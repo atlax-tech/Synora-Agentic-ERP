@@ -19,6 +19,14 @@
       "locator": "approved target architecture; open implementation decisions remain explicit"
     },
     {
+      "id": "approved-engineering-specification",
+      "path": "docs/SPEC.md",
+      "kind": "design",
+      "status": "CONFIRMED",
+      "sha256": "c9fa987252aefbc2150a53063a588cfb95f29503c3afb1f2abee61f3c0254acb",
+      "locator": "requirement traceability, contracts, state machines, governance, evolution gates, and unresolved decisions"
+    },
+    {
       "id": "repository-readme",
       "path": "README.md",
       "kind": "product",
