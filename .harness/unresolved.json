@@ -7,7 +7,7 @@
       "status": "UNRESOLVED",
       "question": "Which exact Frappe v16 and ERPNext v16 commits form the verified baseline?",
       "impact": "Runtime, source evidence, tests, and upstream behavior cannot be reproducible until both commits pass the manual P2P baseline.",
-      "sources": [".synora-product-architecture-review.tmp.md#证据边界"]
+      "sources": ["docs/ARCHITECTURE.md#Open Architecture Decisions", "docs/PRD.md#12-待确认问题"]
     },
     {
       "id": "runtime-user-authorization",
@@ -28,7 +28,7 @@
       "status": "UNRESOLVED",
       "question": "Which local and optional OpenAI-compatible models meet the evaluation baseline?",
       "impact": "No model quality, latency, or resource claim is currently supported.",
-      "sources": [".synora-product-architecture-review.tmp.md#技术选型建议"]
+      "sources": ["docs/ARCHITECTURE.md#Open Architecture Decisions", "docs/PRD.md#12-待确认问题"]
     },
     {
       "id": "product-commands",
@@ -42,21 +42,28 @@
       "status": "UNRESOLVED",
       "question": "How will MIT project code, ERPNext GPL-3.0, and Harness Armor CC BY-NC content be separated and attributed?",
       "impact": "Public distribution and reuse claims require an explicit third-party license and notice boundary.",
-      "sources": [".synora-product-architecture-review.tmp.md#风险预估与应对"]
+      "sources": ["docs/ARCHITECTURE.md#Open Architecture Decisions", "docs/PRD.md#11-依赖与风险"]
     },
     {
       "id": "multi-agent-adoption-threshold",
       "status": "UNRESOLVED",
       "question": "What measured improvement is required before a Multi-Agent role is adopted?",
       "impact": "Without an A/B threshold, complexity could be introduced for interview optics rather than product value.",
-      "sources": ["docs/DESIGN.md#Multi-Agent Introduction Gate"]
+      "sources": ["docs/ARCHITECTURE.md#Multi-Agent Evolution Boundary"]
     },
     {
       "id": "vector-retrieval-threshold",
       "status": "UNRESOLVED",
       "question": "What retrieval-quality threshold triggers embeddings, vector search, hybrid retrieval, or reranking?",
       "impact": "The RAG roadmap requires a measured FTS5 baseline before adding infrastructure.",
-      "sources": ["docs/DESIGN.md#Retrieval Design Progression"]
+      "sources": ["docs/ARCHITECTURE.md#RAG Evolution Boundary"]
+    },
+    {
+      "id": "frontend-design-baseline",
+      "status": "UNRESOLVED",
+      "question": "Which exact Frappe v16 components, tokens, desktop browser and viewport matrix, accessibility target, and bilingual terminology form the verified frontend baseline?",
+      "impact": "Detailed visual design and frontend acceptance cannot be finalized without inventing host-product constraints or unsupported compatibility claims.",
+      "sources": ["docs/DESIGN.md#Open Design Decisions", "docs/PRD.md#12-待确认问题"]
     }
   ]
 }

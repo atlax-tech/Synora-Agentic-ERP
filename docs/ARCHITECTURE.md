@@ -91,5 +91,5 @@ The initial retrieval implementation uses curated, versioned sources with SQLite
 
 ## Sources
 
-- `.synora-product-architecture-review.tmp.md` — sections 4, 5, 9, 10, and 11.
-- `docs/PRD.md` — product boundaries and requirements that architecture must preserve.
+- `docs/PRD.md` — approved product boundaries, complete P2P scope, safety requirements, staged delivery, and unresolved decisions this architecture must preserve.
+- `docs/development-log/2026-08-24-harness-bootstrap.md` — evidence that this target architecture was incorporated during the approved Harness bootstrap.

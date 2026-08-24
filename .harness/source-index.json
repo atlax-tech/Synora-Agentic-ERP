@@ -7,16 +7,16 @@
       "path": "docs/PRD.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "678ed5d554e393dcfa3267f2cb4b4211563a948521c553983a3bd796f2d5f90f",
+      "sha256": "5b8ee3cc0250bad7b7ed21125af16aeffadbd2d777be44ebcd3b7313eed89a35",
       "locator": "single merged product definition and requirements baseline; unresolved decisions remain explicitly marked"
     },
     {
-      "id": "approved-product-architecture-review",
-      "path": ".synora-product-architecture-review.tmp.md",
-      "kind": "product",
+      "id": "approved-target-architecture",
+      "path": "docs/ARCHITECTURE.md",
+      "kind": "architecture",
       "status": "CONFIRMED",
-      "sha256": "3466df0e3fba6c1814fc24d581fbcb2e847c849fe207371392f5192b5e493a6b",
-      "locator": "2026-08-24 conditionally approved review; sections 2-11"
+      "sha256": "b133a8889f2b965deb7f4dcefc6b6dce34eca6b9a9e9c96a9b238b51c346f60f",
+      "locator": "approved target architecture; open implementation decisions remain explicit"
     },
     {
       "id": "repository-readme",

@@ -71,4 +71,5 @@ Exit: every public claim is reproducible and the system can be explained from bu
 
 ## Sources
 
-- `.synora-product-architecture-review.tmp.md` — sections 6, 9, 10, and 11.
+- `docs/PRD.md` — approved priorities, complete P2P scope, acceptance requirements, and unresolved decisions.
+- `docs/ARCHITECTURE.md` — target component boundaries and evidence-gated RAG/Multi-Agent evolution.

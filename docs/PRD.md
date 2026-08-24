@@ -466,7 +466,7 @@ F-009 至 F-012 是完整 P2P 需求的一部分，只是分阶段实现，不�
 
 ## 13. 需求来源
 
-- `.synora-product-architecture-review.tmp.md` — 2026-08-24 带条件审核通过的产品与架构评审。
+- 2026-08-24 用户带条件批准的第一性原理评审 — 已将批准结论和永久约束完整固化到本文，不依赖未提交的临时评审文件。
 - Harness 初始化阶段的 Product 定义 — 其使命、用户、核心任务、能力、非目标和完整 P2P 边界已合并入本文。
 - `docs/ARCHITECTURE.md` — 组件、信任边界、Multi-Agent 与 RAG 演进约束。
 - `docs/ACCEPTANCE.md` — 产品和发布验收原则。

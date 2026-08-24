@@ -1,83 +1,137 @@
-# Design
+# Frontend Design Constitution
 
-Status: `CONFIRMED` target design constraints; detailed API and schema design remains unresolved.
+Status: `CONFIRMED` frontend responsibility and interaction principles. Detailed visual tokens, component mapping, browser matrix, and accessibility target remain `UNRESOLVED`.
 
-## Primary Workflow
+## Purpose and Boundary
 
-```text
-Goal submitted in ERPNext Desk
-  -> Frappe creates Agent Run with initiator and scope
-  -> runtime uses allowlisted read tools
-  -> deterministic services calculate shortages and constraints
-  -> runtime returns versioned ProposedAction
-  -> gateway evaluates schema, permissions, policy, duplicates, and snapshot
-  -> authorized user approves or declines
-  -> gateway reloads current ERP state
-  -> ERPNext executes the mutation
-  -> gateway reads the resulting document and stores Execution Receipt
-  -> runtime resumes with verified outcome or reconciliation state
-```
+This document governs how Synora presents its product behavior inside ERPNext Desk. It is the frontend design constitution for information hierarchy, interaction states, risk communication, accessibility, and visual consistency.
 
-## Run State Model
+It does not define product scope, backend workflow, API contracts, Agent orchestration, RAG architecture, or Multi-Agent adoption. Those authorities are `docs/PRD.md`, `docs/ARCHITECTURE.md`, and `docs/SPEC.md` when the specification exists.
 
-```text
-CREATED -> ANALYZING -> PROPOSED -> AWAITING_APPROVAL
-                                      |-> DECLINED
-                                      |-> EXPIRED
-                                      `-> EXECUTING -> SUCCEEDED
-                                                      |-> FAILED
-                                                      `-> RECONCILIATION_REQUIRED
-```
+## Experience Principles
 
-State transitions are controlled by deterministic code. The model may recommend an action but may not select or force a persisted state transition.
+1. **Operate inside the ERP context.** Synora should feel like a governed ERPNext capability, not a disconnected chat application.
+2. **Show evidence before confidence.** Facts, calculations, sources, recommendations, risks, and unknowns must be visually distinguishable.
+3. **Make workflow state visible.** Users must always understand the current Run stage, what the system is doing, what is blocked, and what can happen next.
+4. **Use progressive disclosure.** Lead with the business conclusion and required decision; keep source detail, traces, and technical evidence available without overwhelming the primary task.
+5. **Make consequences explicit.** Approval controls must name the real ERP document and business effect. Generic confirmation copy is prohibited.
+6. **Fail safely and visibly.** Permission denial, stale state, execution failure, and reconciliation are product states, not generic toast errors.
+7. **Preserve user control.** AI suggestions never masquerade as completed ERP actions. Proposal, approval, execution, and verified outcome must remain visually distinct.
 
-## Proposed Action Contract
+## Information Architecture
 
-Every proposed mutation must carry:
+The confirmed first desktop experience lives in ERPNext Desk and provides these product areas:
 
-- schema and action version;
-- run and action identifiers;
-- typed business payload;
-- business rationale and evidence references;
-- risk classification;
-- ERP state snapshot or version reference;
-- stable idempotency key;
-- required approval class;
-- expiration and revalidation policy.
+| Area | User purpose | Primary content |
+| --- | --- | --- |
+| New Run | Describe a procurement goal and authorized scope | Goal, company/warehouse scope, time window, validation feedback |
+| Runs | Follow current and historical work | Status, progress, proposals, failures, receipts |
+| Approvals | Review governed business mutations | Consequences, evidence, risks, state snapshot, approve/decline/request changes |
+| Audit | Investigate what happened | Correlated run, tool, policy, approval, execution, and reconciliation evidence |
 
-Exact field names and schemas belong in `docs/SPEC.md` after the PRD and Harness are aligned.
+These labels are information-architecture identifiers, not a finalized bilingual terminology set.
 
-## Mutation Safety
+## Primary Desktop Surface
 
-- Fail closed on invalid or unknown model output.
-- Check authorization, policy, object existence, company/warehouse scope, quantities, money, duplicates, and required upstream documents.
-- Re-read state after approval to prevent time-of-check/time-of-use errors.
-- Enforce idempotency at the execution boundary.
-- If ERP execution may have succeeded without an acknowledgement, reconcile by idempotency key and target document before any retry.
-- Return a structured receipt containing the target DocType/name, verified fields, outcome, and audit references.
+The canonical page hierarchy is the wireframe in `docs/PRD.md`, section 4.1. The visual emphasis must follow this order:
 
-## Retrieval Design Progression
+1. business goal and current Run state;
+2. analysis conclusion and proposed actions;
+3. evidence, calculations, risks, unknowns, and ERP state snapshot;
+4. the next authorized user action;
+5. trace and technical details.
 
-1. Curate and version ERPNext documentation, verified repository knowledge, and simulated SOP sources.
-2. Normalize metadata and chunk boundaries.
-3. Establish an FTS5/BM25 retrieval baseline.
-4. Measure recall, ranking, groundedness, refusal, latency, and version isolation.
-5. Add local embeddings/vector indexing only when the baseline exposes a measured gap.
-6. Evaluate hybrid retrieval and reranking against the same dataset.
-7. Preserve citations, permission filtering, prompt-injection defenses, and rebuildability at every stage.
+The result must not collapse into a single chat transcript. Conversation may help collect a goal or missing condition, but governed actions require stable, inspectable UI regions.
 
-## Multi-Agent Introduction Gate
+## State and Feedback Contract
 
-Multi-Agent design is considered only when at least one condition is demonstrated:
+| State | Frontend obligation |
+| --- | --- |
+| Empty | Explain what Synora can do and provide one clear starting action |
+| Input invalid | Preserve user input and identify the exact missing or invalid condition |
+| Analyzing | Show the current bounded step without inventing percentage progress |
+| Proposed | Separate deterministic findings from AI explanation and display all material unknowns |
+| Awaiting approval | Freeze the reviewed proposal, show snapshot time and expiry conditions, and present explicit consequences |
+| Executing | Prevent duplicate actions and show that ERP confirmation is still pending |
+| Succeeded | Link the verified ERP document and show the Execution Receipt summary |
+| Failed | Classify the failure, preserve correlation evidence, and offer only safe recovery actions |
+| Reconciliation required | State that the result is uncertain, prohibit blind retry, and show reconciliation progress |
+| Permission denied | Reveal no unauthorized business data and provide an actionable escalation direction |
 
-- one context cannot reliably contain planning, policy review, and reconciliation;
-- roles require different permissions, models, tools, or acceptance criteria;
-- independent evidence-based review reduces correlated errors;
-- bounded parallel work produces material latency improvement.
+Loading, empty, partial, stale, error, and permission states are required design work, not implementation afterthoughts.
 
-Preferred implementation is explicit LangGraph subgraphs or supervisor-controlled typed handoffs over shared workflow state. Every role uses the same gateway, policy, approval, idempotency, and audit services. Controls include maximum steps, timeouts, role tool allowlists, loop detection, full tracing, and A/B evaluation against the single-Agent baseline.
+## High-Risk Action Design
+
+- Place approve, decline, and request-changes actions next to the exact proposal being reviewed.
+- Show target DocType, document count, supplier, quantity, amount when available, and the execution consequence before approval.
+- Visually separate approval from execution; approval does not imply that ERP execution has succeeded.
+- Require a fresh-state warning when the proposal has expired or ERP data changed.
+- Disable repeated submission while an action is executing.
+- Never use color, iconography, or optimistic wording as the only indication of risk or completion.
+
+## Evidence and Explainability
+
+- Label authoritative ERP facts, deterministic calculations, retrieved sources, Agent recommendations, warnings, and unknowns as different information types.
+- Every material recommendation must expose its supporting source or calculation path.
+- Long evidence and traces may be collapsed, but their existence and status must remain visible.
+- Conflicting or missing sources must be displayed as uncertainty, not blended into a confident answer.
+- Audit views must minimize sensitive data and follow the viewer's ERP permissions.
+
+## Visual System Boundary
+
+Synora should initially reuse the Frappe/ERPNext visual language and proven interaction patterns so that it remains coherent with the host product. A separate bespoke design system is not justified before the exact Frappe v16 component and token baseline is inspected.
+
+Until that baseline is verified:
+
+- do not invent final brand colors, typography, spacing tokens, shadows, or component APIs;
+- do not claim pixel-level compatibility with a Frappe release;
+- record any necessary custom component and the reason the host component is insufficient;
+- keep risk, status, evidence, and action semantics independent from a specific color palette.
+
+## Accessibility and Responsive Boundary
+
+- The first delivery target is desktop web inside ERPNext Desk; mobile and offline experiences are outside the current scope.
+- Interactive elements require keyboard operation, visible focus, semantic labels, and understandable disabled states.
+- Status, risk, and validation information cannot rely on color alone.
+- Motion must not be required to understand progress or state transitions.
+- Exact viewport support, browser matrix, contrast target, and accessibility conformance level remain unresolved until the Frappe v16 baseline is verified.
+
+## Content and Localization
+
+- Use concise enterprise language that distinguishes facts, suggestions, risks, actions, and unknowns.
+- Buttons start with clear verbs and name the actual action when risk is material.
+- Errors state the cause category, safe next step, and correlation identifier when available.
+- Chinese and English terminology must use one approved glossary; mixed synonyms are prohibited after the glossary is fixed.
+- Do not use anthropomorphic or celebratory language to conceal uncertainty or business risk.
+
+## Prohibited Patterns
+
+- Chat-only presentation for structured proposals, approvals, receipts, or audit evidence.
+- Hidden mutation consequences behind a generic “Confirm” action.
+- Success UI before ERP state has been read back and verified.
+- Fabricated progress percentages, unsupported confidence scores, or ungrounded explanations.
+- Silent retries after an uncertain write result.
+- Dense technical traces as the default view for procurement users.
+- Mock-only UI paths presented as completed enterprise behavior.
+
+## Frontend Acceptance Checks
+
+- A user can distinguish proposal, approval, execution, and verified completion without reading implementation details.
+- Normal, empty, loading, permission-denied, stale, failed, and reconciliation states are all represented.
+- High-risk actions communicate their ERP consequence before authorization.
+- Evidence and unknowns remain accessible from the primary decision surface.
+- Keyboard and non-color state cues are included in component acceptance criteria.
+- The frontend does not expose actions that bypass the typed gateway, policy, approval, or receipt boundaries.
+
+## Open Design Decisions
+
+- Exact Frappe v16 components, tokens, layout primitives, and extension constraints.
+- Approved Chinese/English product terminology and status glossary.
+- Supported desktop viewport and browser matrix.
+- Accessibility conformance target and verification tooling.
+- Detailed approval interaction for self-approval, multi-level approval, expiry, and changes requested.
 
 ## Sources
 
-- `.synora-product-architecture-review.tmp.md` — sections 3.3, 4.3, 4.4, 7, and 11.
-- `docs/ARCHITECTURE.md` — component and trust boundaries.
+- `docs/PRD.md` — product form, users, workflow, states, content rules, and the canonical desktop wireframe.
+- `docs/ARCHITECTURE.md` — system, trust, authorization, and execution boundaries the frontend must preserve.

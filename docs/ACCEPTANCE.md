@@ -46,4 +46,5 @@ Receipt, Invoice, Payment, and PO submission are staged requirements, not remove
 
 ## Sources
 
-- `.synora-product-architecture-review.tmp.md` — sections 3, 6, 7, 8, and approved conditions.
+- `docs/PRD.md` — approved complete scope, non-functional requirements, acceptance summary, and benchmark boundaries.
+- `docs/ROADMAP.md` — staged delivery order and milestone exit conditions.

@@ -6,7 +6,7 @@ Read before changing behavior:
 
 - Product requirements and definition: `docs/PRD.md`
 - Architecture: `docs/ARCHITECTURE.md`
-- Design: `docs/DESIGN.md`
+- Frontend design constitution: `docs/DESIGN.md`
 - Development: `docs/DEVELOPMENT.md`
 - Testing: `docs/TESTING.md`
 - Acceptance: `docs/ACCEPTANCE.md`

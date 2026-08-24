@@ -46,4 +46,5 @@ python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .
 
 ## Sources
 
-- `.synora-product-architecture-review.tmp.md` — sections 6, 7, 8, and approved conditions.
+- `docs/PRD.md` — approved maintainability, testing, acceptance, and unresolved-decision requirements.
+- `docs/ARCHITECTURE.md` — implementation boundaries and open architecture decisions.

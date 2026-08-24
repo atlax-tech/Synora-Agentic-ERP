@@ -38,4 +38,5 @@ The test and review roles do not trust the executor's self-report. Before releas
 
 ## Sources
 
-- `.synora-product-architecture-review.tmp.md` — section 7 and risk controls in section 8.
+- `docs/PRD.md` — approved testability, product acceptance, RAG, Multi-Agent, and benchmark requirements.
+- `docs/ARCHITECTURE.md` — trust, data ownership, dependency, and evolution boundaries requiring verification.
