@@ -6,7 +6,7 @@
   "repository_state": "DOCS_ONLY",
   "managed_files": [
     {"path": "AGENTS.md", "owner": "harness-armor", "mode": "managed"},
-    {"path": "docs/PRODUCT.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/PRD.md", "owner": "harness-armor", "mode": "managed", "sha256": "678ed5d554e393dcfa3267f2cb4b4211563a948521c553983a3bd796f2d5f90f"},
     {"path": "docs/ARCHITECTURE.md", "owner": "harness-armor", "mode": "managed"},
     {"path": "docs/DESIGN.md", "owner": "harness-armor", "mode": "managed"},
     {"path": "docs/DEVELOPMENT.md", "owner": "harness-armor", "mode": "managed"},
@@ -17,15 +17,15 @@
     {"path": "docs/development-log/README.md", "owner": "harness-armor", "mode": "managed"},
     {"path": "docs/development-log/2026-08-24-harness-bootstrap.md", "owner": "harness-armor", "mode": "managed"},
     {"path": "docs/development-log/2026-08-24-prd-baseline.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/development-log/2026-08-24-prd-relocation.md", "owner": "harness-armor", "mode": "managed"},
     {"path": ".harness/manifest.json", "owner": "harness-armor", "mode": "managed"},
     {"path": ".harness/source-index.json", "owner": "harness-armor", "mode": "managed"},
     {"path": ".harness/unresolved.json", "owner": "harness-armor", "mode": "managed"},
-    {"path": "PRD.md", "owner": "user", "mode": "user", "sha256": "59588ef56623be91b8f854d414a1bb62435bcb150e676db2b3a0cb468214824e"},
     {"path": ".synora-product-architecture-review.tmp.md", "owner": "user", "mode": "user", "sha256": "3466df0e3fba6c1814fc24d581fbcb2e847c849fe207371392f5192b5e493a6b"},
     {"path": "README.md", "owner": "user", "mode": "user", "sha256": "499f6fce4cf396696219ad9ed35f00deba3b2648b071bc0bad27aba796a6ebee"},
     {"path": "LICENSE", "owner": "user", "mode": "user", "sha256": "7f675055f696b69d32f0a549a3b8b676884f5af9ca8cf9436b8fe23cfa19bcfc"}
   ],
   "source_index": ".harness/source-index.json",
   "unresolved_index": ".harness/unresolved.json",
-  "last_updated": "2026-08-24T04:00:00Z"
+  "last_updated": "2026-08-24T04:35:10Z"
 }

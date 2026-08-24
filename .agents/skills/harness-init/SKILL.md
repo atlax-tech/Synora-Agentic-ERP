@@ -51,7 +51,7 @@ features, language, framework, database, deployment, or commands.
 
 1. Propose the new-file set. The default set is:
    - `AGENTS.md`;
-   - `docs/PRODUCT.md`, `ARCHITECTURE.md`, `DESIGN.md`, `DEVELOPMENT.md`,
+   - `docs/PRD.md`, `ARCHITECTURE.md`, `DESIGN.md`, `DEVELOPMENT.md`,
      `TESTING.md`, `ACCEPTANCE.md`, and `ROADMAP.md`;
    - `.harness/manifest.json`, `source-index.json`, and `unresolved.json`.
 2. Treat an explicit request to initialize as authorization to create only
@@ -97,5 +97,5 @@ succeeded when structure validation did not complete.
 
 Report: applicability evidence, confirmed facts, unresolved items, files
 created, files preserved, validation commands with actual results, and manual
-acceptance steps. End by recommending that the user fill `docs/PRODUCT.md` and
+acceptance steps. End by recommending that the user fill `docs/PRD.md` and
 then invoke `harness-build` once substantive product sources exist.

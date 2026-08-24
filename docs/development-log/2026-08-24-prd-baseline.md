@@ -3,10 +3,10 @@
 ## 完成内容
 
 - 使用项目级 `prd-writer` Skill，把已批准的概念方向展开为落地 PRD。
-- `PRD.md` 补齐了用户、场景、主流程与异常分支、功能优先级、关键页面线框图、核心功能、状态机、数据字段、文案、非功能需求、测试验收、Benchmark 和待确认项。
+- `docs/PRD.md` 补齐了用户、场景、主流程与异常分支、功能优先级、关键页面线框图、核心功能、状态机、数据字段、文案、非功能需求、测试验收、Benchmark 和待确认项。
 - 明确保留 PO Submit、Receipt、Invoice、Payment 的后续需求；第一阶段 MR/PO Draft 是交付拆分，不是范围删除。
 - 增加 Multi-Agent 的引入条件、候选角色、收益风险和 A/B 评测门禁，以及从 FTS5 到 Vector/Hybrid/Rerank 的完整 RAG 演进要求。
-- 更新 `AGENTS.md`，把 `PRD.md` 设为产品需求入口，并禁止实现 Agent 为降低复杂度删除已批准需求。
+- 更新 `AGENTS.md`，把 `docs/PRD.md` 设为产品需求入口，并禁止实现 Agent 为降低复杂度删除已批准需求。
 
 ## 验证结果
 
@@ -22,6 +22,6 @@
 
 ## 人工验收步骤
 
-1. 打开 `PRD.md`，确认 F-009 至 F-012 仍包含 PO Submit、Receipt、Invoice 和 Payment。
+1. 打开 `docs/PRD.md`，确认 F-009 至 F-012 仍包含 PO Submit、Receipt、Invoice 和 Payment。
 2. 检查第 5、6、8 节，确认正常、无权限、状态漂移、重复执行和对账状态都有要求。
 3. 检查第 12 节，确认实现前必须解决的问题没有被 Skill 自由补全。

@@ -4,11 +4,11 @@
   "sources": [
     {
       "id": "approved-product-requirements",
-      "path": "PRD.md",
+      "path": "docs/PRD.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "59588ef56623be91b8f854d414a1bb62435bcb150e676db2b3a0cb468214824e",
-      "locator": "approved product requirements baseline; unresolved decisions remain explicitly marked"
+      "sha256": "678ed5d554e393dcfa3267f2cb4b4211563a948521c553983a3bd796f2d5f90f",
+      "locator": "single merged product definition and requirements baseline; unresolved decisions remain explicitly marked"
     },
     {
       "id": "approved-product-architecture-review",

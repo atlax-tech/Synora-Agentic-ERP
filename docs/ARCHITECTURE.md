@@ -92,4 +92,4 @@ The initial retrieval implementation uses curated, versioned sources with SQLite
 ## Sources
 
 - `.synora-product-architecture-review.tmp.md` — sections 4, 5, 9, 10, and 11.
-- `docs/PRODUCT.md` — product boundaries that architecture must preserve.
+- `docs/PRD.md` — product boundaries and requirements that architecture must preserve.

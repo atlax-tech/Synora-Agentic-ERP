@@ -365,7 +365,7 @@ def _compare_recorded(root: Path, item: dict[str, Any], category: str, events: l
 def validate_structure(root: Path) -> dict[str, Any]:
     required = [
         "AGENTS.md", ".harness/manifest.json", ".harness/source-index.json",
-        ".harness/unresolved.json", "docs/PRODUCT.md", "docs/ARCHITECTURE.md",
+        ".harness/unresolved.json", "docs/PRD.md", "docs/ARCHITECTURE.md",
         "docs/DEVELOPMENT.md", "docs/TESTING.md", "docs/ACCEPTANCE.md",
     ]
     missing = [rel for rel in required if not (root / Path(*rel.split("/"))).is_file()]
