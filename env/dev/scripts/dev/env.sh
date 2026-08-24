@@ -71,10 +71,15 @@ _bootstrap() {
     cd apps/frappe && git fetch --depth=1 origin "$FDP_REV_FRAPPE" && git checkout -q "$FDP_REV_FRAPPE"
     cd ../erpnext && git fetch --depth=1 origin "$FDP_REV_ERP_NEXT" && git checkout -q "$FDP_REV_ERP_NEXT"
     cd /home/frappe/bench && bench setup requirements && bench build
+    # yarn 按 package.json 解析时自动改写上游 banking/yarn.lock（间接依赖）；
+    # 候选环境要求 checkout 与候选 SHA 完全一致，构建后显式恢复原状并在此记录。
+    git -C apps/erpnext checkout -- banking/yarn.lock
   '
   docker compose -f docker-compose.yml exec -T bench bash -lc '
     set -euo pipefail
     cd /home/frappe/bench
+    python3 --version | grep -q "Python $FDP_VER_PYTHON." \
+      || { echo "[env] 容器 Python 版本与 FDP_VER_PYTHON 不符" >&2; exit 1; }
     test "$(cd apps/frappe  && git rev-parse HEAD)" = "$FDP_REV_FRAPPE"
     test "$(cd apps/erpnext && git rev-parse HEAD)" = "$FDP_REV_ERP_NEXT"
     echo "[env] 上游 HEAD 与候选 SHA 匹配"

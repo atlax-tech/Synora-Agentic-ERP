@@ -34,6 +34,7 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set in env/dev/.env}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - FRAPPE_SITE=${FRAPPE_SITE:-dev.localhost}
+      - FDP_VER_PYTHON=${FDP_VER_PYTHON}
       - FDP_REF_FRAPPE=${FDP_REF_FRAPPE}
       - FDP_REF_ERP_NEXT=${FDP_REF_ERP_NEXT}
       - FDP_REV_FRAPPE=${FDP_REV_FRAPPE}

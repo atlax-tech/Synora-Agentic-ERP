@@ -26,3 +26,6 @@ node_modules/
 # 日志与系统文件
 *.log
 .DS_Store
+
+# Trae 会话/计划技术夹（按计划边界不入库）
+.trae/
