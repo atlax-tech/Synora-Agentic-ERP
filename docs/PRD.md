@@ -229,11 +229,13 @@ F-009 至 F-012 是完整 P2P 需求的一部分，只是分阶段实现，不�
 
 **功能描述**：对 ProposedAction 执行权限、业务政策、风险和当前状态检查；需要审批的动作必须由有权用户显式决定。
 
+**【本次更新：审批基线】**：Synora 继承 ERPNext Workflow 和权限配置，不在 Agent Runtime 中复制审批规则。测试基线中，MR Draft 与 PO Draft 由发起人显式确认即可执行，不强制第二人审批；PO Submit、Purchase Receipt、Purchase Invoice 与 Payment 相关写操作必须由不同于发起人的有权审批人授权。实际企业 Workflow 或政策更严格时始终采用更严格规则；规则缺失、冲突或无法验证时 fail closed。
+
 **审批页面必须显示**：动作和后果、审批人权限、计算和来源、差异/风险、状态快照时间、过期条件、批准/拒绝/要求修改入口。
 
 **状态**：awaiting、approved、declined、changes_requested、expired、revoked。
 
-**边界条件**：审批人无权、自己审批是否允许 `[待确认]`、多审批人策略 `[待确认]`、审批后权限撤销、审批后数据变化、重复审批、并发审批。
+**边界条件**：审批人无权、Draft 发起人确认、Submit 及后续 P2P 操作的职责分离、多审批人策略 `[待确认]`、审批后权限撤销、审批后数据变化、重复审批、并发审批。
 
 **危险操作确认文案原则**：说明将创建/提交的真实 ERP 单据、关键金额和影响，并提示执行前还会重新校验；不得只显示“确认”。
 
@@ -453,7 +455,7 @@ F-009 至 F-012 是完整 P2P 需求的一部分，只是分阶段实现，不�
 
 - [ ] Frappe v16 与 ERPNext v16 的完整 baseline commit pair。
 - [ ] Frappe 与 Runtime 之间的用户绑定授权方案。
-- [ ] 具体 ERPNext Role/Permission Matrix 与“发起人能否审批自己的动作”。
+- [ ] 将已批准的审批基线映射到具体 ERPNext Role/Permission Matrix 与 Workflow 配置。
 - [ ] 多级审批、金额阈值和策略配置来源。
 - [ ] Goal 长度、默认公司/仓库/时间范围。
 - [ ] 性能、并发、数据保留和浏览器支持指标。
