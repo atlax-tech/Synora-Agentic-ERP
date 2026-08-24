@@ -1,0 +1,398 @@
+{
+  "schemaVersion": "1.0.0",
+  "installerVersion": "0.1.2",
+  "skillsVersion": "0.1.2",
+  "specVersion": "1.0.0",
+  "target": "codex-project",
+  "client": "OpenAI Codex",
+  "installedAt": "2026-08-24T04:22:42.455Z",
+  "updatedAt": "2026-08-24T04:22:42.455Z",
+  "inventoryHash": "b129febb58c1f496e67f2c7121fec0fbbfbd5f2d7e08e4112fd37eb04b84535c",
+  "files": [
+    {
+      "path": ".harness-armor/evals/evals.json",
+      "sha256": "50b7820e1730ba979e0aeb85c82e415d368657cb5695393da8001e196053bc13",
+      "size": 1766
+    },
+    {
+      "path": ".harness-armor/evals/health-dimensions.json",
+      "sha256": "02db7e5ab32e1f966603cfc5016d8cd25fb14032b133f43f29e833bcba76252d",
+      "size": 895
+    },
+    {
+      "path": ".harness-armor/evals/trigger-evals.json",
+      "sha256": "b540cd8cb217d62a960f3547d4a86bed31a1e82a428d10ce85208fc796d703e3",
+      "size": 10998
+    },
+    {
+      "path": ".harness-armor/evals/workflow-evals.json",
+      "sha256": "c3898f71149ddda775c3d49c50e7167339b1d87191ec8c9f4861a6582d22bef6",
+      "size": 2211
+    },
+    {
+      "path": ".harness-armor/schemas/manifest.schema.json",
+      "sha256": "a07b6dbf7e2a80158ed63ae6c07911fe995f4aa566fcf422a5c15330a9b28416",
+      "size": 1563
+    },
+    {
+      "path": ".harness-armor/schemas/scan-result.schema.json",
+      "sha256": "681def7330254a7126d9ff8e7fe720d6af9308b80df4369fb10565d2dbe82120",
+      "size": 522
+    },
+    {
+      "path": ".harness-armor/schemas/source-index.schema.json",
+      "sha256": "d462b98055b50ff64011d011e650185df566e2da8bd0adf8940cd1290d091f3c",
+      "size": 1087
+    },
+    {
+      "path": ".harness-armor/schemas/unresolved.schema.json",
+      "sha256": "2720a17edf7a68d1601dd823d80ce874172975cdb1cc5ed927418688e613d3ca",
+      "size": 920
+    },
+    {
+      "path": ".harness-armor/scripts/check_references.py",
+      "sha256": "1a9704569fe64acda63c27d934e6d6bd9b931fc1c94191acc30232db5c653e8c",
+      "size": 150
+    },
+    {
+      "path": ".harness-armor/scripts/detect_drift.py",
+      "sha256": "4c5a17ff76883790542d050d7f42af921bd9c8d5afcfce578ca2376f929ae5dd",
+      "size": 142
+    },
+    {
+      "path": ".harness-armor/scripts/detect_repository_state.py",
+      "sha256": "56b33e7789a1edae60806170a6f9b1ae67d6b68086e36b91d42022811d8466c6",
+      "size": 142
+    },
+    {
+      "path": ".harness-armor/scripts/fingerprint_sources.py",
+      "sha256": "1ef5abe0502526b861be1055ef0eeb06117b9f177b50f1c2949d53428e23d13e",
+      "size": 140
+    },
+    {
+      "path": ".harness-armor/scripts/harness_armor/__init__.py",
+      "sha256": "46ff07299972712d91e44ae4884816cbab9bc3d137d60adfe4dbfc0c220d0b36",
+      "size": 120
+    },
+    {
+      "path": ".harness-armor/scripts/harness_armor/analysis.py",
+      "sha256": "14505f4a3ef4846090757c9f53b38d40fdcf61ce309f666d773d6a466f6c80b8",
+      "size": 26316
+    },
+    {
+      "path": ".harness-armor/scripts/harness_armor/cli.py",
+      "sha256": "6dfd6ca37031cedf7f710c6e820d29157d4d81e2f1fee0d131ba60f312d3bb98",
+      "size": 8356
+    },
+    {
+      "path": ".harness-armor/scripts/harness_armor/common.py",
+      "sha256": "78383effb14181e2ffb6fefe9b3e593ce3b9c52d360f4cc068bdde9224aea307",
+      "size": 12753
+    },
+    {
+      "path": ".harness-armor/scripts/harness_armor/manifest.py",
+      "sha256": "bc5065da2047e93f43be619257b7766ed457db530ea28f8de60371321ff5d6d8",
+      "size": 11179
+    },
+    {
+      "path": ".harness-armor/scripts/README.md",
+      "sha256": "09e3fca964c72f93bf955ee5bbdd973a5d98b32393aa1c44e286dc5f1f71c2ff",
+      "size": 1300
+    },
+    {
+      "path": ".harness-armor/scripts/scan_repository.py",
+      "sha256": "25631ea0fcc5d7a0a48edf279aabfabbb73ebd2eed0c66fcf6556a558a255088",
+      "size": 126
+    },
+    {
+      "path": ".harness-armor/scripts/score_harness_health.py",
+      "sha256": "85e5c7a8e84b6ed9b0a3f767726c5b2153afa828a1047ebcb5f761383581451b",
+      "size": 142
+    },
+    {
+      "path": ".harness-armor/scripts/validate_harness_structure.py",
+      "sha256": "4d7d8313df5029f483c37553f98410795e27e4e37c4eaec612e1211f3744d472",
+      "size": 154
+    },
+    {
+      "path": ".harness-armor/scripts/validate_manifest.py",
+      "sha256": "397e3040e13308f9f24216fd6581a6d95adb17293f819e095ad0aa67fe445a4d",
+      "size": 152
+    },
+    {
+      "path": ".harness-armor/spec/harness-engineering-v1.md",
+      "sha256": "6ba22d475f8d71e6ddf98315d3d5b5563e65157eac1d276584396f2e36d109b5",
+      "size": 4964
+    },
+    {
+      "path": ".harness-armor/spec/VERSION",
+      "sha256": "902772cf66e85a24a4c33df08372d2e50040c365eff94f8a7cf0e3183fe1140f",
+      "size": 7
+    },
+    {
+      "path": ".harness-armor/templates/AGENTS.md.tmpl",
+      "sha256": "0c8c0fffcc4a438eb4c41de6a5cff5a2dab0f4f9e67679d73e5cb7d4f61886c6",
+      "size": 395
+    },
+    {
+      "path": ".harness-armor/templates/development-log.md.tmpl",
+      "sha256": "179caa3b37a423c9bde2be7724af858647500e0e6cf5d3332a30ddd7d51eb8fc",
+      "size": 216
+    },
+    {
+      "path": ".harness-armor/templates/manifest.json.tmpl",
+      "sha256": "cd6160a2f75061b8a802f6ec991ad967bdb05483342e98032a5f04779432bed4",
+      "size": 354
+    },
+    {
+      "path": ".harness-armor/templates/PROJECT_DOC.md.tmpl",
+      "sha256": "add2a97e87ba39cdfe609368e2244d188f28f505c47a50aa35a4b5d2f4d81891",
+      "size": 173
+    },
+    {
+      "path": "harness-build/agents/openai.yaml",
+      "sha256": "367e5ad83331653ce87e6a3a8cc7dd1df9770804ab887c1c6afdd2ba3697198d",
+      "size": 316
+    },
+    {
+      "path": "harness-build/assets/fact-ledger.md",
+      "sha256": "330ce51e0dbac4b89824b0824e19e8b79bca0a8ccff9764970561f0fa2ff51b3",
+      "size": 301
+    },
+    {
+      "path": "harness-build/references/evidence-extraction.md",
+      "sha256": "7b9055f7e963794d3779498121cf8e6963a92e6b2579e7d70235f886dcd5d357",
+      "size": 1038
+    },
+    {
+      "path": "harness-build/scripts/fingerprint_sources.py",
+      "sha256": "e4c509f7c99756f76062ed47a12e5806a58e576fc1b4977f933a4767452f2f1f",
+      "size": 515
+    },
+    {
+      "path": "harness-build/scripts/scan_repository.py",
+      "sha256": "fb56a39bac7102c77d6dc6876e63a7dd22f5b3669d2ee0873d7bf071c4ab02d7",
+      "size": 501
+    },
+    {
+      "path": "harness-build/scripts/validate_harness_structure.py",
+      "sha256": "b832efeabead0a011853417e76d27d95cdc7f5c47d1bed546c5fc174216fdf05",
+      "size": 529
+    },
+    {
+      "path": "harness-build/SKILL.md",
+      "sha256": "9d4ee0a6dacbc595e2dc988c81a71274e111d55b19d8b188a7675377884bb7ab",
+      "size": 4974
+    },
+    {
+      "path": "harness-check/agents/openai.yaml",
+      "sha256": "158b8a0fc70f3b2d8e5a7fb1d853c01779075194f2901c0494b55bae892d68b7",
+      "size": 305
+    },
+    {
+      "path": "harness-check/assets/health-report.md",
+      "sha256": "57834b8343556f6b63cb367534fd1553d1186180b0bdaecf46e4f7d449008d58",
+      "size": 621
+    },
+    {
+      "path": "harness-check/references/health-review.md",
+      "sha256": "22b85f5ceba636ce4d5deb91661bcecc02689dd80a162c8b4caf35849c9ec714",
+      "size": 1562
+    },
+    {
+      "path": "harness-check/scripts/check_references.py",
+      "sha256": "848815d5dc4bd5a4003c6f54e02f5df23e3ad2041fdd40ee29efad0c7d31ab53",
+      "size": 517
+    },
+    {
+      "path": "harness-check/scripts/detect_drift.py",
+      "sha256": "176a879b83b5c117ec52beda82e23ea47455aab762a09c705d07073097f0fa05",
+      "size": 509
+    },
+    {
+      "path": "harness-check/scripts/score_harness_health.py",
+      "sha256": "f6f34fd985a9d79043fc65a74e47c6ac91b3585c686089355bfdd28bd5debe21",
+      "size": 509
+    },
+    {
+      "path": "harness-check/scripts/validate_manifest.py",
+      "sha256": "b2c29be8678cfd872a8727a545c0129097217bd3e434134a616a47c8cd5626fe",
+      "size": 519
+    },
+    {
+      "path": "harness-check/SKILL.md",
+      "sha256": "d55884302f5142a6c051361e7ad22c521324f66a25ade6ff75a34fe16373b548",
+      "size": 4836
+    },
+    {
+      "path": "harness-init/agents/openai.yaml",
+      "sha256": "b2e471b979ac920ff0d16af60c845620d41771ec5d41038d90e62c1dedbb8993",
+      "size": 317
+    },
+    {
+      "path": "harness-init/assets/unresolved-marker.md",
+      "sha256": "15813926bf625ba6ca3e2858a98ce27137420fe967b7277635dc56b5cc485c1b",
+      "size": 116
+    },
+    {
+      "path": "harness-init/references/init-policy.md",
+      "sha256": "98de1fcf8c5f54d00f048a5db1aa912b15321a520889be6daf4dfbac6759aaf2",
+      "size": 980
+    },
+    {
+      "path": "harness-init/scripts/detect_repository_state.py",
+      "sha256": "c30d1e51dec833b592933bffaf056e7c6b149af24c6071d1a41ec33f59036b02",
+      "size": 530
+    },
+    {
+      "path": "harness-init/scripts/validate_harness_structure.py",
+      "sha256": "15be492d20a4ab51e7563887a949a72ef93fda8c4101ce5a59d5f95832a58e74",
+      "size": 542
+    },
+    {
+      "path": "harness-init/SKILL.md",
+      "sha256": "1f2311b19971400c2c7491ee43c9429caa29da6a8bf9a88efe28c9fe802e51be",
+      "size": 4531
+    },
+    {
+      "path": "harness-promotion/agents/openai.yaml",
+      "sha256": "474e69dab682f5ced9dc9a92a4d3c73e0374b306787ca538fd060f1e0a2abcfc",
+      "size": 327
+    },
+    {
+      "path": "harness-promotion/assets/reality-ledger.md",
+      "sha256": "1956bc7186d4ce5c7c3bd5ed2c222ba0f5a7815c8043e90266abce7e1dfcdb14",
+      "size": 296
+    },
+    {
+      "path": "harness-promotion/references/code-evidence.md",
+      "sha256": "b0f1525d233eecf9accaeb7631bf296e0114f9f4dbff4d098ff9eac68830c166",
+      "size": 960
+    },
+    {
+      "path": "harness-promotion/scripts/fingerprint_sources.py",
+      "sha256": "4dc5ee09f0d2ff832a655a61643167def9bdb372b37fc9352dcfbbdc4b113b1d",
+      "size": 507
+    },
+    {
+      "path": "harness-promotion/scripts/scan_repository.py",
+      "sha256": "6a287cec6464a4f0d2eb82d9402c69e6413700b29b46e841affa2e627a83a922",
+      "size": 493
+    },
+    {
+      "path": "harness-promotion/scripts/validate_harness_structure.py",
+      "sha256": "df0c820febfd4367bf09ecf020dffce4ca888b6d365a78ad55e650f5c37554bd",
+      "size": 521
+    },
+    {
+      "path": "harness-promotion/SKILL.md",
+      "sha256": "f8fa68e2b1a3ee3d60664ef325984fd3a070fc34d23ef8daf45198d21c3e8627",
+      "size": 5367
+    },
+    {
+      "path": "harness-prompt/agents/openai.yaml",
+      "sha256": "e645ef4e7a644b129a02e5913a334b3adba0d207253099f06542e86de43364e5",
+      "size": 312
+    },
+    {
+      "path": "harness-prompt/assets/execute.md",
+      "sha256": "59092ea0665b8fde93ce77e9b69862a91c77de38a0ea528eef9ec7dfba79456c",
+      "size": 763
+    },
+    {
+      "path": "harness-prompt/assets/prompt-index.md",
+      "sha256": "a983136344e882db33b865bfd2c98de0fc3945b44613e4d7b6b737dcf9f0c4c9",
+      "size": 408
+    },
+    {
+      "path": "harness-prompt/assets/review.md",
+      "sha256": "aa2b6e4fb481bd64f07098898f23c1ad5133e21ac9d30462e87cdf3c8318c262",
+      "size": 613
+    },
+    {
+      "path": "harness-prompt/assets/test.md",
+      "sha256": "3b2b03137156a4ea7b99e8e30cac359313307d72bbb5ae163f7d39754e2add78",
+      "size": 644
+    },
+    {
+      "path": "harness-prompt/references/prompt-contract.md",
+      "sha256": "a379040782b92a08d7014a9a0f38f82f280322622f51ffff18c9185183e1c99d",
+      "size": 1041
+    },
+    {
+      "path": "harness-prompt/scripts/check_references.py",
+      "sha256": "848815d5dc4bd5a4003c6f54e02f5df23e3ad2041fdd40ee29efad0c7d31ab53",
+      "size": 517
+    },
+    {
+      "path": "harness-prompt/scripts/fingerprint_sources.py",
+      "sha256": "4dc5ee09f0d2ff832a655a61643167def9bdb372b37fc9352dcfbbdc4b113b1d",
+      "size": 507
+    },
+    {
+      "path": "harness-prompt/SKILL.md",
+      "sha256": "3872e92a265fb45558fbcead1a7654bb3a0e2f1caecd27f1c4ba881d9c917073",
+      "size": 5507
+    },
+    {
+      "path": "harness-update/agents/openai.yaml",
+      "sha256": "5d20517c8499d9031813e60a93796b879113b6c692810fec6277c6ea476fdfde",
+      "size": 323
+    },
+    {
+      "path": "harness-update/assets/update-plan.md",
+      "sha256": "3553cce5b9e8bbe4a2012368a2cc86e83aa7358c311b7faf5117f5ab39de8e2e",
+      "size": 550
+    },
+    {
+      "path": "harness-update/references/authorization-and-drift.md",
+      "sha256": "bf98d462c79990d15a45325c7ef49762ce1e7e578debb8459f69729284bc786c",
+      "size": 986
+    },
+    {
+      "path": "harness-update/scripts/detect_drift.py",
+      "sha256": "176a879b83b5c117ec52beda82e23ea47455aab762a09c705d07073097f0fa05",
+      "size": 509
+    },
+    {
+      "path": "harness-update/scripts/validate_harness_structure.py",
+      "sha256": "df0c820febfd4367bf09ecf020dffce4ca888b6d365a78ad55e650f5c37554bd",
+      "size": 521
+    },
+    {
+      "path": "harness-update/scripts/validate_manifest.py",
+      "sha256": "b2c29be8678cfd872a8727a545c0129097217bd3e434134a616a47c8cd5626fe",
+      "size": 519
+    },
+    {
+      "path": "harness-update/SKILL.md",
+      "sha256": "bb5eb85ea96fde2c712e8d01ab24aab60b5becb8109b82b2e1bada66611bf096",
+      "size": 4590
+    },
+    {
+      "path": "harness/agents/openai.yaml",
+      "sha256": "eaeede90e0fb0bb113e5d5f0b12fccdb435c0783debd73641c12a86553cf495c",
+      "size": 306
+    },
+    {
+      "path": "harness/assets/state-report.md",
+      "sha256": "604275767ce07bc2c6c686027e2dd2732f14c4761a946cbb7696784f23c9e039",
+      "size": 355
+    },
+    {
+      "path": "harness/references/routing.md",
+      "sha256": "73890da3a659b07bdc8ffd09c025084a9f042e0e44bc178bcc74a2e9c601d398",
+      "size": 1739
+    },
+    {
+      "path": "harness/scripts/detect_repository_state.py",
+      "sha256": "fb89407a3663f3c154bbc09f837a35c78eb38f836aa45580ebe81c7e894a6d43",
+      "size": 628
+    },
+    {
+      "path": "harness/SKILL.md",
+      "sha256": "cdb579208d73c587a95dcf842a2175bfb165f274d40d5327cd06f70e0872652c",
+      "size": 4205
+    }
+  ]
+}

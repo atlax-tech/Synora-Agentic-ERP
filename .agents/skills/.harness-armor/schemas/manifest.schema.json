@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harness-armor.dev/schemas/manifest.schema.json",
+  "title": "Harness Armor manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "spec_version", "generator", "repository_state", "managed_files", "source_index", "unresolved_index", "last_updated"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "spec_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"const": "harness-armor"},
+        "version": {"type": "string"}
+      }
+    },
+    "repository_state": {"enum": ["EMPTY", "DOCS_ONLY", "LEGACY_CODE", "MANAGED_HARNESS", "CUSTOM_HARNESS", "MIXED_OR_CONFLICTED"]},
+    "managed_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "owner", "mode"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "owner": {"type": "string", "minLength": 1},
+          "mode": {"enum": ["managed", "managed-section", "observed", "user"]},
+          "sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    },
+    "source_index": {"type": "string"},
+    "unresolved_index": {"type": "string"},
+    "last_updated": {"type": "string", "format": "date-time"}
+  }
+}
+

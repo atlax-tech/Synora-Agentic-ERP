@@ -1,0 +1,7 @@
+interface:
+  display_name: "Harness Update"
+  short_description: "Plan managed Harness drift updates before authorized sync"
+  brand_color: "#F97316"
+  default_prompt: "Use $harness-update to detect drift and show me an immutable file-level plan; do not write until I approve it."
+policy:
+  allow_implicit_invocation: true

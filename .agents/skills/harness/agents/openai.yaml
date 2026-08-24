@@ -1,0 +1,8 @@
+interface:
+  display_name: "Harness Armor"
+  short_description: "Classify a repository and route to the right Harness workflow"
+  brand_color: "#F97316"
+  default_prompt: "Use $harness to inspect this repository and route me to the right Harness Armor workflow."
+policy:
+  allow_implicit_invocation: true
+

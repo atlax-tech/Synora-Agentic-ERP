@@ -1,0 +1,29 @@
+{
+  "$schema": "../.agents/skills/.harness-armor/schemas/manifest.schema.json",
+  "schema_version": "1.0.0",
+  "spec_version": "1.0.0",
+  "generator": {"name": "harness-armor", "version": "0.1.2"},
+  "repository_state": "DOCS_ONLY",
+  "managed_files": [
+    {"path": "AGENTS.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/PRODUCT.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/ARCHITECTURE.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/DESIGN.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/DEVELOPMENT.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/TESTING.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/ACCEPTANCE.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/ROADMAP.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/decisions/README.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/development-log/README.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": "docs/development-log/2026-08-24-harness-bootstrap.md", "owner": "harness-armor", "mode": "managed"},
+    {"path": ".harness/manifest.json", "owner": "harness-armor", "mode": "managed"},
+    {"path": ".harness/source-index.json", "owner": "harness-armor", "mode": "managed"},
+    {"path": ".harness/unresolved.json", "owner": "harness-armor", "mode": "managed"},
+    {"path": ".synora-product-architecture-review.tmp.md", "owner": "user", "mode": "user", "sha256": "3466df0e3fba6c1814fc24d581fbcb2e847c849fe207371392f5192b5e493a6b"},
+    {"path": "README.md", "owner": "user", "mode": "user", "sha256": "499f6fce4cf396696219ad9ed35f00deba3b2648b071bc0bad27aba796a6ebee"},
+    {"path": "LICENSE", "owner": "user", "mode": "user", "sha256": "7f675055f696b69d32f0a549a3b8b676884f5af9ca8cf9436b8fe23cfa19bcfc"}
+  ],
+  "source_index": ".harness/source-index.json",
+  "unresolved_index": ".harness/unresolved.json",
+  "last_updated": "2026-08-24T04:00:00Z"
+}

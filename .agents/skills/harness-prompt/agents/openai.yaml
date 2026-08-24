@@ -1,0 +1,7 @@
+interface:
+  display_name: "Harness Prompt"
+  short_description: "Generate independent execute, test, and review prompts"
+  brand_color: "#F97316"
+  default_prompt: "Use $harness-prompt to generate independent execute, test, and review prompts for each real plan step."
+policy:
+  allow_implicit_invocation: true

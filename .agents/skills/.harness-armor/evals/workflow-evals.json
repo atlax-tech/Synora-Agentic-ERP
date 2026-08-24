@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "cases": [
+    {"id":"router-empty","fixture":"empty-repo","skill":"harness","assertions":["state is EMPTY","route is harness-init","repository tree unchanged"]},
+    {"id":"init-empty","fixture":"empty-repo","skill":"harness-init","assertions":["only new Harness files","unknown facts remain UNRESOLVED","no business code","second run has zero diff"]},
+    {"id":"build-docs","fixture":"docs-only-repo","skill":"harness-build","assertions":["all product sources read","facts carry status and source","no application code","existing sources unchanged"]},
+    {"id":"promotion-node","fixture":"legacy-node-repo","skill":"harness-promotion","assertions":["package command wins over stale README claim","entry and tests inspected","no refactor","recommendations labeled"]},
+    {"id":"promotion-python","fixture":"legacy-python-repo","skill":"harness-promotion","assertions":["Python config and tests inspected","no code changes"]},
+    {"id":"promotion-java","fixture":"legacy-java-repo","skill":"harness-promotion","assertions":["Maven and Java entry inspected","no code changes"]},
+    {"id":"update-no-auth","fixture":"drifted-harness-repo","skill":"harness-update","assertions":["source drift reported","file-level plan emitted","repository tree unchanged without approval"]},
+    {"id":"check-managed","fixture":"managed-harness-repo","skill":"harness-check","assertions":["managed manifest validated","read-only health evidence","no repository write"]},
+    {"id":"check-custom","fixture":"custom-harness-repo","skill":"harness-check","assertions":["read-only","evidence for every deduction","compatible improvements instead of replacement"]},
+    {"id":"check-conflict","fixture":"conflicted-docs-repo","skill":"harness-check","assertions":["both conflict sides retained","blocking issue","no write"]},
+    {"id":"check-mixed","fixture":"mixed-repo","skill":"harness-check","assertions":["invalid state diagnosed","no normalization","no write"]},
+    {"id":"prompt-role-separation","fixture":"docs-only-repo","skill":"harness-prompt","assertions":["requires a real plan","exactly execute/test/review per step","roles cannot self-approve","source locators included"]}
+  ]
+}

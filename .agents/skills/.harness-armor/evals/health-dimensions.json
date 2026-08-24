@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "dimensions": [
+    {"id": "understandability", "weight": 10},
+    {"id": "agents-entry", "weight": 6},
+    {"id": "product-architecture-implementation-consistency", "weight": 10},
+    {"id": "instruction-conflicts", "weight": 7},
+    {"id": "documentation-drift", "weight": 8},
+    {"id": "command-veracity", "weight": 8},
+    {"id": "change-boundaries", "weight": 7},
+    {"id": "verification-loop", "weight": 8},
+    {"id": "source-traceability", "weight": 7},
+    {"id": "state-continuity", "weight": 5},
+    {"id": "file-ownership", "weight": 6},
+    {"id": "context-efficiency", "weight": 5},
+    {"id": "cross-agent-compatibility", "weight": 4},
+    {"id": "updateability", "weight": 5},
+    {"id": "safety", "weight": 2},
+    {"id": "nonfiction", "weight": 2}
+  ],
+  "rule": "Each deduction requires file-level evidence; file count never adds points."
+}

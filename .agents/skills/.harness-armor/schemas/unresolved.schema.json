@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harness-armor.dev/schemas/unresolved.schema.json",
+  "title": "Harness Armor unresolved and conflicted items",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "items"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "question", "impact"],
+        "properties": {
+          "id": {"type": "string"},
+          "status": {"enum": ["UNRESOLVED", "CONFLICTED", "RESOLVED"]},
+          "question": {"type": "string"},
+          "impact": {"type": "string"},
+          "sources": {"type": "array", "items": {"type": "string"}},
+          "resolution": {"type": "string"}
+        }
+      }
+    }
+  }
+}
+

@@ -1,0 +1,8 @@
+interface:
+  display_name: "Harness Check"
+  short_description: "Audit Harness health read-only with evidence for every score"
+  brand_color: "#F97316"
+  default_prompt: "Use $harness-check to audit this Harness read-only and cite evidence for every deduction."
+policy:
+  allow_implicit_invocation: true
+

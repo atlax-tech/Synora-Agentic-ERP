@@ -1,0 +1,29 @@
+{
+  "skill_name": "harness-armor",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "This repository contains only a detailed PRD and design notes. Build a traceable project Harness without application code.",
+      "expected_output": "Routes to harness-build; produces a source-linked fact ledger and Harness plan without inventing stack or writing business code.",
+      "files": ["tests/fixtures/docs-only-repo"],
+      "assertions": ["all sources read", "facts classified", "no business code", "source files preserved"],
+      "expectations": ["all sources read", "facts classified", "no business code", "source files preserved"]
+    },
+    {
+      "id": 2,
+      "prompt": "The managed Harness drifted. Show the exact synchronization plan, but do not edit anything until I approve it.",
+      "expected_output": "Uses harness-update Phase A, reports source drift and immutable file-level plan, and makes zero writes.",
+      "files": ["tests/fixtures/drifted-harness-repo"],
+      "assertions": ["drift evidence", "file-level plan", "authorization request", "zero writes"],
+      "expectations": ["drift evidence", "file-level plan", "authorization request", "zero writes"]
+    },
+    {
+      "id": 3,
+      "prompt": "Audit this custom Harness read-only and give file evidence for every score; do not replace the custom layout.",
+      "expected_output": "Uses harness-check, produces evidence-backed dimensions and compatible recommendations, and makes zero writes.",
+      "files": ["tests/fixtures/custom-harness-repo"],
+      "assertions": ["read-only", "evidence per deduction", "no file-count bonus", "custom layout preserved"],
+      "expectations": ["read-only", "evidence per deduction", "no file-count bonus", "custom layout preserved"]
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "../.agents/skills/.harness-armor/schemas/unresolved.schema.json",
+  "schema_version": "1.0.0",
+  "items": [
+    {
+      "id": "erp-version-pair",
+      "status": "UNRESOLVED",
+      "question": "Which exact Frappe v16 and ERPNext v16 commits form the verified baseline?",
+      "impact": "Runtime, source evidence, tests, and upstream behavior cannot be reproducible until both commits pass the manual P2P baseline.",
+      "sources": [".synora-product-architecture-review.tmp.md#证据边界"]
+    },
+    {
+      "id": "runtime-user-authorization",
+      "status": "UNRESOLVED",
+      "question": "What exact user-bound authorization mechanism connects the Agent Runtime to the Frappe Tool Gateway?",
+      "impact": "Read and write authorization cannot be implemented safely without a verified identity and permission propagation design.",
+      "sources": ["docs/ARCHITECTURE.md#Trust Boundaries"]
+    },
+    {
+      "id": "workflow-engine-spike",
+      "status": "UNRESOLVED",
+      "question": "Which LangGraph and checkpoint integration satisfies interruption, approval, resume, and reconciliation requirements?",
+      "impact": "The runtime dependency and state model must not be fixed before a focused spike validates the required behavior.",
+      "sources": ["docs/ARCHITECTURE.md#Open Architecture Decisions"]
+    },
+    {
+      "id": "model-selection",
+      "status": "UNRESOLVED",
+      "question": "Which local and optional OpenAI-compatible models meet the evaluation baseline?",
+      "impact": "No model quality, latency, or resource claim is currently supported.",
+      "sources": [".synora-product-architecture-review.tmp.md#技术选型建议"]
+    },
+    {
+      "id": "product-commands",
+      "status": "UNRESOLVED",
+      "question": "What are the verified format, lint, type-check, test, integration, and runtime commands?",
+      "impact": "Implementation completion cannot be mechanically proven before project scaffolding exists.",
+      "sources": ["docs/DEVELOPMENT.md#Verified Commands"]
+    },
+    {
+      "id": "third-party-licenses",
+      "status": "UNRESOLVED",
+      "question": "How will MIT project code, ERPNext GPL-3.0, and Harness Armor CC BY-NC content be separated and attributed?",
+      "impact": "Public distribution and reuse claims require an explicit third-party license and notice boundary.",
+      "sources": [".synora-product-architecture-review.tmp.md#风险预估与应对"]
+    },
+    {
+      "id": "multi-agent-adoption-threshold",
+      "status": "UNRESOLVED",
+      "question": "What measured improvement is required before a Multi-Agent role is adopted?",
+      "impact": "Without an A/B threshold, complexity could be introduced for interview optics rather than product value.",
+      "sources": ["docs/DESIGN.md#Multi-Agent Introduction Gate"]
+    },
+    {
+      "id": "vector-retrieval-threshold",
+      "status": "UNRESOLVED",
+      "question": "What retrieval-quality threshold triggers embeddings, vector search, hybrid retrieval, or reranking?",
+      "impact": "The RAG roadmap requires a measured FTS5 baseline before adding infrastructure.",
+      "sources": ["docs/DESIGN.md#Retrieval Design Progression"]
+    }
+  ]
+}

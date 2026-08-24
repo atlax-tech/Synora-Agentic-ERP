@@ -1,0 +1,8 @@
+interface:
+  display_name: "Harness Promotion"
+  short_description: "Promote an existing codebase with a truthful agent Harness"
+  brand_color: "#F97316"
+  default_prompt: "Use $harness-promotion to inspect this real codebase and add an AI-agent-safe Harness without refactoring it."
+policy:
+  allow_implicit_invocation: true
+

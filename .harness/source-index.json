@@ -1,0 +1,30 @@
+{
+  "$schema": "../.agents/skills/.harness-armor/schemas/source-index.schema.json",
+  "schema_version": "1.0.0",
+  "sources": [
+    {
+      "id": "approved-product-architecture-review",
+      "path": ".synora-product-architecture-review.tmp.md",
+      "kind": "product",
+      "status": "CONFIRMED",
+      "sha256": "3466df0e3fba6c1814fc24d581fbcb2e847c849fe207371392f5192b5e493a6b",
+      "locator": "2026-08-24 conditionally approved review; sections 2-11"
+    },
+    {
+      "id": "repository-readme",
+      "path": "README.md",
+      "kind": "product",
+      "status": "CONFIRMED",
+      "sha256": "499f6fce4cf396696219ad9ed35f00deba3b2648b071bc0bad27aba796a6ebee",
+      "locator": "repository title and one-line positioning"
+    },
+    {
+      "id": "repository-license",
+      "path": "LICENSE",
+      "kind": "configuration",
+      "status": "CONFIRMED",
+      "sha256": "7f675055f696b69d32f0a549a3b8b676884f5af9ca8cf9436b8fe23cfa19bcfc",
+      "locator": "MIT license text"
+    }
+  ]
+}

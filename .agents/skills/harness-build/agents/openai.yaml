@@ -1,0 +1,7 @@
+interface:
+  display_name: "Harness Build"
+  short_description: "Build a traceable Harness from product documents"
+  brand_color: "#F97316"
+  default_prompt: "Use $harness-build to read every product source here and build a traceable Harness without writing business code."
+policy:
+  allow_implicit_invocation: true

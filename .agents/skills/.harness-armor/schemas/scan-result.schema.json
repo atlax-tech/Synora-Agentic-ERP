@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harness-armor.dev/schemas/scan-result.schema.json",
+  "title": "Harness Armor repository scan result",
+  "type": "object",
+  "required": ["schema_version", "root", "files", "summary", "limits", "warnings"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "root": {"type": "string"},
+    "files": {"type": "array"},
+    "summary": {"type": "object"},
+    "limits": {"type": "object"},
+    "warnings": {"type": "array"}
+  }
+}
+

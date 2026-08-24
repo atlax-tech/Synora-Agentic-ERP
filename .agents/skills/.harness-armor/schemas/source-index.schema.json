@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harness-armor.dev/schemas/source-index.schema.json",
+  "title": "Harness Armor source index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "sources"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "kind", "status", "sha256"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+          "path": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["product", "architecture", "design", "development", "testing", "acceptance", "plan", "code", "configuration", "other"]},
+          "status": {"enum": ["CONFIRMED", "INFERRED", "UNRESOLVED", "CONFLICTED"]},
+          "sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+          "locator": {"type": "string"}
+        }
+      }
+    }
+  }
+}
+

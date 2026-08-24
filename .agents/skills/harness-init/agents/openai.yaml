@@ -1,0 +1,8 @@
+interface:
+  display_name: "Harness Init"
+  short_description: "Create a fact-safe Harness skeleton in an empty repository"
+  brand_color: "#F97316"
+  default_prompt: "Use $harness-init to create a Harness Engineering skeleton here without guessing product facts or stack."
+policy:
+  allow_implicit_invocation: true
+
