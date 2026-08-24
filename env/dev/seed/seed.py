@@ -18,6 +18,7 @@ frappe.db.delete、ignore_permissions。
 """
 
 import frappe
+from frappe.utils import getdate
 
 # ---- 确定性标识（与 cleanup.py 保持同步）----
 PREFIX = "SYNORA-P1"
@@ -32,14 +33,23 @@ ITEM = "SYNORA-P1-Item-1001"
 WAREHOUSE_NAME = "SYNORA-P1 Stores"
 WAREHOUSE = f"{WAREHOUSE_NAME} - {ABBR}"  # Warehouse autoname 追加公司缩写
 ROOT_WAREHOUSE = f"All Warehouses - {ABBR}"
+FISCAL_YEAR = "SYNORA-P1 FY 2026"  # 交易日期（2026）须落在活跃会计年度内（Inc-3 实跑发现的空 site 缺口）
+BUYING_PRICE_LIST = "SYNORA-P1 Buying CNY"
 
 
 def _get_or_insert(doctype, name, values):
     if frappe.db.exists(doctype, name):
+        doc = frappe.get_doc(doctype, name)
+        drift = {
+            field: {"actual": doc.get(field), "expected": expected}
+            for field, expected in values.items()
+            if doc.meta.has_field(field) and doc.get(field) != expected
+        }
+        if drift:
+            raise Exception(f"[seed] {doctype} 配置漂移: {name}: {drift}")
         print(f"[seed] exists  {doctype}: {name}")
         return
     frappe.get_doc(values).insert()
-    frappe.db.commit()
     print(f"[seed] created {doctype}: {name}")
 
 
@@ -52,6 +62,8 @@ def namespace_counts():
         "Item": frappe.db.count("Item", {"name": like}),
         "Item Group(ns)": frappe.db.count("Item Group", {"name": like}),
         "Warehouse(ns)": frappe.db.count("Warehouse", {"name": like}),
+        "Fiscal Year(ns)": frappe.db.count("Fiscal Year", {"name": like}),
+        "Price List(ns)": frappe.db.count("Price List", {"name": like}),
     }
 
 
@@ -64,7 +76,12 @@ def retained_counts():
     }
 
 
-def run():
+def _seed():
+    # 上游缺陷规避（frappe 6a329d0 locale.py:48-52）：bench console 会话无 lang 上下文，
+    # Fiscal Year after_insert 触发内置 Notification 时 get_locale_value 引用未绑定 value 而崩。
+    # 会话内显式设置语言，不改上游代码。
+    frappe.local.lang = "en"
+
     # 环境基础（标准名，等同 setup wizard 产物，不属命名空间）
     _get_or_insert("UOM", STOCK_UOM, {"doctype": "UOM", "uom_name": STOCK_UOM})
     _get_or_insert("Item Group", ROOT_ITEM_GROUP,
@@ -92,7 +109,31 @@ def run():
         "doctype": "Warehouse", "warehouse_name": WAREHOUSE_NAME,
         "company": COMPANY, "parent_warehouse": ROOT_WAREHOUSE,
     })
+    _get_or_insert("Fiscal Year", FISCAL_YEAR, {
+        "doctype": "Fiscal Year", "year": FISCAL_YEAR,
+        "year_start_date": getdate("2026-01-01"), "year_end_date": getdate("2026-12-31"),
+    })
+    # 首个 Buying Price List 由上游 on_update 自动设为 Buying Settings 默认值。
+    _get_or_insert("Price List", BUYING_PRICE_LIST, {
+        "doctype": "Price List", "price_list_name": BUYING_PRICE_LIST,
+        "currency": "CNY", "buying": 1, "selling": 0, "enabled": 1,
+    })
+    default_price_list = frappe.db.get_single_value("Buying Settings", "buying_price_list")
+    if default_price_list != BUYING_PRICE_LIST:
+        raise Exception(
+            f"[seed] Buying Settings 默认价目表配置漂移: "
+            f"actual={default_price_list!r}, expected={BUYING_PRICE_LIST!r}"
+        )
 
     print(f"[seed] namespace_counts = {namespace_counts()}")
     print(f"[seed] retained_counts  = {retained_counts()}")
-    print("SEED-OK")
+
+
+def run():
+    try:
+        _seed()
+        frappe.db.commit()
+        print("SEED-OK")
+    except Exception:
+        frappe.db.rollback()
+        raise

@@ -19,6 +19,8 @@ ITEM_GROUP = "SYNORA-P1 Items"
 SUPPLIER = "SYNORA-P1-Supplier-1"
 ITEM = "SYNORA-P1-Item-1001"
 WAREHOUSE = "SYNORA-P1 Stores - SP1"
+FISCAL_YEAR = "SYNORA-P1 FY 2026"
+BUYING_PRICE_LIST = "SYNORA-P1 Buying CNY"
 
 
 def _delete(doctype, name):
@@ -26,16 +28,17 @@ def _delete(doctype, name):
         print(f"[cleanup] absent  {doctype}: {name}")
         return
     frappe.delete_doc(doctype, name)
-    frappe.db.commit()
     print(f"[cleanup] deleted {doctype}: {name}")
 
 
-def run():
+def _cleanup():
     # 依赖安全序：Item 先于其 Item Group；自建 Warehouse 先于 Company（公司级联再清默认仓）
+    _delete("Price List", BUYING_PRICE_LIST)
     _delete("Item", ITEM)
     _delete("Item Group", ITEM_GROUP)
     _delete("Supplier", SUPPLIER)
     _delete("Warehouse", WAREHOUSE)
+    _delete("Fiscal Year", FISCAL_YEAR)  # 存在交易单据时会被 link check 阻止（fail closed）
     _delete("Company", COMPANY)  # 上游 on_trash 级联清默认仓库/科目/成本中心
 
     like = ("like", f"{PREFIX}%")
@@ -45,9 +48,20 @@ def run():
         "Item": frappe.db.count("Item", {"name": like}),
         "Item Group(ns)": frappe.db.count("Item Group", {"name": like}),
         "Warehouse(ns)": frappe.db.count("Warehouse", {"name": like}),
+        "Fiscal Year(ns)": frappe.db.count("Fiscal Year", {"name": like}),
+        "Price List(ns)": frappe.db.count("Price List", {"name": like}),
         "Contact(ns)": frappe.db.count("Contact", {"first_name": like}),
     }
     print(f"[cleanup] leftover_counts = {leftover}")
     if any(leftover.values()):
         raise Exception(f"[cleanup] 命名空间内仍有残留，拒绝宣布清理完成: {leftover}")
-    print("CLEANUP-OK")
+
+
+def run():
+    try:
+        _cleanup()
+        frappe.db.commit()
+        print("CLEANUP-OK")
+    except Exception:
+        frappe.db.rollback()
+        raise

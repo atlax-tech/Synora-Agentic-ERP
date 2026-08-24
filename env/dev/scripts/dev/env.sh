@@ -139,13 +139,25 @@ do_seed() {
   _set_env
   local which="$1"
   local cid
+  local output
+  local success_marker
+  case "$which" in
+    seed) success_marker="SEED-OK" ;;
+    cleanup) success_marker="CLEANUP-OK" ;;
+    *) echo "[env] 未知主数据操作: $which" >&2; exit 1 ;;
+  esac
   cid="$(docker compose -f docker-compose.yml ps -q bench)"
   [ -n "$cid" ] || { echo "[env] bench 容器未运行" >&2; exit 1; }
   docker compose -f docker-compose.yml exec -T bench mkdir -p /tmp/synora_seed
   docker cp "$DEV/seed/seed.py" "$cid:/tmp/synora_seed/seed.py"
   docker cp "$DEV/seed/cleanup.py" "$cid:/tmp/synora_seed/cleanup.py"
-  docker compose -f docker-compose.yml exec -T bench bash -lc \
-    "cd /home/frappe/bench && echo 'exec(open(\"/tmp/synora_seed/$which.py\").read(), globals()); run()' | bench --site \"$FRAPPE_SITE\" console"
+  output="$(docker compose -f docker-compose.yml exec -T bench bash -lc \
+    "cd /home/frappe/bench && echo 'exec(open(\"/tmp/synora_seed/$which.py\").read(), globals()); run()' | bench --site \"$FRAPPE_SITE\" console")"
+  printf '%s\n' "$output"
+  if ! grep -qxF "$success_marker" <<<"$output"; then
+    echo "[env] $which 未输出成功标记 $success_marker" >&2
+    return 1
+  fi
 }
 
 case "${1:-}" in
