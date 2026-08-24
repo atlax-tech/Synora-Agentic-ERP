@@ -1,0 +1,28 @@
+# Synora 忽略：本地/环境/运行时产物（不提交）
+# 开发环境运行时数据与生成凭据
+env/dev/.env
+env/dev/.env-local/
+.env-dev/
+.mariadb-data/
+.redis-data/
+
+# bench 站点、数据库、上游 checkout、生成的缓存/资产（SPEC §15 不入库）
+env/dev/.bench/
+env/dev/bench/
+**/sites/assets/
+**/public/assets/
+**/sites/*/private/
+**/sites/*/site_config.json
+**/sites/*/sessions/
+**/archived/
+
+# Python / Node
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.env
+
+# 日志与系统文件
+*.log
+.DS_Store

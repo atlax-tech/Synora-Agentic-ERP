@@ -1,0 +1,94 @@
+# Synora Phase 1 开发环境 Compose（Inc-1 / P1.1）
+# 四服务：bench / mariadb / redis-cache / redis-queue。长运行依赖服务带 healthcheck；
+# 数据卷具名并限定在 COMPOSE_PROJECT_NAME 项目内。真实凭据经 .env（gitignored）注入。
+name: ${COMPOSE_PROJECT_NAME}
+
+services:
+  bench:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        FDP_BASE_IMAGE: ${FDP_BASE_IMAGE}
+        FDP_VER_NODE: ${FDP_VER_NODE}
+        FDP_VER_BENCH: ${FDP_VER_BENCH}
+    image: synora_dev_bench:latest
+    working_dir: /home/frappe
+    command: ["tail", "-f", "/dev/null"]
+    stdin_open: true
+    tty: true
+    volumes:
+      - bench_work:/home/frappe
+    networks:
+      - synora
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in env/dev/.env}
+      - MYSQL_USER=${MYSQL_USER:?MYSQL_USER must be set in env/dev/.env}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set in env/dev/.env}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - FRAPPE_SITE=${FRAPPE_SITE:-dev.localhost}
+      - FDP_REF_FRAPPE=${FDP_REF_FRAPPE}
+      - FDP_REF_ERP_NEXT=${FDP_REF_ERP_NEXT}
+      - FDP_REV_FRAPPE=${FDP_REV_FRAPPE}
+      - FDP_REV_ERP_NEXT=${FDP_REV_ERP_NEXT}
+    ports:
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:9000:9000"
+
+  mariadb:
+    image: mariadb:${FDP_VER_MARIADB}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in env/dev/.env}
+      - MYSQL_USER=${MYSQL_USER:?MYSQL_USER must be set in env/dev/.env}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set in env/dev/.env}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - synora
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis-cache:
+    image: redis:${FDP_VER_REDIS}
+    volumes:
+      - redis_cache_data:/data
+    networks:
+      - synora
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis-queue:
+    image: redis:${FDP_VER_REDIS}
+    volumes:
+      - redis_queue_data:/data
+    networks:
+      - synora
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  bench_work: {}
+  mariadb_data: {}
+  redis_cache_data: {}
+  redis_queue_data: {}
+
+networks:
+  synora: {}
