@@ -1,12 +1,12 @@
 # P2.2 身份授权安全 Spike 取证
 
-- 状态：`EVIDENCE_RECORDED / ADR PROPOSED / IMPLEMENTATION NOT STARTED`
+- 状态：`EVIDENCE_RECORDED / ADR APPROVED / P2.3 IMPLEMENTATION IN PROGRESS`
 - 日期：2026-08-25
 - 阶段：Phase 2 / P2.2
 - 关联：`docs/PLAN.md` §7、§11；`docs/PRD.md` F-001/F-002；`docs/ARCHITECTURE.md` 信任与依赖边界；`docs/SPEC.md` §5、§7、§9、§14
-- 决策载体：[`docs/decisions/ADR-0003-runtime-user-authorization.md`](../decisions/ADR-0003-runtime-user-authorization.md)（`PROPOSED`，未获用户批准）
+- 决策载体：[`docs/decisions/ADR-0003-runtime-user-authorization.md`](../decisions/ADR-0003-runtime-user-authorization.md)（用户于 2026-08-25 批准）
 
-本文件只记录固定 Frappe/ERPNext 基线上的认证、权限和安全边界事实。它不表示已经实现 Agent Run、Gateway、授权钩子或 ERP 读取工具；未实现的项目明确标为 `NOT_IMPLEMENTED_BY_DESIGN` 或 `PENDING_P2.3`。
+本文件只记录固定 Frappe/ERPNext 基线上的认证、权限和安全边界事实。下列“未实现”均指 P2.2 取证完成时的历史状态；后续 P2.3 实现与证据单独记录。
 
 ## 1. 取证范围与固定输入
 
@@ -130,11 +130,11 @@
 
 1. Frappe 的 Cookie、API key/Basic、OAuth 和 `auth_hooks` 都由服务端解释当前请求；用户身份不能由 Runtime 自己声明，但混合 Cookie + Bearer 存在 Cookie 胜出行为。
 2. 用户 Cookie/API key/OAuth 转发会把 ERP 原生权限面、凭据生命周期、混合凭据优先级和 `auth_hooks` 身份改写能力暴露给 Runtime，且 OAuth 还存在 disabled-user 校验缺口；不采纳该方向。
-3. P2.2 推荐的短期安全边界是“按 Run 签发的短期 capability + Frappe 服务端 Run 解析”，备选是最小权限 Runtime 服务凭据 + 服务端 Run 解析。具体 ADR 仍为 `PROPOSED`。
+3. P2.2 推荐的短期安全边界是“按 Run 签发的短期 capability + Frappe 服务端 Run 解析”，用户已于 2026-08-25 批准 ADR-0003。
 4. 实现最小 Run 身份/范围记录是进入 P2.3 Gateway 的前置条件，但不等同于本轮提前实现完整 Phase 3 Agent Run。
 
 ## 6. 复核与停止门禁
 
-- 当前没有生产 `auth_hooks`、Gateway endpoint、Run DocType、ERP 读取工具或 Runtime ERP/DB import。
+- 截至 P2.2 取证提交时没有生产 `auth_hooks`、Gateway endpoint、Run DocType、ERP 读取工具或 Runtime ERP/DB import；后续状态见 P2.3 开发日志。
 - 独立 Test/Review 必须分别审查本文件、ADR 和上述原始结果；任一结论不是 `PASS` 都不得提交。
-- 提交后停止在 ADR 用户批准门禁；批准前不开始 P2.3，也不把 `runtime-user-authorization` 标为已解决。
+- 本 Spike 当时停止在批准门禁；用户已于 2026-08-25 批准，后续实现证据由 P2.3–P2.6 单独记录。

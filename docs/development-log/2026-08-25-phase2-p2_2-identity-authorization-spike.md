@@ -1,7 +1,7 @@
 # Phase 2 / P2.2 身份授权安全 Spike
 
 - 日期：2026-08-25
-- 状态：取证完成，独立 Test=`PASS`、Review=`PASS`、source/Ponytail Review=`PASS`；ADR `PROPOSED`，等待用户批准
+- 状态：取证完成，独立 Test=`PASS`、Review=`PASS`、source/Ponytail Review=`PASS`；ADR 后续于 2026-08-25 获用户批准
 - 关联：`docs/PLAN.md` §7、§11；`docs/security/phase2-p2_2-identity-authorization-spike.md`；`docs/decisions/ADR-0003-runtime-user-authorization.md`
 
 ## 改了什么
@@ -9,7 +9,7 @@
 在固定 Frappe/ERPNext commit pair 上完成了身份授权行为取证，并新增：
 
 1. `docs/security/phase2-p2_2-identity-authorization-spike.md`：记录源码事实、真实 Cookie/API key/OAuth/`auth_hooks`/权限结果，以及尚未实现的 fail-closed 场景。
-2. `docs/decisions/ADR-0003-runtime-user-authorization.md`：比较三种用户绑定方案，提出“按 Run 签发短期 capability、Frappe 服务端解析”的 `PROPOSED` 方向，明确最小 Run 身份/范围记录边界和用户批准门禁。
+2. `docs/decisions/ADR-0003-runtime-user-authorization.md`：比较三种用户绑定方案；本文记录的是当时 `PROPOSED` 的历史状态，该方案随后于 2026-08-25 获用户批准。
 
 没有创建生产 `auth_hooks`、Gateway endpoint、Run DocType、读取工具或 Runtime ERP/数据库依赖；没有修改 Frappe/ERPNext 上游。
 
@@ -51,7 +51,7 @@
 - OAuth 固定源码对关联 disabled user 的检查不足，是拒绝转发用户 OAuth 的证据；没有为了测试而停用命名用户。
 - 混合凭据结果不是统一拒绝：有效 Cookie + 无效 Bearer 仍返回 Cookie Buyer；有效 Cookie + 无效 API key 返回 401。Gateway 必须自行拒绝混合身份来源。
 - Website Viewer 访问 `/app` 实际重定向到 `/desk` 并返回 403；403 页面中的 token 字样不是可用 Desk token，不能作为 CSRF 已启用的证据。
-- 独立 Test、主 Review 和 source/Ponytail Review 均已返回 `PASS`；本次文档增量满足提交门禁。用户批准 ADR 前仍不开始 P2.3。
+- 独立 Test、主 Review 和 source/Ponytail Review 均已返回 `PASS`；本次文档增量满足提交门禁。当时在用户批准 ADR 前未开始 P2.3，随后批准记录见 ADR-0003。
 
 ## 可重复人工验收
 

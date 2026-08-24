@@ -1,6 +1,6 @@
 # ADR-0003：Runtime 与 Frappe 的用户绑定授权方案
 
-- 状态：`PROPOSED`（等待用户批准）
+- 状态：`APPROVED`（用户于 2026-08-25 明确批准）
 - 日期：2026-08-25
 - 关联：`docs/PLAN.md` §7、§11 P2.2；`docs/PRD.md` F-001/F-002；`docs/ARCHITECTURE.md`；`docs/SPEC.md` §5、§7、§9、§14；[`docs/security/phase2-p2_2-identity-authorization-spike.md`](../security/phase2-p2_2-identity-authorization-spike.md)
 - 批准门禁：用户明确批准本 ADR 后，才允许实现最小 Run 身份/范围记录和 P2.3 Gateway；批准前不得创建生产 `auth_hooks`、Gateway endpoint、读取工具或完整 Phase 3 Agent Run。
@@ -68,7 +68,7 @@ Goal、分析状态、UI、checkpoint、Proposal 和写入生命周期仍属于 
 - Frappe 权限是最终门禁；绑定 Run 不得扩大 Buyer、Viewer、Accountant 的原始权限。
 - 任意非 Gateway 路径、任意工具名/版本/字段、任意 URL、直接数据库或 ERP 内部模块路径均拒绝。
 - 跨公司、仓库、文档、停用对象和 User Permission 都必须在每次读取重检；当前 site 只有一家公司，第二公司 fixture 是 P2.3 必须补齐的测试条件。
-- 敏感头和 token 不进入日志、Recorder、响应或模型上下文；只保留脱敏 correlation。
+- 敏感头和 token 不进入日志、Recorder、普通响应或模型上下文；唯一例外是 capability 通过关闭 Recorder 的受控 `issue_run` 成功响应返回一次，之后只存摘要且不可再次读取。
 - 重复只读调用不能改变 Run 身份/范围或产生权限扩张；结果和审计 correlation 可重复核对。
 
 ## 后果（Consequences）
