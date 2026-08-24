@@ -26,6 +26,15 @@ Critical boundaries:
 
 Before a non-trivial change, identify the affected requirement, load only the relevant domain and architecture context, locate upstream source/tests when ERP behavior matters, state unknowns, and define the verification plan. Report actual commands and unrun checks honestly.
 
+Mandatory project workflow:
+
+- For every coding, bug-fix, refactor, code-review, or dependency-selection task, load `.agents/skills/ponytail/SKILL.md` before implementation and use its default `full` level. Ponytail may remove needless complexity, but never an approved requirement, validation, error handling, security control, accessibility requirement, data-safety measure, or necessary test.
+- Code follows the [Clean Code summary](https://gist.github.com/wojteklu/73c6914cc446146b8b533c0988cf8d29): use standard conventions, find root causes, choose descriptive searchable names, keep functions/classes small and single-purpose, prefer few arguments and explicit boundaries, avoid flags/magic values/hidden side effects/repetition, and keep tests readable, fast, independent, and repeatable. Apply these principles contextually; do not add speculative abstractions to satisfy a slogan.
+- Explain every repository change in a clear Chinese entry under `docs/development-log/`: what changed, why, actual verification, limitations, and repeatable manual acceptance. Keep code comments for intent, clarification, or consequence warnings; do not paste the development explanation into source comments.
+- Make every change as a small coherent commit after its relevant checks pass. Do not mix unrelated work or include user-owned temporary files.
+- Before changing either README, load `.agents/skills/readme-writer/SKILL.md` and keep `README.md` and `README.zh-CN.md` semantically aligned.
+- Before a release, tag, product version change, dependency baseline upgrade, or pinned ERP/Frappe version update, call an independent adversarial sub-agent. Give it the original requirement, diff, tests, runtime evidence, architecture and security boundaries; require `PASS`, `CHANGES_REQUIRED`, or `BLOCKED` with evidence before proceeding.
+
 Verified Harness command:
 
 ```bash
