@@ -160,6 +160,38 @@ do_seed() {
   fi
 }
 
+# P2P 测试用户初始化（Inc-3）：Administrator 仅在此建命名用户+角色，密码经环境变量注入
+do_p2p_users() {
+  _set_env
+  [ -n "${SYNORA_P2P_USER_PWD:-}" ] || { echo "[env] .env 缺少 SYNORA_P2P_USER_PWD" >&2; exit 1; }
+  local cid
+  cid="$(docker compose -f docker-compose.yml ps -q bench)"
+  [ -n "$cid" ] || { echo "[env] bench 容器未运行" >&2; exit 1; }
+  docker compose -f docker-compose.yml exec -T bench mkdir -p /tmp/synora_seed
+  docker cp "$DEV/seed/p2p_users.py" "$cid:/tmp/synora_seed/p2p_users.py"
+  local output
+  output="$(docker compose -f docker-compose.yml exec -T -e SYNORA_P2P_USER_PWD bench bash -lc \
+    "cd /home/frappe/bench && echo 'exec(open(\"/tmp/synora_seed/p2p_users.py\").read(), globals()); run()' | bench --site \"$FRAPPE_SITE\" console")"
+  printf '%s\n' "$output"
+  if ! grep -qxF "P2P-USERS-OK" <<<"$output"; then
+    echo "[env] p2p-users 未输出成功标记 P2P-USERS-OK" >&2
+    return 1
+  fi
+}
+
+# 人工 P2P 运行器（Inc-3）：纯 HTTP 模拟人工 MR→PO→PR→PI + 失败用例
+do_p2p_run() {
+  _set_env
+  [ -n "${SYNORA_P2P_USER_PWD:-}" ] || { echo "[env] .env 缺少 SYNORA_P2P_USER_PWD" >&2; exit 1; }
+  local cid
+  cid="$(docker compose -f docker-compose.yml ps -q bench)"
+  [ -n "$cid" ] || { echo "[env] bench 容器未运行" >&2; exit 1; }
+  docker compose -f docker-compose.yml exec -T bench mkdir -p /tmp/synora_p2p
+  docker cp "$DEV/p2p/p2p_run.py" "$cid:/tmp/synora_p2p/p2p_run.py"
+  docker compose -f docker-compose.yml exec -T -e SYNORA_P2P_USER_PWD bench bash -lc \
+    "cd /home/frappe/bench && env/bin/python /tmp/synora_p2p/p2p_run.py"
+}
+
 case "${1:-}" in
   up) _set_env; docker compose -f docker-compose.yml up -d --wait "${@:2}" ;;
   down) _set_env; docker compose -f docker-compose.yml down --remove-orphans ;;
@@ -170,6 +202,8 @@ case "${1:-}" in
   bash) _set_env; docker compose -f docker-compose.yml exec -T bench bash -lc "${2:-echo 'no cmd'}" ;;
   seed) do_seed seed ;;
   cleanup) do_seed cleanup ;;
+  p2p-users) do_p2p_users ;;
+  p2p-run) do_p2p_run ;;
   info) _set_env; env | grep -E '^(FDP_|COMPOSE_|MYSQL_|FRAPPE_|ADMIN_)' | sed 's/=.*/=<set>/' ;;
-  *) echo "用法: env.sh <up|down|reset|resolve|bootstrap|start|bash|seed|cleanup|info>" >&2; exit 1 ;;
+  *) echo "用法: env.sh <up|down|reset|resolve|bootstrap|start|bash|seed|cleanup|p2p-users|p2p-run|info>" >&2; exit 1 ;;
 esac
