@@ -39,6 +39,23 @@ Before a release or product/dependency version update:
 python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .
 ```
 
+### Phase 1 environment commands (verified 2026-08-24, exit 0)
+
+Candidate environment is a Docker Bench inside `env/dev/` (see `docs/decisions/ADR-0001-docker-bench-environment.md`); the frozen baseline pair is recorded in `docs/decisions/ADR-0002-frozen-baseline-pair.md`.
+
+```bash
+bash env/dev/scripts/dev/env.sh up          # 启动依赖服务并等待健康
+bash env/dev/scripts/dev/env.sh bootstrap   # 空卷重建候选环境（含双 SHA 断言；P1.1 证据）
+bash env/dev/scripts/dev/env.sh seed        # 确定性主数据（期望 SEED-OK）
+bash env/dev/scripts/dev/env.sh p2p-users   # 命名测试用户（期望 P2P-USERS-OK）
+bash env/dev/scripts/dev/env.sh p2p-run     # 人工 P2P 基线（期望 P2P-RUN-OK）
+bash env/dev/scripts/dev/env.sh bash \
+  "cd /home/frappe/bench && git -C apps/frappe rev-parse HEAD && git -C apps/erpnext rev-parse HEAD && git -C apps/frappe status --porcelain && git -C apps/erpnext status --porcelain"
+# 期望：两 SHA 与 ADR-0002 一致，两仓无输出
+```
+
+这些是 Phase 1 环境命令，不是产品命令。
+
 > **UNRESOLVED:** What are the product format, lint, type-check, unit-test, integration-test, and runtime commands?
 >
 > Impact: agents cannot prove implementation completion until the code and dependency manifests exist.

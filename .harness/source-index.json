@@ -7,7 +7,7 @@
       "path": "docs/PRD.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "34457cbf54aead2dd937c7282d08090e45b74eb4c4bb59977dc2c3ed98b86240",
+      "sha256": "6ed32db529ee57c48d29edb19b9ba37c6ab095b679612dc7f7babfb099d6e8e8",
       "locator": "single merged product definition and requirements baseline; unresolved decisions remain explicitly marked"
     },
     {
@@ -15,7 +15,7 @@
       "path": "docs/ARCHITECTURE.md",
       "kind": "architecture",
       "status": "CONFIRMED",
-      "sha256": "90fc0ead10a2b736c91c5f5574792bb29b96b77a706247a7865c26c95f280277",
+      "sha256": "0e15cca0c8fe46c6c1998ed0d40a3744110ff1f349f8f3adb8ed093ab7f3f1b7",
       "locator": "approved target architecture; open implementation decisions remain explicit"
     },
     {

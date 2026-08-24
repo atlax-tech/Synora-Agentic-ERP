@@ -4,10 +4,11 @@
   "items": [
     {
       "id": "erp-version-pair",
-      "status": "UNRESOLVED",
+      "status": "RESOLVED",
       "question": "Which exact Frappe v16 and ERPNext v16 commits form the verified baseline?",
       "impact": "Runtime, source evidence, tests, and upstream behavior cannot be reproducible until both commits pass the manual P2P baseline.",
-      "sources": ["docs/ARCHITECTURE.md#Open Architecture Decisions", "docs/PRD.md#12-待确认问题"]
+      "sources": ["docs/ARCHITECTURE.md#Open Architecture Decisions", "docs/PRD.md#12-待确认问题"],
+      "resolution": "Fixed by docs/decisions/ADR-0002-frozen-baseline-pair.md (2026-08-24): Frappe 6a329d068416768ec47ccd3326b9cc95a8d7bf99 (16.31.0) + ERPNext 11e0ba0a1c45f217e2e73e885f699102d06da325 (16.32.3); manual P2P baseline P2P-RUN-OK and independent adversarial review passed."
     },
     {
       "id": "runtime-user-authorization",

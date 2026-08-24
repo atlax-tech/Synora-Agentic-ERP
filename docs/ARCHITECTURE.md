@@ -111,7 +111,7 @@ The initial retrieval implementation uses curated, versioned sources with SQLite
 
 ## Open Architecture Decisions
 
-- Complete Frappe/ERPNext commit pair.
+- Complete Frappe/ERPNext commit pair. — **RESOLVED 2026-08-24**：`docs/decisions/ADR-0002-frozen-baseline-pair.md` 固定 Frappe `6a329d0` (16.31.0) + ERPNext `11e0ba0` (16.32.3)。
 - Exact user-bound authorization mechanism between Frappe and the Agent Runtime.
 - Workflow engine spike results and LangGraph checkpoint adapter.
 - Local model and optional provider set selected by evaluation.
