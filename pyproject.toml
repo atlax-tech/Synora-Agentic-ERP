@@ -1,0 +1,49 @@
+[project]
+name = "synora_agentic_erp"
+authors = [{ name = "Atlax-Tech" }]
+description = "Governed Agentic Enterprise Operations for ERPNext"
+requires-python = ">=3.14,<3.15"
+readme = "README.md"
+dynamic = ["version"]
+dependencies = []
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[dependency-groups]
+dev = [
+    "mypy==2.3.1",
+    "pytest==9.1.1",
+    "ruff==0.16.4",
+]
+
+[tool.uv.workspace]
+members = ["services/agent_runtime"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+exclude = [".agents", ".workbuddy", "env/dev"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+files = [
+    "synora_agentic_erp/__init__.py",
+    "synora_agentic_erp/hooks.py",
+    "services/agent_runtime/src",
+    "tests",
+]
+python_version = "3.14"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+pythonpath = ["services/agent_runtime/src"]
+testpaths = ["tests", "services/agent_runtime/tests"]

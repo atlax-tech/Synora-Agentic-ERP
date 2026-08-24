@@ -1,0 +1,6 @@
+app_name = "synora_agentic_erp"
+app_title = "Synora Agentic ERP"
+app_publisher = "Atlax-Tech"
+app_description = "Governed Agentic Enterprise Operations for ERPNext"
+app_email = ""
+app_license = "MIT"

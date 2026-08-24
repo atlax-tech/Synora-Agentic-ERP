@@ -19,6 +19,9 @@ services:
     tty: true
     volumes:
       - bench_work:/home/frappe
+      - ../..:/workspace/synora:ro
+      - type: tmpfs
+        target: /workspace/synora/env/dev
     networks:
       - synora
     depends_on:

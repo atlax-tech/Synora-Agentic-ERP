@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 SCRIPT := env/dev/scripts/dev/env.sh
 
-.PHONY: up down reset resolve bootstrap start bash info
+.PHONY: up down reset resolve bootstrap start bash app-install app-test info
 
 up:       ## 启动依赖服务并等待健康
 	@$(SCRIPT) up
@@ -24,6 +24,12 @@ start:     ## 前台启动 Bench 开发进程
 
 bash:     ## 在 bench 容器执行命令: make bash CMD="bench --version"
 	@$(SCRIPT) bash "$(CMD)"
+
+app-install: ## 通过只读仓库挂载幂等安装 Synora App
+	@$(SCRIPT) app-install
+
+app-test:    ## 安装 Synora App 并运行其 Bench 测试
+	@$(SCRIPT) app-test
 
 info:     ## 打印非敏感环境变量键名
 	@$(SCRIPT) info

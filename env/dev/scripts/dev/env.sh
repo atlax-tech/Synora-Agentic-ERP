@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Synora Phase 1 开发环境脚本（Inc-1 / P1.1）
-# 用法: env.sh <up|down|reset|resolve|bootstrap|start|bash|seed|cleanup|info>
+# 用法: env.sh <up|down|reset|resolve|bootstrap|start|bash|app-install|app-test|seed|cleanup|info>
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -192,6 +192,41 @@ do_p2p_run() {
     "cd /home/frappe/bench && env/bin/python /tmp/synora_p2p/p2p_run.py"
 }
 
+do_app_install() {
+  _set_env
+  local app="synora_agentic_erp"
+  docker compose -f docker-compose.yml exec -T bench bash -lc \
+    "set -euo pipefail
+     cd /home/frappe/bench
+     if [ -e apps/$app ] || [ -L apps/$app ]; then
+       link_target=\"\$(readlink \"apps/$app\")\"
+       if [ ! -L apps/$app ] || [ \"\$link_target\" != \"/workspace/synora\" ]; then
+         echo \"[env] apps/$app 已存在但不是 /workspace/synora soft-link，拒绝继续\" >&2
+         exit 1
+       fi
+     else
+       bench get-app --soft-link /workspace/synora
+     fi
+     if ! bench --site \"$FRAPPE_SITE\" list-apps | awk '{print \$1}' | grep -qxF '$app'; then
+       bench --site \"$FRAPPE_SITE\" install-app '$app'
+     fi
+     bench --site \"$FRAPPE_SITE\" migrate
+     echo '[env] $app installed'"
+}
+
+do_app_test() {
+  do_app_install
+  docker compose -f docker-compose.yml exec -T bench bash -lc \
+    "set -euo pipefail
+     cd /home/frappe/bench
+     bench --site \"$FRAPPE_SITE\" set-config allow_tests 1
+     restore_tests() {
+       bench --site \"$FRAPPE_SITE\" set-config allow_tests 0 >/dev/null
+     }
+     trap restore_tests EXIT
+     bench --site \"$FRAPPE_SITE\" run-tests --app synora_agentic_erp"
+}
+
 case "${1:-}" in
   up) _set_env; docker compose -f docker-compose.yml up -d --wait "${@:2}" ;;
   down) _set_env; docker compose -f docker-compose.yml down --remove-orphans ;;
@@ -200,10 +235,12 @@ case "${1:-}" in
   bootstrap) _bootstrap ;;
   start) _set_env; docker compose -f docker-compose.yml exec bench bash -lc 'cd /home/frappe/bench && exec bench start' ;;
   bash) _set_env; docker compose -f docker-compose.yml exec -T bench bash -lc "${2:-echo 'no cmd'}" ;;
+  app-install) do_app_install ;;
+  app-test) do_app_test ;;
   seed) do_seed seed ;;
   cleanup) do_seed cleanup ;;
   p2p-users) do_p2p_users ;;
   p2p-run) do_p2p_run ;;
   info) _set_env; env | grep -E '^(FDP_|COMPOSE_|MYSQL_|FRAPPE_|ADMIN_)' | sed 's/=.*/=<set>/' ;;
-  *) echo "用法: env.sh <up|down|reset|resolve|bootstrap|start|bash|seed|cleanup|p2p-users|p2p-run|info>" >&2; exit 1 ;;
+  *) echo "用法: env.sh <up|down|reset|resolve|bootstrap|start|bash|app-install|app-test|seed|cleanup|p2p-users|p2p-run|info>" >&2; exit 1 ;;
 esac
