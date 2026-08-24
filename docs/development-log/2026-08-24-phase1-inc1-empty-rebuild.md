@@ -64,6 +64,9 @@ Inc-1 验收本来就要求"修正后的 bootstrap 从空卷完整重跑"，两�
   必要性（含旧凭据的备份文件不应长期保留）。
 - `FDP_VER_NODE/MARIADB/REDIS` 仍为大版本 tag（Node 24 / MariaDB 11.4 / Redis 7），
   非 digest 级固定；完整依赖固定属 Inc-5（P1.5）晋升要求，本步保持计划规定的候选态。
+  【2026-08-24 补充】"完整依赖固定属 Inc-5（P1.5）晋升要求"的表述已被
+  `docs/decisions/ADR-0002-frozen-baseline-pair.md` 取代：P1.5 冻结范围仅为
+  Frappe/ERPNext commit pair；Node/MariaDB/Redis 维持 major tag 的说明与风险缓释见该 ADR。
 - 候选 SHA 尚未经 P1.5 独立对抗审查晋升正式；此前仅可用于 Inc-2~Inc-4 的候选态工作。
 - 备份内含旧 site db 密码（已随卷销毁的旧凭据），文件本身不外发、不提交。
 
