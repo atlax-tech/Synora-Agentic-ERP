@@ -49,6 +49,14 @@
       "status": "CONFIRMED",
       "sha256": "7f675055f696b69d32f0a549a3b8b676884f5af9ca8cf9436b8fe23cfa19bcfc",
       "locator": "MIT license text"
+    },
+    {
+      "id": "phase2-p2-1-engineering-skeleton",
+      "path": "docs/development-log/2026-08-24-phase2-p2_1-engineering-skeleton.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "e6268a51ab193877ff74063d7abe03c2e557365e913967fa383755727c242f3c",
+      "locator": "P2.1 implementation commands, Runtime health evidence, Bench installation/test evidence, limitations, and repeatable manual acceptance"
     }
   ]
 }

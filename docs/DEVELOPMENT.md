@@ -1,6 +1,6 @@
 # Development
 
-Status: `CONFIRMED` engineering policy; implementation commands are `UNRESOLVED`.
+Status: `CONFIRMED` engineering policy; P2.1 implementation commands are `CONFIRMED` (verified 2026-08-24).
 
 ## Change Protocol
 
@@ -39,6 +39,51 @@ Before a release or product/dependency version update:
 python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .
 ```
 
+### P2.1 project commands (verified 2026-08-24)
+
+The root `Makefile` is the executable source of truth for the P2.1 project
+checks. It selects Python 3.14, and the repository requires `>=3.14,<3.15`.
+
+```bash
+make setup
+make format
+make format-check
+make lint
+make type
+make unit
+make integration
+make runtime
+```
+
+Observed results for the 2026-08-24 P2.1 evidence run:
+
+- `make setup` exited 0; the frozen workspace resolved 30 packages and synced
+  successfully.
+- `make format` exited 0 with 52 files unchanged; `make format-check` exited
+  0 with 52 files already formatted.
+- `make lint` exited 0 with `All checks passed!`.
+- `make type` exited 0 with mypy reporting no issues in 5 source files.
+- `make unit` exited 0 with 4 tests passed.
+- `make integration` exited 0; the Bench Frappe test reported `Ran 1 test ...
+  OK` and the site listed `synora_agentic_erp` as installed.
+
+`make runtime` is a long-running foreground command. Keep it running and, in
+another terminal, verify the health contract:
+
+```bash
+curl --fail http://127.0.0.1:8001/healthz
+```
+
+The expected response is
+`{"service":"synora-agent-runtime","status":"ok"}`. Stop the foreground
+server with `Ctrl-C` after the check; its termination status is not the health
+gate. The runtime exposes no additional HTTP documentation route (`/docs`
+returns 404).
+
+The full evidence, limitations, and repeatable manual acceptance steps are in
+`docs/development-log/2026-08-24-phase2-p2_1-engineering-skeleton.md` and are
+anchored to commit `e10a4dd`.
+
 ### Phase 1 environment commands (verified 2026-08-24, exit 0)
 
 Candidate environment is a Docker Bench inside `env/dev/` (see `docs/decisions/ADR-0001-docker-bench-environment.md`); the frozen baseline pair is recorded in `docs/decisions/ADR-0002-frozen-baseline-pair.md`.
@@ -55,11 +100,6 @@ bash env/dev/scripts/dev/env.sh bash \
 ```
 
 这些是 Phase 1 环境命令，不是产品命令。
-
-> **UNRESOLVED:** What are the product format, lint, type-check, unit-test, integration-test, and runtime commands?
->
-> Impact: agents cannot prove implementation completion until the code and dependency manifests exist.
-> Required evidence: executable project configuration and successful command output.
 
 ## Sources
 
