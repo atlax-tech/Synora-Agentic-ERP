@@ -35,6 +35,7 @@ WAREHOUSE = f"{WAREHOUSE_NAME} - {ABBR}"  # Warehouse autoname 追加公司缩�
 ROOT_WAREHOUSE = f"All Warehouses - {ABBR}"
 FISCAL_YEAR = "SYNORA-P1 FY 2026"  # 交易日期（2026）须落在活跃会计年度内（Inc-3 实跑发现的空 site 缺口）
 BUYING_PRICE_LIST = "SYNORA-P1 Buying CNY"
+GLOBAL_CURRENCY = "CNY"  # 空 site 未跑 Setup Wizard 时仍为安装默认 INR
 
 
 def _get_or_insert(doctype, name, values):
@@ -82,6 +83,16 @@ def _seed():
     # 会话内显式设置语言，不改上游代码。
     frappe.local.lang = "en"
 
+    global_defaults = frappe.get_doc("Global Defaults", "Global Defaults")
+    if (
+        global_defaults.default_currency != GLOBAL_CURRENCY
+        or frappe.defaults.get_global_default("currency") != GLOBAL_CURRENCY
+    ):
+        previous_currency = global_defaults.default_currency
+        global_defaults.default_currency = GLOBAL_CURRENCY
+        global_defaults.save()  # 与 ERPNext Setup Wizard 相同，由 on_update 同步运行默认值
+        print(f"[seed] global currency {previous_currency!r} -> {GLOBAL_CURRENCY}")
+
     # 环境基础（标准名，等同 setup wizard 产物，不属命名空间）
     _get_or_insert("UOM", STOCK_UOM, {"doctype": "UOM", "uom_name": STOCK_UOM})
     _get_or_insert("Item Group", ROOT_ITEM_GROUP,
@@ -124,6 +135,11 @@ def _seed():
             f"[seed] Buying Settings 默认价目表配置漂移: "
             f"actual={default_price_list!r}, expected={BUYING_PRICE_LIST!r}"
         )
+    if (
+        frappe.db.get_single_value("Global Defaults", "default_currency") != GLOBAL_CURRENCY
+        or frappe.defaults.get_global_default("currency") != GLOBAL_CURRENCY
+    ):
+        raise Exception("[seed] Global Defaults 单据与运行默认币种未同时写入 CNY")
 
     print(f"[seed] namespace_counts = {namespace_counts()}")
     print(f"[seed] retained_counts  = {retained_counts()}")
