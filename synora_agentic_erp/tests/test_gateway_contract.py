@@ -138,6 +138,7 @@ class TestGatewayContract(FrappeTestCase):
         self.assertTrue(response["ok"])
         self.assertEqual(response["tool"]["risk"], "READ")
         self.assertEqual(response["data"], [{"value": "bearing"}])
+        self.assertEqual(response["completeness"], {"status": "COMPLETE", "omissions": {}})
         self.assertEqual(response["page"]["limit"], 1)
         self.assertIn("erpnext_revision", response["snapshot"])
         self.assertEqual(frappe.session.user, "Guest")

@@ -64,6 +64,9 @@ def register(
 
 
 def dispatch(request: GatewayRequest, run: RunContext) -> dict[str, Any]:
+    from synora_agentic_erp.gateway import tools as product_tools
+
+    _ = product_tools
     started_at = monotonic()
     spec = _TOOLS.get((request.tool.name, request.tool.version))
     if spec is None:
@@ -105,6 +108,10 @@ def dispatch(request: GatewayRequest, run: RunContext) -> dict[str, Any]:
             "source_modified_at": result.source_modified_at,
             "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
             "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+        },
+        "completeness": {
+            "status": "PARTIAL" if result.omissions else "COMPLETE",
+            "omissions": result.omissions,
         },
         "page": {
             "offset": offset,

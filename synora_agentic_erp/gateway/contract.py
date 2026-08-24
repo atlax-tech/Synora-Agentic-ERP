@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from typing import Any
 from uuid import UUID
 
@@ -43,6 +44,7 @@ class InputField:
 class ToolResult:
     items: list[dict[str, JsonScalar]]
     source_modified_at: str | None = None
+    omissions: dict[str, int] = dataclass_field(default_factory=dict)
 
 
 def _strict_object(value: object, fields: set[str], label: str) -> dict[str, Any]:

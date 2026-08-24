@@ -46,3 +46,13 @@ def test_runtime_direct_dependencies_are_boundary_safe() -> None:
     assert "erpnext" not in pyproject.lower()
     assert "mariadb" not in pyproject.lower()
     assert "pymysql" not in pyproject.lower()
+
+
+def test_frappe_read_tools_do_not_bypass_orm_or_import_erp_internals() -> None:
+    source = Path("synora_agentic_erp/gateway/tools.py").read_text(encoding="utf-8")
+
+    assert "frappe.db" not in source
+    assert "frappe.get_all" not in source
+    assert "frappe.qb" not in source
+    assert "import erpnext" not in source
+    assert "from erpnext" not in source
