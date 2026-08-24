@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Synora Phase 1 开发环境脚本（Inc-1 / P1.1）
-# 用法: env.sh <up|down|reset|resolve|bootstrap|start|bash|info>
+# 用法: env.sh <up|down|reset|resolve|bootstrap|start|bash|seed|cleanup|info>
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -134,6 +134,20 @@ do_reset() {
   docker compose -f docker-compose.yml down --volumes --remove-orphans
 }
 
+# 主数据 seed/cleanup（P1.2）：拷入容器后经 bench console 执行（bench execute 仅接受已安装 app 的模块）
+do_seed() {
+  _set_env
+  local which="$1"
+  local cid
+  cid="$(docker compose -f docker-compose.yml ps -q bench)"
+  [ -n "$cid" ] || { echo "[env] bench 容器未运行" >&2; exit 1; }
+  docker compose -f docker-compose.yml exec -T bench mkdir -p /tmp/synora_seed
+  docker cp "$DEV/seed/seed.py" "$cid:/tmp/synora_seed/seed.py"
+  docker cp "$DEV/seed/cleanup.py" "$cid:/tmp/synora_seed/cleanup.py"
+  docker compose -f docker-compose.yml exec -T bench bash -lc \
+    "cd /home/frappe/bench && echo 'exec(open(\"/tmp/synora_seed/$which.py\").read(), globals()); run()' | bench --site \"$FRAPPE_SITE\" console"
+}
+
 case "${1:-}" in
   up) _set_env; docker compose -f docker-compose.yml up -d --wait "${@:2}" ;;
   down) _set_env; docker compose -f docker-compose.yml down --remove-orphans ;;
@@ -142,6 +156,8 @@ case "${1:-}" in
   bootstrap) _bootstrap ;;
   start) _set_env; docker compose -f docker-compose.yml exec bench bash -lc 'cd /home/frappe/bench && exec bench start' ;;
   bash) _set_env; docker compose -f docker-compose.yml exec -T bench bash -lc "${2:-echo 'no cmd'}" ;;
+  seed) do_seed seed ;;
+  cleanup) do_seed cleanup ;;
   info) _set_env; env | grep -E '^(FDP_|COMPOSE_|MYSQL_|FRAPPE_|ADMIN_)' | sed 's/=.*/=<set>/' ;;
-  *) echo "用法: env.sh <up|down|reset|resolve|bootstrap|start|bash|info>" >&2; exit 1 ;;
+  *) echo "用法: env.sh <up|down|reset|resolve|bootstrap|start|bash|seed|cleanup|info>" >&2; exit 1 ;;
 esac
