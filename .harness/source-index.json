@@ -3,6 +3,14 @@
   "schema_version": "1.0.0",
   "sources": [
     {
+      "id": "approved-product-requirements",
+      "path": "PRD.md",
+      "kind": "product",
+      "status": "CONFIRMED",
+      "sha256": "59588ef56623be91b8f854d414a1bb62435bcb150e676db2b3a0cb468214824e",
+      "locator": "approved product requirements baseline; unresolved decisions remain explicitly marked"
+    },
+    {
       "id": "approved-product-architecture-review",
       "path": ".synora-product-architecture-review.tmp.md",
       "kind": "product",

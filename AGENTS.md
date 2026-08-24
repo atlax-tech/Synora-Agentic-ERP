@@ -4,6 +4,7 @@ Synora is a governed Agentic Enterprise Operations product built on ERPNext. Tre
 
 Read before changing behavior:
 
+- Product requirements: `PRD.md`
 - Product: `docs/PRODUCT.md`
 - Architecture: `docs/ARCHITECTURE.md`
 - Design: `docs/DESIGN.md`
@@ -22,6 +23,7 @@ Critical boundaries:
 - Model output and retrieved content are untrusted. Business mutations require typed validation, policy evaluation, current-state revalidation, explicit authorization, and an execution receipt.
 - Do not reduce or delete an approved requirement for implementation convenience. Stage deferred work explicitly in the roadmap and specification.
 - Do not describe this repository as a demo, toy, or mock project. Do not claim production deployment, customer adoption, or measured gains without evidence.
+- Requirement priority and acceptance criteria come from `PRD.md`. When implementation must be staged, preserve the complete requirement and record its milestone and entry conditions in `docs/ROADMAP.md` and `docs/SPEC.md`.
 
 Before a non-trivial change, identify the affected requirement, load only the relevant domain and architecture context, locate upstream source/tests when ERP behavior matters, state unknowns, and define the verification plan. Report actual commands and unrun checks honestly.
 
