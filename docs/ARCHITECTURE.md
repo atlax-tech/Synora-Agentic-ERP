@@ -70,6 +70,35 @@ The Agent Runtime may call only registered typed gateway operations. It must not
 - Make this repository installable as the Synora Frappe App at its root; keep `services/agent_runtime` as a separate Python project boundary.
 - Use Bench for the initial development baseline. Add a reproducible `frappe_docker` custom/layered integration environment after the app skeleton is stable.
 
+## Approval and Workflow Authority
+
+- ERPNext Workflow, roles, permissions, and document controllers remain the authoritative enterprise policy inputs. Synora may enforce stricter policy but never weaken configured ERP rules.
+- The controlled test baseline allows the initiator to explicitly confirm MR Draft and PO Draft actions. This is a confirmation boundary, not permission for silent execution.
+- PO Submit, Purchase Receipt, Purchase Invoice, and Payment-related mutations require an authenticated approver who is different from the initiator.
+- Approval is not execution. The gateway rechecks the approver, initiator, current document state, policy, and idempotency immediately before mutation.
+- Missing, conflicting, stale, or unverifiable Workflow configuration fails closed. The exact Frappe Role and Workflow mapping remains unresolved until the ERP baseline is running.
+
+## Technology Selection and Adoption Gates
+
+The entries below describe the approved target or a conditional candidate. They do not claim that dependencies are installed, version-compatible, or runtime-verified.
+
+| Layer | Selection | Status and adoption gate |
+| --- | --- | --- |
+| ERP system of record | ERPNext v16, Frappe v16, MariaDB, Redis | `CONFIRMED` family; exact Frappe/ERPNext commits freeze only after the manual P2P baseline passes |
+| ERP extension | Root-installable Frappe Custom App using documented REST, whitelisted methods, hooks, and extension points | `CONFIRMED` approach; choose each hook/API from pinned-source and runtime evidence, never override upstream by convenience |
+| Agent Runtime | Python sidecar with FastAPI, Pydantic v2, and HTTPX | `CONFIRMED` target boundary; exact versions require a Frappe Python compatibility check and lockfile |
+| Structured contracts | Versioned Pydantic models and discriminated unions | `CONFIRMED` safety boundary; unknown actions and fields fail closed |
+| Stateful Agent workflow | Deterministic services by default; LangGraph only for multi-step interruption, approval, resume, and reconciliation | `CONDITIONAL`; adopt only after a checkpoint/resume spike proves the required behavior |
+| Model access | Provider interface; local Ollama/OpenAI-compatible runtime by default, optional remote compatible providers | `CONDITIONAL`; concrete models are selected by the same evaluation set, while CI uses deterministic recorded or mock responses |
+| Retrieval | Curated versioned Markdown, metadata filtering, SQLite FTS5/BM25 baseline | `CONFIRMED` first stage; embeddings, vector search, hybrid retrieval, and reranking require measured evaluation benefit |
+| Agent checkpoint | SQLite for development or a verified single-instance workflow only | `CONDITIONAL`; never treat checkpoint state as an ERP fact or claim production scalability before a storage decision |
+| Frontend | Synora AI Operations inside ERPNext Desk using verified Frappe components | `CONFIRMED` product form; detailed component/token baseline remains a frontend design decision |
+| Python engineering | `uv` lock, Ruff, mypy, pytest | `CONFIRMED` target toolchain; commands become verified only after scaffolding and successful execution |
+| Observability | Structured logs plus run/action/tool/receipt correlation identifiers | `CONFIRMED` baseline; external observability SaaS is not required and must justify data, cost, and security impact |
+| Development environment | Bench first; reproducible `frappe_docker` custom/layered image after the app skeleton is stable | `CONFIRMED` staged approach; disposable demo images are not an enterprise integration environment |
+
+The baseline explicitly excludes default Multi-Agent orchestration, arbitrary MCP/HTTP tools, direct SQL, an unmeasured vector database, Kafka, Kubernetes, and paid tracing platforms. These are not permanently banned, but each requires a demonstrated product or operational need, an architecture decision, failure analysis, and evaluation evidence before adoption.
+
 ## Multi-Agent Evolution Boundary
 
 The first implementation uses one Agent with deterministic workflow control. Stable role, typed state, event, handoff, tool, policy, and audit contracts must permit later role separation without replacing the ERP Gateway.
@@ -88,6 +117,7 @@ The initial retrieval implementation uses curated, versioned sources with SQLite
 - Local model and optional provider set selected by evaluation.
 - Production storage and scaling path beyond the first single-instance implementation.
 - Third-party license boundary for GPL and CC BY-NC materials.
+- Exact ERPNext Workflow, Role, permission, and multi-level approval mapping implementing the confirmed approval baseline.
 
 ## Sources
 

@@ -129,7 +129,7 @@ Until that baseline is verified:
 - Approved Chinese/English product terminology and status glossary.
 - Supported desktop viewport and browser matrix.
 - Accessibility conformance target and verification tooling.
-- Detailed approval interaction for self-approval, multi-level approval, expiry, and changes requested.
+- Detailed approval interaction for configured multi-level approval, expiry, and changes requested; the Draft versus Submit responsibility baseline is defined in the PRD and architecture.
 
 ## Sources
 

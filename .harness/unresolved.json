@@ -17,6 +17,13 @@
       "sources": ["docs/ARCHITECTURE.md#Trust Boundaries"]
     },
     {
+      "id": "approval-workflow-mapping",
+      "status": "UNRESOLVED",
+      "question": "Which exact ERPNext Roles, permissions, Workflow states, multi-level rules, and policy configuration implement the confirmed Draft confirmation and Submit-or-later separation-of-duties baseline?",
+      "impact": "The product approval policy is confirmed, but it cannot be enforced or integration-tested until mapped to a pinned ERPNext/Frappe baseline.",
+      "sources": ["docs/PRD.md#55-f-005-policy--rbac--approval", "docs/ARCHITECTURE.md#Approval and Workflow Authority"]
+    },
+    {
       "id": "workflow-engine-spike",
       "status": "UNRESOLVED",
       "question": "Which LangGraph and checkpoint integration satisfies interruption, approval, resume, and reconciliation requirements?",

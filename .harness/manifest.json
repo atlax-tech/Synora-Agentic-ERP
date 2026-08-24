@@ -7,8 +7,8 @@
   "managed_files": [
     {"path": "AGENTS.md", "owner": "harness-armor", "mode": "managed", "sha256": "e064dcaae4c316ebe78621a841e162a7929c18b73a3281982e63f33e35ed4a30"},
     {"path": "docs/PRD.md", "owner": "harness-armor", "mode": "managed", "sha256": "34457cbf54aead2dd937c7282d08090e45b74eb4c4bb59977dc2c3ed98b86240"},
-    {"path": "docs/ARCHITECTURE.md", "owner": "harness-armor", "mode": "managed", "sha256": "b133a8889f2b965deb7f4dcefc6b6dce34eca6b9a9e9c96a9b238b51c346f60f"},
-    {"path": "docs/DESIGN.md", "owner": "harness-armor", "mode": "managed", "sha256": "5afbf7dc94abe38577c734cba14fc15630583a436d9dc90a7ebe21b3d1a4015c"},
+    {"path": "docs/ARCHITECTURE.md", "owner": "harness-armor", "mode": "managed", "sha256": "90fc0ead10a2b736c91c5f5574792bb29b96b77a706247a7865c26c95f280277"},
+    {"path": "docs/DESIGN.md", "owner": "harness-armor", "mode": "managed", "sha256": "a018af4979cf769e55fe757b08f6bcf6d0007247e11d810896425d73a0a6834d"},
     {"path": "docs/DEVELOPMENT.md", "owner": "harness-armor", "mode": "managed", "sha256": "06c712ded9f3a60aa602ecf382cc57f5ef269438f51a2d1d7935ae382331d80d"},
     {"path": "docs/TESTING.md", "owner": "harness-armor", "mode": "managed", "sha256": "2c827944aea0c3f4c54270ea532a716d41a00dbebd6021025aeea57ecf489e0f"},
     {"path": "docs/ACCEPTANCE.md", "owner": "harness-armor", "mode": "managed", "sha256": "7911e236be1d1eccdf2e62b0008d46252d71bda217821ec6d4a7960e9dc18d10"},
@@ -20,12 +20,13 @@
     {"path": "docs/development-log/2026-08-24-prd-relocation.md", "owner": "harness-armor", "mode": "managed", "sha256": "0aca5c4211e71342acac4e504bf95ebfe99c6b3bdd38dbeaba94f63e5fde334c"},
     {"path": "docs/development-log/2026-08-24-frontend-design-charter.md", "owner": "harness-armor", "mode": "managed", "sha256": "b33be6665d30d95314a1128bb6e64ff0d7cc9f97cee1f0ae7d7862bbc7874daa"},
     {"path": "docs/development-log/2026-08-24-prd-approval-baseline.md", "owner": "harness-armor", "mode": "managed", "sha256": "e8d629e2c7c9e6036e40a817b725ffc335405b5a453ada3f82aacbb0f5b7ab45"},
-    {"path": ".harness/source-index.json", "owner": "harness-armor", "mode": "managed", "sha256": "d9a36bc89e2ad4decb3788ad112225a6407c762d6fb7d177108abf11b6e06a7c"},
-    {"path": ".harness/unresolved.json", "owner": "harness-armor", "mode": "managed", "sha256": "80b198bae8e56692a57fbc0c0bf47a2f48e92aaa4cf22806823bf2e25f426001"},
+    {"path": "docs/development-log/2026-08-24-architecture-technology-baseline.md", "owner": "harness-armor", "mode": "managed", "sha256": "5fd76dc1aaea259982eba1c382dcab3e93900a552cbe637347b464ad51ec81ea"},
+    {"path": ".harness/source-index.json", "owner": "harness-armor", "mode": "managed", "sha256": "9fa0c1af82b8780733f408d23e9a43b48a14b34b6180d1e342dc925dee410548"},
+    {"path": ".harness/unresolved.json", "owner": "harness-armor", "mode": "managed", "sha256": "de011a4a310f81ce82cfe8d5480cba0459e6f1ccc8d1e2953245399143061ec9"},
     {"path": "README.md", "owner": "user", "mode": "user", "sha256": "499f6fce4cf396696219ad9ed35f00deba3b2648b071bc0bad27aba796a6ebee"},
     {"path": "LICENSE", "owner": "user", "mode": "user", "sha256": "7f675055f696b69d32f0a549a3b8b676884f5af9ca8cf9436b8fe23cfa19bcfc"}
   ],
   "source_index": ".harness/source-index.json",
   "unresolved_index": ".harness/unresolved.json",
-  "last_updated": "2026-08-24T04:58:29Z"
+  "last_updated": "2026-08-24T05:00:48Z"
 }

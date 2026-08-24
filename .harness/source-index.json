@@ -15,7 +15,7 @@
       "path": "docs/ARCHITECTURE.md",
       "kind": "architecture",
       "status": "CONFIRMED",
-      "sha256": "b133a8889f2b965deb7f4dcefc6b6dce34eca6b9a9e9c96a9b238b51c346f60f",
+      "sha256": "90fc0ead10a2b736c91c5f5574792bb29b96b77a706247a7865c26c95f280277",
       "locator": "approved target architecture; open implementation decisions remain explicit"
     },
     {
