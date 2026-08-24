@@ -27,6 +27,14 @@
       "locator": "requirement traceability, contracts, state machines, governance, evolution gates, and unresolved decisions"
     },
     {
+      "id": "governed-project-execution-plan",
+      "path": "docs/PLAN.md",
+      "kind": "plan",
+      "status": "CONFIRMED",
+      "sha256": "7b70316efe23613e517532816d1936a8211f6ae2e31c951ef5aed3820e09c2bc",
+      "locator": "evidence-driven phase selection, increment protocol, skill routing, decision gates, and Phase 0 through Phase 8 execution order"
+    },
+    {
       "id": "repository-readme",
       "path": "README.md",
       "kind": "product",

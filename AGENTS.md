@@ -4,6 +4,7 @@ Synora is a governed Agentic Enterprise Operations product built on ERPNext. Tre
 
 Read before changing behavior:
 
+- Execution plan and phase protocol: `docs/PLAN.md`
 - Product requirements and definition: `docs/PRD.md`
 - Architecture: `docs/ARCHITECTURE.md`
 - Frontend design constitution: `docs/DESIGN.md`
@@ -14,6 +15,8 @@ Read before changing behavior:
 - Active specification: `docs/SPEC.md` when present
 - Decisions: `docs/decisions/`
 - Development history: `docs/development-log/`
+
+Read in this order: this file, `docs/PLAN.md`, then the authorities and evidence named by the active PLAN phase. When the user says “开始完成阶段 X”, “开始完成下个阶段”, or “继续工作”, interpret and execute that instruction exactly as `docs/PLAN.md` defines. If PLAN conflicts with an authoritative fact document, stop and report the conflict; do not choose a convenient interpretation.
 
 Critical boundaries:
 
