@@ -23,8 +23,8 @@
       "path": "README.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "499f6fce4cf396696219ad9ed35f00deba3b2648b071bc0bad27aba796a6ebee",
-      "locator": "repository title and one-line positioning"
+      "sha256": "5148541755413f43053e446e5ccc40dc1bda7b6e25cb0501a6c6586bf8dc3fba",
+      "locator": "English repository positioning, evidence status, architecture summary, and roadmap"
     },
     {
       "id": "repository-license",
