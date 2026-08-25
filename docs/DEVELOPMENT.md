@@ -152,11 +152,14 @@ uv run --python 3.14 pytest services/agent_runtime/tests/test_providers.py -v
 ### 连通性测试（填好 .env 后）
 
 ```bash
-source env/dev/.env
-uv run --python 3.14 python services/agent_runtime/scripts/check_provider.py
-# PROVIDER-OK: <响应文本前 80 字符> = 链接生效；PROVIDER-FAIL / PROVIDER-CONFIG-FAIL = 失败原因
-# 任何输出都不包含 API Key；未填 Base URL 时明确报错并退出码 1
+# 一行命令 (脚本自动加载 env/dev/.env 中的 SYNORA_PROVIDER_* 项, 不覆盖已设置的环境变量):
+uv run --python 3.14 python services/agent_runtime/scripts/check_provider.py --env env/dev/.env
+# PROVIDER-OK: <响应文本前 80 字符> | tokens: in=X out=Y = 链接生效
+# PROVIDER-FAIL / PROVIDER-CONFIG-FAIL = 失败原因; 任何输出都不包含 API Key
 ```
+
+> 注意：不要用 `source env/dev/.env && uv run ...` —— shell `source` 只设置局部变量、不导出，
+> `uv run` 的子进程看不到；用上面的 `--env` 参数即可。若环境变量已 export，可不带 `--env`。
 
 ## Sources
 
