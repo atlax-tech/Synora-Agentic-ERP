@@ -31,7 +31,7 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "f1cde2444011b03b46757dc2df228673cf699565c10cee21e93d2a1cb177957e",
+      "sha256": "d7b7ea3b60c15ec4101c03139ef1e2f94f46ff2383d67b3808d8731b898ab0f0",
       "locator": "risk-tiered workflow, phase selection, learning mode, decision gates, and Phase 0 through Phase 8 order"
     },
     {
@@ -136,7 +136,7 @@
       "kind": "design",
       "locator": "工作流引擎 Spike 结论：Phase 3 不采用 LangGraph；checkpoint/resume 证据待补",
       "status": "UNRESOLVED",
-      "sha256": "606ac41fc43e13ce40729787582de6dbc9dca0263827f8f6723828ddabce836b"
+      "sha256": "21cf346e9c3ee3e49771402764f33ff7d9dbc0efe2c0cac85a5eae207776fb41"
     },
     {
       "id": "decision-pack-p3-4-model-provider",
@@ -152,7 +152,7 @@
       "kind": "code",
       "locator": "模型自然语言增强：确定性计算 + 模型仅解释 + 严格校验回退 + 证据记录",
       "status": "UNRESOLVED",
-      "sha256": "c7d53ad9958e5465e26eeb3068d00365072fc52693511102217e7ef9cf024385"
+      "sha256": "5b2f8f44f917bec0a8422242812a3700df071ff77e04404e4ce4bcd949948bf3"
     },
     {
       "id": "p34-provider-module",
@@ -160,7 +160,7 @@
       "kind": "code",
       "locator": "Provider 接口：Deterministic(CI)/OpenAI 兼容(BYOK)，SecretStr 脱敏、max_tokens 护栏、fail-closed 解析",
       "status": "UNRESOLVED",
-      "sha256": "532a7d2bc320962ed235eca814e82449886dce41976bf8deb4d99e61e6664638"
+      "sha256": "cb7f85ab53402713fa0ca4e8d44871ac7a3f55ec999388b7b137c27adaf57678"
     },
     {
       "id": "p36-retrieval-module",
@@ -168,7 +168,7 @@
       "kind": "code",
       "locator": "SQLite FTS5/BM25 检索基线 + CJK 子串补充；permission_scope 过滤待接入",
       "status": "UNRESOLVED",
-      "sha256": "d23421cb2eaba3a229f5dd14b9f9579b228e8e83994504e85441dfce66f8f099"
+      "sha256": "645d7a29ee4780bb87a1882231eb27c5f86f44e76abbd438dcf14818fa9ee33a"
     },
     {
       "id": "p33-analysis-module",
@@ -192,7 +192,7 @@
       "kind": "code",
       "locator": "Run 确定性状态机（非法转换 fail-closed）；CAS/并发互斥待加固",
       "status": "UNRESOLVED",
-      "sha256": "8b3d304898284ccc0d74d453309fd62f68d919f66ff7211779d1712ed2358aea"
+      "sha256": "a7e5811de644a1556028bd74bda66bdebc25a0a36e6eb08703ecb540d26a70ee"
     },
     {
       "id": "p36-knowledge-source-map",

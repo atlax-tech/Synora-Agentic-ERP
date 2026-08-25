@@ -35,12 +35,13 @@
     },
     {
       "id": "workflow-engine-spike",
-      "status": "UNRESOLVED",
+      "status": "RESOLVED",
       "question": "Which LangGraph and checkpoint integration satisfies interruption, approval, resume, and reconciliation requirements?",
       "impact": "The runtime dependency and state model must not be fixed before a focused spike validates the required behavior.",
       "sources": [
-        "docs/ARCHITECTURE.md#Open Architecture Decisions"
-      ]
+        "docs/decisions/ADR-0004-workflow-engine-spike.md"
+      ],
+      "resolution": "ADR-0004 (2026-08-25): Phase 3 read-only lifecycle has no cross-request state - analyze/plan are synchronous deterministic steps, so interruption/approval/resume/reconciliation needs do not hold this phase; LangGraph not adopted. Phase 4 write enablement keeps a gate: re-evaluate with a fresh spike when approval/execution/reconciliation actually require resume. Deterministic state machine already defines Phase 4 transitions (AWAITING_APPROVAL->EXPIRED/EXECUTING, RECONCILIATION_REQUIRED->SUCCEEDED/FAILED) covered by tests/test_run_state_machine.py."
     },
     {
       "id": "model-selection",

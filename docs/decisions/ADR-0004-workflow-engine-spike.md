@@ -33,7 +33,8 @@ Phase 3 的实际实现证据（2026-08-25）：
 
 ## 证据（Evidence）
 
-- `synora_agentic_erp/agent/state_machine.py`：确定性状态机（SPEC §8.1 全转换表）。
+- `synora_agentic_erp/agent/state_machine.py`：确定性状态机（SPEC §8.1 全转换表），已定义 Phase 4 中断/对账场景转换（AWAITING_APPROVAL→EXPIRED/EXECUTING、RECONCILIATION_REQUIRED→SUCCEEDED/FAILED）。
+- `tests/test_run_state_machine.py`：上述 Phase 4 场景转换被单测覆盖（_LEGAL/_ILLEGAL 全表），"中断→恢复"所需的状态权威已有可测落点；实测需要不成立的是"引入编排框架"本身，不是状态机能力。
 - `synora_agentic_erp/agent/service.py`：analyze_run / plan_run 同步编排（无 checkpoint、无跨请求状态）。
-- P3.2–P3.5 集成测试：app-test 43/43；真实 HTTP 冒烟：issue→analyze→plan 全链路 SUCCEEDED。
-- ARCHITECTURE "Stateful Agent workflow"：`CONDITIONAL`，采用条件是实测需要成立——本 ADR 记录 Phase 3 该条件不成立。
+- P3.2–P3.5 集成测试：app-test 59/59；真实 HTTP 冒烟：issue→analyze→plan 全链路 SUCCEEDED。
+- ARCHITECTURE "Stateful Agent workflow"：`CONDITIONAL`，采用条件是实测需要成立——本 ADR 记录 Phase 3 该条件不成立，Phase 4 写入门禁保留重估。

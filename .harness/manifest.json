@@ -66,7 +66,7 @@
       "path": "docs/PLAN.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "f1cde2444011b03b46757dc2df228673cf699565c10cee21e93d2a1cb177957e"
+      "sha256": "d7b7ea3b60c15ec4101c03139ef1e2f94f46ff2383d67b3808d8731b898ab0f0"
     },
     {
       "path": "docs/decisions/README.md",
@@ -120,13 +120,13 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "cbf6c50b98ae78c804bab5d996897fd11cdbfa703ec7dcc375f2153fb0ab0533"
+      "sha256": "e6f577eb84b3a1f60614b4c7ce7cfff20733a8df29bbc9c040a7613393c02a22"
     },
     {
       "path": ".harness/unresolved.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "cb03f26ad62c12527094a506e8d095ea9d14abdbd1f1d0b8140ccfb24a6b7edd"
+      "sha256": "fa87a3e17606197544d4c8d6cda22fb4bbfad9d2db54453181fb432149310676"
     },
     {
       "path": "README.md",
@@ -162,7 +162,7 @@
       "path": "docs/decisions/ADR-0004-workflow-engine-spike.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "606ac41fc43e13ce40729787582de6dbc9dca0263827f8f6723828ddabce836b"
+      "sha256": "21cf346e9c3ee3e49771402764f33ff7d9dbc0efe2c0cac85a5eae207776fb41"
     },
     {
       "path": "docs/decisions/decision-pack-p3-4-model-provider.md",

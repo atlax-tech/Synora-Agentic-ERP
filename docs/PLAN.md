@@ -161,7 +161,7 @@
 | `frontend-design-baseline` | Phase 3 | 从固定 Frappe v16 取证；浏览器、可访问性和双语术语等产品选择交用户批准。 |
 | Goal 长度及默认公司、仓库、时间范围 | Phase 3 | 提交产品决策包，用户批准后固化到 PRD/SPEC。 |
 | `model-selection` | Phase 3 | 使用同一评测集比较；涉及远程数据、成本或安全边界时交用户决定。 |
-| `workflow-engine-spike` | Phase 3，进入 Phase 4 前 | 先验证 interruption、approval、resume、reconciliation；无明确收益则保持确定性服务。 |
+| `workflow-engine-spike` | Phase 3（已闭环，ADR-0004） | Phase 3 只读链路无中断/恢复实测需要 → 不采用 LangGraph；Phase 4 写入门禁：实测需要成立时以独立 Spike 重估。 |
 | 性能、并发、保留期、浏览器与可访问性目标 | 首次受影响阶段 | 先取得基线数据，再由用户批准验收目标，禁止编造数字。 |
 | `vector-retrieval-threshold` | Phase 6 | 用 FTS5 原始结果形成阈值决策包，用户批准后才允许采用后续检索技术。 |
 | `multi-agent-adoption-threshold` | Phase 7 | 用单 Agent 原始结果形成阈值决策包，用户批准后才允许采用角色。 |
@@ -227,7 +227,7 @@
 - **P3.3 确定性采购分析**：实现库存、需求、在途采购、重复采购、UOM、日期和 UNKNOWN/NEEDS_INPUT；LLM 不处理数量、金额和阈值计算。
 - **P3.4 Provider 基线**：建立 provider 接口、CI 确定性响应和同一数据集模型评测；远程数据、成本或安全变化先交用户决定。
 - **P3.5 单 Agent 只读计划**：实现目标理解、受限上下文、tool allowlist、可解释结果、来源、未知和失败恢复，不产生可执行写入。
-- **P3.6 FTS5 与工作流 Spike**：建立 curated source 和 SQLite FTS5/BM25 基线；验证 checkpoint/resume。只有 interruption/approval/resume/reconciliation 的实测需要成立时才采用 LangGraph。
+- **P3.6 FTS5 与工作流 Spike**：建立 curated source 和 SQLite FTS5/BM25 基线。checkpoint/resume 验证结论（ADR-0004）：Phase 3 只读生命周期为同步确定性步骤、无跨请求状态，interruption/approval/resume/reconciliation 的实测需要不成立，不采用 LangGraph；Phase 4 启用写入（审批/执行/对账）时若实测需要成立，再以独立 Spike 重估。确定性状态机已定义 Phase 4 中断/对账转换（AWAITING_APPROVAL→EXPIRED/EXECUTING、RECONCILIATION_REQUIRED→SUCCEEDED/FAILED）并被 `tests/test_run_state_machine.py` 覆盖。
 - **P3.7 安全评测**：固定并运行正常、歧义、无权限、tool failure、恶意目标、恶意 ERP 字段、检索注入和完全无写入场景。
 
 出口证据：单 Agent 和 FTS5 原始基线可复跑；相同输入产生确定性业务计算；所有写工具均不可达。
