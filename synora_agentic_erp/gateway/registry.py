@@ -25,6 +25,9 @@ class ToolSpec:
     name: str
     version: str
     risk: str
+    # post-hoc 耗时分类阈值: handler 返回后才比较, 不中断正在执行的 ERP 调用。
+    # ERP 永久卡住时由 Runtime 侧 HTTP 超时兜底; 真正的执行截止需进程隔离,
+    # 留待首个写操作阶段 (Phase 4) 按需引入。
     timeout_ms: int
     max_page_size: int
     required_doctypes: tuple[str, ...]
@@ -67,6 +70,8 @@ def dispatch(request: GatewayRequest, run: RunContext) -> dict[str, Any]:
     from synora_agentic_erp.gateway import tools as product_tools
 
     _ = product_tools
+    # 超时是"执行完成后的耗时分类" (post-hoc): handler 返回后才比较耗时,
+    # 不会中断正在执行的 ERP 查询。永久卡住的上游由 Runtime HTTP 超时兜底。
     started_at = monotonic()
     spec = _TOOLS.get((request.tool.name, request.tool.version))
     if spec is None:
@@ -75,7 +80,11 @@ def dispatch(request: GatewayRequest, run: RunContext) -> dict[str, Any]:
     validated_input = parse_tool_input(request.tool.input, spec.input_fields, spec.max_page_size)
     result = spec.handler(run, validated_input)
     if (monotonic() - started_at) * 1000 > spec.timeout_ms:
-        raise GatewayFault("TIMEOUT", "tool execution timed out", 504)
+        raise GatewayFault(
+            "TIMEOUT",
+            "tool execution exceeded its post-hoc timeout classification budget",
+            504,
+        )
     limit = cast(int, validated_input["limit"])
     offset = cast(int, validated_input["offset"])
     if len(result.items) > limit + 1:

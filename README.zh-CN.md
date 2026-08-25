@@ -6,7 +6,7 @@
 
 ## 项目状态
 
-Synora 当前处于 **Phase 0：工程治理与架构基线阶段**。产品运行时尚未实现；仓库已经具备经确认的产品需求、架构边界、前端设计宪章、测试与验收策略、分阶段路线图，以及通过校验的 Harness Engineering 层。
+Synora 已完成 **Phase 0 至 Phase 2**：经治理的工程基线、固定的 Frappe/ERPNext v16 组合，以及类型化只读 ERP Gateway（服务端 Run/capability 模型、六个已验证只读工具、Agent Runtime HTTPX 客户端）均已实现并通过真实 HTTP 端到端验证。只读 Procurement Agent（Phase 3）与全部写操作（Phase 4 起）仍处于分阶段交付状态。
 
 这是证据边界，不是产品标准降级。Synora 始终按照生产级企业产品推进；本文不会把规划中的能力描述成已经可运行的软件。
 
@@ -93,7 +93,7 @@ python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .
 
 ### 产品安装状态
 
-目前还没有可安装的 Frappe App 或 Agent Runtime，因此不提供虚假的 Bench、依赖、环境变量、数据库或 Docker 启动命令。只有在固定的 Frappe/ERPNext v16 组合上真实运行成功后，才会补充对应安装和验证说明。
+Frappe App 与 Agent Runtime 的工程脚手架及已验证命令见 `docs/DEVELOPMENT.md`。产品级 Agent 能力与写操作尚不可安装；Bench 环境、固定基线命令、确定性种子数据与 Phase 2 真实 HTTP 验证（`env/dev/p26`）可按该文档实际运行。
 
 ## 系统架构
 
@@ -175,14 +175,14 @@ flowchart LR
 
 | 层级 | 目标技术 | 证据状态 |
 | --- | --- | --- |
-| ERP | ERPNext v16、Frappe v16、MariaDB、Redis | 技术族已选；完整 Commit 待运行基线 |
-| ERP 扩展 | 根目录可安装的 Frappe Custom App | 架构已确认；尚未创建脚手架 |
-| Agent 服务 | Python、FastAPI、Pydantic v2、HTTPX | 目标已确认；具体版本待兼容验证 |
-| Workflow | 确定性服务；条件式 LangGraph | 必须完成 Checkpoint/Resume Spike |
+| ERP | ERPNext v16、Frappe v16、MariaDB、Redis | ADR-0002 已固定（Frappe 16.31.0 / ERPNext 16.32.3） |
+| ERP 扩展 | 根目录可安装的 Frappe Custom App | P2.1 已创建脚手架并安装 |
+| Agent 服务 | Python、FastAPI、Pydantic v2、HTTPX | `services/agent_runtime` 已固定（FastAPI 0.141.1、HTTPX 0.28.1、Pydantic 2.12.5） |
+| Workflow | 确定性服务；条件式 LangGraph | 必须完成 Checkpoint/Resume Spike（Phase 3） |
 | Retrieval | SQLite FTS5/BM25 优先 | Vector/Hybrid/Rerank 由评测门禁控制 |
 | 前端 | ERPNext Desk 与已验证的 Frappe 组件 | 产品形态已确认；组件基线待验证 |
-| 工程工具 | `uv`、Ruff、mypy、pytest | 目标工具链；命令尚未验证 |
-| 开发环境 | Bench 优先，后续 custom/layered `frappe_docker` | 分阶段目标；尚未实现 |
+| 工程工具 | `uv`、Ruff、mypy、pytest | P2.1 已验证；命令见 `docs/DEVELOPMENT.md` |
+| 开发环境 | Bench 优先，后续 custom/layered `frappe_docker` | Bench 环境已运行（P1/P2） |
 
 ## 项目结构
 
@@ -224,8 +224,8 @@ Synora-Agentic-ERP/
 ## Roadmap
 
 - [x] Phase 0：产品定义、Harness Engineering、架构、设计、测试和验收基线
-- [ ] Phase 1：未修改的 Frappe/ERPNext v16 基线与 P2P 业务考古
-- [ ] Phase 2：类型化只读 ERP Gateway
+- [x] Phase 1：未修改的 Frappe/ERPNext v16 基线与 P2P 业务考古
+- [x] Phase 2：类型化只读 ERP Gateway
 - [ ] Phase 3：只读 Procurement Agent 与 FTS5 评测基线
 - [ ] Phase 4：Proposal、审批、MR Draft、PO Draft、Receipt 与对账
 - [ ] Phase 5：PO Submit、Receipt、Invoice 和 Payment 相关受控流程
@@ -237,7 +237,7 @@ Synora-Agentic-ERP/
 
 ## 参与贡献
 
-当前尚未开放业务实现。修改前请先阅读 `AGENTS.md` 及相关需求、架构、测试和验收文档；保持小步提交，在 `docs/development-log/` 中记录通俗中文说明，并如实报告实际运行的命令。
+受治理的只读 Gateway 已实现；后续阶段仍处于分阶段交付状态。修改前请先阅读 `AGENTS.md` 及相关需求、架构、测试和验收文档；保持小步提交，在 `docs/development-log/` 中记录通俗中文说明，并如实报告实际运行的命令。
 
 ## 常见问题
 
@@ -255,7 +255,7 @@ FTS5 本地、可检查、成本低，适合作为明确基线。完整 RAG 路�
 
 ### 现在能运行 Synora 吗？
 
-暂时不能。当前仓库提供受治理的产品与工程基线；只有真实 ERPNext/Frappe 基线和应用脚手架验证完成后，才会发布可运行命令。
+Phase 2 只读 Gateway 与 Agent Runtime 可基于固定 Bench 环境运行：已验证命令见 `docs/DEVELOPMENT.md`，真实 HTTP 端到端验证见 `env/dev/p26`。产品级 Agent 规划（Phase 3）与全部写操作（Phase 4 起）尚不可用。
 
 ## License
 

@@ -1,6 +1,6 @@
 # P2.2 身份授权安全 Spike 取证
 
-- 状态：`EVIDENCE_RECORDED / ADR APPROVED / P2.3 IMPLEMENTATION IN PROGRESS`
+- 状态：`EVIDENCE_RECORDED / ADR APPROVED / PHASE 2 COMPLETE`
 - 日期：2026-08-25
 - 阶段：Phase 2 / P2.2
 - 关联：`docs/PLAN.md` §7、§11；`docs/PRD.md` F-001/F-002；`docs/ARCHITECTURE.md` 信任与依赖边界；`docs/SPEC.md` §5、§7、§9、§14

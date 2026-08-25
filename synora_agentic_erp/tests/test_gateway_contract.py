@@ -1,4 +1,6 @@
 from datetime import timedelta
+from unittest.mock import patch
+from uuid import uuid4
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -176,27 +178,54 @@ class TestGatewayContract(FrappeTestCase):
             self.assertEqual(response["error"]["code"], "INVALID_INPUT")
             frappe.set_user(BUYER)
 
-    def test_registered_tool_enforces_timeout(self) -> None:
+    def test_registered_tool_classifies_post_hoc_timeout(self) -> None:
+        # timeout_ms 是执行完成后的耗时分类阈值 (post-hoc), 不中断执行;
+        # TIMEOUT 在错误契约中标记 retryable。
         result = self._issue()
         payload = _payload(result)
         payload["tool"] = {"name": "contract.timeout-probe", "version": "1", "input": {}}
         frappe.set_user("Guest")
         response = execute(**payload)
         self.assertEqual(response["error"]["code"], "TIMEOUT")
+        self.assertTrue(response["error"]["retryable"])
 
     def test_unexpected_tool_failure_is_sanitized_and_audited(self) -> None:
         result = self._issue()
         payload = _payload(result)
         payload["tool"] = {"name": "contract.error-probe", "version": "1", "input": {}}
         frappe.set_user("Guest")
-        response = execute(**payload)
+        with patch("synora_agentic_erp.api.frappe.log_error") as mock_log:
+            response = execute(**payload)
         self.assertEqual(response["error"]["code"], "ERP_ERROR")
         self.assertNotIn("internal detail", str(response))
-
+        # 诊断日志保留真实异常 (脱敏响应之外), 避免运维只剩统一错误码。
+        self.assertTrue(mock_log.called)
+        logged = " ".join(str(call) for call in mock_log.call_args_list)
+        self.assertIn("internal", logged)
+        # 已解析 Run 的失败仍形成绑定 Run 的 Gateway Audit。
         frappe.set_user("Administrator")
         audit = frappe.get_last_doc("Synora Gateway Audit")
         self.assertEqual(audit.outcome, "REJECTED")
         self.assertEqual(audit.error_code, "ERP_ERROR")
+
+    def test_unresolvable_run_failure_is_logged_as_security_event(self) -> None:
+        # 无效/猜测 capability 无法解析出 Run -> 不形成 Gateway Audit,
+        # 按安全事件日志策略记录脱敏事件 (不含 capability)。
+        forged_capability = "f" * 43
+        frappe.set_user("Guest")
+        with patch("synora_agentic_erp.api.frappe.log_error") as mock_log:
+            response = execute(
+                schema_version="1",
+                run_id=str(uuid4()),
+                capability=forged_capability,
+                correlation_id=str(uuid4()),
+                tool={"name": "item.lookup", "version": "1", "input": {}},
+            )
+        self.assertEqual(response["error"]["code"], "RUN_REJECTED")
+        self.assertTrue(mock_log.called)
+        logged = " ".join(str(call) for call in mock_log.call_args_list)
+        self.assertIn("security event", logged)
+        self.assertNotIn(forged_capability, logged)
 
     def test_issue_and_revoke_validate_runtime_types(self) -> None:
         frappe.set_user(BUYER)

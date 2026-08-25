@@ -9,6 +9,8 @@
 
 成功标记：P26-DATA-OK。重复运行安全（先清理后创建）。
 """
+import os
+
 import frappe
 from frappe.utils import getdate
 
@@ -20,6 +22,8 @@ ITEM = "SYNORA-P1-Item-1001"
 SUPPLIER_B = "SYNORA-P26-Supplier-1"
 WAREHOUSE_B = "SYNORA-P26 Stores - P26"
 DISABLED_SUPPLIER = "SYNORA-P26-Disabled-Supplier"
+# 仅可访问公司 A 的用户 (Purchase User + User Permission 公司范围), 用于跨公司权限拒绝验证。
+AONLY_USER = "synora-p26-aonly@dev.localhost"
 
 
 def _delete_documents(doctype: str, filters: dict[str, object]) -> None:
@@ -49,6 +53,14 @@ def _cleanup() -> None:
         frappe.delete_doc("Supplier", name, force=True)
     if frappe.db.exists("Company", COMPANY_B):
         frappe.delete_doc("Company", COMPANY_B, force=True)
+    for permission_name in frappe.get_all(
+        "User Permission",
+        pluck="name",
+        filters={"user": AONLY_USER, "allow": "Company"},
+    ):
+        frappe.delete_doc("User Permission", permission_name, force=True)
+    if frappe.db.exists("User", AONLY_USER):
+        frappe.delete_doc("User", AONLY_USER, force=True)
     frappe.db.commit()
 
 
@@ -169,6 +181,32 @@ def _create_paging_items() -> list[str]:
     return created
 
 
+def _ensure_aonly_user() -> None:
+    """创建仅可访问公司 A 的用户 (Purchase User + User Permission 公司范围)。"""
+    frappe.set_user("Administrator")
+    password = os.environ.get("SYNORA_P2P_USER_PWD")
+    if not password:
+        raise RuntimeError("SYNORA_P2P_USER_PWD is required")
+    if not frappe.db.exists("User", AONLY_USER):
+        frappe.get_doc(
+            {
+                "doctype": "User",
+                "email": AONLY_USER,
+                "first_name": "Synora P26 AOnly",
+                "new_password": password,  # 标准 User 字段，走 frappe 哈希存储
+                "roles": [{"role": "Purchase User"}],
+            }
+        ).insert()
+    frappe.get_doc(
+        {
+            "doctype": "User Permission",
+            "user": AONLY_USER,
+            "allow": "Company",
+            "for_value": COMPANY_A,
+        }
+    ).insert(ignore_permissions=True)
+
+
 def run() -> None:
     _cleanup()
     company_b_warehouse = _ensure_company_b()
@@ -176,12 +214,13 @@ def run() -> None:
     disabled_order = _upsert_disabled_supplier_order()
     cancelled_mr = _create_cancelled_material_request()
     paging_items = _create_paging_items()
+    _ensure_aonly_user()
     frappe.db.commit()
     print(
         "P26-DATA-OK "
         f"company_b={COMPANY_B} order_b={order_b} "
         f"disabled_order={disabled_order} cancelled_mr={cancelled_mr} "
-        f"paging_items={len(paging_items)}"
+        f"paging_items={len(paging_items)} aonly_user={AONLY_USER}"
     )
 
 

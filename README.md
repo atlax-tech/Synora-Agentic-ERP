@@ -6,7 +6,7 @@
 
 ## Project status
 
-Synora is currently in **Phase 0: engineering governance and architecture baseline**. The product runtime has not been implemented yet. The repository already contains approved product requirements, architecture boundaries, frontend design constitution, testing and acceptance strategies, a staged roadmap, and a validated Harness Engineering layer.
+Synora has completed **Phase 0 through Phase 2**: the governed engineering baseline, the pinned Frappe/ERPNext v16 pair, and the typed read-only ERP Gateway (server-side Run/capability model, six verified read tools, plus the Agent Runtime HTTPX client) are implemented and verified end-to-end over real HTTP. The read-only procurement Agent (Phase 3) and all write operations (Phase 4+) remain staged.
 
 This status is an evidence boundary, not a reduction in product standards. Synora is being designed and developed as a production-grade enterprise product; this README does not present planned behavior as working software.
 
@@ -93,7 +93,7 @@ Then read in this order:
 
 ### Product installation
 
-Product installation is intentionally not documented yet because no installable Frappe App or Agent Runtime exists. Bench, dependency, environment-variable, database, Docker, and verification commands will be added only after they run successfully against a pinned Frappe/ERPNext v16 pair.
+The Frappe App and Agent Runtime scaffold and their verified commands are documented in `docs/DEVELOPMENT.md`. Product-level Agent capabilities and write operations are not yet installable; the Bench environment, pinned-baseline commands, deterministic seed data, and the Phase 2 real-HTTP verification (`env/dev/p26`) are runnable as described there.
 
 ## System architecture
 
@@ -175,14 +175,14 @@ The architecture preserves typed role, state, event, handoff, tool, policy, and 
 
 | Layer | Target | Evidence status |
 | --- | --- | --- |
-| ERP | ERPNext v16, Frappe v16, MariaDB, Redis | Family selected; exact commits pending runtime baseline |
-| ERP extension | Root-installable Frappe Custom App | Approved architecture; not scaffolded |
-| Agent service | Python, FastAPI, Pydantic v2, HTTPX | Approved target; exact versions pending compatibility check |
-| Workflow | Deterministic services; conditional LangGraph | Checkpoint/resume spike required |
+| ERP | ERPNext v16, Frappe v16, MariaDB, Redis | Pinned in ADR-0002 (Frappe 16.31.0 / ERPNext 16.32.3) |
+| ERP extension | Root-installable Frappe Custom App | Scaffolded and installed (P2.1) |
+| Agent service | Python, FastAPI, Pydantic v2, HTTPX | Pinned in `services/agent_runtime` (FastAPI 0.141.1, HTTPX 0.28.1, Pydantic 2.12.5) |
+| Workflow | Deterministic services; conditional LangGraph | Checkpoint/resume spike required (Phase 3) |
 | Retrieval | SQLite FTS5/BM25 first | Vector/hybrid/reranking gated by evaluation |
 | Frontend | ERPNext Desk using verified Frappe components | Product form approved; component baseline unresolved |
-| Engineering | `uv`, Ruff, mypy, pytest | Target toolchain; commands not yet verified |
-| Environment | Bench first, layered/custom `frappe_docker` later | Staged target; not yet implemented |
+| Engineering | `uv`, Ruff, mypy, pytest | Verified (P2.1); commands in `docs/DEVELOPMENT.md` |
+| Environment | Bench first, layered/custom `frappe_docker` later | Bench environment running (P1/P2) |
 
 ## Repository structure
 
@@ -224,8 +224,8 @@ Before a release or version update, an independent adversarial sub-agent must re
 ## Roadmap
 
 - [x] Phase 0: product definition, Harness Engineering, architecture, design, testing, and acceptance baseline
-- [ ] Phase 1: unmodified Frappe/ERPNext v16 baseline and P2P business archaeology
-- [ ] Phase 2: typed read-only ERP gateway
+- [x] Phase 1: unmodified Frappe/ERPNext v16 baseline and P2P business archaeology
+- [x] Phase 2: typed read-only ERP gateway
 - [ ] Phase 3: read-only procurement Agent and FTS5 evaluation baseline
 - [ ] Phase 4: proposals, approval, MR Draft, PO Draft, receipts, and reconciliation
 - [ ] Phase 5: PO Submit, Receipt, Invoice, and Payment-related controlled operations
@@ -237,7 +237,7 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for milestone entry and exit conditions
 
 ## Contributing
 
-The implementation has not opened yet. Before proposing a change, read `AGENTS.md` and the affected requirement, architecture, testing, and acceptance documents. Keep commits small, record the change in `docs/development-log/`, and report commands that actually ran.
+The governed read-only gateway is implemented; later phases remain staged. Before proposing a change, read `AGENTS.md` and the affected requirement, architecture, testing, and acceptance documents. Keep commits small, record the change in `docs/development-log/`, and report commands that actually ran.
 
 ## FAQ
 
@@ -255,7 +255,7 @@ FTS5 is local, inspectable, inexpensive, and provides a clear baseline. The comp
 
 ### Can I run Synora today?
 
-Not yet. The repository currently provides the governed product and engineering baseline. Runnable product commands will be published only after the real ERPNext/Frappe baseline and application scaffold are verified.
+The Phase 2 read-only Gateway and Agent Runtime are runnable against the pinned Bench environment: see `docs/DEVELOPMENT.md` for verified commands and the `env/dev/p26` real-HTTP end-to-end verification. Product-level Agent planning (Phase 3) and all write operations (Phase 4+) are not yet available.
 
 ## License
 

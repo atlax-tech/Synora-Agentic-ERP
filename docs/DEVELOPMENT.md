@@ -92,15 +92,17 @@ Requires the bench web server listening on `127.0.0.1:8000` (see `env.sh up` +
 ```bash
 # 1) prepare boundary data inside bench console (idempotent; expect P26-DATA-OK)
 #    - docker cp env/dev/p26/p26_data.py into bench, then run via bench console
-# 2) host-side end-to-end (11 scenarios; expect 11x P26-*-OK and P26-E2E-OK):
+# 2) host-side end-to-end (13 scenarios; expect 13x P26-*-OK and P26-E2E-OK):
 SYNORA_P2P_USER_PWD=<pwd> uv run --python 3.14 python env/dev/p26/p26_e2e.py
 ```
 
-Observed evidence for the 2026-08-25 run: `P26-E2E-OK` with all 11 scenarios
+Observed evidence for the 2026-08-25 run: `P26-E2E-OK` with all 13 scenarios
 (BASIC, PERMISSION_DENIED, SCOPE_DENIED, PAGINATION_CLIENT/SERVER, TIMEOUT,
 DISABLED_SUPPLIER, CROSS_COMPANY, CANCELLED_MR, MISSING_FIELD,
-UNSUPPORTED_VERSION). Full evidence is in
+UNSUPPORTED_VERSION, AONLY_COMPANY_A_ACCESS, AONLY_COMPANY_B_DENIED). Full
+evidence is in
 `docs/development-log/2026-08-25-phase2-p2_6-real-http-verification.md`,
+`docs/development-log/2026-08-25-phase2-exit-corrections.md`,
 anchored to commit `733da89`.
 
 ### Phase 1 environment commands (verified 2026-08-24, exit 0)

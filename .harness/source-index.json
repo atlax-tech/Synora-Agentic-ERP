@@ -23,7 +23,7 @@
       "path": "docs/SPEC.md",
       "kind": "design",
       "status": "CONFIRMED",
-      "sha256": "c9fa987252aefbc2150a53063a588cfb95f29503c3afb1f2abee61f3c0254acb",
+      "sha256": "7c26d54e52b213a06c6fdf167bcdbc900fd506c1288372555c7c55f35284cb3b",
       "locator": "requirement traceability, contracts, state machines, governance, evolution gates, and unresolved decisions"
     },
     {
@@ -39,7 +39,7 @@
       "path": "README.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "5148541755413f43053e446e5ccc40dc1bda7b6e25cb0501a6c6586bf8dc3fba",
+      "sha256": "1db19535529850c0ffce112008d6de61a91c6ca79738cf70c597204fdda849a4",
       "locator": "English repository positioning, evidence status, architecture summary, and roadmap"
     },
     {
@@ -57,6 +57,94 @@
       "status": "CONFIRMED",
       "sha256": "e6268a51ab193877ff74063d7abe03c2e557365e913967fa383755727c242f3c",
       "locator": "P2.1 implementation commands, Runtime health evidence, Bench installation/test evidence, limitations, and repeatable manual acceptance"
+    },
+    {
+      "id": "phase2-p2-2-identity-spike-log",
+      "path": "docs/development-log/2026-08-25-phase2-p2_2-identity-authorization-spike.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "c965808027d1bed2bc0445f70c5588adeed35cd34b19ca57e94a91d6a9a6eccb",
+      "locator": "P2.2 identity/authorization spike evidence: cookie, API key, OAuth, auth_hooks, cleanup verification"
+    },
+    {
+      "id": "phase2-p2-3-gateway-contract-log",
+      "path": "docs/development-log/2026-08-25-phase2-p2_3-gateway-contract.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "5053ea0b27b3889d5959a3b46d798500e4c697ff9e236190226356e39f767c6c",
+      "locator": "P2.3 run capability and typed gateway envelope implementation and gate evidence"
+    },
+    {
+      "id": "phase2-p2-4-read-tools-log",
+      "path": "docs/development-log/2026-08-25-phase2-p2_4-read-tools.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "b13e0ba3944c4cb0562d478c8c1b61557b94fc464c692189fbe9c3367148e9dc",
+      "locator": "P2.4 six read-only ERP tools: source anchors, business semantics, integration evidence"
+    },
+    {
+      "id": "phase2-p2-5-runtime-client-log",
+      "path": "docs/development-log/2026-08-25-phase2-p2_5-runtime-client.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "bd291cb22af3d9dcd1242cfc98efbba6a472568795eeee24dfe2923f5303200e",
+      "locator": "P2.5 runtime typed HTTPX gateway client: redaction, fail-closed, three-round gate evidence"
+    },
+    {
+      "id": "phase2-p2-6-real-http-log",
+      "path": "docs/development-log/2026-08-25-phase2-p2_6-real-http-verification.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "99eae027f6ad29627143297306ead267139111250f3f784c0a87a28ddfe8d418",
+      "locator": "P2.6 real bench HTTP end-to-end: 11 scenarios, cmd-injection contract fix, second-company fixture"
+    },
+    {
+      "id": "phase2-exit-report",
+      "path": "docs/development-log/2026-08-25-phase2-exit-report.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "97bb76559093062f497ca2d20cfc58b3a6d3f2600eb8cb207fffb425b538f4db",
+      "locator": "Phase 2 exit report: completed steps, commands, gate conclusions, upstream cleanliness, limits"
+    },
+    {
+      "id": "phase2-identity-spike-evidence",
+      "path": "docs/security/phase2-p2_2-identity-authorization-spike.md",
+      "kind": "other",
+      "status": "CONFIRMED",
+      "sha256": "fa769e208a9801f414fe15d6ee31c5955182c70c1c872472302c29f6b23be3b2",
+      "locator": "P2.2 security spike evidence record on pinned baseline (status updated to Phase 2 complete)"
+    },
+    {
+      "id": "adr-0003-runtime-user-authorization",
+      "path": "docs/decisions/ADR-0003-runtime-user-authorization.md",
+      "kind": "architecture",
+      "status": "CONFIRMED",
+      "sha256": "af404cb70b26fecfc8a925bc07c6aeea97c058076e5537ec0ea6a01bae9f7e77",
+      "locator": "Approved user-bound runtime authorization decision (2026-08-25)"
+    },
+    {
+      "id": "agent-runtime-gateway-client",
+      "path": "services/agent_runtime/src/agent_runtime/gateway.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "9350736057207fda80592e94039bf7d529cb6730a21c6d79ceea10710d29da90",
+      "locator": "P2.5 runtime typed gateway HTTPX client implementation"
+    },
+    {
+      "id": "p26-data-script",
+      "path": "env/dev/p26/p26_data.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "93e39e2dd7a9e28d259ed41233e8683734d82b85040748aef96a98187b8ede52",
+      "locator": "P2.6 idempotent boundary-data preparation script (second-company fixture, self cleanup)"
+    },
+    {
+      "id": "p26-e2e-script",
+      "path": "env/dev/p26/p26_e2e.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "c4bc3d28d5c406ffd4e62fbfe7745182e1bcf1293242a7d2279fde271309c275",
+      "locator": "P2.6 real-HTTP end-to-end verification script (11 scenarios)"
     }
   ]
 }

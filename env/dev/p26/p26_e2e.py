@@ -52,8 +52,10 @@ BASE = os.environ.get("SYNORA_GATEWAY_ORIGIN", "http://127.0.0.1:8000")
 os.environ[GATEWAY_ORIGIN_ENV] = BASE
 BUYER = "synora-p1-buyer@dev.localhost"
 ACCOUNTANT = "synora-p1-accountant@dev.localhost"
+AONLY_USER = "synora-p26-aonly@dev.localhost"
 PWD = os.environ["SYNORA_P2P_USER_PWD"]
 COMPANY = "SYNORA-P1 Test Company"
+COMPANY_B = "SYNORA-P26 Test Company"
 WAREHOUSE = "SYNORA-P1 Stores - SP1"
 ROOT_WAREHOUSE = "All Warehouses - SP1"
 ITEM = "SYNORA-P1-Item-1001"
@@ -330,6 +332,43 @@ async def main() -> None:
             unsupported.status_code == 400
             and unsupported_code == "UNSUPPORTED_VERSION",
             f"http={unsupported.status_code} code={unsupported_code}",
+        )
+
+        # 12. 跨公司权限拒绝: aonly 用户有公司 A 权限、无公司 B 权限
+        await _login(session, AONLY_USER)
+        aonly_run_a = await _issue_run(session, COMPANY, None)
+
+        async def aonly_item_request():
+            return GatewayRequest(
+                run_id=aonly_run_a["run_id"],
+                capability=aonly_run_a["capability"],
+                correlation_id=aonly_run_a["correlation_id"],
+                tool=ItemLookupCall(
+                    name="item.lookup", input=ItemLookupInput(query=ITEM)
+                ),
+            )
+
+        try:
+            aonly_result = await _client_request(aonly_item_request)
+            _record(
+                "AONLY_COMPANY_A_ACCESS",
+                aonly_result.ok and aonly_result.data,
+                f"rows={len(aonly_result.data)}",
+            )
+        except Exception as error:  # noqa: BLE001
+            _record("AONLY_COMPANY_A_ACCESS", False, repr(error))
+
+        # 无公司 B 权限的用户在发行阶段即被拒 (User Permission 生效于 get_list)
+        denied = await session.post(
+            "/api/method/synora_agentic_erp.api.issue_run",
+            data={"company": COMPANY_B, "correlation_id": str(uuid4())},
+        )
+        denied_body = denied.json().get("message", {})
+        denied_code = denied_body.get("error", {}).get("code")
+        _record(
+            "AONLY_COMPANY_B_DENIED",
+            denied.status_code == 403 and denied_code == "SCOPE_DENIED",
+            f"http={denied.status_code} code={denied_code}",
         )
 
     failed = [scenario for scenario, ok, _ in _results if not ok]

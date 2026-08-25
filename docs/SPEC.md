@@ -235,6 +235,14 @@ Initial write actions:
 
 Later actions remain registered but disabled until their milestone gates pass. No generic DocType write, arbitrary REST, SQL, URL fetch, or unrestricted MCP tool is permitted.
 
+Tool timeout semantics: a tool's `timeout_ms` is a **post-hoc classification
+threshold** checked after the handler returns; it does not interrupt an
+executing ERP call. A permanently stuck upstream call is bounded by the
+Runtime HTTP client deadline (the caller disconnects; server-side work
+continues but its result is unreachable). True execution cutoff requires
+worker/process isolation and is deferred to the first write stage (Phase 4),
+where interrupted execution semantics and rollback become safety-relevant.
+
 ## 10. Policy and Approval Evaluation Order
 
 Before presenting a write proposal:
@@ -346,6 +354,15 @@ run_id -> action_id -> tool_call_id -> approval_id
 Failure categories distinguish input, permission, policy, stale state, schema, ERP validation, model, retrieval, provider, network, timeout, uncertain result, and internal error.
 
 Logs and traces must exclude secrets, complete credentials, unnecessary prompt/context content, and unauthorized business data. Audit access follows ERP permissions and least-necessary disclosure.
+
+Security-event logging: requests that fail before a Run can be resolved (invalid,
+expired, guessed, or mismatched capability; unknown tool; malformed contract) cannot
+form a Run-bound Gateway Audit. They are recorded as a sanitized security event
+(error code, correlation id, source IP only) for probing/abuse pattern analysis;
+the capability value and request body are never logged. Internal-error diagnostic
+evidence: a sanitized `ERP_ERROR` is returned to the caller, but the real exception
+and its traceback are persisted to the operational log (with run/correlation
+context) so operations are not left with only the unified error code.
 
 ## 15. Target Repository Boundaries
 

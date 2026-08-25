@@ -9,11 +9,11 @@
     {"path": "docs/PRD.md", "owner": "harness-armor", "mode": "managed", "sha256": "6ed32db529ee57c48d29edb19b9ba37c6ab095b679612dc7f7babfb099d6e8e8"},
     {"path": "docs/ARCHITECTURE.md", "owner": "harness-armor", "mode": "managed", "sha256": "0e15cca0c8fe46c6c1998ed0d40a3744110ff1f349f8f3adb8ed093ab7f3f1b7"},
     {"path": "docs/DESIGN.md", "owner": "harness-armor", "mode": "managed", "sha256": "a018af4979cf769e55fe757b08f6bcf6d0007247e11d810896425d73a0a6834d"},
-    {"path": "docs/DEVELOPMENT.md", "owner": "harness-armor", "mode": "managed", "sha256": "6566b84d54bd0fd35d993c266d121c3f5da7ffff5220d8b0023b62942f87ee6b"},
+    {"path": "docs/DEVELOPMENT.md", "owner": "harness-armor", "mode": "managed", "sha256": "78f5ddcc86247743ab267fb5bd22cf278d9ede5093b71ea7a979fb71e9bb3d9d"},
     {"path": "docs/TESTING.md", "owner": "harness-armor", "mode": "managed", "sha256": "2c827944aea0c3f4c54270ea532a716d41a00dbebd6021025aeea57ecf489e0f"},
     {"path": "docs/ACCEPTANCE.md", "owner": "harness-armor", "mode": "managed", "sha256": "7911e236be1d1eccdf2e62b0008d46252d71bda217821ec6d4a7960e9dc18d10"},
     {"path": "docs/ROADMAP.md", "owner": "harness-armor", "mode": "managed", "sha256": "753bd083ec06bcb981f2cab8304724d2de9561b72bc758063dd9cd81c4c5b9bc"},
-    {"path": "docs/SPEC.md", "owner": "harness-armor", "mode": "managed", "sha256": "c9fa987252aefbc2150a53063a588cfb95f29503c3afb1f2abee61f3c0254acb"},
+    {"path": "docs/SPEC.md", "owner": "harness-armor", "mode": "managed", "sha256": "7c26d54e52b213a06c6fdf167bcdbc900fd506c1288372555c7c55f35284cb3b"},
     {"path": "docs/PLAN.md", "owner": "harness-armor", "mode": "managed", "sha256": "7b70316efe23613e517532816d1936a8211f6ae2e31c951ef5aed3820e09c2bc"},
     {"path": "docs/decisions/README.md", "owner": "harness-armor", "mode": "managed", "sha256": "13eaa4d31e1f2d8d7c6b604fd35b83d15758ae888fcbcbb56f45160726cc44a0"},
     {"path": "docs/decisions/ADR-0002-frozen-baseline-pair.md", "owner": "harness-armor", "mode": "managed", "sha256": "7c762629c157a3158533c73915cbba91ebc38c4e8fbaea2fe0801f742356d6ad"},
@@ -33,13 +33,13 @@
     {"path": "docs/development-log/2026-08-24-project-execution-plan.md", "owner": "harness-armor", "mode": "managed", "sha256": "cb9bf11ad8b9a502a40a27c07461ca380954668f0c829dafa678b3cc3ced2567"},
     {"path": "docs/development-log/2026-08-24-phase2-p2_1-engineering-skeleton.md", "owner": "harness-armor", "mode": "managed", "sha256": "e6268a51ab193877ff74063d7abe03c2e557365e913967fa383755727c242f3c"},
     {"path": "docs/development-log/2026-08-24-phase2-p2_1-harness-sync.md", "owner": "harness-armor", "mode": "managed", "sha256": "f4372a82b1ac42c2bc0f194e285e9c28b860698b5c69ed2b6eecf6bbdb53f62f"},
-    {"path": ".harness/source-index.json", "owner": "harness-armor", "mode": "managed", "sha256": "2fcf9af817ec17764217da0824227eca7fe6e74383e77f4afa61528f0ce04390"},
-    {"path": ".harness/unresolved.json", "owner": "harness-armor", "mode": "managed", "sha256": "11b264caf5e5e9400d31a02be143e71b5e7346267383dbcd6e6cb1f21a6016fb"},
-    {"path": "README.md", "owner": "user", "mode": "user", "sha256": "5148541755413f43053e446e5ccc40dc1bda7b6e25cb0501a6c6586bf8dc3fba"},
-    {"path": "README.zh-CN.md", "owner": "user", "mode": "user", "sha256": "fafda0d109e784f8c45de4cae4de54975cbc4f3a095f8a99abab322206fc6e89"},
+    {"path": ".harness/source-index.json", "owner": "harness-armor", "mode": "managed", "sha256": "e6566ff0ba0195711216438f7c6c15d22f7e7eb290a274488cb6d98115f3c2d7"},
+    {"path": ".harness/unresolved.json", "owner": "harness-armor", "mode": "managed", "sha256": "b22a86d1f378d8c431603be4a76a53b714a09e8436ee662a170d3cc7ca1c7905"},
+    {"path": "README.md", "owner": "user", "mode": "user", "sha256": "1db19535529850c0ffce112008d6de61a91c6ca79738cf70c597204fdda849a4"},
+    {"path": "README.zh-CN.md", "owner": "user", "mode": "user", "sha256": "a7227c092332a44e486f66a19da90036f2524b9ff39f336163b22bccec5ddb60"},
     {"path": "LICENSE", "owner": "user", "mode": "user", "sha256": "7f675055f696b69d32f0a549a3b8b676884f5af9ca8cf9436b8fe23cfa19bcfc"}
   ],
   "source_index": ".harness/source-index.json",
   "unresolved_index": ".harness/unresolved.json",
-  "last_updated": "2026-08-25T04:22:43Z"
+  "last_updated": "2026-08-25T07:36:42Z"
 }
