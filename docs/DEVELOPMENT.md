@@ -12,6 +12,7 @@ Before implementation:
 4. Classify claims as `CONFIRMED`, `INFERRED`, `UNRESOLVED`, or `CONFLICTED`.
 5. State the intended file perimeter, risks, failure paths, and verification plan.
 6. For non-trivial work, maintain an execution plan and Context Receipt.
+7. Create a bounded Agent-development Assignment before each phase step: explain the business reason, code entry, inputs/outputs, acceptance, tests, boundaries, hint ladder, expected time, and interview questions; record whether the user attempted it.
 
 During implementation:
 
@@ -19,13 +20,16 @@ During implementation:
 - Do not modify upstream Frappe/ERPNext.
 - Do not delete or demote approved requirements to simplify a milestone; record staged implementation explicitly.
 - Keep changes small and commit one coherent, verified increment at a time.
-- Record every change in `docs/development-log/` in clear Chinese, explaining what changed, why, validation evidence, limitations, and manual acceptance.
+- Work as a mentor: explain why each operation is necessary, let the user attempt safe work first, and take over only for an explicit request, a capability boundary, a security gate, or a production defect; record the reason when taking over.
+- Record every change in `docs/development-log/` in clear Chinese, explaining what changed, why, validation evidence, limitations, and manual acceptance. Preserve each user question, doubt, or blocker verbatim, followed by evidence, explanation, conclusion, and a review action.
 
-Before a release or product/dependency version update:
+Before a phase exit, release, or product/dependency version update:
 
 - Run required automated and manual checks.
-- Use an independent adversarial sub-agent that receives the requirement, diff, tests, and runtime evidence rather than the builder's explanation.
-- Record `PASS`, `CHANGES_REQUIRED`, or `BLOCKED` with evidence.
+- Score the 9 phase-exit dimensions and record likelihood/impact plus P0–P3 disposition; no P0/P1 may remain open, and deferred P2 items need an owner, next gate, and re-test condition.
+- Use an independent adversarial sub-agent after the final diff and full evidence are ready; it receives the requirement, diff, tests, runtime evidence, and report draft rather than relying on the builder's explanation.
+- Record `PASS`, `CHANGES_REQUIRED`, or `BLOCKED` with evidence. Only final `PASS` permits the phase report; `CHANGES_REQUIRED` returns to fix/retest, and `BLOCKED` stops progression.
+- Deliver at least five phase-specific project/interview questions; let the user answer first and mark unanswered items `待练习`.
 
 ## Evidence Rules
 

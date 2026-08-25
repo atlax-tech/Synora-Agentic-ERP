@@ -31,16 +31,40 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "d7b7ea3b60c15ec4101c03139ef1e2f94f46ff2383d67b3808d8731b898ab0f0",
-      "locator": "risk-tiered workflow, phase selection, learning mode, decision gates, and Phase 0 through Phase 8 order"
+      "sha256": "ce705976b13a61fb358bedab943cb3c13892e37dd107f558283801f5419f0892",
+      "locator": "risk-tiered workflow, current phase status, 9-dimension exit Rubric, likelihood/impact gates, mentor Assignments, independent adversarial review, and Phase 0 through Phase 8 order"
+    },
+    {
+      "id": "agent-governance-entry",
+      "path": "AGENTS.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "106f189ac119dba5bb9dc13754b0567efd4034689ee627b03808823e044d0ddc",
+      "locator": "repository execution boundaries, stage-end independent review gate, mentor-led Assignment workflow, and verbatim question/blocker recording"
+    },
+    {
+      "id": "development-log-protocol",
+      "path": "docs/development-log/README.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "9b90eee95c4fff7aba9962312505a1940fec49cff50ec9f538dda1b27c13f362",
+      "locator": "per-round log structure for Assignments, mentor evidence, verbatim user questions/blockers, stage Rubric/risk records, adversarial review, and interview practice"
+    },
+    {
+      "id": "engineering-development-protocol",
+      "path": "docs/DEVELOPMENT.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "bbe2fa9033116301ddf693773e8cacbf44ebf522130ed198d69b7e16b9e4d619",
+      "locator": "implementation evidence protocol, mentor-led Assignment requirement, verbatim blocker recording, and phase/release PASS gate"
     },
     {
       "id": "repository-readme",
       "path": "README.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "08462601b00725c56171fbcb982452a550d6cf70cb6bd14f35252ac4ed40e793",
-      "locator": "English repository positioning, evidence status, architecture summary, and roadmap"
+      "sha256": "07d8f9f61a565a455f498bf0e79b8f26a27492aa31a2cd9d1630bf50fde47cdc",
+      "locator": "English repository positioning, evidence status, mentor-led learning workflow, phase gates, architecture summary, and roadmap"
     },
     {
       "id": "repository-license",
@@ -120,7 +144,7 @@
       "kind": "development",
       "locator": "Phase 3 分轮开发日志（P3.1-P3.7、出口验证、最终修复与 P4.1 只读取证准备）",
       "status": "CONFIRMED",
-      "sha256": "184ba5e3bd301076747dad183f4139e4ad5579239bca66d5c0185f7e6f8a1a22"
+      "sha256": "2ae8a0d3148d43c8646c28e33de6d6963a196c8974ea255c429a422318f51078"
     },
     {
       "id": "phase3-security-eval",

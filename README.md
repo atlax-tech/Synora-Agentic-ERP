@@ -10,6 +10,12 @@ Synora has completed **Phase 0 through Phase 3** for its read-only scope: the go
 
 Phase 3 exit review **passed**: the independent adversarial review initially returned `CHANGES_REQUIRED` with eight blocking findings; the fixes were re-verified across three review rounds, and the final cleanup also closed the CAS-loser recovery race, Docker sidecar configuration/authentication, redirect handling, reasoning-token accounting, and stale evidence wording. The model guard is accurately described as a request output budget plus provider usage verification—not a provider-side hard cost cap. Phase 4 has not started; approval/workflow mapping remains an explicit gate, and all write operations remain staged.
 
+## Learning and phase gates
+
+Synora follows a mentor-led Agent development workflow. Every phase step begins with a bounded Assignment covering the business reason, code entry point, expected output, tests, boundaries, hints, and interview questions; the learner attempts safe work first, while security gates and production defects remain mentor-controlled.
+
+At each phase exit, the team scores nine Agent-engineering dimensions, records likelihood/impact risks, and runs an independent adversarial review after the final diff and full evidence are ready. `CHANGES_REQUIRED` or `BLOCKED` stops the phase; only a final `PASS` permits the exit report. User questions and blockers are kept verbatim in the phase log, followed by the explanation and evidence. Each exit also produces at least five project- and interview-focused practice questions.
+
 This status is an evidence boundary, not a reduction in product standards. Synora is being designed and developed as a production-grade enterprise product; this README does not present planned behavior as working software.
 
 ## Why Synora exists
@@ -239,7 +245,7 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for milestone entry and exit conditions
 
 ## Contributing
 
-The governed read-only gateway and Phase 3 procurement Agent are implemented; later phases remain staged. Before proposing a change, read `AGENTS.md` and the affected requirement, architecture, testing, and acceptance documents. Keep commits small, record the change in `docs/development-log/`, and report commands that actually ran.
+The governed read-only gateway and Phase 3 procurement Agent are implemented; later phases remain staged. Before proposing a change, read `AGENTS.md` and the affected requirement, architecture, testing, and acceptance documents. Follow the Assignment/mentor workflow, keep commits small, record the change and verbatim questions in `docs/development-log/`, and report commands that actually ran.
 
 ## FAQ
 
