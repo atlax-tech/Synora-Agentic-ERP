@@ -39,7 +39,7 @@
       "path": "README.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "1db19535529850c0ffce112008d6de61a91c6ca79738cf70c597204fdda849a4",
+      "sha256": "731b1f942f1e07ac6af37f7e79be8bbc26fc6cb3199f1c8969328d4e4110d755",
       "locator": "English repository positioning, evidence status, architecture summary, and roadmap"
     },
     {
@@ -113,6 +113,118 @@
       "status": "CONFIRMED",
       "sha256": "086e85ec6c1b78b0611c1427d0d0f4e021a2bdc6d5790c4c54b49581d7d9a537",
       "locator": "P2.6 real-HTTP end-to-end verification script (11 scenarios)"
+    },
+    {
+      "id": "phase3-development-log",
+      "path": "docs/development-log/20260825-Phase-3-开发日志.md",
+      "kind": "development",
+      "locator": "Phase 3 分轮开发日志（P3.1-P3.7、出口验证与对抗审查）；验收未过，修复轮追加于此",
+      "status": "UNRESOLVED",
+      "sha256": "468d938a3278812ee820f70feb869f586fdfd71752f9cfa5a8b98d909584b8cb"
+    },
+    {
+      "id": "phase3-security-eval",
+      "path": "docs/security/phase3-security-eval.md",
+      "kind": "testing",
+      "locator": "8 类安全场景评测（S-01..S-08）映射：场景、测试、证据、复跑命令、已知限制",
+      "status": "UNRESOLVED",
+      "sha256": "e50eaaecb3cf5e0c483bcdf99a97b4e28466f04817a8a82c64a11ff021983614"
+    },
+    {
+      "id": "adr-0004-workflow-engine-spike",
+      "path": "docs/decisions/ADR-0004-workflow-engine-spike.md",
+      "kind": "design",
+      "locator": "工作流引擎 Spike 结论：Phase 3 不采用 LangGraph；checkpoint/resume 证据待补",
+      "status": "UNRESOLVED",
+      "sha256": "606ac41fc43e13ce40729787582de6dbc9dca0263827f8f6723828ddabce836b"
+    },
+    {
+      "id": "decision-pack-p3-4-model-provider",
+      "path": "docs/decisions/decision-pack-p3-4-model-provider.md",
+      "kind": "design",
+      "locator": "模型 Provider 决策包（APPROVED：BYOK 远程兼容 API，本地不装 Ollama，评测集范围批准）",
+      "status": "UNRESOLVED",
+      "sha256": "c9871fef77f3ec331fcfa80212f6a823a750456f6fefc8c80b35b95afd4ad3dc"
+    },
+    {
+      "id": "p35-enhance-module",
+      "path": "services/agent_runtime/src/agent_runtime/agent/enhance.py",
+      "kind": "code",
+      "locator": "模型自然语言增强：确定性计算 + 模型仅解释 + 严格校验回退 + 证据记录",
+      "status": "UNRESOLVED",
+      "sha256": "c7d53ad9958e5465e26eeb3068d00365072fc52693511102217e7ef9cf024385"
+    },
+    {
+      "id": "p34-provider-module",
+      "path": "services/agent_runtime/src/agent_runtime/providers.py",
+      "kind": "code",
+      "locator": "Provider 接口：Deterministic(CI)/OpenAI 兼容(BYOK)，SecretStr 脱敏、max_tokens 护栏、fail-closed 解析",
+      "status": "UNRESOLVED",
+      "sha256": "532a7d2bc320962ed235eca814e82449886dce41976bf8deb4d99e61e6664638"
+    },
+    {
+      "id": "p36-retrieval-module",
+      "path": "services/agent_runtime/src/agent_runtime/retrieval/index.py",
+      "kind": "code",
+      "locator": "SQLite FTS5/BM25 检索基线 + CJK 子串补充；permission_scope 过滤待接入",
+      "status": "UNRESOLVED",
+      "sha256": "d23421cb2eaba3a229f5dd14b9f9579b228e8e83994504e85441dfce66f8f099"
+    },
+    {
+      "id": "p33-analysis-module",
+      "path": "synora_agentic_erp/agent/analysis.py",
+      "kind": "code",
+      "locator": "确定性采购风险分析纯函数（净位置=库存+窗口在途-窗口需求；Decimal 精确；六类风险）",
+      "status": "UNRESOLVED",
+      "sha256": "9afc06247421f4c125624a4f4462fdaab4b938a824775c01ac55f96cf0367e5e"
+    },
+    {
+      "id": "p35-plan-module",
+      "path": "synora_agentic_erp/agent/plan.py",
+      "kind": "code",
+      "locator": "可解释只读计划生成（goal 匹配、风险摘要、逐项建议+来源+未知项）",
+      "status": "UNRESOLVED",
+      "sha256": "b5f34a8efdc301ade84de381eb48840b55028a1cd36e81e5d31ff31d0e8c174b"
+    },
+    {
+      "id": "p32-state-machine",
+      "path": "synora_agentic_erp/agent/state_machine.py",
+      "kind": "code",
+      "locator": "Run 确定性状态机（非法转换 fail-closed）；CAS/并发互斥待加固",
+      "status": "UNRESOLVED",
+      "sha256": "8b3d304898284ccc0d74d453309fd62f68d919f66ff7211779d1712ed2358aea"
+    },
+    {
+      "id": "p36-knowledge-source-map",
+      "path": "services/agent_runtime/src/agent_runtime/retrieval/knowledge/erp-p2p-source-map.md",
+      "kind": "other",
+      "locator": "curated 知识源：P2P source-map 摘要（含 权限基线/SOP 两篇同目录文档）",
+      "status": "UNRESOLVED",
+      "sha256": "99c4bfe43628ec0838d77c491eb1d5d920f57a5b2e564a8a08c23ec3e1ea4506"
+    },
+    {
+      "id": "p36-knowledge-permission-baseline",
+      "path": "services/agent_runtime/src/agent_runtime/retrieval/knowledge/erp-permission-baseline.md",
+      "kind": "other",
+      "locator": "curated 知识源：权限/审批基线（引用 Phase 1 取证）",
+      "status": "UNRESOLVED",
+      "sha256": "8d6335a10f56017a8865442dc691170ef62d7267373bed39361f3b1a7c22bb3f"
+    },
+    {
+      "id": "p34-evaluation-loader",
+      "path": "services/agent_runtime/src/agent_runtime/evaluation/loader.py",
+      "kind": "testing",
+      "locator": "评测集 loader：固定 JSON cases（goal+期望结果+tags）",
+      "status": "UNRESOLVED",
+      "sha256": "37e5ef72bc049e922c98bfc2ccde13d9ba2ddd0b0f59b2006a11b8690956b650"
+    },
+    {
+      "id": "p34-evaluation-case-1001",
+      "path": "services/agent_runtime/src/agent_runtime/evaluation/cases/p3-dup-risk-item-1001.json",
+      "kind": "testing",
+      "locator": "评测 case：Item-1001 重复采购风险（当前仅 1 个 case，不足以支撑模型选择结论）",
+      "status": "UNRESOLVED",
+      "sha256": "7c02050ac67ab2d9a300331f664d28d8afbf644376bfd542021cc48af33d4339"
     }
   ]
 }

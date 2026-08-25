@@ -18,6 +18,13 @@ Synora 是构建在 ERPNext 上的受治理 Agentic Enterprise Operations 产品
 - Mock 只能是明确允许的 test double，不能替代真实 ERP 集成完成度。
 - 不得声称生产部署、客户采用或未被证据支持的收益。
 
+## 文件所有权与保留边界
+
+- 权威事实来源：`docs/PRD.md`、`docs/ARCHITECTURE.md`、`docs/DESIGN.md`、`docs/SPEC.md`、`docs/PLAN.md`；上游 ERP 行为以 `docs/source-maps/`、`docs/erp-baselines/` 的取证记录为准。
+- 用户维护、禁止覆盖或未经确认不得改写的文件：`.env*`（含 `env/dev/.env`，API Key 只存在此处）、`README.md`/`README.zh-CN.md`（公开事实由用户确认后更新）、`.harness/`（由 harness-armor 流程管理，不手工改）。
+- 未提交的修改、未合并的决策与未完成的验收不得写入权威文档冒充事实；延期与未决项必须显式标记。
+- 工作区里未被本文件声明为"用户维护"的源文件，Agent 修改后必须保留 Git 历史并记录到开发日志，不得静默覆盖任何既有证据。
+
 ## 精简工作流
 
 - 编码、修复、重构、代码审查和依赖选择前读取 `.agents/skills/ponytail/SKILL.md`，默认 `full`。

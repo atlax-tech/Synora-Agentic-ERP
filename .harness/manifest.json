@@ -2,32 +2,174 @@
   "$schema": "../.agents/skills/.harness-armor/schemas/manifest.schema.json",
   "schema_version": "1.0.0",
   "spec_version": "1.0.0",
-  "generator": {"name": "harness-armor", "version": "0.1.2"},
+  "generator": {
+    "name": "harness-armor",
+    "version": "0.1.2"
+  },
   "repository_state": "MANAGED_HARNESS",
   "managed_files": [
-    {"path": "AGENTS.md", "owner": "harness-armor", "mode": "managed", "sha256": "017d8695b11f8c5a34c15a03bde448cad54d10615925c0aa652575521bd11b24"},
-    {"path": "docs/PRD.md", "owner": "harness-armor", "mode": "managed", "sha256": "d1554ddd02cfabee1920e56e132539470ec6bcafee38fd424d49663daace1b21"},
-    {"path": "docs/ARCHITECTURE.md", "owner": "harness-armor", "mode": "managed", "sha256": "f60f8f0a26e6b068b33df484dad3b7668b3037ce871cc12f68e1f814406af1e9"},
-    {"path": "docs/DESIGN.md", "owner": "harness-armor", "mode": "managed", "sha256": "67c01058389dff3d043608e76103e3fc93c78a234a213be5592de409290e24e3"},
-    {"path": "docs/DEVELOPMENT.md", "owner": "harness-armor", "mode": "managed", "sha256": "2e497d22002fe5ad91f035c7e4559213b5eb2237b8198bb487d5a952f89742eb"},
-    {"path": "docs/TESTING.md", "owner": "harness-armor", "mode": "managed", "sha256": "2c827944aea0c3f4c54270ea532a716d41a00dbebd6021025aeea57ecf489e0f"},
-    {"path": "docs/ACCEPTANCE.md", "owner": "harness-armor", "mode": "managed", "sha256": "7911e236be1d1eccdf2e62b0008d46252d71bda217821ec6d4a7960e9dc18d10"},
-    {"path": "docs/ROADMAP.md", "owner": "harness-armor", "mode": "managed", "sha256": "9220847b9b3357de050e1116e496bf0f4c9798ff3ec051e116030496dbd6e6a3"},
-    {"path": "docs/SPEC.md", "owner": "harness-armor", "mode": "managed", "sha256": "8055a4c2af58a3aa97da53fe87e62a6e4406b24530435e39a32788aeb1b78e07"},
-    {"path": "docs/PLAN.md", "owner": "harness-armor", "mode": "managed", "sha256": "f1cde2444011b03b46757dc2df228673cf699565c10cee21e93d2a1cb177957e"},
-    {"path": "docs/decisions/README.md", "owner": "harness-armor", "mode": "managed", "sha256": "13eaa4d31e1f2d8d7c6b604fd35b83d15758ae888fcbcbb56f45160726cc44a0"},
-    {"path": "docs/decisions/ADR-0002-frozen-baseline-pair.md", "owner": "harness-armor", "mode": "managed", "sha256": "d81562178c660de127fe8e73fae46f045f8387032fff5ee7f4fa519d7dabbda5"},
-    {"path": "docs/source-maps/phase1-p2p-source-map.md", "owner": "harness-armor", "mode": "managed", "sha256": "03b04bf94a3d0c8dcde042193184f253bd834f9cf7d37c82bea6731cb37320c2"},
-    {"path": "docs/erp-baselines/phase1-permission-workflow-baseline.md", "owner": "harness-armor", "mode": "managed", "sha256": "887ab54ee09711d6a3d0305e5aeb2cd5a5b8915bceb76c907564a2a0b54b3446"},
-    {"path": "docs/development-log/README.md", "owner": "harness-armor", "mode": "managed", "sha256": "0c02d79a6d0ab23626edb863cb039941e03692ce86047d12f36dc21f5191a45e"},
-    {"path": "docs/development-log/20260824-Phase-0-开发日志.md", "owner": "harness-armor", "mode": "managed", "sha256": "5ddddd548d59bb57a1c0d4d4ae7e493db55427cdc13cef44326ae4ff3dcf33e4"},
-    {"path": "docs/development-log/20260824-Phase-1-开发日志.md", "owner": "harness-armor", "mode": "managed", "sha256": "661baa5b7db11a871bb50abb8f2be93810594537b0b348527ca4603af5a459bf"},
-    {"path": "docs/development-log/20260825-Phase-2-开发日志.md", "owner": "harness-armor", "mode": "managed", "sha256": "b486d50a132c0b8d84ab2bb382b3acfee7d5864713dcf06f333c3435f8182395"},
-    {"path": ".harness/source-index.json", "owner": "harness-armor", "mode": "managed", "sha256": "ef66aaa0d6610b63647ca7edf0f30350fd5efbbd03ca8a6bb4c7d10003006543"},
-    {"path": ".harness/unresolved.json", "owner": "harness-armor", "mode": "managed", "sha256": "cb03f26ad62c12527094a506e8d095ea9d14abdbd1f1d0b8140ccfb24a6b7edd"},
-    {"path": "README.md", "owner": "user", "mode": "user", "sha256": "1db19535529850c0ffce112008d6de61a91c6ca79738cf70c597204fdda849a4"},
-    {"path": "README.zh-CN.md", "owner": "user", "mode": "user", "sha256": "a7227c092332a44e486f66a19da90036f2524b9ff39f336163b22bccec5ddb60"},
-    {"path": "LICENSE", "owner": "user", "mode": "user", "sha256": "7f675055f696b69d32f0a549a3b8b676884f5af9ca8cf9436b8fe23cfa19bcfc"}
+    {
+      "path": "AGENTS.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "a96c22db0c13f598d7e0cc1b9588b2b84de5e70833dee2e6f31c2236715b0af1"
+    },
+    {
+      "path": "docs/PRD.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "d1554ddd02cfabee1920e56e132539470ec6bcafee38fd424d49663daace1b21"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "f60f8f0a26e6b068b33df484dad3b7668b3037ce871cc12f68e1f814406af1e9"
+    },
+    {
+      "path": "docs/DESIGN.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "67c01058389dff3d043608e76103e3fc93c78a234a213be5592de409290e24e3"
+    },
+    {
+      "path": "docs/DEVELOPMENT.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "2e497d22002fe5ad91f035c7e4559213b5eb2237b8198bb487d5a952f89742eb"
+    },
+    {
+      "path": "docs/TESTING.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "2c827944aea0c3f4c54270ea532a716d41a00dbebd6021025aeea57ecf489e0f"
+    },
+    {
+      "path": "docs/ACCEPTANCE.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "7911e236be1d1eccdf2e62b0008d46252d71bda217821ec6d4a7960e9dc18d10"
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "9220847b9b3357de050e1116e496bf0f4c9798ff3ec051e116030496dbd6e6a3"
+    },
+    {
+      "path": "docs/SPEC.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "8055a4c2af58a3aa97da53fe87e62a6e4406b24530435e39a32788aeb1b78e07"
+    },
+    {
+      "path": "docs/PLAN.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "f1cde2444011b03b46757dc2df228673cf699565c10cee21e93d2a1cb177957e"
+    },
+    {
+      "path": "docs/decisions/README.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "13eaa4d31e1f2d8d7c6b604fd35b83d15758ae888fcbcbb56f45160726cc44a0"
+    },
+    {
+      "path": "docs/decisions/ADR-0002-frozen-baseline-pair.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "d81562178c660de127fe8e73fae46f045f8387032fff5ee7f4fa519d7dabbda5"
+    },
+    {
+      "path": "docs/source-maps/phase1-p2p-source-map.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "03b04bf94a3d0c8dcde042193184f253bd834f9cf7d37c82bea6731cb37320c2"
+    },
+    {
+      "path": "docs/erp-baselines/phase1-permission-workflow-baseline.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "887ab54ee09711d6a3d0305e5aeb2cd5a5b8915bceb76c907564a2a0b54b3446"
+    },
+    {
+      "path": "docs/development-log/README.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "0c02d79a6d0ab23626edb863cb039941e03692ce86047d12f36dc21f5191a45e"
+    },
+    {
+      "path": "docs/development-log/20260824-Phase-0-开发日志.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "5ddddd548d59bb57a1c0d4d4ae7e493db55427cdc13cef44326ae4ff3dcf33e4"
+    },
+    {
+      "path": "docs/development-log/20260824-Phase-1-开发日志.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "661baa5b7db11a871bb50abb8f2be93810594537b0b348527ca4603af5a459bf"
+    },
+    {
+      "path": "docs/development-log/20260825-Phase-2-开发日志.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "b486d50a132c0b8d84ab2bb382b3acfee7d5864713dcf06f333c3435f8182395"
+    },
+    {
+      "path": ".harness/source-index.json",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "cbf6c50b98ae78c804bab5d996897fd11cdbfa703ec7dcc375f2153fb0ab0533"
+    },
+    {
+      "path": ".harness/unresolved.json",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "cb03f26ad62c12527094a506e8d095ea9d14abdbd1f1d0b8140ccfb24a6b7edd"
+    },
+    {
+      "path": "README.md",
+      "owner": "user",
+      "mode": "user",
+      "sha256": "731b1f942f1e07ac6af37f7e79be8bbc26fc6cb3199f1c8969328d4e4110d755"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "owner": "user",
+      "mode": "user",
+      "sha256": "0a98437ace190f0983163c149ad3f6c21ce0c6aee6d70fa7481a09dc4a72c720"
+    },
+    {
+      "path": "LICENSE",
+      "owner": "user",
+      "mode": "user",
+      "sha256": "7f675055f696b69d32f0a549a3b8b676884f5af9ca8cf9436b8fe23cfa19bcfc"
+    },
+    {
+      "path": "docs/development-log/20260825-Phase-3-开发日志.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "468d938a3278812ee820f70feb869f586fdfd71752f9cfa5a8b98d909584b8cb"
+    },
+    {
+      "path": "docs/security/phase3-security-eval.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "e50eaaecb3cf5e0c483bcdf99a97b4e28466f04817a8a82c64a11ff021983614"
+    },
+    {
+      "path": "docs/decisions/ADR-0004-workflow-engine-spike.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "606ac41fc43e13ce40729787582de6dbc9dca0263827f8f6723828ddabce836b"
+    },
+    {
+      "path": "docs/decisions/decision-pack-p3-4-model-provider.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "c9871fef77f3ec331fcfa80212f6a823a750456f6fefc8c80b35b95afd4ad3dc"
+    }
   ],
   "source_index": ".harness/source-index.json",
   "unresolved_index": ".harness/unresolved.json",

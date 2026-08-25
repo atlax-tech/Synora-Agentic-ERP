@@ -41,7 +41,9 @@ def _load_env_file(path: str) -> None:
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Synora plan enhancement self-check")
     parser.add_argument("--env", help="load SYNORA_PROVIDER_* from this file")
-    parser.add_argument("--plan", required=True, help="path to plan JSON (Synora Run Plan.plan_json)")
+    parser.add_argument(
+        "--plan", required=True, help="path to plan JSON (Synora Run Plan.plan_json)"
+    )
     args = parser.parse_args()
     if args.env:
         _load_env_file(args.env)

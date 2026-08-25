@@ -6,7 +6,9 @@
 
 ## 项目状态
 
-Synora 已完成 **Phase 0 至 Phase 2**：经治理的工程基线、固定的 Frappe/ERPNext v16 组合，以及类型化只读 ERP Gateway（服务端 Run/capability 模型、六个已验证只读工具、Agent Runtime HTTPX 客户端）均已实现并通过真实 HTTP 端到端验证。只读 Procurement Agent（Phase 3）与全部写操作（Phase 4 起）仍处于分阶段交付状态。
+Synora 已完成 **Phase 0 至 Phase 3**：经治理的工程基线、固定的 Frappe/ERPNext v16 组合、类型化只读 ERP Gateway（服务端 Run/capability 模型、已验证只读工具、Agent Runtime HTTPX 客户端），以及只读 Procurement Agent（确定性风险分析、可解释计划、BYOK 模型 Provider、FTS5 检索、模型仅解释增强）均已实现并通过真实 HTTP 端到端验证。
+
+Phase 3 阶段出口审查**进行中**：独立对抗审查返回 `CHANGES_REQUIRED`，共 8 项阻断发现（脚本文件 format/lint 缺口、模型增强尚未接入 `plan_run`、过期/撤销重检缺口、CAS/并发保护缺失、New Run XSS 边界、checkpoint/resume 证据、Harness 来源追踪）。修复正在实施并复验，完成后才启动 Phase 4。全部写操作（Phase 4 起）仍处于分阶段交付状态。
 
 这是证据边界，不是产品标准降级。Synora 始终按照生产级企业产品推进；本文不会把规划中的能力描述成已经可运行的软件。
 
