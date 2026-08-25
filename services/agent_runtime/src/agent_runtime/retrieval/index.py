@@ -125,7 +125,9 @@ class RetrievalIndex:
     def _contains_cjk(text: str) -> bool:
         return any("\u4e00" <= char <= "\u9fff" for char in text)
 
-    def search(self, query: str, limit: int = 5, permission_scope: str = "internal") -> list[SearchHit]:
+    def search(
+        self, query: str, limit: int = 5, permission_scope: str = "internal"
+    ) -> list[SearchHit]:
         """按 BM25 排序检索; 非法/空查询返回空列表。
 
         调用方必须显式传入允许的 permission_scope (默认 "internal"),

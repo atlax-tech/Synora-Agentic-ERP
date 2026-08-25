@@ -88,9 +88,8 @@ def test_rebuild_is_idempotent_and_recoverable(tmp_path: Path) -> None:
 
 def test_search_filters_permission_scope(tmp_path) -> None:
     """检索结果必须按 permission_scope 过滤 (低权限上下文读不到高权限知识)。"""
-    from agent_runtime.retrieval.sources import CuratedSource, load_curated_sources
-
     from agent_runtime.retrieval.index import RetrievalIndex
+    from agent_runtime.retrieval.sources import CuratedSource
 
     index = RetrievalIndex(str(tmp_path / "scope.db"))
     public = CuratedSource(

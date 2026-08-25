@@ -119,7 +119,10 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
         # Runtime 返回非对象结构 (list/str/null): 视为异常响应, 回退确定性。
         return fallback("runtime returned a non-object response")
 
-    evidence = body.get("evidence") or {}
+    evidence = body.get("evidence")
+    if not isinstance(evidence, dict):
+        # evidence 缺失或非对象 (list/str/数字): 回退确定性, 不抛 500。
+        return fallback("runtime returned invalid evidence")
     explanation = body.get("explanation")
     if not isinstance(explanation, str) or not explanation.strip():
         return fallback(
