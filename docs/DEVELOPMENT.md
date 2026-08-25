@@ -121,6 +121,34 @@ bash env/dev/scripts/dev/env.sh bash \
 
 这些是 Phase 1 环境命令，不是产品命令。
 
+## Model Provider 配置与 API Key 脱敏（P3.4 BYOK，2026-08-25 批准）
+
+模型 Provider 采用 BYOK：**Base URL 由用户提供、API Key 由用户自行填写**，代码不持有明文。
+
+### 配置方式
+
+1. 复制 `env/dev/.env.example` 为 `env/dev/.env`（已被 gitignore，不会进入 Git）；
+2. 在 `.env` 中填写三项（真实值只存在于本机 `.env`）：
+   - `SYNORA_PROVIDER_BASE_URL`：OpenAI 兼容 API 的纯 HTTP(S) origin，如 `https://api.example.com`；
+   - `SYNORA_PROVIDER_API_KEY`：你的 API Key；
+   - `SYNORA_PROVIDER_MODEL`：默认模型名（可选）；
+3. Runtime 通过 `agent_runtime.providers.provider_from_environment()` 读取并构造 provider。
+
+### 代码中的脱敏保证
+
+- **入口唯一**：Key 只从环境变量进入，`SecretStr` 保存；不写进代码、Git、日志、数据库或证据文档；
+- **输出面**：`SecretStr` 的 repr/str 一律显示 `**********`；异常消息、HTTP 错误、测试断言均不含明文（有测试 `test_secret_never_appears_in_error` 守护）；
+- **传输面**：`trust_env=False` 防止环境代理改写目标地址；base_url 必须是纯 origin，禁止 userinfo/query/fragment，防 Key 被拼进 URL；
+- **未配置即失败**：`SYNORA_PROVIDER_BASE_URL` 未设置时 `provider_from_environment()` 抛错（fail closed），不猜测默认地址；
+- **使用后即弃**：构造出的 provider 只存在进程内，不持久化。
+
+### 验证
+
+```bash
+uv run --python 3.14 pytest services/agent_runtime/tests/test_providers.py -v
+# 期望：15 passed（含 base_url 校验、fail-closed、secret 防泄漏用例）
+```
+
 ## Sources
 
 - `docs/PRD.md` — approved maintainability, testing, acceptance, and unresolved-decision requirements.

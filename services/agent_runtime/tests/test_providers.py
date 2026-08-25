@@ -10,6 +10,9 @@ import json
 import httpx
 import pytest
 from agent_runtime.providers import (
+    PROVIDER_API_KEY_ENV,
+    PROVIDER_BASE_URL_ENV,
+    PROVIDER_MODEL_ENV,
     DeterministicProvider,
     OpenAICompatibleProvider,
     ProviderError,
@@ -17,6 +20,7 @@ from agent_runtime.providers import (
     ProviderResponse,
     ProviderToolCall,
     ProviderToolSpec,
+    provider_from_environment,
 )
 from pydantic import SecretStr
 
@@ -269,3 +273,28 @@ class TestOpenAICompatibleProvider:
                     await provider.complete([])
 
         asyncio.run(run())
+
+
+class TestProviderFromEnvironment:
+    def test_missing_base_url_fails_closed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv(PROVIDER_BASE_URL_ENV, raising=False)
+        monkeypatch.delenv(PROVIDER_API_KEY_ENV, raising=False)
+        with pytest.raises(ProviderError):
+            provider_from_environment()
+
+    def test_reads_environment_and_hides_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://api.example.com")
+        monkeypatch.setenv(PROVIDER_API_KEY_ENV, "sk-secret-123")
+        monkeypatch.setenv(PROVIDER_MODEL_ENV, "model-x")
+        provider = provider_from_environment(
+            transport=_transport_that_returns(
+                {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+            )
+        )
+        assert provider._model == "model-x"
+        assert "sk-secret-123" not in repr(provider)
+
+    def test_invalid_origin_from_environment_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://user:pass@host/v1?x=1")
+        with pytest.raises(ValueError):
+            provider_from_environment()

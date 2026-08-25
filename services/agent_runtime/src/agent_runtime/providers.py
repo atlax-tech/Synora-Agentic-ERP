@@ -1,11 +1,18 @@
 """Model provider abstraction (ARCHITECTURE "Model access").
 
-本地 Ollama/OpenAI 兼容运行时为默认目标, 可选远程兼容 provider; CI 使用
-确定性 recorded/mock 响应。模型输出一律视为不可信数据, 未知字段/结构
-fail closed, 不得因 provider 返回内容改变工具 allowlist 或授权。
+本地 Ollama/OpenAI 兼容运行时为默认目标, 可选远程兼容 provider (BYOK:
+用户自备 base_url 与 API key); CI 使用确定性 recorded/mock 响应。模型
+输出一律视为不可信数据, 未知字段/结构 fail closed, 不得因 provider
+返回内容改变工具 allowlist 或授权。
+
+API key 脱敏约定 (用户要求):
+- key 只通过环境变量注入, 不写入代码、Git、日志或数据库;
+- 内部一律以 SecretStr 保存, repr/str/异常均不输出明文;
+- 构造对象后立即使用, 不在模块级保存明文。
 """
 
 import math
+import os
 from collections.abc import Mapping
 from typing import Literal, Protocol
 
@@ -14,6 +21,11 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 _OPENAI_CHAT_PATH = "/v1/chat/completions"
 MAX_PROVIDER_RESPONSE_BYTES = 2_000_000
+
+# BYOK 环境变量 (用户自行填写, 不进入代码/Git)。
+PROVIDER_BASE_URL_ENV = "SYNORA_PROVIDER_BASE_URL"
+PROVIDER_API_KEY_ENV = "SYNORA_PROVIDER_API_KEY"
+PROVIDER_MODEL_ENV = "SYNORA_PROVIDER_MODEL"
 
 
 class StrictModel(BaseModel):
@@ -218,3 +230,26 @@ class _Choice(StrictModel):
 
 class _CompletionEnvelope(StrictModel):
     choices: tuple[_Choice, ...] = ()
+
+
+def provider_from_environment(
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> OpenAICompatibleProvider:
+    """BYOK 工厂: 从环境变量读取配置构造 OpenAI 兼容 provider。
+
+    - SYNORA_PROVIDER_BASE_URL: 必填, 纯 HTTP(S) origin (如 https://api.example.com);
+    - SYNORA_PROVIDER_API_KEY: 可选, 由用户填写, 仅以 SecretStr 传入 (脱敏);
+    - SYNORA_PROVIDER_MODEL: 可选, 默认模型名。
+
+    base_url 未配置时抛 ProviderError (fail closed, 不猜测默认地址)。
+    """
+    base_url = os.environ.get(PROVIDER_BASE_URL_ENV, "")
+    if not base_url:
+        raise ProviderError(f"{PROVIDER_BASE_URL_ENV} is not configured; set it in the environment")
+    api_key = os.environ.get(PROVIDER_API_KEY_ENV, "")
+    return OpenAICompatibleProvider(
+        base_url=base_url,
+        api_key=SecretStr(api_key) if api_key else None,
+        model=os.environ.get(PROVIDER_MODEL_ENV, ""),
+        transport=transport,
+    )
