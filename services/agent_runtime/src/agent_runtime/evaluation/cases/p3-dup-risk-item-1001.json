@@ -1,0 +1,9 @@
+{
+  "case_id": "p3-dup-risk-item-1001",
+  "goal": "ensure stock for SYNORA-P1-Item-1001 for the next quarter",
+  "expected": {
+    "item_code": "SYNORA-P1-Item-1001",
+    "risk": "DUPLICATE_RISK"
+  },
+  "tags": ["normal", "duplicate-risk"]
+}

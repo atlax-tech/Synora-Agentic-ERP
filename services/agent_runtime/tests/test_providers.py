@@ -1,0 +1,271 @@
+"""P3.4 Provider 接口基线测试 (ARCHITECTURE "Model access")。
+
+CI 使用确定性 provider; OpenAI 兼容 provider 通过 MockTransport 验证
+请求/响应契约、fail-closed 与 secret 防泄漏, 不发真实网络请求。
+"""
+
+import asyncio
+import json
+
+import httpx
+import pytest
+from agent_runtime.providers import (
+    DeterministicProvider,
+    OpenAICompatibleProvider,
+    ProviderError,
+    ProviderMessage,
+    ProviderResponse,
+    ProviderToolCall,
+    ProviderToolSpec,
+)
+from pydantic import SecretStr
+
+
+def _transport_that_returns(body: dict[str, object], status: int = 200) -> httpx.MockTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json=body, request=request)
+
+    return httpx.MockTransport(handler)
+
+
+def _transport_that_raises(error: Exception) -> httpx.MockTransport:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise error
+
+    return httpx.MockTransport(handler)
+
+
+def _messages(*, text: str = "user input") -> list[ProviderMessage]:
+    return [ProviderMessage(role="user", content=text)]
+
+
+class TestDeterministicProvider:
+    def test_returns_fixed_response_for_mapped_input(self) -> None:
+        async def run() -> None:
+            provider = DeterministicProvider(
+                responses={
+                    "user input": ProviderResponse(text="planned answer"),
+                    "other": ProviderResponse(text="other answer"),
+                }
+            )
+            response = await provider.complete(_messages())
+            assert response.text == "planned answer"
+            response = await provider.complete(_messages(text="other"))
+            assert response.text == "other answer"
+
+        asyncio.run(run())
+
+    def test_unknown_input_fails_closed(self) -> None:
+        async def run() -> None:
+            provider = DeterministicProvider(responses={"known": ProviderResponse(text="ok")})
+            with pytest.raises(ProviderError):
+                await provider.complete(_messages(text="unmapped"))
+
+        asyncio.run(run())
+
+    def test_default_used_when_provided(self) -> None:
+        async def run() -> None:
+            provider = DeterministicProvider(
+                responses={"known": ProviderResponse(text="ok")},
+                default=ProviderResponse(text="fallback"),
+            )
+            response = await provider.complete(_messages(text="anything"))
+            assert response.text == "fallback"
+
+        asyncio.run(run())
+
+    def test_rejects_empty_messages(self) -> None:
+        async def run() -> None:
+            provider = DeterministicProvider(default=ProviderResponse(text="fallback"))
+            with pytest.raises(ProviderError):
+                await provider.complete([])
+
+        asyncio.run(run())
+
+    def test_is_repeatable(self) -> None:
+        async def run() -> None:
+            provider = DeterministicProvider(
+                responses={"user input": ProviderResponse(text="same")}
+            )
+            first = await provider.complete(_messages())
+            second = await provider.complete(_messages())
+            assert first == second
+
+        asyncio.run(run())
+
+
+class TestOpenAICompatibleProvider:
+    def test_rejects_non_origin_base_url(self) -> None:
+        for bad in (
+            "https://user:pass@host/v1",
+            "https://host/v1",
+            "https://host/v1?x=1",
+            "https://host/v1#frag",
+            "ftp://host",
+            "",
+        ):
+            with pytest.raises(ValueError):
+                OpenAICompatibleProvider(base_url=bad)
+
+    def test_rejects_non_positive_timeout(self) -> None:
+        with pytest.raises(ValueError):
+            OpenAICompatibleProvider(base_url="http://127.0.0.1:11434", timeout_seconds=0)
+
+    def test_parses_text_response(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_returns(
+                {"choices": [{"message": {"role": "assistant", "content": "hello from model"}}]}
+            )
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434",
+                model="local-model",
+                transport=transport,
+            ) as provider:
+                response = await provider.complete(_messages())
+            assert response.text == "hello from model"
+            assert response.tool_calls == ()
+
+        asyncio.run(run())
+
+    def test_parses_tool_calls(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_returns(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": "call-1",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "item.lookup",
+                                            "arguments": '{"query": "bearing"}',
+                                        },
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }
+            )
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434", transport=transport
+            ) as provider:
+                response = await provider.complete(_messages())
+            assert response.text == ""
+            assert response.tool_calls == (
+                ProviderToolCall(name="item.lookup", arguments='{"query": "bearing"}'),
+            )
+
+        asyncio.run(run())
+
+    def test_sends_tools_and_model(self) -> None:
+        async def run() -> None:
+            captured: dict[str, object] = {}
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                captured["json"] = json.loads(request.content)
+                captured["path"] = request.url.path
+                return httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"role": "assistant", "content": "ok"}}]},
+                    request=request,
+                )
+
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434",
+                model="configured-model",
+                transport=httpx.MockTransport(handler),
+            ) as provider:
+                await provider.complete(
+                    _messages(),
+                    tools=[
+                        ProviderToolSpec(
+                            name="item.lookup",
+                            description="lookup items",
+                            parameters={"type": "object"},
+                        )
+                    ],
+                    model="override-model",
+                )
+            body = captured["json"]
+            assert captured["path"] == "/v1/chat/completions"
+            assert isinstance(body, dict)
+            assert body["model"] == "override-model"
+            assert body["stream"] is False
+            tools = body["tools"]
+            assert isinstance(tools, list)
+            assert tools[0]["function"]["name"] == "item.lookup"
+
+        asyncio.run(run())
+
+    def test_non_success_status_fails_closed(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_returns({"error": "boom"}, status=500)
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434", transport=transport
+            ) as provider:
+                with pytest.raises(ProviderError):
+                    await provider.complete(_messages())
+
+        asyncio.run(run())
+
+    def test_invalid_envelope_fails_closed(self) -> None:
+        async def run() -> None:
+            bodies: list[dict[str, object]] = [
+                {"choices": []},
+                {"choices": [{"message": {"role": "assistant", "content": "x", "extra": 1}}]},
+                {"unexpected": True},
+            ]
+            for body in bodies:
+                transport = _transport_that_returns(body)
+                async with OpenAICompatibleProvider(
+                    base_url="http://127.0.0.1:11434", transport=transport
+                ) as provider:
+                    with pytest.raises(ProviderError):
+                        await provider.complete(_messages())
+
+        asyncio.run(run())
+
+    def test_timeout_fails_closed(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_raises(httpx.TimeoutException("slow"))
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434", timeout_seconds=0.1, transport=transport
+            ) as provider:
+                with pytest.raises(ProviderError):
+                    await provider.complete(_messages())
+
+        asyncio.run(run())
+
+    def test_secret_never_appears_in_error(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_raises(httpx.TimeoutException("slow"))
+            secret = "super-secret-key-value"
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434",
+                api_key=SecretStr(secret),
+                transport=transport,
+            ) as provider:
+                with pytest.raises(ProviderError) as caught:
+                    await provider.complete(_messages())
+            assert secret not in str(caught.value)
+            assert secret not in repr(provider)
+
+        asyncio.run(run())
+
+    def test_rejects_empty_messages(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_returns(
+                {"choices": [{"message": {"role": "assistant", "content": "x"}}]}
+            )
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434", transport=transport
+            ) as provider:
+                with pytest.raises(ProviderError):
+                    await provider.complete([])
+
+        asyncio.run(run())
