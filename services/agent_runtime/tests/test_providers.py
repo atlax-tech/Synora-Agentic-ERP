@@ -300,3 +300,23 @@ class TestProviderFromEnvironment:
         monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://user:pass@host/v1?x=1")
         with pytest.raises(ValueError):
             provider_from_environment()
+
+
+class TestBaseUrlCompatibility:
+    def test_full_endpoint_base_url_is_not_duplicated(self) -> None:
+        provider = OpenAICompatibleProvider(
+            base_url="https://ccapi.us/v1/chat/completions",
+            transport=_transport_that_returns(
+                {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+            ),
+        )
+        assert provider._chat_url == "https://ccapi.us/v1/chat/completions"
+
+    def test_root_base_url_gets_chat_path_appended(self) -> None:
+        provider = OpenAICompatibleProvider(
+            base_url="https://ccapi.us/v1",
+            transport=_transport_that_returns(
+                {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+            ),
+        )
+        assert provider._chat_url == "https://ccapi.us/v1/chat/completions"

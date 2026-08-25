@@ -18,7 +18,10 @@ from agent_runtime.providers import ProviderMessage, ProviderError, provider_fro
 async def main() -> None:
     try:
         provider = provider_from_environment()
-        response = await provider.complete([ProviderMessage(role="user", content="ping")])
+        # 成本护栏: 连通测试只发 1 条最小消息, 输出上限 16 token。
+        response = await provider.complete(
+            [ProviderMessage(role="user", content="ping")], max_tokens=16
+        )
     except ProviderError as error:
         print(f"PROVIDER-FAIL: {error}")
         raise SystemExit(1) from error

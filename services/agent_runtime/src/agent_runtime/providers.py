@@ -62,6 +62,7 @@ class Provider(Protocol):
         messages: list[ProviderMessage],
         tools: list[ProviderToolSpec] | None = None,
         model: str | None = None,
+        max_tokens: int | None = None,
     ) -> ProviderResponse: ...
 
 
@@ -87,8 +88,9 @@ class DeterministicProvider:
         messages: list[ProviderMessage],
         tools: list[ProviderToolSpec] | None = None,
         model: str | None = None,
+        max_tokens: int | None = None,
     ) -> ProviderResponse:
-        del tools, model
+        del tools, model, max_tokens
         if not messages:
             raise ProviderError("provider requires at least one message")
         # 以最后一条 user 消息内容作为确定性键。
@@ -138,7 +140,11 @@ class OpenAICompatibleProvider:
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("provider timeout must be positive")
         self._base_url = str(url).rstrip("/")
-        self._chat_url = f"{self._base_url}/chat/completions"
+        # 兼容两种填法: 根地址 (https://host/v1) 或完整端点 (https://host/v1/chat/completions)。
+        if self._base_url.endswith("/chat/completions"):
+            self._chat_url = self._base_url
+        else:
+            self._chat_url = f"{self._base_url}/chat/completions"
         self._api_key = api_key
         self._model = model
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
@@ -166,6 +172,7 @@ class OpenAICompatibleProvider:
         messages: list[ProviderMessage],
         tools: list[ProviderToolSpec] | None = None,
         model: str | None = None,
+        max_tokens: int | None = None,
     ) -> ProviderResponse:
         if not messages:
             raise ProviderError("provider requires at least one message")
@@ -174,6 +181,13 @@ class OpenAICompatibleProvider:
             "messages": [message.model_dump() for message in messages],
             "stream": False,
         }
+        # 成本护栏: 补全价格通常是输入的 5 倍, 每次调用显式限制最大输出 token,
+        # 防止异常/冗长响应浪费费用; 默认不发送 (服务商默认值), 测试与工具调用
+        # 必须显式传小值。
+        if max_tokens is not None:
+            if max_tokens < 1 or max_tokens > 8192:
+                raise ValueError("provider max_tokens must be within 1..8192")
+            payload["max_tokens"] = max_tokens
         if tools:
             payload["tools"] = [
                 {
