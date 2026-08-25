@@ -131,6 +131,12 @@ Required concepts:
 - correlation identifiers and timestamps;
 - cancellation, expiry, and failure classification.
 
+Approved data semantics (P3.1 decision pack, user-approved 2026-08-25):
+
+- `goal` is a `Text` field with a hard server-side limit of **1000 characters**; over-limit input is rejected fail-closed. The original text is stored but never treated as a direct write instruction.
+- `warehouse_scope = []` (empty) means **all warehouses of the company**; read tools are not filtered by warehouse and return company-wide data.
+- `time_window` default (absent) means **current stock + open purchases + demand through the next 90 days**; a present value overrides this default.
+
 ### 7.2 Proposed Action
 
 Required concepts:
@@ -194,6 +200,22 @@ stateDiagram-v2
 ```
 
 Only deterministic code persists transitions. The model may recommend a next action but cannot set state.
+
+Run status copy (Chinese UI text) follows the approved glossary in `docs/DESIGN.md` §Content and Localization:
+
+| Status | UI copy |
+| --- | --- |
+| CREATED | 已创建 |
+| ANALYZING | 分析中 |
+| PROPOSED | 已形成提议 |
+| AWAITING_APPROVAL | 等待审批 |
+| EXECUTING | 执行中 |
+| SUCCEEDED | 已成功 |
+| FAILED | 已失败 |
+| CANCELLED | 已取消 |
+| RECONCILIATION_REQUIRED | 需要对账 |
+| EXPIRED | 已过期 |
+| DECLINED | 已拒绝 |
 
 ### 8.2 Proposed Action
 
@@ -434,11 +456,10 @@ Implementation must not fill these by guesswork:
 - exact Frappe v16 and ERPNext v16 commit pair;
 - user-bound Runtime authorization mechanism;
 - concrete ERP Roles, permissions, Workflow states, multi-level approval, and policy configuration;
-- goal length and default company/warehouse/time scope;
 - exact dependency versions and verified commands;
 - LangGraph checkpoint/resume Spike outcome;
 - local and optional provider model baseline;
-- performance, concurrency, retention, browser, viewport, and accessibility targets;
+- performance, concurrency, and retention targets;
 - vector retrieval and Multi-Agent quantitative adoption thresholds;
 - production checkpoint/storage/scaling path;
 - MIT, GPL-3.0, CC BY-NC, attribution, and distribution boundary.

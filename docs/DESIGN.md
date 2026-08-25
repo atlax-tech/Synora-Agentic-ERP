@@ -1,6 +1,6 @@
 # Frontend Design Constitution
 
-Status: `CONFIRMED` frontend responsibility and interaction principles. Detailed visual tokens, component mapping, browser matrix, and accessibility target remain `UNRESOLVED`.
+Status: `CONFIRMED` frontend responsibility and interaction principles. Component baseline, browser matrix, viewport, accessibility target, and bilingual glossary are resolved by the P3.1 decision pack (user-approved 2026-08-25) and recorded below.
 
 ## Purpose and Boundary
 
@@ -79,9 +79,11 @@ Loading, empty, partial, stale, error, and permission states are required design
 
 ## Visual System Boundary
 
-Synora should initially reuse the Frappe/ERPNext visual language and proven interaction patterns so that it remains coherent with the host product. A separate bespoke design system is not justified before the exact Frappe v16 component and token baseline is inspected.
+Synora reuses the Frappe/ERPNext visual language and proven interaction patterns so that it remains coherent with the host product.
 
-Until that baseline is verified:
+Confirmed baseline (P3.1 decision pack, fixed Frappe `6a329d0`): Desk's existing component system — Vue 3.3.0 + Bootstrap 4.6.2, `frappe.ui.form`, Control, Dialog, List/Form/Report views, `@headlessui/vue`, `@vueuse/core`. `frappe-ui` is not installed in the pinned baseline and is **not** introduced.
+
+Until detailed visual tokens are produced during Phase 3 implementation:
 
 - do not invent final brand colors, typography, spacing tokens, shadows, or component APIs;
 - do not claim pixel-level compatibility with a Frappe release;
@@ -94,15 +96,30 @@ Until that baseline is verified:
 - Interactive elements require keyboard operation, visible focus, semantic labels, and understandable disabled states.
 - Status, risk, and validation information cannot rely on color alone.
 - Motion must not be required to understand progress or state transitions.
-- Exact viewport support, browser matrix, contrast target, and accessibility conformance level remain unresolved until the Frappe v16 baseline is verified.
+- Confirmed targets (P3.1 decision pack, user-approved 2026-08-25): browser matrix = Chrome/Edge/Firefox/Safari, latest 2 major versions each (desktop); minimum supported viewport width = 1280px with adaptive layout; accessibility conformance = WCAG 2.1 AA (keyboard, non-color status, visible focus).
 
 ## Content and Localization
 
 - Use concise enterprise language that distinguishes facts, suggestions, risks, actions, and unknowns.
 - Buttons start with clear verbs and name the actual action when risk is material.
 - Errors state the cause category, safe next step, and correlation identifier when available.
-- Chinese and English terminology must use one approved glossary; mixed synonyms are prohibited after the glossary is fixed.
+- Chinese and English terminology must use the approved glossary below; mixed synonyms are prohibited. Status copy, error-code copy, and state-machine labels follow the same single glossary (see `docs/SPEC.md` §8.1 for Run status copy).
 - Do not use anthropomorphic or celebratory language to conceal uncertainty or business risk.
+
+### Approved Bilingual Glossary (P3.1 decision pack, user-approved 2026-08-25)
+
+| English | 中文 | 备注 |
+| --- | --- | --- |
+| Agent Run | 智能体运行 | 有身份/范围/状态的服务端记录 |
+| Goal | 目标 | 用户自然语言业务目标 |
+| Proposed Action | 提议动作 | 版本化写入提议 |
+| Approval Decision | 审批决定 | 独立审批人的决策记录 |
+| Execution Receipt | 执行回执 | 幂等+对账的验证结果 |
+| Reconciliation | 对账 | 不确定结果的人工接管路径 |
+| Shortage Risk | 缺货风险 | 确定性计算 |
+| Duplicate Purchase Risk | 重复采购风险 | 确定性计算 |
+| Scope | 范围 | 公司/仓库授权范围 |
+| Draft / Submit | 草稿 / 提交 | MR/PO 生命周期 |
 
 ## Prohibited Patterns
 
@@ -125,11 +142,10 @@ Until that baseline is verified:
 
 ## Open Design Decisions
 
-- Exact Frappe v16 components, tokens, layout primitives, and extension constraints.
-- Approved Chinese/English product terminology and status glossary.
-- Supported desktop viewport and browser matrix.
-- Accessibility conformance target and verification tooling.
+- Detailed visual tokens (final colors, typography, spacing, shadows) and component APIs for custom Synora components; the host-component baseline itself is resolved in §Visual System Boundary.
 - Detailed approval interaction for configured multi-level approval, expiry, and changes requested; the Draft versus Submit responsibility baseline is defined in the PRD and architecture.
+
+Resolved by the P3.1 decision pack (user-approved 2026-08-25): component baseline (Desk existing components), browser matrix (latest 2 major versions of Chrome/Edge/Firefox/Safari, desktop), minimum viewport 1280px, accessibility WCAG 2.1 AA, and the approved bilingual glossary (§Content and Localization).
 
 ## Sources
 

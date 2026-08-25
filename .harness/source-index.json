@@ -7,7 +7,7 @@
       "path": "docs/PRD.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "6ed32db529ee57c48d29edb19b9ba37c6ab095b679612dc7f7babfb099d6e8e8",
+      "sha256": "d1554ddd02cfabee1920e56e132539470ec6bcafee38fd424d49663daace1b21",
       "locator": "single merged product definition and requirements baseline; unresolved decisions remain explicitly marked"
     },
     {
@@ -23,7 +23,7 @@
       "path": "docs/SPEC.md",
       "kind": "design",
       "status": "CONFIRMED",
-      "sha256": "7c26d54e52b213a06c6fdf167bcdbc900fd506c1288372555c7c55f35284cb3b",
+      "sha256": "8055a4c2af58a3aa97da53fe87e62a6e4406b24530435e39a32788aeb1b78e07",
       "locator": "requirement traceability, contracts, state machines, governance, evolution gates, and unresolved decisions"
     },
     {

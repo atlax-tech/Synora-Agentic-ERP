@@ -183,11 +183,11 @@ F-009 至 F-012 是完整 P2P 需求的一部分，只是分阶段实现，不�
 | 字段 | 类型 | 必填 | 约束 |
 | --- | --- | --- | --- |
 | run_id | UUID/ULID | 是 | 服务端生成，全局唯一 |
-| goal | string | 是 | 长度上限 `[待确认]`；保存原始文本但不得作为直接写指令 |
+| goal | string | 是 | 长度上限 1000 字符（服务端 fail-closed 校验，P3.1 决策包批准）；保存原始文本但不得作为直接写指令 |
 | initiator | Frappe User reference | 是 | 从登录态记录，不接受 Runtime 参数覆盖 |
 | company_scope | reference/list | 是 | 只能选择用户有权访问的公司 |
-| warehouse_scope | reference/list | 否 | 为空时的默认规则 `[待确认]` |
-| time_window | structured duration/date range | 否 | 缺省行为必须在 SPEC 中确认 |
+| warehouse_scope | reference/list | 否 | 为空时默认公司全部仓库（工具不按仓库过滤，P3.1 决策包批准） |
+| time_window | structured duration/date range | 否 | 缺省为"当前库存 + 在途采购 + 未来 90 天需求"（P3.1 决策包批准，语义见 SPEC §7.1） |
 | status | enum | 是 | 只能由确定性状态机转换 |
 | created_at | timestamp | 是 | 服务端时间 |
 
@@ -344,7 +344,7 @@ F-009 至 F-012 是完整 P2P 需求的一部分，只是分阶段实现，不�
 | 审批 | 明确真实后果 | “批准后将创建 1 份 Purchase Order Draft；执行前会重新校验库存和在途订单。” |
 | 未知 | 明确证据不足 | “当前证据不足，无法确认该单据为何被阻止。” |
 
-最终中英文 UI 术语表 `[待确认]`，不能在实现中随意混用同义词。
+中英双语术语表已由 P3.1 决策包批准并固化在 `docs/DESIGN.md` §Content and Localization；全产品单一术语，不能在实现中混用同义词。
 
 ## 8. 非功能性需求
 
