@@ -14,6 +14,7 @@ CI (app-test) 无 Runtime 服务: 走回退路径, 不依赖付费真实模型�
 import json
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import date
 from decimal import Decimal
@@ -58,10 +59,18 @@ _RUNTIME_RESPONSE_BYTES = 1_000_000
 def _runtime_enhance_url() -> str:
     configured = os.environ.get(_RUNTIME_URL_ENV, "").strip().rstrip("/")
     if configured:
-        host = configured.split("://")[-1].split("/")[0]
-        if not (host == "127.0.0.1" or host == "localhost" or host.startswith("127.0.0.1:")):
+        # 严格校验: 仅接受 http(s) 回环地址; 拒绝 userinfo/凭据/任意 host,
+        # 防止 urllib 把 userinfo@evil 解析到非本机地址 (SSRF 纵深防御)。
+        try:
+            parsed = urllib.parse.urlsplit(configured)
+        except ValueError as error:
+            raise GatewayFault("CONFIG_ERROR", "runtime url is invalid", 500) from error
+        hostname = (parsed.hostname or "").lower()
+        if parsed.scheme not in ("http", "https") or parsed.username or parsed.password:
             raise GatewayFault("CONFIG_ERROR", "runtime url must be a loopback address", 500)
-        return f"{configured}/enhance"
+        if hostname not in ("127.0.0.1", "localhost", "::1"):
+            raise GatewayFault("CONFIG_ERROR", "runtime url must be a loopback address", 500)
+        return f"{configured.rstrip('/')}/enhance"
     return f"{_RUNTIME_DEFAULT_URL}/enhance"
 
 
@@ -106,18 +115,29 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
         # Runtime 未运行 / 超时 / 非法响应: 回退确定性, 不阻塞 plan_run。
         return fallback(f"runtime unavailable: {type(error).__name__}")
 
+    if not isinstance(body, dict):
+        # Runtime 返回非对象结构 (list/str/null): 视为异常响应, 回退确定性。
+        return fallback("runtime returned a non-object response")
+
     evidence = body.get("evidence") or {}
     explanation = body.get("explanation")
     if not isinstance(explanation, str) or not explanation.strip():
         return fallback(
             "runtime returned no explanation", status=evidence.get("status", "fallback_error")
         )
+    try:
+        prompt_tokens = int(evidence.get("prompt_tokens", 0) or 0)
+        completion_tokens = int(evidence.get("completion_tokens", 0) or 0)
+        elapsed_ms = int(evidence.get("elapsed_ms", 0) or 0)
+    except TypeError, ValueError:
+        # Runtime 返回异常类型: 证据解析失败回退确定性, 不抛 500。
+        return fallback("runtime returned malformed evidence")
     return explanation, {
-        "provider": evidence.get("provider", "runtime"),
-        "status": evidence.get("status", "ok"),
-        "prompt_tokens": int(evidence.get("prompt_tokens", 0) or 0),
-        "completion_tokens": int(evidence.get("completion_tokens", 0) or 0),
-        "elapsed_ms": int(evidence.get("elapsed_ms", 0) or 0),
+        "provider": str(evidence.get("provider", "runtime"))[:100],
+        "status": str(evidence.get("status", "ok"))[:100],
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "elapsed_ms": elapsed_ms,
         "fallback_reason": str(evidence.get("fallback_reason") or "")[:200],
     }
 
@@ -156,14 +176,24 @@ def _run_context(run: Any) -> RunContext:
 def _set_run_state(run: Any, target: str) -> None:
     """受控状态推进 (CAS)。
 
-    依赖 Frappe 原生乐观锁 (save 时 modified 对比, check_if_latest): 若自本
-    run 对象加载后数据库已被其他请求修改 (并发分析/取消), 抛 TimestampMismatchError
-    并转 GatewayFault CONFLICT —— 并发互斥、取消竞态防护、失败后旧请求不得复活。
+    双保险: ① save 前显式校验 state_version 未被并发修改; ② 依赖 Frappe 原生
+    乐观锁 (save 时 modified 微秒对比, check_if_latest)。任一层检测到并发修改
+    (并发分析/取消), 抛 GatewayFault CONFLICT —— 并发互斥、取消竞态防护、
+    失败后旧请求不得复活。
     """
     validate_transition(run.run_state, target)
     run.flags.synora_state_change = True
     run.run_state = target
     run.state_version += 1
+    expected = run.state_version - 1
+    try:
+        current_version = frappe.db.get_value(
+            "Synora Agent Run", run.name, "state_version", ignore_permissions=True
+        )
+    except Exception:
+        current_version = expected  # 读取失败: 交给乐观锁兜底, 不阻塞。
+    if current_version != expected:
+        raise GatewayFault("CONFLICT", "run state changed concurrently", 409)
     try:
         run.save(ignore_permissions=True)
     except frappe.TimestampMismatchError as exc:
@@ -430,7 +460,16 @@ def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
     run.status = "REVOKED"
     run.revoked_at = frappe.utils.now_datetime()
     run.revoked_by = frappe.session.user
-    _set_run_state(run, "SUCCEEDED")
+    try:
+        _set_run_state(run, "SUCCEEDED")
+    except GatewayFault:
+        # 推进失败 (并发冲突): 补偿删除本次插入的计划, 保持 PROPOSED 可重试,
+        # 避免"已有计划但未 SUCCEEDED"导致 plan_run 永远 409 死锁。
+        try:
+            frappe.db.delete("Synora Run Plan", {"run": run_id, "correlation_id": correlation_id})
+        except Exception:
+            pass
+        raise
     plan_result = plan.to_dict()
     plan_result["enhanced_text"] = enhanced_text
     plan_result["evidence"] = evidence

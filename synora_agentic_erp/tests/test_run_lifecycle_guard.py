@@ -169,3 +169,62 @@ class TestRunLifecycleGuard(FrappeTestCase):
         response = plan_run(run_id, CORRELATION_ID)
         self.assertEqual(response["error"]["code"], "CONFLICT")
         self.assertEqual(len(frappe.get_all("Synora Run Plan", filters={"run": run_id})), 1)
+
+    def test_plan_succeeded_failure_compensates_insert(self) -> None:
+        """SUCCEEDED 推进失败: 补偿删除本次计划, run 保持 PROPOSED 可重试 (无死锁)。"""
+        run_id = self._issue()
+        frappe.set_user(BUYER)
+        analyze_run(run_id, CORRELATION_ID)
+        original = agent_service._set_run_state
+
+        def flaky(run, target):
+            if target == "SUCCEEDED":
+                raise GatewayFault("CONFLICT", "simulated concurrent failure", 409)
+            return original(run, target)
+
+        with mock.patch.object(agent_service, "_set_run_state", side_effect=flaky):
+            response = plan_run(run_id, CORRELATION_ID)
+        self.assertEqual(response["error"]["code"], "CONFLICT")
+        # 补偿删除: 无残留计划, run 仍 PROPOSED, 可重试成功。
+        self.assertEqual(frappe.get_all("Synora Run Plan", filters={"run": run_id}), [])
+        stored = frappe.get_doc("Synora Agent Run", run_id)
+        self.assertEqual(stored.run_state, "PROPOSED")
+        retry = plan_run(run_id, CORRELATION_ID)
+        self.assertTrue(retry["ok"])
+        self.assertEqual(len(frappe.get_all("Synora Run Plan", filters={"run": run_id})), 1)
+
+    def test_runtime_url_rejects_userinfo_bypass(self) -> None:
+        """loopback 校验防 SSRF: userinfo@evil host 必须拒绝 (不能只匹配前缀)。"""
+        evil = "http://127.0.0.1:8001@evil.example.com:80"
+        with mock.patch.dict("os.environ", {"SYNORA_RUNTIME_URL": evil}, clear=False):
+            with self.assertRaises(GatewayFault):
+                agent_service._runtime_enhance_url()
+
+    def test_runtime_url_accepts_loopback(self) -> None:
+        with mock.patch.dict(
+            "os.environ", {"SYNORA_RUNTIME_URL": "http://127.0.0.1:8001"}, clear=False
+        ):
+            self.assertEqual(agent_service._runtime_enhance_url(), "http://127.0.0.1:8001/enhance")
+
+    def test_runtime_non_object_response_falls_back(self) -> None:
+        """Runtime 返回非对象 JSON: 回退确定性摘要, 不抛 500。"""
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_exc):
+                return False
+
+            def read(self, _n):
+                return b'["not", "an", "object"]'
+
+        with mock.patch.dict(
+            "os.environ", {"SYNORA_RUNTIME_URL": "http://127.0.0.1:8001"}, clear=False
+        ):
+            with mock.patch.object(
+                agent_service.urllib.request, "urlopen", return_value=FakeResponse()
+            ):
+                text, evidence = agent_service._enhance_plan_via_runtime({"summary": "确定性摘要"})
+        self.assertEqual(text, "确定性摘要")
+        self.assertTrue(evidence["fallback_reason"])

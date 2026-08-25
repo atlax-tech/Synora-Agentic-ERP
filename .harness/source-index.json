@@ -168,7 +168,7 @@
       "kind": "code",
       "locator": "SQLite FTS5/BM25 检索基线 + CJK 子串补充；permission_scope 过滤待接入",
       "status": "UNRESOLVED",
-      "sha256": "645d7a29ee4780bb87a1882231eb27c5f86f44e76abbd438dcf14818fa9ee33a"
+      "sha256": "5c1f55791fd2a89b3b3b587d7ec2c181890da452574f2ec8edaf03ec478ad905"
     },
     {
       "id": "p33-analysis-module",

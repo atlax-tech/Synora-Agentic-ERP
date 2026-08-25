@@ -120,7 +120,7 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "e6f577eb84b3a1f60614b4c7ce7cfff20733a8df29bbc9c040a7613393c02a22"
+      "sha256": "007859d02d3656a1763d6d4bb7447a40628a9bbec107f7159dd377840cdb4b17"
     },
     {
       "path": ".harness/unresolved.json",
