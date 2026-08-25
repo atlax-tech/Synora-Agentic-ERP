@@ -10,6 +10,7 @@ from decimal import Decimal
 from typing import Any
 
 import frappe
+from frappe.utils import get_datetime, now_datetime
 
 from synora_agentic_erp.agent.analysis import (
     NEEDS_INPUT,
@@ -36,6 +37,27 @@ MAX_ANALYSIS_ITEMS = 200
 _TOOL_PAGE_SIZE = 50
 
 
+def _load_active_run(run_id: str, expected_states: frozenset[str]) -> Any:
+    """统一入口校验: 存在性 + 归属 + capability 有效(ACTIVE/未撤销/未过期) + 业务状态。
+
+    所有业务入口 (analyze/plan) 必须经过本校验, 防止已撤销/已过期的 Run
+    绕过 capability 继续进入中间状态或读取工具调用。
+    """
+    if not frappe.db.exists("Synora Agent Run", run_id):
+        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
+    run = frappe.get_doc("Synora Agent Run", run_id)
+    actor = frappe.session.user
+    if actor != run.initiator and "System Manager" not in frappe.get_roles(actor):
+        raise GatewayFault("PERMISSION_DENIED", "run is not available", 403)
+    if run.status != "ACTIVE" or run.revoked:
+        raise GatewayFault("CONFLICT", "run is not active", 409)
+    if get_datetime(run.expires_at) <= now_datetime():
+        raise GatewayFault("CONFLICT", "run capability has expired", 409)
+    if run.run_state not in expected_states:
+        raise GatewayFault("CONFLICT", "run is not in required state", 409)
+    return run
+
+
 def _run_context(run: Any) -> RunContext:
     return RunContext(
         run_id=run.name,
@@ -47,11 +69,42 @@ def _run_context(run: Any) -> RunContext:
 
 
 def _set_run_state(run: Any, target: str) -> None:
+    """受控状态推进 (CAS)。
+
+    依赖 Frappe 原生乐观锁 (save 时 modified 对比, check_if_latest): 若自本
+    run 对象加载后数据库已被其他请求修改 (并发分析/取消), 抛 TimestampMismatchError
+    并转 GatewayFault CONFLICT —— 并发互斥、取消竞态防护、失败后旧请求不得复活。
+    """
     validate_transition(run.run_state, target)
     run.flags.synora_state_change = True
     run.run_state = target
     run.state_version += 1
-    run.save(ignore_permissions=True)
+    try:
+        run.save(ignore_permissions=True)
+    except frappe.TimestampMismatchError as exc:
+        raise GatewayFault("CONFLICT", "run state changed concurrently", 409) from exc
+
+
+def _recover_failed_analysis(run_id: str, correlation_id: str) -> None:
+    """分析中途失败: 清理本次部分分析记录, 并把仍处于 ANALYZING 的 Run 回退 CREATED。
+
+    回退只发生在"当前数据库仍为 ANALYZING"时 (重新读取); 若期间被取消或推进,
+    则不再改动 (不复活、不覆盖并发结果)。清理按 correlation_id 限定本次请求
+    已写入的不可变快照, 不影响历史分析记录。
+    """
+    try:
+        frappe.db.delete("Synora Item Analysis", {"run": run_id, "correlation_id": correlation_id})
+    except Exception:
+        # 清理失败不应掩盖原始分析错误; 残留记录会在重试时按 run 聚合展示。
+        pass
+    try:
+        current = frappe.get_doc("Synora Agent Run", run_id)
+        if current.run_state != "ANALYZING":
+            return
+        _set_run_state(current, "CREATED")
+    except GatewayFault, frappe.TimestampMismatchError:
+        # 并发取消/推进已生效: 回退让位, 不覆盖。
+        pass
 
 
 def _call_tool(
@@ -175,34 +228,35 @@ def _persist_analysis(run_id: str, analysis: ItemAnalysis, correlation_id: str) 
 
 def analyze_run(run_id: str, correlation_id: str) -> dict[str, Any]:
     """对 Run 执行确定性采购风险分析 (仅 CREATED 可开始)。"""
-    if not frappe.db.exists("Synora Agent Run", run_id):
-        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
-    run = frappe.get_doc("Synora Agent Run", run_id)
-    actor = frappe.session.user
-    if actor != run.initiator and "System Manager" not in frappe.get_roles(actor):
-        raise GatewayFault("PERMISSION_DENIED", "run is not available", 403)
-    if run.run_state != "CREATED":
-        raise GatewayFault("CONFLICT", "run is not analyzable", 409)
+    run = _load_active_run(run_id, frozenset({"CREATED"}))
 
     ctx = _run_context(run)
-    _set_run_state(run, "ANALYZING")
+    try:
+        _set_run_state(run, "ANALYZING")
 
-    # 需求源 = 未结 MR 行; 在途源 = 未收货 PO 行; 各拉取一次后按 item 分组。
-    mr_rows = _collect_rows(ctx, "material_request.open", {}, correlation_id)
-    po_rows = _collect_rows(ctx, "purchase_order.open", {}, correlation_id)
-    item_codes = sorted({row["item_code"] for row in mr_rows})
-    if len(item_codes) > MAX_ANALYSIS_ITEMS:
-        raise GatewayFault("RESULT_LIMIT", "analysis item scope is too large", 422)
+        # 需求源 = 未结 MR 行; 在途源 = 未收货 PO 行; 各拉取一次后按 item 分组。
+        mr_rows = _collect_rows(ctx, "material_request.open", {}, correlation_id)
+        po_rows = _collect_rows(ctx, "purchase_order.open", {}, correlation_id)
+        item_codes = sorted({row["item_code"] for row in mr_rows})
+        if len(item_codes) > MAX_ANALYSIS_ITEMS:
+            raise GatewayFault("RESULT_LIMIT", "analysis item scope is too large", 422)
 
-    analyses: list[dict[str, object]] = []
-    for item_code in item_codes:
-        item_analysis = _analyze_item(
-            ctx, item_code, run.time_window_days, mr_rows, po_rows, correlation_id
-        )
-        _persist_analysis(run_id, item_analysis, correlation_id)
-        analyses.append(item_analysis.to_dict())
+        analyses: list[dict[str, object]] = []
+        for item_code in item_codes:
+            item_analysis = _analyze_item(
+                ctx, item_code, run.time_window_days, mr_rows, po_rows, correlation_id
+            )
+            _persist_analysis(run_id, item_analysis, correlation_id)
+            analyses.append(item_analysis.to_dict())
 
-    _set_run_state(run, "PROPOSED")
+        _set_run_state(run, "PROPOSED")
+    except GatewayFault:
+        # 工具失败/结果超限/并发冲突: 回退可重试, 不留永久中间态。
+        _recover_failed_analysis(run_id, correlation_id)
+        raise
+    except Exception:
+        _recover_failed_analysis(run_id, correlation_id)
+        raise
     return {
         "run_id": run_id,
         "run_state": run.run_state,
@@ -218,14 +272,7 @@ def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
     计划由确定性规则基于分析结果生成, 数量/金额/阈值不经过模型;
     每项结论带来源引用与未知说明。
     """
-    if not frappe.db.exists("Synora Agent Run", run_id):
-        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
-    run = frappe.get_doc("Synora Agent Run", run_id)
-    actor = frappe.session.user
-    if actor != run.initiator and "System Manager" not in frappe.get_roles(actor):
-        raise GatewayFault("PERMISSION_DENIED", "run is not available", 403)
-    if run.run_state != "PROPOSED":
-        raise GatewayFault("CONFLICT", "run is not ready for planning", 409)
+    run = _load_active_run(run_id, frozenset({"PROPOSED"}))
 
     analysis_docs = frappe.get_all(
         "Synora Item Analysis",
@@ -266,23 +313,27 @@ def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
         warehouse=run.warehouse_scope or None,
         analyses=rows,
     )
-    frappe.get_doc(
-        {
-            "doctype": "Synora Run Plan",
-            "run": run_id,
-            "goal": run.goal,
-            "summary": plan.summary,
-            "plan_json": frappe.as_json(plan.to_dict()),
-            "correlation_id": correlation_id,
-        }
-    ).insert(ignore_permissions=True)
+    try:
+        frappe.get_doc(
+            {
+                "doctype": "Synora Run Plan",
+                "run": run_id,
+                "goal": run.goal,
+                "summary": plan.summary,
+                "plan_json": frappe.as_json(plan.to_dict()),
+                "correlation_id": correlation_id,
+            }
+        ).insert(ignore_permissions=True)
+    except (frappe.DuplicateEntryError, frappe.UniqueValidationError) as exc:
+        # run 字段唯一: 并发 plan_run 重复插入被 DB 层幂等拦截。
+        raise GatewayFault("CONFLICT", "plan already generated", 409) from exc
 
     # SUCCEEDED 是只读终态: 同步撤销 capability, 防止 TTL 内继续调用只读工具。
     run.flags.synora_revocation = True
     run.revoked = 1
     run.status = "REVOKED"
     run.revoked_at = frappe.utils.now_datetime()
-    run.revoked_by = actor
+    run.revoked_by = frappe.session.user
     _set_run_state(run, "SUCCEEDED")
     return {
         "run_id": run_id,

@@ -8,7 +8,7 @@
   "run", "goal", "summary", "plan_json", "correlation_id"
  ],
  "fields": [
-  {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1, "unique": 1},
   {"fieldname": "goal", "fieldtype": "Text", "label": "Goal", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "summary", "fieldtype": "Small Text", "label": "Summary", "read_only": 1, "set_only_once": 1},
   {"fieldname": "plan_json", "fieldtype": "Long Text", "label": "Plan JSON", "read_only": 1, "reqd": 1, "set_only_once": 1},

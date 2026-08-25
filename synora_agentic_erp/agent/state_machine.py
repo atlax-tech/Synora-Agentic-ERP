@@ -22,9 +22,11 @@ RUN_STATES: tuple[str, ...] = (
 )
 
 # SPEC §8.1 状态机转换表: current -> 允许的 targets。
+# 验收修复: ANALYZING 允许回退 CREATED —— 分析中途工具/数据失败时恢复可重试
+# (不再留下永久中间态与部分分析记录; 回退由受控路径执行, 失败才允许)。
 _TRANSITIONS: dict[str, frozenset[str]] = {
     "CREATED": frozenset({"ANALYZING", "CANCELLED"}),
-    "ANALYZING": frozenset({"PROPOSED", "CANCELLED"}),
+    "ANALYZING": frozenset({"PROPOSED", "CANCELLED", "CREATED"}),
     "PROPOSED": frozenset({"AWAITING_APPROVAL", "SUCCEEDED"}),
     "AWAITING_APPROVAL": frozenset({"DECLINED", "EXPIRED", "EXECUTING"}),
     "EXECUTING": frozenset({"SUCCEEDED", "FAILED", "RECONCILIATION_REQUIRED"}),

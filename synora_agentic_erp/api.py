@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import frappe
 from frappe.recorder import do_not_record
-from frappe.utils import cint
+from frappe.utils import cint, get_datetime, now_datetime
 
 from synora_agentic_erp.agent.service import analyze_run as analyze_server_run
 from synora_agentic_erp.agent.service import plan_run as plan_server_run
@@ -227,16 +227,23 @@ def _visible_run_filter() -> dict[str, str]:
 
 
 def _run_summary(run: Any) -> dict[str, Any]:
+    """Run 摘要; 展示层归一化: capability TTL 已过的 ACTIVE Run 显示为 EXPIRED。"""
+    capability_expired = (
+        run.status == "ACTIVE"
+        and not run.revoked
+        and get_datetime(run.expires_at) <= now_datetime()
+    )
     return {
         "run_id": run.name,
         "goal": run.goal,
-        "run_state": run.run_state,
+        "run_state": "EXPIRED" if capability_expired else run.run_state,
         "status": run.status,
         "initiator": run.initiator,
         "company_scope": run.company_scope,
         "warehouse_scope": run.warehouse_scope or None,
         "time_window_days": run.time_window_days,
         "created_at": str(run.creation),
+        "expired": capability_expired,
     }
 
 
@@ -257,6 +264,8 @@ def list_runs() -> dict[str, Any]:
             "goal",
             "run_state",
             "status",
+            "revoked",
+            "expires_at",
             "initiator",
             "company_scope",
             "warehouse_scope",

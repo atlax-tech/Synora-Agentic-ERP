@@ -17,6 +17,8 @@ _LEGAL = [
     ("CREATED", "CANCELLED"),
     ("ANALYZING", "PROPOSED"),
     ("ANALYZING", "CANCELLED"),
+    # 验收修复: 分析失败回退 CREATED (可重试, 受控路径执行)。
+    ("ANALYZING", "CREATED"),
     ("PROPOSED", "AWAITING_APPROVAL"),
     ("PROPOSED", "SUCCEEDED"),
     ("AWAITING_APPROVAL", "DECLINED"),
