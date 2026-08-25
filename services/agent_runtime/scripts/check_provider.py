@@ -28,7 +28,11 @@ async def main() -> None:
     except ValueError as error:
         print(f"PROVIDER-CONFIG-FAIL: {error}")
         raise SystemExit(1) from error
-    print("PROVIDER-OK:", response.text[:80])
+    print(
+        "PROVIDER-OK:",
+        response.text[:80],
+        f"| tokens: in={response.prompt_tokens} out={response.completion_tokens}",
+    )
 
 
 if __name__ == "__main__":

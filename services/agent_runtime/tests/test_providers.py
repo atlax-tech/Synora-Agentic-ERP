@@ -320,3 +320,28 @@ class TestBaseUrlCompatibility:
             ),
         )
         assert provider._chat_url == "https://ccapi.us/v1/chat/completions"
+
+
+class TestRefusalFieldCompat:
+    def test_message_with_refusal_field_is_accepted(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_returns(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "hello",
+                                "refusal": None,
+                            }
+                        }
+                    ]
+                }
+            )
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434/v1", transport=transport
+            ) as provider:
+                response = await provider.complete(_messages())
+            assert response.text == "hello"
+
+        asyncio.run(run())

@@ -50,6 +50,9 @@ class ProviderToolCall(StrictModel):
 class ProviderResponse(StrictModel):
     text: str = ""
     tool_calls: tuple[ProviderToolCall, ...] = ()
+    # 服务商返回的 token 用量 (用于成本透明; 缺失时为空)。
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
 
 class ProviderError(Exception):
@@ -225,6 +228,8 @@ class OpenAICompatibleProvider:
                 ProviderToolCall(name=call.function.name, arguments=call.function.arguments)
                 for call in message.tool_calls or ()
             ),
+            prompt_tokens=completion.usage.prompt_tokens if completion.usage else 0,
+            completion_tokens=completion.usage.completion_tokens if completion.usage else 0,
         )
 
 
@@ -242,14 +247,34 @@ class _ProviderToolCall(StrictModel):
 class _AssistantMessage(StrictModel):
     role: Literal["assistant"]
     content: str | None = None
+    # OpenAI 兼容响应 (如 grok) 常携带 refusal 字段 (通常为 null), 纳入严格模型。
+    refusal: str | None = None
     tool_calls: tuple[_ProviderToolCall, ...] = ()
 
 
 class _Choice(StrictModel):
     message: _AssistantMessage
+    finish_reason: str = ""
+    index: int = 0
+
+
+class _Usage(BaseModel):
+    # usage 是纯计费/统计元数据 (不同服务商附加字段差异大, 如 cost_in_usd_ticks、
+    # num_sources_used), 不影响任何安全决策, 故忽略未知明细; 核心 envelope/message
+    # 仍保持 extra="forbid" fail-closed。
+    model_config = ConfigDict(extra="ignore", strict=True, hide_input_in_errors=True)
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
 
 
 class _CompletionEnvelope(StrictModel):
+    # 标准 OpenAI chat.completion 元数据字段 (白名单), 缺失时容错默认。
+    id: str = ""
+    object: str = ""
+    created: int = 0
+    model: str = ""
+    usage: _Usage | None = None
     choices: tuple[_Choice, ...] = ()
 
 
