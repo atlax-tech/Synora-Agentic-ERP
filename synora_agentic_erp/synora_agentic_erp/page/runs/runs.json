@@ -1,0 +1,13 @@
+{
+  "doctype": "Page",
+  "name": "runs",
+  "page_name": "runs",
+  "title": "Runs",
+  "module": "Synora Agentic ERP",
+  "standard": "Yes",
+  "roles": [
+    {
+      "role": "All"
+    }
+  ]
+}

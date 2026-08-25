@@ -5,6 +5,8 @@ IMMUTABLE_FIELDS = {
     "initiator",
     "company_scope",
     "warehouse_scope",
+    "goal",
+    "time_window_days",
     "capability_digest",
     "capability_audience",
     "issued_at",
@@ -14,6 +16,7 @@ IMMUTABLE_FIELDS = {
 LIFECYCLE_FIELDS = {
     "revoked",
     "status",
+    "run_state",
     "state_version",
     "revoked_at",
     "revoked_by",
@@ -28,7 +31,8 @@ class SynoraAgentRun(Document):  # type: ignore[misc]
         if any(self.has_value_changed(field) for field in IMMUTABLE_FIELDS):
             frappe.throw("Synora Agent Run identity and scope are immutable")
         lifecycle_changed = any(self.has_value_changed(field) for field in LIFECYCLE_FIELDS)
-        if lifecycle_changed and not self.flags.synora_revocation:
+        controlled = self.flags.synora_revocation or self.flags.synora_state_change
+        if lifecycle_changed and not controlled:
             frappe.throw(
-                "Synora Agent Run lifecycle changes require the controlled revocation path"
+                "Synora Agent Run lifecycle changes require the controlled transition path"
             )

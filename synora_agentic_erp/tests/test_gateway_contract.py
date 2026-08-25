@@ -23,6 +23,7 @@ from synora_agentic_erp.gateway.security import (
 
 BUYER = "synora-p1-buyer@dev.localhost"
 COMPANY = "SYNORA-P1 Test Company"
+GOAL = "ensure stock for SYNORA-P1-Item-1001 for the next quarter"
 CORRELATION_ID = "1f7f6772-b3a1-4a09-a03c-4f80f845aef8"
 
 
@@ -82,7 +83,7 @@ class TestGatewayContract(FrappeTestCase):
 
     def _issue(self) -> dict[str, object]:
         frappe.set_user(BUYER)
-        response = issue_run(COMPANY, correlation_id=CORRELATION_ID)
+        response = issue_run(COMPANY, GOAL, correlation_id=CORRELATION_ID)
         result = response["run"]
         self.assertNotIn("error", result)
         return result
@@ -229,7 +230,11 @@ class TestGatewayContract(FrappeTestCase):
 
     def test_issue_and_revoke_validate_runtime_types(self) -> None:
         frappe.set_user(BUYER)
-        response = issue_run(42, correlation_id=CORRELATION_ID)  # type: ignore[arg-type]
+        response = issue_run(42, GOAL, correlation_id=CORRELATION_ID)  # type: ignore[arg-type]
+        self.assertEqual(response["error"]["code"], "INVALID_INPUT")
+        response = issue_run(COMPANY, "", correlation_id=CORRELATION_ID)
+        self.assertEqual(response["error"]["code"], "INVALID_INPUT")
+        response = issue_run(COMPANY, "x" * (1000 + 1), correlation_id=CORRELATION_ID)
         self.assertEqual(response["error"]["code"], "INVALID_INPUT")
         response = revoke_run("not-a-uuid", CORRELATION_ID)
         self.assertEqual(response["error"]["code"], "INVALID_INPUT")
@@ -265,7 +270,7 @@ class TestGatewayContract(FrappeTestCase):
     def test_invalid_correlation_is_not_reflected(self) -> None:
         frappe.set_user(BUYER)
         secret = "capability-looking-secret"
-        response = issue_run(COMPANY, correlation_id=secret)
+        response = issue_run(COMPANY, GOAL, correlation_id=secret)
         self.assertIsNone(response["correlation_id"])
         self.assertNotIn(secret, str(response))
 

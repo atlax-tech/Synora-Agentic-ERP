@@ -10,6 +10,7 @@ from synora_agentic_erp.gateway.registry import _TOOLS
 BUYER = "synora-p1-buyer@dev.localhost"
 ACCOUNTANT = "synora-p1-accountant@dev.localhost"
 COMPANY = "SYNORA-P1 Test Company"
+GOAL = "ensure stock for SYNORA-P1-Item-1001 for the next quarter"
 ITEM = "SYNORA-P1-Item-1001"
 SUPPLIER = "SYNORA-P1-Supplier-1"
 WAREHOUSE = "SYNORA-P1 Stores - SP1"
@@ -24,7 +25,7 @@ class TestReadTools(FrappeTestCase):
 
     def _issue(self, user: str = BUYER, warehouse: str | None = WAREHOUSE) -> dict[str, object]:
         frappe.set_user(user)
-        response = issue_run(COMPANY, warehouse, CORRELATION_ID)
+        response = issue_run(COMPANY, GOAL, warehouse, correlation_id=CORRELATION_ID)
         self.assertTrue(response["ok"])
         return response["run"]
 

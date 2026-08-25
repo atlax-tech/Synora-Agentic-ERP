@@ -5,26 +5,160 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "initiator", "company_scope", "warehouse_scope", "capability_digest",
-  "capability_audience", "issued_at", "expires_at", "revoked", "status",
-  "state_version", "correlation_id", "revoked_at", "revoked_by",
+  "initiator",
+  "goal",
+  "time_window_days",
+  "company_scope",
+  "warehouse_scope",
+  "capability_digest",
+  "capability_audience",
+  "issued_at",
+  "expires_at",
+  "revoked",
+  "status",
+  "run_state",
+  "state_version",
+  "correlation_id",
+  "revoked_at",
+  "revoked_by",
   "revocation_correlation_id"
  ],
  "fields": [
-  {"fieldname": "initiator", "fieldtype": "Link", "label": "Initiator", "options": "User", "read_only": 1, "reqd": 1, "set_only_once": 1},
-  {"fieldname": "company_scope", "fieldtype": "Link", "label": "Company Scope", "options": "Company", "read_only": 1, "reqd": 1, "set_only_once": 1},
-  {"fieldname": "warehouse_scope", "fieldtype": "Link", "label": "Warehouse Scope", "options": "Warehouse", "read_only": 1, "set_only_once": 1},
-  {"fieldname": "capability_digest", "fieldtype": "Data", "hidden": 1, "label": "Capability Digest", "read_only": 1, "reqd": 1, "set_only_once": 1},
-  {"fieldname": "capability_audience", "fieldtype": "Data", "hidden": 1, "label": "Capability Audience", "read_only": 1, "reqd": 1, "set_only_once": 1},
-  {"fieldname": "issued_at", "fieldtype": "Datetime", "label": "Issued At", "read_only": 1, "reqd": 1, "set_only_once": 1},
-  {"fieldname": "expires_at", "fieldtype": "Datetime", "label": "Expires At", "read_only": 1, "reqd": 1, "set_only_once": 1},
-  {"default": "0", "fieldname": "revoked", "fieldtype": "Check", "label": "Revoked", "read_only": 1},
-  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "ACTIVE\nREVOKED\nEXPIRED", "read_only": 1, "reqd": 1},
-  {"default": "1", "fieldname": "state_version", "fieldtype": "Int", "label": "State Version", "read_only": 1, "reqd": 1},
-  {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1},
-  {"fieldname": "revoked_at", "fieldtype": "Datetime", "label": "Revoked At", "read_only": 1},
-  {"fieldname": "revoked_by", "fieldtype": "Link", "label": "Revoked By", "options": "User", "read_only": 1},
-  {"fieldname": "revocation_correlation_id", "fieldtype": "Data", "label": "Revocation Correlation ID", "read_only": 1}
+  {
+   "fieldname": "initiator",
+   "fieldtype": "Link",
+   "label": "Initiator",
+   "options": "User",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "goal",
+   "fieldtype": "Text",
+   "label": "Goal",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "default": "90",
+   "fieldname": "time_window_days",
+   "fieldtype": "Int",
+   "label": "Time Window Days",
+   "read_only": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "company_scope",
+   "fieldtype": "Link",
+   "label": "Company Scope",
+   "options": "Company",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "warehouse_scope",
+   "fieldtype": "Link",
+   "label": "Warehouse Scope",
+   "options": "Warehouse",
+   "read_only": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "capability_digest",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Capability Digest",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "capability_audience",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Capability Audience",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "issued_at",
+   "fieldtype": "Datetime",
+   "label": "Issued At",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "expires_at",
+   "fieldtype": "Datetime",
+   "label": "Expires At",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "revoked",
+   "fieldtype": "Check",
+   "label": "Revoked",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "ACTIVE\nREVOKED\nEXPIRED",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "CREATED",
+   "fieldname": "run_state",
+   "fieldtype": "Select",
+   "label": "Run State",
+   "options": "CREATED\nANALYZING\nPROPOSED\nAWAITING_APPROVAL\nEXECUTING\nSUCCEEDED\nFAILED\nCANCELLED\nRECONCILIATION_REQUIRED\nDECLINED\nEXPIRED",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "state_version",
+   "fieldtype": "Int",
+   "label": "State Version",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "correlation_id",
+   "fieldtype": "Data",
+   "label": "Correlation ID",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "revoked_at",
+   "fieldtype": "Datetime",
+   "label": "Revoked At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revoked_by",
+   "fieldtype": "Link",
+   "label": "Revoked By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revocation_correlation_id",
+   "fieldtype": "Data",
+   "label": "Revocation Correlation ID",
+   "read_only": 1
+  }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
@@ -33,7 +167,12 @@
  "module": "Synora Agentic ERP",
  "name": "Synora Agent Run",
  "owner": "Administrator",
- "permissions": [{"read": 1, "role": "System Manager"}],
+ "permissions": [
+  {
+   "read": 1,
+   "role": "System Manager"
+  }
+ ],
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],

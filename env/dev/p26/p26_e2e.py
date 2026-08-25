@@ -77,9 +77,13 @@ async def _login(client: httpx.AsyncClient, email: str) -> None:
     login_response.raise_for_status()
 
 
+GOAL = "ensure stock for SYNORA-P1-Item-1001 for the next quarter"
+
+
 async def _issue_run(client: httpx.AsyncClient, company: str, warehouse: str | None) -> dict[str, object]:
     data: dict[str, object] = {
         "company": company,
+        "goal": GOAL,
         "correlation_id": str(uuid4()),
     }
     if warehouse is not None:
@@ -361,7 +365,7 @@ async def main() -> None:
         # 无公司 B 权限的用户在发行阶段即被拒 (User Permission 生效于 get_list)
         denied = await session.post(
             "/api/method/synora_agentic_erp.api.issue_run",
-            data={"company": COMPANY_B, "correlation_id": str(uuid4())},
+            data={"company": COMPANY_B, "goal": GOAL, "correlation_id": str(uuid4())},
         )
         denied_body = denied.json().get("message", {})
         denied_code = denied_body.get("error", {}).get("code")

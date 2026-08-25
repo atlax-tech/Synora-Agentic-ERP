@@ -23,7 +23,7 @@
     {"path": "docs/development-log/20260824-Phase-0-开发日志.md", "owner": "harness-armor", "mode": "managed", "sha256": "5ddddd548d59bb57a1c0d4d4ae7e493db55427cdc13cef44326ae4ff3dcf33e4"},
     {"path": "docs/development-log/20260824-Phase-1-开发日志.md", "owner": "harness-armor", "mode": "managed", "sha256": "661baa5b7db11a871bb50abb8f2be93810594537b0b348527ca4603af5a459bf"},
     {"path": "docs/development-log/20260825-Phase-2-开发日志.md", "owner": "harness-armor", "mode": "managed", "sha256": "b486d50a132c0b8d84ab2bb382b3acfee7d5864713dcf06f333c3435f8182395"},
-    {"path": ".harness/source-index.json", "owner": "harness-armor", "mode": "managed", "sha256": "f79619f4de610606de8ad4e95356e7d35447c9dce11edbcc50e581f526b06fc5"},
+    {"path": ".harness/source-index.json", "owner": "harness-armor", "mode": "managed", "sha256": "ef66aaa0d6610b63647ca7edf0f30350fd5efbbd03ca8a6bb4c7d10003006543"},
     {"path": ".harness/unresolved.json", "owner": "harness-armor", "mode": "managed", "sha256": "cb03f26ad62c12527094a506e8d095ea9d14abdbd1f1d0b8140ccfb24a6b7edd"},
     {"path": "README.md", "owner": "user", "mode": "user", "sha256": "1db19535529850c0ffce112008d6de61a91c6ca79738cf70c597204fdda849a4"},
     {"path": "README.zh-CN.md", "owner": "user", "mode": "user", "sha256": "a7227c092332a44e486f66a19da90036f2524b9ff39f336163b22bccec5ddb60"},

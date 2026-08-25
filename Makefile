@@ -17,7 +17,7 @@ lint:
 	uv run --python $(PYTHON) ruff check .
 
 type:
-	uv run --python $(PYTHON) mypy synora_agentic_erp/__init__.py synora_agentic_erp/hooks.py synora_agentic_erp/api.py synora_agentic_erp/gateway synora_agentic_erp/synora_agentic_erp services/agent_runtime/src tests
+	uv run --python $(PYTHON) mypy synora_agentic_erp/__init__.py synora_agentic_erp/hooks.py synora_agentic_erp/api.py synora_agentic_erp/agent synora_agentic_erp/gateway synora_agentic_erp/synora_agentic_erp services/agent_runtime/src tests
 
 unit:
 	uv run --python $(PYTHON) pytest

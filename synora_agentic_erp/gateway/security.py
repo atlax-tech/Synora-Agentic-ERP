@@ -9,6 +9,10 @@ from datetime import timedelta
 import frappe
 from frappe.utils import get_datetime, now_datetime
 
+from synora_agentic_erp.agent.state_machine import (
+    CANCELLABLE_STATES,
+    validate_transition,
+)
 from synora_agentic_erp.gateway.contract import GatewayFault
 
 CAPABILITY_AUDIENCE = "synora-agent-runtime"
@@ -48,7 +52,9 @@ def reject_mixed_user_credentials(headers: Mapping[str, str] | None = None) -> N
         raise GatewayFault("AUTHENTICATION_REJECTED", "mixed user credentials are not allowed", 401)
 
 
-def issue_run(company: str, warehouse: str | None, correlation_id: str) -> dict[str, str | int]:
+def issue_run(
+    company: str, goal: str, warehouse: str | None, time_window_days: int, correlation_id: str
+) -> dict[str, str | int]:
     initiator = frappe.session.user
     if not initiator or initiator == "Guest":
         raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
@@ -75,6 +81,8 @@ def issue_run(company: str, warehouse: str | None, correlation_id: str) -> dict[
             "doctype": "Synora Agent Run",
             "name": run_id,
             "initiator": initiator,
+            "goal": goal,
+            "time_window_days": time_window_days,
             "company_scope": company,
             "warehouse_scope": warehouse,
             "capability_digest": _digest(run_id, capability),
@@ -83,6 +91,7 @@ def issue_run(company: str, warehouse: str | None, correlation_id: str) -> dict[
             "expires_at": expires_at,
             "revoked": 0,
             "status": "ACTIVE",
+            "run_state": "CREATED",
             "state_version": 1,
             "correlation_id": correlation_id,
         }
@@ -93,6 +102,7 @@ def issue_run(company: str, warehouse: str | None, correlation_id: str) -> dict[
         "audience": CAPABILITY_AUDIENCE,
         "expires_at": str(expires_at),
         "state_version": 1,
+        "run_state": "CREATED",
     }
 
 
@@ -114,6 +124,39 @@ def revoke_run(run_id: str, correlation_id: str) -> dict[str, str | int]:
     run.state_version += 1
     run.save(ignore_permissions=True)
     return {"run_id": run.name, "status": run.status, "state_version": run.state_version}
+
+
+def cancel_run(run_id: str, correlation_id: str) -> dict[str, str | int]:
+    """发起人取消分析: run_state CREATED/ANALYZING -> CANCELLED 并撤销 capability。
+
+    取消必须通过确定性状态机校验 (fail-closed); 取消后 capability 同步失效,
+    避免已取消的分析继续执行工具调用。
+    """
+    if not frappe.db.exists("Synora Agent Run", run_id):
+        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
+    run = frappe.get_doc("Synora Agent Run", run_id)
+    actor = frappe.session.user
+    if actor != run.initiator and "System Manager" not in frappe.get_roles(actor):
+        raise GatewayFault("PERMISSION_DENIED", "run is not available", 403)
+    if run.run_state not in CANCELLABLE_STATES or run.status != "ACTIVE" or run.revoked:
+        raise GatewayFault("CONFLICT", "run cannot be cancelled", 409)
+    validate_transition(run.run_state, "CANCELLED")
+    run.flags.synora_state_change = True
+    run.flags.synora_revocation = True
+    run.run_state = "CANCELLED"
+    run.revoked = 1
+    run.status = "REVOKED"
+    run.revoked_at = now_datetime()
+    run.revoked_by = actor
+    run.revocation_correlation_id = correlation_id
+    run.state_version += 1
+    run.save(ignore_permissions=True)
+    return {
+        "run_id": run.name,
+        "run_state": run.run_state,
+        "status": run.status,
+        "state_version": run.state_version,
+    }
 
 
 def resolve_run(run_id: str, capability: str) -> RunContext:
