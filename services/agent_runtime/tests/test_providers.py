@@ -102,7 +102,9 @@ class TestOpenAICompatibleProvider:
     def test_rejects_non_origin_base_url(self) -> None:
         for bad in (
             "https://user:pass@host/v1",
-            "https://host/v1",
+            "https://host",
+            "https://host/",
+            "https://host/v1/",
             "https://host/v1?x=1",
             "https://host/v1#frag",
             "ftp://host",
@@ -113,7 +115,7 @@ class TestOpenAICompatibleProvider:
 
     def test_rejects_non_positive_timeout(self) -> None:
         with pytest.raises(ValueError):
-            OpenAICompatibleProvider(base_url="http://127.0.0.1:11434", timeout_seconds=0)
+            OpenAICompatibleProvider(base_url="http://127.0.0.1:11434/v1", timeout_seconds=0)
 
     def test_parses_text_response(self) -> None:
         async def run() -> None:
@@ -121,7 +123,7 @@ class TestOpenAICompatibleProvider:
                 {"choices": [{"message": {"role": "assistant", "content": "hello from model"}}]}
             )
             async with OpenAICompatibleProvider(
-                base_url="http://127.0.0.1:11434",
+                base_url="http://127.0.0.1:11434/v1",
                 model="local-model",
                 transport=transport,
             ) as provider:
@@ -156,7 +158,7 @@ class TestOpenAICompatibleProvider:
                 }
             )
             async with OpenAICompatibleProvider(
-                base_url="http://127.0.0.1:11434", transport=transport
+                base_url="http://127.0.0.1:11434/v1", transport=transport
             ) as provider:
                 response = await provider.complete(_messages())
             assert response.text == ""
@@ -180,7 +182,7 @@ class TestOpenAICompatibleProvider:
                 )
 
             async with OpenAICompatibleProvider(
-                base_url="http://127.0.0.1:11434",
+                base_url="http://127.0.0.1:11434/v1",
                 model="configured-model",
                 transport=httpx.MockTransport(handler),
             ) as provider:
@@ -210,7 +212,7 @@ class TestOpenAICompatibleProvider:
         async def run() -> None:
             transport = _transport_that_returns({"error": "boom"}, status=500)
             async with OpenAICompatibleProvider(
-                base_url="http://127.0.0.1:11434", transport=transport
+                base_url="http://127.0.0.1:11434/v1", transport=transport
             ) as provider:
                 with pytest.raises(ProviderError):
                     await provider.complete(_messages())
@@ -227,7 +229,7 @@ class TestOpenAICompatibleProvider:
             for body in bodies:
                 transport = _transport_that_returns(body)
                 async with OpenAICompatibleProvider(
-                    base_url="http://127.0.0.1:11434", transport=transport
+                    base_url="http://127.0.0.1:11434/v1", transport=transport
                 ) as provider:
                     with pytest.raises(ProviderError):
                         await provider.complete(_messages())
@@ -238,7 +240,7 @@ class TestOpenAICompatibleProvider:
         async def run() -> None:
             transport = _transport_that_raises(httpx.TimeoutException("slow"))
             async with OpenAICompatibleProvider(
-                base_url="http://127.0.0.1:11434", timeout_seconds=0.1, transport=transport
+                base_url="http://127.0.0.1:11434/v1", timeout_seconds=0.1, transport=transport
             ) as provider:
                 with pytest.raises(ProviderError):
                     await provider.complete(_messages())
@@ -250,7 +252,7 @@ class TestOpenAICompatibleProvider:
             transport = _transport_that_raises(httpx.TimeoutException("slow"))
             secret = "super-secret-key-value"
             async with OpenAICompatibleProvider(
-                base_url="http://127.0.0.1:11434",
+                base_url="http://127.0.0.1:11434/v1",
                 api_key=SecretStr(secret),
                 transport=transport,
             ) as provider:
@@ -267,7 +269,7 @@ class TestOpenAICompatibleProvider:
                 {"choices": [{"message": {"role": "assistant", "content": "x"}}]}
             )
             async with OpenAICompatibleProvider(
-                base_url="http://127.0.0.1:11434", transport=transport
+                base_url="http://127.0.0.1:11434/v1", transport=transport
             ) as provider:
                 with pytest.raises(ProviderError):
                     await provider.complete([])
@@ -283,7 +285,7 @@ class TestProviderFromEnvironment:
             provider_from_environment()
 
     def test_reads_environment_and_hides_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://api.example.com")
+        monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://api.example.com/v1")
         monkeypatch.setenv(PROVIDER_API_KEY_ENV, "sk-secret-123")
         monkeypatch.setenv(PROVIDER_MODEL_ENV, "model-x")
         provider = provider_from_environment(

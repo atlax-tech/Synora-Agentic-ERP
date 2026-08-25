@@ -19,7 +19,6 @@ from typing import Literal, Protocol
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-_OPENAI_CHAT_PATH = "/v1/chat/completions"
 MAX_PROVIDER_RESPONSE_BYTES = 2_000_000
 
 # BYOK 环境变量 (用户自行填写, 不进入代码/Git)。
@@ -103,11 +102,14 @@ class DeterministicProvider:
 
 
 class OpenAICompatibleProvider:
-    """OpenAI 兼容 /chat/completions 客户端 (本地 Ollama 默认, 远程可选)。
+    """OpenAI 兼容 /chat/completions 客户端 (远程兼容 API, BYOK)。
 
-    base_url 必须是固定 HTTP(S) origin (无 userinfo/query/fragment), 防止
-    请求被重定向到任意地址; trust_env=False 避免环境代理改写目标。
-    响应按 OpenAI chat.completion 结构严格解析, 未知结构 fail closed。
+    base_url 填到 OpenAI 兼容根, 通常含 /v1 (如 https://api.openai.com/v1、
+    https://api.x.ai/v1、http://127.0.0.1:11434/v1); 必须是固定 HTTP(S)
+    地址, 无 userinfo/query/fragment, 防止请求被重定向到任意地址或把 Key
+    拼进 URL; trust_env=False 避免环境代理改写目标。响应按 OpenAI
+    chat.completion 结构严格解析, 未知结构 fail closed。请求路径固定为
+    base_url 拼接 /chat/completions, 不依赖 httpx 相对路径 join。
     """
 
     def __init__(
@@ -126,12 +128,17 @@ class OpenAICompatibleProvider:
             or url.userinfo
             or url.query
             or url.fragment
-            or url.path not in {"", "/"}
+            or url.path in {"", "/"}
+            or url.path.endswith("/")
         ):
-            raise ValueError("provider base_url must be a plain HTTP(S) origin")
+            raise ValueError(
+                "provider base_url must be an HTTP(S) origin plus a path segment, "
+                "e.g. https://api.example.com/v1"
+            )
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("provider timeout must be positive")
-        self._base_url = str(url)
+        self._base_url = str(url).rstrip("/")
+        self._chat_url = f"{self._base_url}/chat/completions"
         self._api_key = api_key
         self._model = model
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
@@ -180,7 +187,7 @@ class OpenAICompatibleProvider:
                 for tool in tools
             ]
         try:
-            response = await self._client.post(_OPENAI_CHAT_PATH, json=payload)
+            response = await self._client.post(self._chat_url, json=payload)
             body = response.content
         except httpx.TimeoutException as error:
             raise ProviderError("provider request timed out") from error

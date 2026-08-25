@@ -129,9 +129,9 @@ bash env/dev/scripts/dev/env.sh bash \
 
 1. 复制 `env/dev/.env.example` 为 `env/dev/.env`（已被 gitignore，不会进入 Git）；
 2. 在 `.env` 中填写三项（真实值只存在于本机 `.env`）：
-   - `SYNORA_PROVIDER_BASE_URL`：OpenAI 兼容 API 的纯 HTTP(S) origin，如 `https://api.example.com`；
+   - `SYNORA_PROVIDER_BASE_URL`：OpenAI 兼容 API 根地址，**通常带 `/v1`**，如 `https://api.example.com/v1`、`https://api.x.ai/v1`（纯域名不带路径段也会被拒绝，如 `https://api.example.com`）；
    - `SYNORA_PROVIDER_API_KEY`：你的 API Key；
-   - `SYNORA_PROVIDER_MODEL`：默认模型名（可选）；
+   - `SYNORA_PROVIDER_MODEL`：模型 ID，如 `gpt-4o`、`grok-4.5`；
 3. Runtime 通过 `agent_runtime.providers.provider_from_environment()` 读取并构造 provider。
 
 ### 代码中的脱敏保证
