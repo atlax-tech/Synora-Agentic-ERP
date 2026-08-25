@@ -25,6 +25,8 @@ MAX_PROVIDER_RESPONSE_BYTES = 2_000_000
 PROVIDER_BASE_URL_ENV = "SYNORA_PROVIDER_BASE_URL"
 PROVIDER_API_KEY_ENV = "SYNORA_PROVIDER_API_KEY"
 PROVIDER_MODEL_ENV = "SYNORA_PROVIDER_MODEL"
+PROVIDER_REASONING_EFFORT_ENV = "SYNORA_PROVIDER_REASONING_EFFORT"
+_REASONING_EFFORTS = {"low", "medium", "high", "xhigh"}
 
 
 class StrictModel(BaseModel):
@@ -53,10 +55,25 @@ class ProviderResponse(StrictModel):
     # 服务商返回的 token 用量 (用于成本透明; 缺失时为空)。
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    reasoning_tokens: int = 0
 
 
 class ProviderError(Exception):
     """provider 调用失败 (网络/超时/非法响应/未知请求), 统一 fail closed。"""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        reasoning_tokens: int = 0,
+    ) -> None:
+        super().__init__(message)
+        # 即使结果因预算门禁被拒绝, 已观测的 usage 仍需进入证据, 便于审计。
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.reasoning_tokens = reasoning_tokens
 
 
 class Provider(Protocol):
@@ -123,6 +140,7 @@ class OpenAICompatibleProvider:
         base_url: str,
         api_key: SecretStr | None = None,
         model: str = "",
+        reasoning_effort: str | None = None,
         timeout_seconds: float = 60.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -142,6 +160,8 @@ class OpenAICompatibleProvider:
             )
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("provider timeout must be positive")
+        if reasoning_effort is not None and reasoning_effort not in _REASONING_EFFORTS:
+            raise ValueError("provider reasoning_effort must be low, medium, high, or xhigh")
         self._base_url = str(url).rstrip("/")
         # 兼容两种填法: 根地址 (https://host/v1) 或完整端点 (https://host/v1/chat/completions)。
         if self._base_url.endswith("/chat/completions"):
@@ -150,6 +170,7 @@ class OpenAICompatibleProvider:
             self._chat_url = f"{self._base_url}/chat/completions"
         self._api_key = api_key
         self._model = model
+        self._reasoning_effort = reasoning_effort
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         if api_key is not None:
             headers["Authorization"] = f"Bearer {api_key.get_secret_value()}"
@@ -193,6 +214,10 @@ class OpenAICompatibleProvider:
             if max_tokens < 1 or max_tokens > 8192:
                 raise ValueError("provider max_tokens must be within 1..8192")
             payload["max_tokens"] = max_tokens
+        if self._reasoning_effort is not None:
+            # Grok reasoning models default to high effort; simple plan explanations
+            # opt in to a lower, explicit effort without weakening output validation.
+            payload["reasoning_effort"] = self._reasoning_effort
         if tools:
             payload["tools"] = [
                 {
@@ -223,16 +248,28 @@ class OpenAICompatibleProvider:
             raise ProviderError("provider returned an invalid response") from error
         if not completion.choices:
             raise ProviderError("provider returned no choices")
-        if (
-            max_tokens is not None
-            and completion.usage is not None
-            and completion.usage.completion_tokens > max_tokens
-        ):
-            # 成本护栏硬上限: 服务商返回的补全 token 超出请求预算视为异常
-            # (服务商可能忽略 max_tokens 或极端情况下超额), fail closed 拒绝使用。
+        if max_tokens is not None and completion.usage is None:
+            # 没有 usage 就无法证明服务商遵守输出预算; 宁可回退, 也不接受
+            # 未验证的真实模型结果。请求参数仍是服务商侧的首要成本护栏。
+            raise ProviderError("provider omitted usage for budgeted response")
+        usage = completion.usage
+        reasoning_tokens = (
+            usage.completion_tokens_details.reasoning_tokens
+            if usage and usage.completion_tokens_details
+            else 0
+        )
+        completion_tokens = usage.completion_tokens if usage else 0
+        if completion_tokens < 0 or reasoning_tokens < 0:
+            raise ProviderError("provider returned invalid token usage")
+        billed_output_tokens = completion_tokens + reasoning_tokens
+        if max_tokens is not None and billed_output_tokens > max_tokens:
+            # 成本护栏覆盖最终文本与推理 token; 服务商可能忽略请求参数或把
+            # 推理 token 单独计入账单, 任一合计超预算都 fail closed。
             raise ProviderError(
-                "provider exceeded max_tokens budget "
-                f"({completion.usage.completion_tokens} > {max_tokens})"
+                f"provider exceeded max_tokens budget ({billed_output_tokens} > {max_tokens})",
+                prompt_tokens=usage.prompt_tokens if usage else 0,
+                completion_tokens=completion_tokens,
+                reasoning_tokens=reasoning_tokens,
             )
         message = completion.choices[0].message
         return ProviderResponse(
@@ -241,8 +278,9 @@ class OpenAICompatibleProvider:
                 ProviderToolCall(name=call.function.name, arguments=call.function.arguments)
                 for call in message.tool_calls or ()
             ),
-            prompt_tokens=completion.usage.prompt_tokens if completion.usage else 0,
-            completion_tokens=completion.usage.completion_tokens if completion.usage else 0,
+            prompt_tokens=usage.prompt_tokens if usage else 0,
+            completion_tokens=completion_tokens,
+            reasoning_tokens=reasoning_tokens,
         )
 
 
@@ -271,6 +309,12 @@ class _Choice(StrictModel):
     index: int = 0
 
 
+class _CompletionTokenDetails(BaseModel):
+    # xAI 将 reasoning token 单列, 但其他兼容服务商可能不提供该字段。
+    model_config = ConfigDict(extra="ignore", strict=True, hide_input_in_errors=True)
+    reasoning_tokens: int = 0
+
+
 class _Usage(BaseModel):
     # usage 是纯计费/统计元数据 (不同服务商附加字段差异大, 如 cost_in_usd_ticks、
     # num_sources_used), 不影响任何安全决策, 故忽略未知明细; 核心 envelope/message
@@ -279,6 +323,7 @@ class _Usage(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    completion_tokens_details: _CompletionTokenDetails | None = None
 
 
 class _CompletionEnvelope(StrictModel):
@@ -296,7 +341,7 @@ def provider_from_environment(
 ) -> OpenAICompatibleProvider:
     """BYOK 工厂: 从环境变量读取配置构造 OpenAI 兼容 provider。
 
-    - SYNORA_PROVIDER_BASE_URL: 必填, 纯 HTTP(S) origin (如 https://api.example.com);
+    - SYNORA_PROVIDER_BASE_URL: 必填, HTTP(S) origin 加路径段 (如 https://api.example.com/v1);
     - SYNORA_PROVIDER_API_KEY: 可选, 由用户填写, 仅以 SecretStr 传入 (脱敏);
     - SYNORA_PROVIDER_MODEL: 可选, 默认模型名。
 
@@ -310,5 +355,6 @@ def provider_from_environment(
         base_url=base_url,
         api_key=SecretStr(api_key) if api_key else None,
         model=os.environ.get(PROVIDER_MODEL_ENV, ""),
+        reasoning_effort=os.environ.get(PROVIDER_REASONING_EFFORT_ENV) or None,
         transport=transport,
     )

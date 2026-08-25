@@ -6,9 +6,9 @@
 
 ## 项目状态
 
-Synora 已完成 **Phase 0 至 Phase 3**：经治理的工程基线、固定的 Frappe/ERPNext v16 组合、类型化只读 ERP Gateway（服务端 Run/capability 模型、已验证只读工具、Agent Runtime HTTPX 客户端），以及只读 Procurement Agent（确定性风险分析、可解释计划、BYOK 模型 Provider、FTS5 检索、模型仅解释增强）均已实现并通过真实 HTTP 端到端验证。
+Synora 已完成 **Phase 0 至 Phase 3 的只读范围**：经治理的工程基线、固定的 Frappe/ERPNext v16 组合、类型化只读 ERP Gateway（服务端 Run/capability 模型、已验证只读工具、Agent Runtime HTTPX 客户端），以及只读 Procurement Agent（确定性风险分析、可解释计划、BYOK 模型 Provider、FTS5 检索和失败安全的解释增强）均已实现。P3.5 的 Buyer → Frappe → Runtime → BYOK 链路已通过真实 HTTP 走通；模型输出不安全、超预算或无法验证时，会明确回退到确定性摘要。
 
-Phase 3 阶段出口审查**已通过**：独立对抗审查最初返回 `CHANGES_REQUIRED`（8 项阻断），全部修复并经过三轮复评（最终 PASS），包括统一过期/撤销/状态/capability 校验、乐观锁 CAS（取消竞态防护与失败恢复）、模型增强接入 `plan_run`（证据持久化 + max_tokens 硬上限）、FTS5 权限 scope 过滤、Runs 分页、XSS 加固与 Harness 来源追踪。Phase 4 启动仍由用户决定。全部写操作（Phase 4 起）仍处于分阶段交付状态。
+Phase 3 阶段出口审查**已通过**：独立对抗审查最初返回 `CHANGES_REQUIRED`（8 项阻断），修复经过三轮复评；本轮最终收尾又关闭了 CAS 失败者误回滚、Docker sidecar 配置/认证、重定向、推理 token 成本记录和过时证据口径。模型护栏准确来说是“请求级输出预算 + Provider 用量校验”，不是服务商计费前的硬成本上限。Phase 4 尚未启动；`approval-workflow-mapping` 仍是启用写入前的明确门禁，全部写操作仍处于分阶段交付状态。
 
 这是证据边界，不是产品标准降级。Synora 始终按照生产级企业产品推进；本文不会把规划中的能力描述成已经可运行的软件。
 
@@ -180,7 +180,7 @@ flowchart LR
 | ERP | ERPNext v16、Frappe v16、MariaDB、Redis | ADR-0002 已固定（Frappe 16.31.0 / ERPNext 16.32.3） |
 | ERP 扩展 | 根目录可安装的 Frappe Custom App | P2.1 已创建脚手架并安装 |
 | Agent 服务 | Python、FastAPI、Pydantic v2、HTTPX | `services/agent_runtime` 已固定（FastAPI 0.141.1、HTTPX 0.28.1、Pydantic 2.12.5） |
-| Workflow | 确定性服务；条件式 LangGraph | 必须完成 Checkpoint/Resume Spike（Phase 3） |
+| Workflow | 确定性服务；条件式 LangGraph | Phase 3 Spike 已关闭；只有 Phase 4 写入恢复有实测需要时才重估 |
 | Retrieval | SQLite FTS5/BM25 优先 | Vector/Hybrid/Rerank 由评测门禁控制 |
 | 前端 | ERPNext Desk 与已验证的 Frappe 组件 | 产品形态已确认；组件基线待验证 |
 | 工程工具 | `uv`、Ruff、mypy、pytest | P2.1 已验证；命令见 `docs/DEVELOPMENT.md` |
@@ -228,7 +228,7 @@ Synora-Agentic-ERP/
 - [x] Phase 0：产品定义、Harness Engineering、架构、设计、测试和验收基线
 - [x] Phase 1：未修改的 Frappe/ERPNext v16 基线与 P2P 业务考古
 - [x] Phase 2：类型化只读 ERP Gateway
-- [ ] Phase 3：只读 Procurement Agent 与 FTS5 评测基线
+- [x] Phase 3：只读 Procurement Agent 与 FTS5 评测基线
 - [ ] Phase 4：Proposal、审批、MR Draft、PO Draft、Receipt 与对账
 - [ ] Phase 5：PO Submit、Receipt、Invoice 和 Payment 相关受控流程
 - [ ] Phase 6：Contextual ERP Coach 与完整 RAG 演进
@@ -239,7 +239,7 @@ Synora-Agentic-ERP/
 
 ## 参与贡献
 
-受治理的只读 Gateway 已实现；后续阶段仍处于分阶段交付状态。修改前请先阅读 `AGENTS.md` 及相关需求、架构、测试和验收文档；保持小步提交，在 `docs/development-log/` 中记录通俗中文说明，并如实报告实际运行的命令。
+受治理的只读 Gateway 与 Phase 3 Procurement Agent 已实现；后续阶段仍处于分阶段交付状态。修改前请先阅读 `AGENTS.md` 及相关需求、架构、测试和验收文档；保持小步提交，在 `docs/development-log/` 中记录通俗中文说明，并如实报告实际运行的命令。
 
 ## 常见问题
 
@@ -257,7 +257,7 @@ FTS5 本地、可检查、成本低，适合作为明确基线。完整 RAG 路�
 
 ### 现在能运行 Synora 吗？
 
-Phase 2 只读 Gateway 与 Agent Runtime 可基于固定 Bench 环境运行：已验证命令见 `docs/DEVELOPMENT.md`，真实 HTTP 端到端验证见 `env/dev/p26`。产品级 Agent 规划（Phase 3）与全部写操作（Phase 4 起）尚不可用。
+Phase 3 只读 Gateway 与采购 Agent 可基于固定 Bench 环境运行：命令见 `docs/DEVELOPMENT.md`，真实 HTTP 检查见 `env/dev/p26` 与 `env/dev/p35`。Phase 4 的 Proposal、审批和 ERP 写入尚不可用；启用写入前必须先解决 `approval-workflow-mapping`。
 
 ## License
 

@@ -268,7 +268,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					const ev = plan.evidence || {};
 					const ev_bits = [];
 					if (ev.provider) { ev_bits.push(__("Provider") + ": " + esc(ev.provider)); }
-					if (typeof ev.prompt_tokens === "number") { ev_bits.push("in:" + ev.prompt_tokens + " out:" + ev.completion_tokens); }
+					if (typeof ev.prompt_tokens === "number") { ev_bits.push("in:" + ev.prompt_tokens + " out:" + ev.completion_tokens + " reasoning:" + (ev.reasoning_tokens || 0)); }
 					if (typeof ev.elapsed_ms === "number") { ev_bits.push(ev.elapsed_ms + "ms"); }
 					if (ev.fallback_reason) { ev_bits.push('<span class="text-danger">' + __("已回退") + ": " + esc(ev.fallback_reason) + "</span>"); }
 					if (ev_bits.length) {

@@ -161,6 +161,38 @@ uv run --python 3.14 python services/agent_runtime/scripts/check_provider.py --e
 > 注意：不要用 `source env/dev/.env && uv run ...` —— shell `source` 只设置局部变量、不导出，
 > `uv run` 的子进程看不到；用上面的 `--env` 参数即可。若环境变量已 export，可不带 `--env`。
 
+### Phase 3 P3.5 real HTTP verification (verified 2026-08-25, exit 0)
+
+This check exercises the read-only path `Buyer → Frappe → Runtime → BYOK →
+Run Plan evidence → get_run`. It does not create ERP business documents. The
+runtime must be reachable from the Bench container; when using the Docker host
+gateway, set an ephemeral local token in both processes and do not commit or
+print it:
+
+```bash
+export SYNORA_RUNTIME_URL=http://host.docker.internal:8001
+export SYNORA_RUNTIME_ALLOW_HOST_GATEWAY=1
+export SYNORA_RUNTIME_TOKEN=<ephemeral-local-token>
+bash env/dev/scripts/dev/env.sh start
+
+# In a separate host terminal, use the same token and the local .env key.
+set -a; . env/dev/.env; set +a
+SYNORA_RUNTIME_TOKEN=<ephemeral-local-token> \
+SYNORA_PROVIDER_REASONING_EFFORT=low \
+UV_CACHE_DIR=/private/tmp/synora-uv-cache \
+uv run --python 3.14 uvicorn agent_runtime.app:app --host 127.0.0.1 --port 8001
+
+SYNORA_P2P_USER_PWD="$SYNORA_P2P_USER_PWD" \
+  uv run --python 3.14 python env/dev/p35/p35_e2e.py
+```
+
+Observed evidence for the 2026-08-25 run was `P35-HTTP-OK` with
+`provider=grok-4.5`, `run_state=SUCCEEDED`, and `status=fallback_error`: the
+real provider request was made, but the returned output exceeded the combined
+completion/reasoning-token budget and was safely replaced by the deterministic
+summary. This is a successful fail-closed chain, not a claim that model prose
+was accepted.
+
 ## Sources
 
 - `docs/PRD.md` — approved maintainability, testing, acceptance, and unresolved-decision requirements.

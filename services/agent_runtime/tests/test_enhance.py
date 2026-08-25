@@ -121,6 +121,7 @@ def test_enhance_ok_with_deterministic_provider() -> None:
     assert evidence.provider == "deterministic"
     assert evidence.prompt_tokens == 10
     assert evidence.completion_tokens == 5
+    assert evidence.reasoning_tokens == 0
     assert evidence.elapsed_ms >= 0
     assert evidence.fallback_reason is None
 
@@ -150,6 +151,25 @@ def test_enhance_falls_back_on_provider_error() -> None:
     assert text == PLAN["summary"]
     assert evidence.status == "fallback_error"
     assert "down" in str(evidence.fallback_reason)
+
+
+def test_enhance_preserves_rejected_provider_usage() -> None:
+    class _OverBudgetProvider:
+        async def complete(self, messages, tools=None, model=None, max_tokens=None):
+            del messages, tools, model, max_tokens
+            raise ProviderError(
+                "provider exceeded max_tokens budget (310 > 256)",
+                prompt_tokens=10,
+                completion_tokens=100,
+                reasoning_tokens=210,
+            )
+
+    text, evidence = _run(enhance_plan(PLAN, _OverBudgetProvider()))
+    assert text == PLAN["summary"]
+    assert evidence.status == "fallback_error"
+    assert evidence.prompt_tokens == 10
+    assert evidence.completion_tokens == 100
+    assert evidence.reasoning_tokens == 210
 
 
 def test_enhance_uses_cost_guardrail() -> None:

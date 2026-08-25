@@ -116,6 +116,7 @@ class EnhancementEvidence:
     provider: str
     prompt_tokens: int
     completion_tokens: int
+    reasoning_tokens: int
     elapsed_ms: int
     status: str  # "ok" | "fallback_validation" | "fallback_error"
     fallback_reason: str | None
@@ -136,8 +137,9 @@ async def enhance_plan(
             str(plan.get("summary", "")),
             EnhancementEvidence(
                 provider=provider_name,
-                prompt_tokens=0,
-                completion_tokens=0,
+                prompt_tokens=error.prompt_tokens,
+                completion_tokens=error.completion_tokens,
+                reasoning_tokens=error.reasoning_tokens,
                 elapsed_ms=elapsed_ms,
                 status="fallback_error",
                 fallback_reason=f"provider error: {error}",
@@ -152,6 +154,7 @@ async def enhance_plan(
                 provider=provider_name,
                 prompt_tokens=response.prompt_tokens,
                 completion_tokens=response.completion_tokens,
+                reasoning_tokens=response.reasoning_tokens,
                 elapsed_ms=elapsed_ms,
                 status="fallback_validation",
                 fallback_reason="model output failed validation (numbers or structure)",
@@ -163,6 +166,7 @@ async def enhance_plan(
             provider=provider_name,
             prompt_tokens=response.prompt_tokens,
             completion_tokens=response.completion_tokens,
+            reasoning_tokens=response.reasoning_tokens,
             elapsed_ms=elapsed_ms,
             status="ok",
             fallback_reason=None,

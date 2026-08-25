@@ -48,12 +48,29 @@ from synora_agentic_erp.gateway.security import RunContext
 MAX_ANALYSIS_ITEMS = 200
 _TOOL_PAGE_SIZE = 50
 
-# Agent Runtime sidecar (本机服务, 不暴露到外部)。允许通过环境变量覆盖地址,
-# 但仅接受本机回环地址 (防 SSRF: Runtime 端点不会因任何用户输入而改变目标)。
+# Agent Runtime sidecar (本机服务, 不暴露到外部)。默认仅接受本机回环地址;
+# Docker host-gateway 需显式开关和令牌 (防 SSRF: 用户输入不能改变目标)。
 _RUNTIME_URL_ENV = "SYNORA_RUNTIME_URL"
+_RUNTIME_ALLOW_HOST_GATEWAY_ENV = "SYNORA_RUNTIME_ALLOW_HOST_GATEWAY"
+_RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
+_RUNTIME_HOST_GATEWAY = "host.docker.internal"
 _RUNTIME_DEFAULT_URL = "http://127.0.0.1:8001"
-_RUNTIME_TIMEOUT_SECONDS = 5.0
+# Grok reasoning 模型的简单解释实测约 13 秒, 低推理强度的完整计划实测约 9 秒;
+# 仍以 20 秒墙钟上限防止请求悬挂,
+# 超时后回退确定性摘要。该上限不是成本上限, 成本仍由 max_tokens/usage 校验控制。
+_RUNTIME_TIMEOUT_SECONDS = 20.0
 _RUNTIME_RESPONSE_BYTES = 1_000_000
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Runtime 返回 3xx 时直接失败, 不把请求转发到未知地址。"""
+
+    def redirect_request(
+        self, request: Any, _fp: Any, code: int, _msg: str, headers: Any, _newurl: str
+    ) -> None:
+        raise urllib.error.HTTPError(
+            request.full_url, code, "runtime redirect refused", headers, None
+        )
 
 
 def _runtime_enhance_url() -> str:
@@ -68,7 +85,20 @@ def _runtime_enhance_url() -> str:
         hostname = (parsed.hostname or "").lower()
         if parsed.scheme not in ("http", "https") or parsed.username or parsed.password:
             raise GatewayFault("CONFIG_ERROR", "runtime url must be a loopback address", 500)
-        if hostname not in ("127.0.0.1", "localhost", "::1"):
+        loopback_hosts = {"127.0.0.1", "localhost", "::1"}
+        if hostname == _RUNTIME_HOST_GATEWAY:
+            # Frappe 在 Docker 中运行时, 127.0.0.1 指向 Bench 容器而不是宿主机。
+            # 只有开发环境显式打开 host-gateway 且配置内部令牌时才允许该路径;
+            # 用户输入不能改变此地址。
+            allow_gateway = os.environ.get(_RUNTIME_ALLOW_HOST_GATEWAY_ENV, "").lower()
+            if (
+                allow_gateway not in {"1", "true", "yes"}
+                or not os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
+            ):
+                raise GatewayFault(
+                    "CONFIG_ERROR", "runtime host gateway requires explicit token config", 500
+                )
+        elif hostname not in loopback_hosts:
             raise GatewayFault("CONFIG_ERROR", "runtime url must be a loopback address", 500)
         return f"{configured.rstrip('/')}/enhance"
     return f"{_RUNTIME_DEFAULT_URL}/enhance"
@@ -78,6 +108,7 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
     """调用 Runtime /enhance 生成模型解释; 任何失败回退确定性摘要并记录证据。
 
     返回 (展示文本, 证据)。证据含 provider/status/prompt_tokens/completion_tokens/
+    reasoning_tokens/
     elapsed_ms/fallback_reason; 失败原因只保留类型名与截断消息 (不泄露 key/URL)。
     """
     started = monotonic()
@@ -89,6 +120,7 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
             "status": status,
             "prompt_tokens": 0,
             "completion_tokens": 0,
+            "reasoning_tokens": 0,
             "elapsed_ms": elapsed,
             "fallback_reason": reason[:200],
         }
@@ -99,11 +131,14 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
         return fallback(f"runtime config: {error.code}")
 
     payload = json.dumps({"plan": plan, "provider_name": "byok-runtime"}).encode("utf-8")
-    request = urllib.request.Request(
-        url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
-    )
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    runtime_token = os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
+    if runtime_token:
+        headers["X-Synora-Runtime-Token"] = runtime_token
+    request = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=_RUNTIME_TIMEOUT_SECONDS) as response:
+        opener = urllib.request.build_opener(_NoRedirectHandler())
+        with opener.open(request, timeout=_RUNTIME_TIMEOUT_SECONDS) as response:
             body = json.loads(response.read(_RUNTIME_RESPONSE_BYTES))
     except (
         urllib.error.URLError,
@@ -131,6 +166,7 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
     try:
         prompt_tokens = int(evidence.get("prompt_tokens", 0) or 0)
         completion_tokens = int(evidence.get("completion_tokens", 0) or 0)
+        reasoning_tokens = int(evidence.get("reasoning_tokens", 0) or 0)
         elapsed_ms = int(evidence.get("elapsed_ms", 0) or 0)
     except TypeError, ValueError:
         # Runtime 返回异常类型: 证据解析失败回退确定性, 不抛 500。
@@ -140,6 +176,7 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
         "status": str(evidence.get("status", "ok"))[:100],
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
+        "reasoning_tokens": reasoning_tokens,
         "elapsed_ms": elapsed_ms,
         "fallback_reason": str(evidence.get("fallback_reason") or "")[:200],
     }
@@ -223,6 +260,27 @@ def _recover_failed_analysis(run_id: str, correlation_id: str) -> None:
     except GatewayFault, frappe.TimestampMismatchError:
         # 并发取消/推进已生效: 回退让位, 不覆盖。
         pass
+
+
+def _lock_proposed_run(run_id: str) -> Any:
+    """锁住本 Run 的提议行, 避免并发 plan_run 重复调用模型。
+
+    这是 Synora 自有 DocType 的事务行锁; 锁在本次请求结束时释放, 进程崩溃
+    不会留下业务锁。模型调用仍有 20 秒上限, 锁的范围限定为单个 Run。
+    """
+    locked = frappe.db.sql(
+        """
+        SELECT name
+        FROM `tabSynora Agent Run`
+        WHERE name = %s
+        FOR UPDATE
+        """,
+        (run_id,),
+        as_dict=True,
+    )
+    if not locked:
+        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
+    return _load_active_run(run_id, frozenset({"PROPOSED"}))
 
 
 def _call_tool(
@@ -349,8 +407,10 @@ def analyze_run(run_id: str, correlation_id: str) -> dict[str, Any]:
     run = _load_active_run(run_id, frozenset({"CREATED"}))
 
     ctx = _run_context(run)
+    analysis_started = False
     try:
         _set_run_state(run, "ANALYZING")
+        analysis_started = True
 
         # 需求源 = 未结 MR 行; 在途源 = 未收货 PO 行; 各拉取一次后按 item 分组。
         mr_rows = _collect_rows(ctx, "material_request.open", {}, correlation_id)
@@ -370,10 +430,12 @@ def analyze_run(run_id: str, correlation_id: str) -> dict[str, Any]:
         _set_run_state(run, "PROPOSED")
     except GatewayFault:
         # 工具失败/结果超限/并发冲突: 回退可重试, 不留永久中间态。
-        _recover_failed_analysis(run_id, correlation_id)
+        if analysis_started:
+            _recover_failed_analysis(run_id, correlation_id)
         raise
     except Exception:
-        _recover_failed_analysis(run_id, correlation_id)
+        if analysis_started:
+            _recover_failed_analysis(run_id, correlation_id)
         raise
     return {
         "run_id": run_id,
@@ -390,7 +452,8 @@ def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
     计划由确定性规则基于分析结果生成, 数量/金额/阈值不经过模型;
     每项结论带来源引用与未知说明。
     """
-    run = _load_active_run(run_id, frozenset({"PROPOSED"}))
+    # 在模型调用前串行化同一 Run; 唯一约束只能阻止重复落库, 不能阻止重复计费。
+    run = _lock_proposed_run(run_id)
 
     analysis_docs = frappe.get_all(
         "Synora Item Analysis",
@@ -448,6 +511,7 @@ def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
                 "provider": evidence.get("provider"),
                 "prompt_tokens": evidence.get("prompt_tokens", 0),
                 "completion_tokens": evidence.get("completion_tokens", 0),
+                "reasoning_tokens": evidence.get("reasoning_tokens", 0),
                 "elapsed_ms": evidence.get("elapsed_ms", 0),
                 "fallback_reason": evidence.get("fallback_reason"),
                 "correlation_id": correlation_id,

@@ -55,6 +55,7 @@ async def main() -> None:
     print(
         f"EVIDENCE: provider={evidence.provider} status={evidence.status} "
         f"tokens=in:{evidence.prompt_tokens} out:{evidence.completion_tokens} "
+        f"reasoning:{evidence.reasoning_tokens} "
         f"elapsed_ms={evidence.elapsed_ms} fallback={evidence.fallback_reason}"
     )
 

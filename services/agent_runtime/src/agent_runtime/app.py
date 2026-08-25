@@ -1,13 +1,18 @@
+import hmac
+import os
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from agent_runtime.agent.enhance import (
     EnhancementEvidence,
     enhance_plan,
 )
-from agent_runtime.providers import ProviderError, provider_from_environment
+from agent_runtime.providers import PROVIDER_MODEL_ENV, ProviderError, provider_from_environment
+
+_RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
+_RUNTIME_TOKEN_HEADER = "X-Synora-Runtime-Token"
 
 
 class HealthResponse(BaseModel):
@@ -39,13 +44,19 @@ def health() -> HealthResponse:
 
 
 @app.post("/enhance", response_model=EnhanceResponse)
-async def enhance(request: EnhanceRequest) -> EnhanceResponse:
+async def enhance(request: EnhanceRequest, http_request: Request) -> EnhanceResponse:
     """把确定性计划增强为模型自然语言解释 (只读, 不产生业务写入)。
 
     数量/金额/阈值/风险分类全部由调用方 (Frappe plan_run) 确定性生成;
     本端点只让模型改写解释文本, 输出经严格校验, 失败回退确定性摘要。
     provider 未配置/调用失败 -> enhance_plan 内部回退, 本端点不抛 5xx。
     """
+    expected_token = os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
+    if expected_token and not hmac.compare_digest(
+        http_request.headers.get(_RUNTIME_TOKEN_HEADER, ""), expected_token
+    ):
+        raise HTTPException(status_code=401, detail="runtime authentication required")
+    provider_label = os.environ.get(PROVIDER_MODEL_ENV, "").strip() or request.provider_name
     try:
         provider = provider_from_environment()
     except (ProviderError, ValueError) as error:
@@ -53,9 +64,10 @@ async def enhance(request: EnhanceRequest) -> EnhanceResponse:
         return EnhanceResponse(
             explanation=str(request.plan.get("summary", "")),
             evidence=EnhancementEvidence(
-                provider=request.provider_name,
+                provider=provider_label,
                 prompt_tokens=0,
                 completion_tokens=0,
+                reasoning_tokens=0,
                 elapsed_ms=0,
                 status="fallback_error",
                 fallback_reason=f"provider not configured: {error}",
@@ -63,7 +75,7 @@ async def enhance(request: EnhanceRequest) -> EnhanceResponse:
         )
     try:
         explanation, evidence = await enhance_plan(
-            request.plan, provider, provider_name=request.provider_name
+            request.plan, provider, provider_name=provider_label
         )
     finally:
         close = getattr(provider, "aclose", None)

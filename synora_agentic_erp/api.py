@@ -353,6 +353,7 @@ def get_run(run_id: str) -> dict[str, Any]:
             "provider",
             "prompt_tokens",
             "completion_tokens",
+            "reasoning_tokens",
             "elapsed_ms",
             "fallback_reason",
             "creation",
@@ -373,6 +374,7 @@ def get_run(run_id: str) -> dict[str, Any]:
                 "provider": plans[0].provider,
                 "prompt_tokens": plans[0].prompt_tokens,
                 "completion_tokens": plans[0].completion_tokens,
+                "reasoning_tokens": plans[0].reasoning_tokens,
                 "elapsed_ms": plans[0].elapsed_ms,
                 "fallback_reason": plans[0].fallback_reason,
             }

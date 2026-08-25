@@ -23,12 +23,18 @@ from agent_runtime.providers import (
     PROVIDER_API_KEY_ENV,
     PROVIDER_BASE_URL_ENV,
     PROVIDER_MODEL_ENV,
+    PROVIDER_REASONING_EFFORT_ENV,
     ProviderError,
     ProviderMessage,
     provider_from_environment,
 )
 
-_PROVIDER_ENV_NAMES = (PROVIDER_BASE_URL_ENV, PROVIDER_API_KEY_ENV, PROVIDER_MODEL_ENV)
+_PROVIDER_ENV_NAMES = (
+    PROVIDER_BASE_URL_ENV,
+    PROVIDER_API_KEY_ENV,
+    PROVIDER_MODEL_ENV,
+    PROVIDER_REASONING_EFFORT_ENV,
+)
 
 
 def _load_env_file(path: str) -> None:
@@ -63,7 +69,10 @@ async def main() -> None:
     print(
         "PROVIDER-OK:",
         response.text[:80],
-        f"| tokens: in={response.prompt_tokens} out={response.completion_tokens}",
+        "| tokens:"
+        f" in={response.prompt_tokens}"
+        f" out={response.completion_tokens}"
+        f" reasoning={response.reasoning_tokens}",
     )
 
 

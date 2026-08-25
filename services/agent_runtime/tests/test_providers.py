@@ -13,6 +13,7 @@ from agent_runtime.providers import (
     PROVIDER_API_KEY_ENV,
     PROVIDER_BASE_URL_ENV,
     PROVIDER_MODEL_ENV,
+    PROVIDER_REASONING_EFFORT_ENV,
     DeterministicProvider,
     OpenAICompatibleProvider,
     ProviderError,
@@ -116,6 +117,12 @@ class TestOpenAICompatibleProvider:
     def test_rejects_non_positive_timeout(self) -> None:
         with pytest.raises(ValueError):
             OpenAICompatibleProvider(base_url="http://127.0.0.1:11434/v1", timeout_seconds=0)
+
+    def test_rejects_unknown_reasoning_effort(self) -> None:
+        with pytest.raises(ValueError):
+            OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434/v1", reasoning_effort="unbounded"
+            )
 
     def test_parses_text_response(self) -> None:
         async def run() -> None:
@@ -288,12 +295,14 @@ class TestProviderFromEnvironment:
         monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://api.example.com/v1")
         monkeypatch.setenv(PROVIDER_API_KEY_ENV, "sk-secret-123")
         monkeypatch.setenv(PROVIDER_MODEL_ENV, "model-x")
+        monkeypatch.setenv(PROVIDER_REASONING_EFFORT_ENV, "low")
         provider = provider_from_environment(
             transport=_transport_that_returns(
                 {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
             )
         )
         assert provider._model == "model-x"
+        assert provider._reasoning_effort == "low"
         assert "sk-secret-123" not in repr(provider)
 
     def test_invalid_origin_from_environment_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -347,7 +356,7 @@ class TestRefusalFieldCompat:
         asyncio.run(run())
 
 
-class TestMaxTokensHardBudget:
+class TestMaxTokensRequestBudget:
     def test_completion_over_budget_is_rejected(self) -> None:
         async def run() -> None:
             transport = _transport_that_returns(
@@ -380,8 +389,54 @@ class TestMaxTokensHardBudget:
 
         asyncio.run(run())
 
-    def test_budget_absent_usage_is_not_rejected(self) -> None:
-        # 服务商不返回 usage 时无法校验, 不误伤 (成本护栏以请求参数为主)。
+    def test_reasoning_tokens_are_counted_and_exposed(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_returns(
+                {
+                    "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 4,
+                        "total_tokens": 20,
+                        "completion_tokens_details": {"reasoning_tokens": 6},
+                    },
+                }
+            )
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434/v1", transport=transport
+            ) as provider:
+                response = await provider.complete(_messages(), max_tokens=16)
+            assert response.completion_tokens == 4
+            assert response.reasoning_tokens == 6
+
+        asyncio.run(run())
+
+    def test_reasoning_tokens_over_budget_are_rejected(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_returns(
+                {
+                    "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 100,
+                        "total_tokens": 310,
+                        "completion_tokens_details": {"reasoning_tokens": 210},
+                    },
+                }
+            )
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434/v1", transport=transport
+            ) as provider:
+                with pytest.raises(ProviderError, match="310 > 256") as caught:
+                    await provider.complete(_messages(), max_tokens=256)
+            assert caught.value.prompt_tokens == 10
+            assert caught.value.completion_tokens == 100
+            assert caught.value.reasoning_tokens == 210
+
+        asyncio.run(run())
+
+    def test_budget_absent_usage_fails_closed(self) -> None:
+        # 服务商不返回 usage 时无法证明预算遵守, 必须拒绝真实模型结果。
         async def run() -> None:
             transport = _transport_that_returns(
                 {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
@@ -389,7 +444,7 @@ class TestMaxTokensHardBudget:
             async with OpenAICompatibleProvider(
                 base_url="http://127.0.0.1:11434/v1", transport=transport
             ) as provider:
-                response = await provider.complete(_messages(), max_tokens=16)
-            assert response.text == "ok"
+                with pytest.raises(ProviderError, match="omitted usage"):
+                    await provider.complete(_messages(), max_tokens=16)
 
         asyncio.run(run())

@@ -6,9 +6,9 @@
 
 ## Project status
 
-Synora has completed **Phase 0 through Phase 3**: the governed engineering baseline, the pinned Frappe/ERPNext v16 pair, the typed read-only ERP Gateway (server-side Run/capability model, verified read tools, Agent Runtime HTTPX client), and the read-only procurement Agent (deterministic risk analysis, explainable plans, BYOK model provider, FTS5 retrieval, model-only explanation enhancement) are implemented and verified end-to-end over real HTTP.
+Synora has completed **Phase 0 through Phase 3** for its read-only scope: the governed engineering baseline, the pinned Frappe/ERPNext v16 pair, the typed read-only ERP Gateway (server-side Run/capability model, verified read tools, Agent Runtime HTTPX client), and the read-only procurement Agent (deterministic risk analysis, explainable plans, BYOK model provider, FTS5 retrieval, and fail-closed explanation enhancement) are implemented. The P3.5 Buyer → Frappe → Runtime → BYOK path has been exercised over real HTTP; unsafe, over-budget, or unverified model output is deliberately replaced by the deterministic summary.
 
-Phase 3 exit review **passed**: the independent adversarial review initially returned `CHANGES_REQUIRED` with eight blocking findings; all eight are fixed and re-verified across three review rounds (final: PASS), including unified expiry/revocation/state/capability guards, optimistic-lock CAS with cancel-race protection and failure recovery, model enhancement wired into `plan_run` with persisted evidence and hard `max_tokens` budget, FTS5 permission-scope filtering, Runs pagination, XSS hardening, and Harness source tracking. Phase 4 startup remains a user decision. All write operations (Phase 4+) remain staged.
+Phase 3 exit review **passed**: the independent adversarial review initially returned `CHANGES_REQUIRED` with eight blocking findings; the fixes were re-verified across three review rounds, and the final cleanup also closed the CAS-loser recovery race, Docker sidecar configuration/authentication, redirect handling, reasoning-token accounting, and stale evidence wording. The model guard is accurately described as a request output budget plus provider usage verification—not a provider-side hard cost cap. Phase 4 has not started; approval/workflow mapping remains an explicit gate, and all write operations remain staged.
 
 This status is an evidence boundary, not a reduction in product standards. Synora is being designed and developed as a production-grade enterprise product; this README does not present planned behavior as working software.
 
@@ -180,7 +180,7 @@ The architecture preserves typed role, state, event, handoff, tool, policy, and 
 | ERP | ERPNext v16, Frappe v16, MariaDB, Redis | Pinned in ADR-0002 (Frappe 16.31.0 / ERPNext 16.32.3) |
 | ERP extension | Root-installable Frappe Custom App | Scaffolded and installed (P2.1) |
 | Agent service | Python, FastAPI, Pydantic v2, HTTPX | Pinned in `services/agent_runtime` (FastAPI 0.141.1, HTTPX 0.28.1, Pydantic 2.12.5) |
-| Workflow | Deterministic services; conditional LangGraph | Checkpoint/resume spike required (Phase 3) |
+| Workflow | Deterministic services; conditional LangGraph | Phase 3 spike closed; Phase 4 re-evaluates only if write recovery requires it |
 | Retrieval | SQLite FTS5/BM25 first | Vector/hybrid/reranking gated by evaluation |
 | Frontend | ERPNext Desk using verified Frappe components | Product form approved; component baseline unresolved |
 | Engineering | `uv`, Ruff, mypy, pytest | Verified (P2.1); commands in `docs/DEVELOPMENT.md` |
@@ -228,7 +228,7 @@ Before a release or version update, an independent adversarial sub-agent must re
 - [x] Phase 0: product definition, Harness Engineering, architecture, design, testing, and acceptance baseline
 - [x] Phase 1: unmodified Frappe/ERPNext v16 baseline and P2P business archaeology
 - [x] Phase 2: typed read-only ERP gateway
-- [ ] Phase 3: read-only procurement Agent and FTS5 evaluation baseline
+- [x] Phase 3: read-only procurement Agent and FTS5 evaluation baseline
 - [ ] Phase 4: proposals, approval, MR Draft, PO Draft, receipts, and reconciliation
 - [ ] Phase 5: PO Submit, Receipt, Invoice, and Payment-related controlled operations
 - [ ] Phase 6: contextual ERP Coach and full RAG evolution
@@ -239,7 +239,7 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for milestone entry and exit conditions
 
 ## Contributing
 
-The governed read-only gateway is implemented; later phases remain staged. Before proposing a change, read `AGENTS.md` and the affected requirement, architecture, testing, and acceptance documents. Keep commits small, record the change in `docs/development-log/`, and report commands that actually ran.
+The governed read-only gateway and Phase 3 procurement Agent are implemented; later phases remain staged. Before proposing a change, read `AGENTS.md` and the affected requirement, architecture, testing, and acceptance documents. Keep commits small, record the change in `docs/development-log/`, and report commands that actually ran.
 
 ## FAQ
 
@@ -257,7 +257,7 @@ FTS5 is local, inspectable, inexpensive, and provides a clear baseline. The comp
 
 ### Can I run Synora today?
 
-The Phase 2 read-only Gateway and Agent Runtime are runnable against the pinned Bench environment: see `docs/DEVELOPMENT.md` for verified commands and the `env/dev/p26` real-HTTP end-to-end verification. Product-level Agent planning (Phase 3) and all write operations (Phase 4+) are not yet available.
+The Phase 3 read-only Gateway and procurement Agent are runnable against the pinned Bench environment: see `docs/DEVELOPMENT.md` and the `env/dev/p26`/`env/dev/p35` real-HTTP checks. Phase 4 proposals, approvals, and ERP writes are not yet available; `approval-workflow-mapping` must be resolved before write enablement.
 
 ## License
 

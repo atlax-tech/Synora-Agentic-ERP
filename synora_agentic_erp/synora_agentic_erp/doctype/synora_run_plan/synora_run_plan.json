@@ -5,7 +5,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "run", "goal", "summary", "enhanced_text", "plan_json", "provider", "prompt_tokens", "completion_tokens", "elapsed_ms", "fallback_reason", "correlation_id"
+  "run", "goal", "summary", "enhanced_text", "plan_json", "provider", "prompt_tokens", "completion_tokens", "reasoning_tokens", "elapsed_ms", "fallback_reason", "correlation_id"
  ],
  "fields": [
   {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1, "unique": 1},
@@ -16,6 +16,7 @@
   {"fieldname": "provider", "fieldtype": "Data", "label": "Provider", "read_only": 1, "set_only_once": 1, "description": "增强 provider (byok-runtime/deterministic)"},
   {"fieldname": "prompt_tokens", "fieldtype": "Int", "label": "Prompt Tokens", "read_only": 1, "set_only_once": 1},
   {"fieldname": "completion_tokens", "fieldtype": "Int", "label": "Completion Tokens", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "reasoning_tokens", "fieldtype": "Int", "label": "Reasoning Tokens", "read_only": 1, "set_only_once": 1, "description": "模型推理 token; 纳入成本预算证据"},
   {"fieldname": "elapsed_ms", "fieldtype": "Int", "label": "Elapsed Ms", "read_only": 1, "set_only_once": 1},
   {"fieldname": "fallback_reason", "fieldtype": "Small Text", "label": "Fallback Reason", "read_only": 1, "set_only_once": 1},
   {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1}

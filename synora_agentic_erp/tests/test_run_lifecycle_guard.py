@@ -137,6 +137,23 @@ class TestRunLifecycleGuard(FrappeTestCase):
         stored = frappe.get_doc("Synora Agent Run", run_id)
         self.assertEqual(stored.run_state, "CANCELLED")  # 保持取消, 不回退 CREATED
 
+    def test_analyze_cas_loser_does_not_recover_other_request(self) -> None:
+        """CAS 失败者不能把胜者的 ANALYZING 状态回滚为 CREATED。"""
+        run_id = self._issue()
+        frappe.set_user(BUYER)
+        with mock.patch.object(
+            agent_service,
+            "_set_run_state",
+            side_effect=GatewayFault("CONFLICT", "run state changed concurrently", 409),
+        ) as transition:
+            with mock.patch.object(agent_service, "_recover_failed_analysis") as recover:
+                response = analyze_run(run_id, CORRELATION_ID)
+        self.assertEqual(response["error"]["code"], "CONFLICT")
+        transition.assert_called_once()
+        recover.assert_not_called()
+        stored = frappe.get_doc("Synora Agent Run", run_id)
+        self.assertEqual(stored.run_state, "CREATED")
+
     def test_state_transition_cas_rejects_concurrent_change(self) -> None:
         """乐观锁 CAS: 自加载后数据库被并发修改, 状态推进必须失败。"""
         run_id = self._issue()
@@ -206,6 +223,33 @@ class TestRunLifecycleGuard(FrappeTestCase):
         ):
             self.assertEqual(agent_service._runtime_enhance_url(), "http://127.0.0.1:8001/enhance")
 
+    def test_runtime_url_rejects_host_gateway_without_explicit_config(self) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "SYNORA_RUNTIME_URL": "http://host.docker.internal:8001",
+                "SYNORA_RUNTIME_ALLOW_HOST_GATEWAY": "0",
+            },
+            clear=False,
+        ):
+            with self.assertRaises(GatewayFault):
+                agent_service._runtime_enhance_url()
+
+    def test_runtime_url_accepts_tokenized_host_gateway(self) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "SYNORA_RUNTIME_URL": "http://host.docker.internal:8001",
+                "SYNORA_RUNTIME_ALLOW_HOST_GATEWAY": "1",
+                "SYNORA_RUNTIME_TOKEN": "test-runtime-token",
+            },
+            clear=False,
+        ):
+            self.assertEqual(
+                agent_service._runtime_enhance_url(),
+                "http://host.docker.internal:8001/enhance",
+            )
+
     def test_runtime_non_object_response_falls_back(self) -> None:
         """Runtime 返回非对象 JSON: 回退确定性摘要, 不抛 500。"""
 
@@ -222,8 +266,10 @@ class TestRunLifecycleGuard(FrappeTestCase):
         with mock.patch.dict(
             "os.environ", {"SYNORA_RUNTIME_URL": "http://127.0.0.1:8001"}, clear=False
         ):
+            fake_opener = mock.Mock()
+            fake_opener.open.return_value = FakeResponse()
             with mock.patch.object(
-                agent_service.urllib.request, "urlopen", return_value=FakeResponse()
+                agent_service.urllib.request, "build_opener", return_value=fake_opener
             ):
                 text, evidence = agent_service._enhance_plan_via_runtime({"summary": "确定性摘要"})
         self.assertEqual(text, "确定性摘要")

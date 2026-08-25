@@ -36,7 +36,7 @@
       "path": "docs/DEVELOPMENT.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "2e497d22002fe5ad91f035c7e4559213b5eb2237b8198bb487d5a952f89742eb"
+      "sha256": "6e90cdbc6c228233dad812d784ce6968017d9e9db659d4653e726e3e344b06cb"
     },
     {
       "path": "docs/TESTING.md",
@@ -120,7 +120,7 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "4a3d99af2a9604808505edb25939229c8750ca67db40130d866fe6214a76f307"
+      "sha256": "a6a0184702be20a8139d264a25a19d750f07d5636988f60d8b5338659140dde3"
     },
     {
       "path": ".harness/unresolved.json",
@@ -132,13 +132,13 @@
       "path": "README.md",
       "owner": "user",
       "mode": "user",
-      "sha256": "7daa90280e253103a46cc2ea1f77f5fbc85a245df606abc2814d9b1a55eeae07"
+      "sha256": "08462601b00725c56171fbcb982452a550d6cf70cb6bd14f35252ac4ed40e793"
     },
     {
       "path": "README.zh-CN.md",
       "owner": "user",
       "mode": "user",
-      "sha256": "64c0575f70184189167823e6340776ce01c47ada31921231224e0f18593f3120"
+      "sha256": "fd0ff25302cba0d65f0ebb1b3410d19f5fa125222cd36d2681566645738cc4ba"
     },
     {
       "path": "LICENSE",
@@ -150,7 +150,7 @@
       "path": "docs/development-log/20260825-Phase-3-开发日志.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "412b8885e514623bd377b7cc2465d63beba263ce52118428a97dfe99fd4357a9"
+      "sha256": "184ba5e3bd301076747dad183f4139e4ad5579239bca66d5c0185f7e6f8a1a22"
     },
     {
       "path": "docs/security/phase3-security-eval.md",
@@ -169,9 +169,21 @@
       "owner": "harness-armor",
       "mode": "managed",
       "sha256": "c9871fef77f3ec331fcfa80212f6a823a750456f6fefc8c80b35b95afd4ad3dc"
+    },
+    {
+      "path": "docs/decisions/ADR-0005-p4-1-governed-records-preparation.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "e1261d84143c38c0fe235066313c3a9c89decd9ea4ce944a78b0f22ed836564a"
+    },
+    {
+      "path": "env/dev/p35/p35_e2e.py",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "52ae6fa0b3afa02c7b72ff6a53f7269d970bd499fd5d2af41b099f57bee9afaa"
     }
   ],
   "source_index": ".harness/source-index.json",
   "unresolved_index": ".harness/unresolved.json",
-  "last_updated": "2026-08-25T09:39:49Z"
+  "last_updated": "2026-08-25T15:37:36Z"
 }

@@ -39,7 +39,7 @@
       "path": "README.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "7daa90280e253103a46cc2ea1f77f5fbc85a245df606abc2814d9b1a55eeae07",
+      "sha256": "08462601b00725c56171fbcb982452a550d6cf70cb6bd14f35252ac4ed40e793",
       "locator": "English repository positioning, evidence status, architecture summary, and roadmap"
     },
     {
@@ -118,9 +118,9 @@
       "id": "phase3-development-log",
       "path": "docs/development-log/20260825-Phase-3-开发日志.md",
       "kind": "development",
-      "locator": "Phase 3 分轮开发日志（P3.1-P3.7、出口验证与对抗审查）；验收未过，修复轮追加于此",
+      "locator": "Phase 3 分轮开发日志（P3.1-P3.7、出口验证、最终修复与 P4.1 只读取证准备）",
       "status": "CONFIRMED",
-      "sha256": "412b8885e514623bd377b7cc2465d63beba263ce52118428a97dfe99fd4357a9"
+      "sha256": "184ba5e3bd301076747dad183f4139e4ad5579239bca66d5c0185f7e6f8a1a22"
     },
     {
       "id": "phase3-security-eval",
@@ -134,7 +134,7 @@
       "id": "adr-0004-workflow-engine-spike",
       "path": "docs/decisions/ADR-0004-workflow-engine-spike.md",
       "kind": "design",
-      "locator": "工作流引擎 Spike 结论：Phase 3 不采用 LangGraph；checkpoint/resume 证据待补",
+      "locator": "工作流引擎 Spike 结论：Phase 3 不采用 LangGraph；Phase 4 写入恢复按实测门禁重估",
       "status": "CONFIRMED",
       "sha256": "21cf346e9c3ee3e49771402764f33ff7d9dbc0efe2c0cac85a5eae207776fb41"
     },
@@ -150,23 +150,23 @@
       "id": "p35-enhance-module",
       "path": "services/agent_runtime/src/agent_runtime/agent/enhance.py",
       "kind": "code",
-      "locator": "模型自然语言增强：确定性计算 + 模型仅解释 + 严格校验回退 + 证据记录",
+      "locator": "模型自然语言增强：确定性计算 + 模型仅解释 + 严格校验回退 + provider/usage/reasoning 证据记录",
       "status": "CONFIRMED",
-      "sha256": "5b2f8f44f917bec0a8422242812a3700df071ff77e04404e4ce4bcd949948bf3"
+      "sha256": "7ac094c3ec81433ea19066393ce9beb5a842d834e5457af27cdcdbb9b0a9a8d0"
     },
     {
       "id": "p34-provider-module",
       "path": "services/agent_runtime/src/agent_runtime/providers.py",
       "kind": "code",
-      "locator": "Provider 接口：Deterministic(CI)/OpenAI 兼容(BYOK)，SecretStr 脱敏、max_tokens 护栏、fail-closed 解析",
+      "locator": "Provider 接口：Deterministic(CI)/OpenAI 兼容(BYOK)，SecretStr 脱敏、请求级 max_tokens + usage/reasoning token 校验、fail-closed 解析",
       "status": "CONFIRMED",
-      "sha256": "cb7f85ab53402713fa0ca4e8d44871ac7a3f55ec999388b7b137c27adaf57678"
+      "sha256": "326d6bfcde4afe8c4fd3cf2d16c9bb133558df1858a47b4b87e598f184be194e"
     },
     {
       "id": "p36-retrieval-module",
       "path": "services/agent_runtime/src/agent_runtime/retrieval/index.py",
       "kind": "code",
-      "locator": "SQLite FTS5/BM25 检索基线 + CJK 子串补充；permission_scope 过滤待接入",
+      "locator": "SQLite FTS5/BM25 检索基线 + CJK 子串补充；查询按 permission_scope 过滤，Coach 接入仍需调用方 scope 映射",
       "status": "CONFIRMED",
       "sha256": "5c1f55791fd2a89b3b3b587d7ec2c181890da452574f2ec8edaf03ec478ad905"
     },
@@ -190,7 +190,7 @@
       "id": "p32-state-machine",
       "path": "synora_agentic_erp/agent/state_machine.py",
       "kind": "code",
-      "locator": "Run 确定性状态机（非法转换 fail-closed）；CAS/并发互斥待加固",
+      "locator": "Run 确定性状态机（非法转换 fail-closed）；state_version CAS、失败恢复和同 Run plan 行锁已覆盖",
       "status": "CONFIRMED",
       "sha256": "a7e5811de644a1556028bd74bda66bdebc25a0a36e6eb08703ecb540d26a70ee"
     },
@@ -225,6 +225,70 @@
       "locator": "评测 case：Item-1001 重复采购风险（当前仅 1 个 case，不足以支撑模型选择结论）",
       "status": "CONFIRMED",
       "sha256": "7c02050ac67ab2d9a300331f664d28d8afbf644376bfd542021cc48af33d4339"
+    },
+    {
+      "id": "p35-agent-service",
+      "path": "synora_agentic_erp/agent/service.py",
+      "kind": "code",
+      "locator": "P3.5 plan/analyze 编排、Run capability/state/CAS、失败恢复、Runtime tokenized HTTP boundary",
+      "status": "CONFIRMED",
+      "sha256": "bb696117f6d07cbcc753daa968463a0aa72b390a654481dffdbdb3e468c2e97a"
+    },
+    {
+      "id": "p35-runtime-app",
+      "path": "services/agent_runtime/src/agent_runtime/app.py",
+      "kind": "code",
+      "locator": "Runtime /enhance：内部令牌校验、BYOK provider label、确定性回退和 evidence 返回",
+      "status": "CONFIRMED",
+      "sha256": "3fdd9e3863d190724e8f7f1822b7333a2e83ecf767350058f5d177d3a7833b72"
+    },
+    {
+      "id": "p35-api-evidence",
+      "path": "synora_agentic_erp/api.py",
+      "kind": "code",
+      "locator": "Run Plan evidence API：provider/token/reasoning/elapsed/fallback 字段与当前用户详情边界",
+      "status": "CONFIRMED",
+      "sha256": "bb17a99da7ec20a2b1467b87d79f43608b72ac6e514ad23498acd97296202b1b"
+    },
+    {
+      "id": "p35-run-plan-doctype",
+      "path": "synora_agentic_erp/synora_agentic_erp/doctype/synora_run_plan/synora_run_plan.json",
+      "kind": "code",
+      "locator": "Synora Run Plan 只读证据 DocType：provider、prompt/completion/reasoning token、耗时、回退原因",
+      "status": "CONFIRMED",
+      "sha256": "83f3001c53c3e4a2d08f803f184fa5bb2437fde46a119ada63c7cf25d70c6ee9"
+    },
+    {
+      "id": "p35-lifecycle-guard-tests",
+      "path": "synora_agentic_erp/tests/test_run_lifecycle_guard.py",
+      "kind": "testing",
+      "locator": "Run 状态/CAS/失败恢复/Runtime URL 与 host-gateway 令牌边界测试",
+      "status": "CONFIRMED",
+      "sha256": "6ad6808bb45358048438cd6f9f3ad50b0e132d1e106ee4dae1a75a47b5b58974"
+    },
+    {
+      "id": "p35-provider-tests",
+      "path": "services/agent_runtime/tests/test_providers.py",
+      "kind": "testing",
+      "locator": "Provider MockTransport 契约：usage 缺失、completion/reasoning token 超预算、重试和 BYOK 配置",
+      "status": "CONFIRMED",
+      "sha256": "2686dfe22fd7b627d02f893536527844baab1a2eeec5be97aa7997a8453fecf8"
+    },
+    {
+      "id": "p35-real-http-script",
+      "path": "env/dev/p35/p35_e2e.py",
+      "kind": "testing",
+      "locator": "Buyer → Frappe → Runtime → BYOK → evidence → get_run 真实 HTTP 验收；仅创建 Synora 自有记录",
+      "status": "CONFIRMED",
+      "sha256": "52ae6fa0b3afa02c7b72ff6a53f7269d970bd499fd5d2af41b099f57bee9afaa"
+    },
+    {
+      "id": "p41-governed-records-preparation",
+      "path": "docs/decisions/ADR-0005-p4-1-governed-records-preparation.md",
+      "kind": "design",
+      "locator": "P4.1 只读取证与 Proposed Action/Approval/Receipt/digest 治理设计；PROPOSED，未授权写入实现",
+      "status": "INFERRED",
+      "sha256": "e1261d84143c38c0fe235066313c3a9c89decd9ea4ce944a78b0f22ed836564a"
     }
   ]
 }

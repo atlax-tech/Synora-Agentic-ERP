@@ -24,12 +24,14 @@ PLAN = {
 }
 
 
-async def _post_enhance(payload: dict[str, object]) -> httpx.Response:
+async def _post_enhance(
+    payload: dict[str, object], headers: dict[str, str] | None = None
+) -> httpx.Response:
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",
     ) as client:
-        return await client.post("/enhance", json=payload)
+        return await client.post("/enhance", json=payload, headers=headers)
 
 
 def test_enhance_returns_fallback_when_provider_not_configured(monkeypatch) -> None:
@@ -47,3 +49,23 @@ def test_enhance_returns_fallback_when_provider_not_configured(monkeypatch) -> N
 def test_enhance_rejects_invalid_payload() -> None:
     response = asyncio.run(_post_enhance({"plan": "not-a-dict"}))
     assert response.status_code == 422
+
+
+def test_enhance_requires_configured_runtime_token(monkeypatch) -> None:
+    monkeypatch.setenv("SYNORA_RUNTIME_TOKEN", "test-runtime-token")
+    response = asyncio.run(_post_enhance({"plan": PLAN, "provider_name": "ci-test"}))
+    assert response.status_code == 401
+
+
+def test_enhance_accepts_configured_runtime_token(monkeypatch) -> None:
+    monkeypatch.setenv("SYNORA_RUNTIME_TOKEN", "test-runtime-token")
+    monkeypatch.delenv("SYNORA_PROVIDER_BASE_URL", raising=False)
+    monkeypatch.delenv("SYNORA_PROVIDER_API_KEY", raising=False)
+    response = asyncio.run(
+        _post_enhance(
+            {"plan": PLAN, "provider_name": "ci-test"},
+            headers={"X-Synora-Runtime-Token": "test-runtime-token"},
+        )
+    )
+    assert response.status_code == 200
+    assert response.json()["evidence"]["provider"] == "ci-test"
