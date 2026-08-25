@@ -128,24 +128,25 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			.join("");
 
 		container.html(
-			'<table class="table table-hover table-sm">' +
+			'<table class="table table-hover table-sm" aria-describedby="runs-table-caption">' +
+				'<caption id="runs-table-caption" class="sr-only">' + __("运行历史列表") + "</caption>" +
 				"<thead><tr>" +
-				"<th>" +
+				"<th scope=\"col\">" +
 				__("Run") +
 				"</th>" +
-				"<th>" +
+				"<th scope=\"col\">" +
 				__("目标") +
 				"</th>" +
-				"<th>" +
+				"<th scope=\"col\">" +
 				__("状态") +
 				"</th>" +
-				"<th>" +
+				"<th scope=\"col\">" +
 				__("范围") +
 				"</th>" +
-				"<th>" +
+				"<th scope=\"col\">" +
 				__("创建时间") +
 				"</th>" +
-				"<th></th>" +
+				"<th scope=\"col\"></th>" +
 				"</tr></thead>" +
 				"<tbody>" +
 				rows +
@@ -247,11 +248,11 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 						? '<div class="mb-2"><b>' + __("智能解释") + ":</b> " + esc(plan.enhanced_text) + "</div>"
 						: "";
 					rows_html = '<div class="mb-2"><b>' + __("计划摘要") + ":</b> " + esc(plan.summary) + "</div>" + enhanced;
-					rows_html += "<table class=\"table table-sm table-striped\"><thead><tr>" +
-						"<th>" + __("物料") + "</th>" +
-						"<th>" + __("风险") + "</th>" +
-						"<th>" + __("建议") + "</th>" +
-						"<th>" + __("来源") + "</th>" +
+					rows_html += "<table class=\"table table-sm table-striped\"><caption class=\"sr-only\">" + __("计划明细") + "</caption><thead><tr>" +
+						"<th scope=\"col\">" + __("物料") + "</th>" +
+						"<th scope=\"col\">" + __("风险") + "</th>" +
+						"<th scope=\"col\">" + __("建议") + "</th>" +
+						"<th scope=\"col\">" + __("来源") + "</th>" +
 						"</tr></thead><tbody>";
 					plan.findings.forEach(function (f) {
 						const goal_tag = f.matched_goal ? ' <span class="badge badge-primary">' + __("目标提及") + "</span>" : "";
@@ -275,14 +276,14 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					}
 				} else if (analyses.length) {
 					rows_html =
-						"<table class=\"table table-sm table-striped\"><thead><tr>" +
-						"<th>" + __("物料") + "</th>" +
-						"<th>" + __("风险") + "</th>" +
-						"<th>" + __("库存") + "</th>" +
-						"<th>" + __("窗口需求") + "</th>" +
-						"<th>" + __("在途") + "</th>" +
-						"<th>" + __("净位置") + "</th>" +
-						"<th>" + __("缺货量") + "</th>" +
+						"<table class=\"table table-sm table-striped\"><caption class=\"sr-only\">" + __("分析明细") + "</caption><thead><tr>" +
+						"<th scope=\"col\">" + __("物料") + "</th>" +
+						"<th scope=\"col\">" + __("风险") + "</th>" +
+						"<th scope=\"col\">" + __("库存") + "</th>" +
+						"<th scope=\"col\">" + __("窗口需求") + "</th>" +
+						"<th scope=\"col\">" + __("在途") + "</th>" +
+						"<th scope=\"col\">" + __("净位置") + "</th>" +
+						"<th scope=\"col\">" + __("缺货量") + "</th>" +
 						"</tr></thead><tbody>";
 					analyses.forEach(function (a) {
 						const unknown = a.unknowns ? " (" + esc(a.unknowns) + ")" : "";

@@ -52,7 +52,7 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 		default: 90,
 	});
 
-	page.status_area = $('<div style="padding: 0 8px 8px;"></div>');
+	page.status_area = $('<div style="padding: 0 8px 8px;" aria-live="polite"></div>');
 	page.main.append(page.status_area);
 
 	page.set_primary_action(__("开始分析"), function () {
