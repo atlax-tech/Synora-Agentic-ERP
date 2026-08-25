@@ -29,6 +29,7 @@ P26-UNSUPPORTED_VERSION-OK http=400 code=UNSUPPORTED_VERSION  schema_version=2 f
 
 ## 验证与限制
 
+- 独立门禁：Test 角色两轮均 `PASS`（第二轮对抗抽查验证 cmd 剥离、幂等、CROSS_COMPANY 断言真实有效）；Review 角色两轮（首轮 `CHANGES_REQUIRED` 提出数据清理声明不实、非幂等、跨公司 fixture 缺失三项 P2，修复后第二轮 `PASS`，另留 3 项 P3 建议不阻断）。
 - 宿主机 `format-check`、`lint`、`type`、`unit` 通过（unit 29 passed）。
 - Bench App 集成测试（含新增 cmd 剥离用例）通过（Ran 23 tests OK）。
 - 端到端使用 Runtime `GatewayClient`（P2.5 交付物）走真实 HTTP，覆盖 PLAN P2.6 全部列项：权限拒绝、跨公司（真实第二公司 fixture）、分页（客户端+服务端）、超时、停用对象、取消单据、缺字段、版本差异。
