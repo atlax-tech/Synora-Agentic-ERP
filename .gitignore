@@ -30,5 +30,8 @@ node_modules/
 # Trae 会话/计划技术夹（按计划边界不入库）
 .trae/
 
+# IDE 本地配置（用户临时文件，不入库）
+.idea/
+
 # 本地 Coding Agent 记忆
 .workbuddy/
