@@ -48,6 +48,18 @@ def test_runtime_direct_dependencies_are_boundary_safe() -> None:
     assert "pymysql" not in pyproject.lower()
 
 
+def test_runtime_gateway_has_one_fixed_frappe_path() -> None:
+    source = (RUNTIME_ROOT / "src/agent_runtime/gateway.py").read_text(encoding="utf-8")
+
+    assert source.count('"/api/method/') == 1
+    assert '"/api/resource/' not in source
+    assert "frappe.get_all" not in source
+    assert "frappe.client" not in source
+    assert "Authorization" not in source
+    assert "Cookie" not in source
+    assert "X-Frappe-CSRF-Token" not in source
+
+
 def test_frappe_read_tools_do_not_bypass_orm_or_import_erp_internals() -> None:
     source = Path("synora_agentic_erp/gateway/tools.py").read_text(encoding="utf-8")
 
