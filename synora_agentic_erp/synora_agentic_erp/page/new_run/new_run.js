@@ -19,7 +19,8 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 	page.goal_counter = $('<div class="text-muted small" style="padding: 0 8px 8px;"></div>');
 	page.main.append(page.goal_counter);
 	page.goal_field.$input.on("input", function () {
-		const len = page.goal_field.value ? page.goal_field.value.length : 0;
+		const value = page.goal_field.$input.val() || "";
+		const len = value.length;
 		page.goal_counter.text(len + "/1000");
 		if (len > 1000) {
 			page.goal_counter.css("color", "var(--red-600)");
@@ -81,6 +82,7 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 	// 加载授权范围：空 = 无权限（禁用并说明，不泄露不可访问数据）
 	frappe.call({
 		method: "synora_agentic_erp.api.available_scope",
+		type: "GET",
 		callback: function (r) {
 			scope = (r.message && r.message.scope) || [];
 			if (!scope.length) {
@@ -106,10 +108,21 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 				page.company_field.set_value(scope[0].company);
 			}
 		},
+		error: function () {
+				page.company_field.df.read_only = 1;
+				page.company_field.refresh();
+				page.warehouse_field.df.read_only = 1;
+				page.warehouse_field.refresh();
+				page.btn_primary.attr("disabled", true);
+				set_status(
+					__("无法加载授权范围，请刷新重试或联系 ERP 管理员。"),
+					"danger"
+				);
+		},
 	});
 
 	function submit_goal() {
-		const goal = page.goal_field.value;
+		const goal = page.goal_field.$input.val() || "";
 		const company = page.company_field.value;
 		if (!goal || !goal.trim()) {
 			set_status(__("缺少业务目标。请描述交付或补货目标后再开始分析。"), "danger");
@@ -135,14 +148,17 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 		// 提交中: 禁止重复提交 (PRD F-001 交互处理)
 		page.btn_primary.attr("disabled", true);
 		page.btn_primary.html('<span class="spinner-border spinner-border-sm"></span> ' + __("正在创建运行…"));
+		const args = {
+			company: company,
+			goal: goal,
+			time_window_days: days,
+		};
+		if (page.warehouse_field.value) {
+			args.warehouse = page.warehouse_field.value;
+		}
 		frappe.call({
 			method: "synora_agentic_erp.api.issue_run",
-			args: {
-				company: company,
-				goal: goal,
-				warehouse: page.warehouse_field.value || null,
-				time_window_days: days,
-			},
+			args: args,
 			callback: function (r) {
 				if (r.message && r.message.ok) {
 					page.btn_primary.html(__("开始分析"));

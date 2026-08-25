@@ -34,6 +34,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		container.html('<div class="text-muted text-center py-5"><span class="spinner-border spinner-border-sm"></span> ' + __("加载中…") + "</div>");
 		frappe.call({
 			method: "synora_agentic_erp.api.list_runs",
+			type: "GET",
 			callback: function (r) {
 				render((r.message && r.message.runs) || []);
 			},
@@ -54,9 +55,10 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			);
 			return;
 		}
-		const rows = runs
+	const rows = runs
 			.map(function (run) {
-				const goal = run.goal.length > 80 ? run.goal.slice(0, 80) + "…" : run.goal;
+				const raw_goal = typeof run.goal === "string" ? run.goal : "";
+				const goal = raw_goal.length > 80 ? raw_goal.slice(0, 80) + "…" : raw_goal;
 				const cancellable = (run.run_state === "CREATED" || run.run_state === "ANALYZING") && run.initiator === current_user;
 				const cancel_btn = cancellable
 					? '<button class="btn btn-secondary btn-xs cancel-run" data-run="' +
@@ -74,7 +76,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					esc(run.run_id.slice(0, 8)) +
 					"</td>" +
 					'<td title="' +
-					esc(run.goal) +
+					esc(raw_goal) +
 					'">' +
 					esc(goal) +
 					"</td>" +
@@ -133,7 +135,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			method: "synora_agentic_erp.api.cancel_run",
 			args: {
 				run_id: run_id,
-				correlation_id: frappe.utils.get_random(16),
+				correlation_id: crypto.randomUUID(),
 			},
 			callback: function (r) {
 				if (r.message && r.message.ok) {
