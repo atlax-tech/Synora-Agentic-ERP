@@ -1,12 +1,33 @@
-# Development Log
+# 阶段开发日志规范
 
-Every repository change must add or update a dated Chinese development log entry. Explain in clear language:
+每个 Phase 只保留一份开发日志，不为普通增量新建日志文件。文件名固定为：
 
-- what changed;
-- why it changed and which requirement it serves;
-- commands and actual validation results;
-- limitations and unverified items;
-- repeatable manual acceptance steps;
-- related commit or release identifier when available.
+```text
+YYYYMMDD-Phase-X-开发日志.md
+```
 
-Do not paste implementation commentary into source code when a development-log explanation is more appropriate.
+每次准备提交 Git commit 前，在当前 Phase 文件最上方追加一轮，最新在上。内部标题固定为：
+
+```text
+YYYY-MM-DD HH:mm · Phase X · 第 N 轮 · 本轮任务
+```
+
+每轮必须使用以下结构：
+
+1. 本轮任务列表
+2. 本轮任务完成度
+3. 测试方式
+4. 测试结果
+5. 用户如何进行手工测试
+6. 风险预估与规避
+7. 下轮建议
+8. 本轮任务大白话讲解
+9. 面试官可能追问的技术细节以及如何回答
+
+记录原则：
+
+- 写真实完成内容、实际命令和退出结果；未运行就明确写未运行。
+- 只记录关键限制与用户疑问，不复制完整 diff、终端输出或整段 Agent 对话。
+- 大白话部分先讲业务目的、用户看到什么和数据流，再讲专业术语。
+- 历史错误和修正都保留结论，不能把失败改写成一次成功。
+- Commit SHA 可在提交后下一轮补记；Git 历史是原始旧日志的长期追溯入口。

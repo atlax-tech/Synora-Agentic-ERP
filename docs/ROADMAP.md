@@ -59,6 +59,7 @@ Exit: groundedness, refusal, permission filtering, version isolation, and prompt
 
 - Evaluate Planner, Policy Reviewer, ERP Coach, and Reconciliation role separation.
 - Compare quality, latency, cost, safety, observability, and complexity against the single-Agent baseline.
+- Use Planner -> Policy Reviewer as the first learning experiment; practice typed handoff, shared state, tool isolation, conflict handling, timeout, and recovery before considering more roles.
 
 Exit: adopt only roles with measured net benefit and no governance regression.
 

@@ -1,47 +1,53 @@
 # Synora Agentic ERP
 
-Synora is a governed Agentic Enterprise Operations product built on ERPNext. Treat it as a production-grade enterprise product: mock-only or demo-only substitutions are not acceptable unless a requirement explicitly calls for a test double.
+Synora 是构建在 ERPNext 上的受治理 Agentic Enterprise Operations 产品。ERPNext/Frappe 是只读上游和事务事实源；不得修改上游核心、直写 ERP 数据库，或绕过权限、校验、Workflow 与审计。
 
-Read before changing behavior:
+## 阅读顺序
 
-- Execution plan and phase protocol: `docs/PLAN.md`
-- Product requirements and definition: `docs/PRD.md`
-- Architecture: `docs/ARCHITECTURE.md`
-- Frontend design constitution: `docs/DESIGN.md`
-- Development: `docs/DEVELOPMENT.md`
-- Testing: `docs/TESTING.md`
-- Acceptance: `docs/ACCEPTANCE.md`
-- Roadmap: `docs/ROADMAP.md`
-- Active specification: `docs/SPEC.md` when present
-- Decisions: `docs/decisions/`
-- Development history: `docs/development-log/`
+1. `docs/PLAN.md`：当前阶段、工作方式与停止条件；
+2. 当前任务直接涉及的 `docs/PRD.md`、`docs/ARCHITECTURE.md`、`docs/DESIGN.md`、`docs/SPEC.md`；
+3. 对应阶段的 `docs/development-log/`、ADR、源码和测试。
 
-Read in this order: this file, `docs/PLAN.md`, then the authorities and evidence named by the active PLAN phase. When the user says “开始完成阶段 X”, “开始完成下个阶段”, or “继续工作”, interpret and execute that instruction exactly as `docs/PLAN.md` defines. If PLAN conflicts with an authoritative fact document, stop and report the conflict; do not choose a convenient interpretation.
+只读完整仓库不是默认动作。普通增量只加载当前业务链路所需上下文；ERP 行为不明确时再查固定上游源码和官方测试。
 
-Critical boundaries:
+## 不可简化的边界
 
-- ERPNext/Frappe are the transactional system of record and remain read-only upstream dependencies.
-- Never write directly to the ERP database or bypass ERP permissions, validation, workflows, or audit trails.
-- Model output and retrieved content are untrusted. Business mutations require typed validation, policy evaluation, current-state revalidation, explicit authorization, and an execution receipt.
-- Do not reduce or delete an approved requirement for implementation convenience. Stage deferred work explicitly in the roadmap and specification.
-- Do not describe this repository as a demo, toy, or mock project. Do not claim production deployment, customer adoption, or measured gains without evidence.
-- Requirement priority and acceptance criteria come from `docs/PRD.md`. When implementation must be staged, preserve the complete requirement and record its milestone and entry conditions in `docs/ROADMAP.md` and `docs/SPEC.md`.
+- 模型输出、检索内容、ERP 字段和用户输入都不可信。
+- 业务写入必须经过 typed validation、policy、当前状态重检、明确授权、幂等和执行回执。
+- 不得为实现方便删除已批准需求；延期项写入 Roadmap/SPEC。
+- Mock 只能是明确允许的 test double，不能替代真实 ERP 集成完成度。
+- 不得声称生产部署、客户采用或未被证据支持的收益。
 
-Before a non-trivial change, identify the affected requirement, load only the relevant domain and architecture context, locate upstream source/tests when ERP behavior matters, state unknowns, and define the verification plan. Report actual commands and unrun checks honestly.
+## 精简工作流
 
-Mandatory project workflow:
+- 编码、修复、重构、代码审查和依赖选择前读取 `.agents/skills/ponytail/SKILL.md`，默认 `full`。
+- 普通代码、页面和文案：执行 Agent 自测 + `ponytail-review`；不强制子 Agent。
+- 身份、权限、金额、状态机、ERP 写入、幂等、审计和安全边界：增加一个独立 Test 或 Review；风险同时涉及多个边界时才两者都用。
+- 阶段出口、发布、Tag、产品版本、依赖基线或固定 ERP/Frappe 版本变更：运行完整验证和独立对抗审查。
+- 先跑最相关检查，提交前再运行该增量必要的较宽检查；失败后只重跑受影响检查，阶段出口才全量运行。
+- Harness 只在权威事实、命令、阶段状态或管理文件实际变化时同步；README 只在公开事实变化或阶段出口更新。
+- 每个 commit 前只在当前阶段的一份日志顶部新增一轮记录，格式见 `docs/development-log/README.md`；不再为小修复创建独立日志文件。
+- 使用小而完整的 Conventional Commit；不混入用户文件，不推送，不改写历史。
 
-- For every coding, bug-fix, refactor, code-review, or dependency-selection task, load `.agents/skills/ponytail/SKILL.md` before implementation and use its default `full` level. Ponytail may remove needless complexity, but never an approved requirement, validation, error handling, security control, accessibility requirement, data-safety measure, or necessary test.
-- Code follows the [Clean Code summary](https://gist.github.com/wojteklu/73c6914cc446146b8b533c0988cf8d29): use standard conventions, find root causes, choose descriptive searchable names, keep functions/classes small and single-purpose, prefer few arguments and explicit boundaries, avoid flags/magic values/hidden side effects/repetition, and keep tests readable, fast, independent, and repeatable. Apply these principles contextually; do not add speculative abstractions to satisfy a slogan.
-- Explain every repository change in a clear Chinese entry under `docs/development-log/`: what changed, why, actual verification, limitations, and repeatable manual acceptance. Keep code comments for intent, clarification, or consequence warnings; do not paste the development explanation into source comments.
-- Make every change as a small coherent commit after its relevant checks pass. Do not mix unrelated work or include user-owned temporary files.
-- Before changing either README, load `.agents/skills/readme-writer/SKILL.md` and keep `README.md` and `README.zh-CN.md` semantically aligned.
-- Before a release, tag, product version change, dependency baseline upgrade, or pinned ERP/Frappe version update, call an independent adversarial sub-agent. Give it the original requirement, diff, tests, runtime evidence, architecture and security boundaries; require `PASS`, `CHANGES_REQUIRED`, or `BLOCKED` with evidence before proceeding.
+## 实习生协作
 
-Verified Harness command:
+默认把用户视为 Agent 开发实习生。适合学习的小任务应先作为练习交给用户，说明业务背景、代码入口、完成标准和测试设计；除非任务超出其能力、安全风险过高或用户明确要求接手，否则 Agent 只提示，不代写。
+
+必要时可在练习入口添加清晰的 `TODO(learning)` 提示，但不得把安全门禁、生产缺陷或阶段关键路径整体交给用户。用户的疑问、Agent 的解释和最终结论记录在当前阶段日志的“大白话讲解”或“面试追问”部分。
+
+## 变更说明
+
+每次交付先用大白话说明：解决什么业务问题、用户能看到什么、数据怎样流动、最重要的三个文件、怎样手工验证。随后再报告实际命令、退出码、限制和未运行检查。
+
+验证入口：
 
 ```bash
+make format-check
+make lint
+make type
+make unit
+make integration
 python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .
 ```
 
-Product build, test, and runtime commands are unresolved until implementation exists.
+只运行与当前增量和风险相称的命令；不得把未运行命令写成通过。

@@ -72,4 +72,4 @@ bash env/dev/scripts/dev/env.sh p2p-run
 bash env/dev/scripts/dev/env.sh bootstrap
 ```
 
-上述 1–4 于 2026-08-24 复核通过（真实命令与退出码见 `docs/development-log/2026-08-24-phase1-inc5-frozen-baseline.md`）；第 5 项证据以 Inc-1 空卷重建日志为准，本次未重跑（限制见开发日志）。
+上述 1–4 于 2026-08-24 复核通过（真实命令与退出码见 `docs/development-log/20260824-Phase-1-开发日志.md`）；第 5 项证据以 Phase 1 第 1 轮空卷重建记录为准，本次未重跑。

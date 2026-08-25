@@ -50,7 +50,7 @@ Phase 1 开发环境采用 Docker Compose 四服务拓扑：`bench`（容器内 
 - `list-apps`：frappe 16.31.0、erpnext 16.32.3；两上游 `git status --porcelain` 为空。
 - HTTP `GET /api/method/ping` → `{"message":"pong"}`（127.0.0.1:8000）。
 - 凭据轮换验证：旧 mariadb root 与 Administrator 旧密码均被拒绝；新凭据全部通过。
-- 详细命令与输出见 `docs/development-log/2026-08-24-phase1-inc1-empty-rebuild.md`。
+- 详细命令与输出见 `docs/development-log/20260824-Phase-1-开发日志.md`。
 
 ## 批准来源（Approval）
 
@@ -59,7 +59,7 @@ Phase 1 开发环境采用 Docker Compose 四服务拓扑：`bench`（容器内 
   属 `.trae/` 技术夹，按其边界不入库。
 - 用户于同一会话中批准销毁 `synora_phase1_dev` 全部具名卷并空卷重建（凭据泄露
   处置）；仓库载体见
-  `docs/development-log/2026-08-24-phase1-inc1-empty-rebuild.md`。
+  `docs/development-log/20260824-Phase-1-开发日志.md`。
 
 ## 取代（Supersession）
 

@@ -81,7 +81,7 @@ gate. The runtime exposes no additional HTTP documentation route (`/docs`
 returns 404).
 
 The full evidence, limitations, and repeatable manual acceptance steps are in
-`docs/development-log/2026-08-24-phase2-p2_1-engineering-skeleton.md` and are
+`docs/development-log/20260825-Phase-2-开发日志.md` and are
 anchored to commit `e10a4dd`.
 
 ### Phase 2 P2.6 real HTTP verification (verified 2026-08-25, exit 0)
@@ -101,8 +101,7 @@ Observed evidence for the 2026-08-25 run: `P26-E2E-OK` with all 13 scenarios
 DISABLED_SUPPLIER, CROSS_COMPANY, CANCELLED_MR, MISSING_FIELD,
 UNSUPPORTED_VERSION, AONLY_COMPANY_A_ACCESS, AONLY_COMPANY_B_DENIED). Full
 evidence is in
-`docs/development-log/2026-08-25-phase2-p2_6-real-http-verification.md`,
-`docs/development-log/2026-08-25-phase2-exit-corrections.md`,
+`docs/development-log/20260825-Phase-2-开发日志.md`,
 anchored to commit `733da89`.
 
 ### Phase 1 environment commands (verified 2026-08-24, exit 0)

@@ -15,7 +15,7 @@
       "path": "docs/ARCHITECTURE.md",
       "kind": "architecture",
       "status": "CONFIRMED",
-      "sha256": "0e15cca0c8fe46c6c1998ed0d40a3744110ff1f349f8f3adb8ed093ab7f3f1b7",
+      "sha256": "f60f8f0a26e6b068b33df484dad3b7668b3037ce871cc12f68e1f814406af1e9",
       "locator": "approved target architecture; open implementation decisions remain explicit"
     },
     {
@@ -31,8 +31,8 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "7b70316efe23613e517532816d1936a8211f6ae2e31c951ef5aed3820e09c2bc",
-      "locator": "evidence-driven phase selection, increment protocol, skill routing, decision gates, and Phase 0 through Phase 8 execution order"
+      "sha256": "f5f48d33384fa11ec41e7dbd2dc6aa99fa280d59298ebc5a6be14eb9cfee804a",
+      "locator": "risk-tiered workflow, phase selection, learning mode, decision gates, and Phase 0 through Phase 8 order"
     },
     {
       "id": "repository-readme",
@@ -51,60 +51,28 @@
       "locator": "MIT license text"
     },
     {
-      "id": "phase2-p2-1-engineering-skeleton",
-      "path": "docs/development-log/2026-08-24-phase2-p2_1-engineering-skeleton.md",
+      "id": "phase0-development-log",
+      "path": "docs/development-log/20260824-Phase-0-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "e6268a51ab193877ff74063d7abe03c2e557365e913967fa383755727c242f3c",
-      "locator": "P2.1 implementation commands, Runtime health evidence, Bench installation/test evidence, limitations, and repeatable manual acceptance"
+      "sha256": "5ddddd548d59bb57a1c0d4d4ae7e493db55427cdc13cef44326ae4ff3dcf33e4",
+      "locator": "reverse-ordered consolidated Phase 0 governance history; original files remain in Git history"
     },
     {
-      "id": "phase2-p2-2-identity-spike-log",
-      "path": "docs/development-log/2026-08-25-phase2-p2_2-identity-authorization-spike.md",
+      "id": "phase1-development-log",
+      "path": "docs/development-log/20260824-Phase-1-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "c965808027d1bed2bc0445f70c5588adeed35cd34b19ca57e94a91d6a9a6eccb",
-      "locator": "P2.2 identity/authorization spike evidence: cookie, API key, OAuth, auth_hooks, cleanup verification"
+      "sha256": "661baa5b7db11a871bb50abb8f2be93810594537b0b348527ca4603af5a459bf",
+      "locator": "reverse-ordered consolidated Phase 1 ERP baseline and P2P archaeology evidence"
     },
     {
-      "id": "phase2-p2-3-gateway-contract-log",
-      "path": "docs/development-log/2026-08-25-phase2-p2_3-gateway-contract.md",
+      "id": "phase2-development-log",
+      "path": "docs/development-log/20260825-Phase-2-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "5053ea0b27b3889d5959a3b46d798500e4c697ff9e236190226356e39f767c6c",
-      "locator": "P2.3 run capability and typed gateway envelope implementation and gate evidence"
-    },
-    {
-      "id": "phase2-p2-4-read-tools-log",
-      "path": "docs/development-log/2026-08-25-phase2-p2_4-read-tools.md",
-      "kind": "development",
-      "status": "CONFIRMED",
-      "sha256": "b13e0ba3944c4cb0562d478c8c1b61557b94fc464c692189fbe9c3367148e9dc",
-      "locator": "P2.4 six read-only ERP tools: source anchors, business semantics, integration evidence"
-    },
-    {
-      "id": "phase2-p2-5-runtime-client-log",
-      "path": "docs/development-log/2026-08-25-phase2-p2_5-runtime-client.md",
-      "kind": "development",
-      "status": "CONFIRMED",
-      "sha256": "bd291cb22af3d9dcd1242cfc98efbba6a472568795eeee24dfe2923f5303200e",
-      "locator": "P2.5 runtime typed HTTPX gateway client: redaction, fail-closed, three-round gate evidence"
-    },
-    {
-      "id": "phase2-p2-6-real-http-log",
-      "path": "docs/development-log/2026-08-25-phase2-p2_6-real-http-verification.md",
-      "kind": "development",
-      "status": "CONFIRMED",
-      "sha256": "99eae027f6ad29627143297306ead267139111250f3f784c0a87a28ddfe8d418",
-      "locator": "P2.6 real bench HTTP end-to-end: 11 scenarios, cmd-injection contract fix, second-company fixture"
-    },
-    {
-      "id": "phase2-exit-report",
-      "path": "docs/development-log/2026-08-25-phase2-exit-report.md",
-      "kind": "development",
-      "status": "CONFIRMED",
-      "sha256": "97bb76559093062f497ca2d20cfc58b3a6d3f2600eb8cb207fffb425b538f4db",
-      "locator": "Phase 2 exit report: completed steps, commands, gate conclusions, upstream cleanliness, limits"
+      "sha256": "e1d3771433a8e3d1c1903d313a960d320d7cbad7796ea7fb7197ef9b9d3c53bd",
+      "locator": "reverse-ordered consolidated Phase 2 gateway implementation, verification, exit, and workflow evidence"
     },
     {
       "id": "phase2-identity-spike-evidence",

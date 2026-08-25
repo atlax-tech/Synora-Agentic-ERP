@@ -1,7 +1,7 @@
 # Phase 1 P2P 源码地图（候选基线取证）
 
 - 日期：2026-08-24
-- 对应：`docs/PLAN.md` P1.4；前置证据见 `docs/development-log/2026-08-24-phase1-inc3-manual-p2p.md`
+- 对应：`docs/PLAN.md` P1.4；前置证据见 `docs/development-log/20260824-Phase-1-开发日志.md`
 - 固定候选 SHA（正式冻结待 P1.5 独立对抗审查后由 ADR-0002 记录）：
   - Frappe：`6a329d068416768ec47ccd3326b9cc95a8d7bf99`
   - ERPNext：`11e0ba0a1c45f217e2e73e885f699102d06da325`

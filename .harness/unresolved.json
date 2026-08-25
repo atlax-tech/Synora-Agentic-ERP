@@ -59,7 +59,7 @@
       "impact": "Implementation completion cannot be mechanically proven before project scaffolding exists.",
       "sources": [
         "docs/DEVELOPMENT.md#Verified Commands",
-        "docs/development-log/2026-08-24-phase2-p2_1-engineering-skeleton.md"
+        "docs/development-log/20260825-Phase-2-开发日志.md"
       ],
       "resolution": "Resolved by commit e10a4dd (2026-08-24) and the P2.1 engineering-skeleton development log. The root Makefile provides make setup, make format, make format-check, make lint, make type, make unit, make integration, and make runtime; runtime verification uses curl --fail http://127.0.0.1:8001/healthz and the expected service JSON. The recorded P2.1 command and Bench/Runtime checks passed. runtime-user-authorization remains UNRESOLVED."
     },

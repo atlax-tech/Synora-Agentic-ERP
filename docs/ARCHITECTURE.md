@@ -122,4 +122,4 @@ The initial retrieval implementation uses curated, versioned sources with SQLite
 ## Sources
 
 - `docs/PRD.md` — approved product boundaries, complete P2P scope, safety requirements, staged delivery, and unresolved decisions this architecture must preserve.
-- `docs/development-log/2026-08-24-harness-bootstrap.md` — evidence that this target architecture was incorporated during the approved Harness bootstrap.
+- `docs/development-log/20260824-Phase-0-开发日志.md` — evidence that this target architecture was incorporated during the approved Harness bootstrap.
