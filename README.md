@@ -8,7 +8,7 @@
 
 Synora has completed **Phase 0 through Phase 3**: the governed engineering baseline, the pinned Frappe/ERPNext v16 pair, the typed read-only ERP Gateway (server-side Run/capability model, verified read tools, Agent Runtime HTTPX client), and the read-only procurement Agent (deterministic risk analysis, explainable plans, BYOK model provider, FTS5 retrieval, model-only explanation enhancement) are implemented and verified end-to-end over real HTTP.
 
-Phase 3 exit review is **in progress**: the independent adversarial review returned `CHANGES_REQUIRED` with eight blocking findings (format/lint gap in a scripts file, model enhancement not yet wired into `plan_run`, expiry/revocation recheck gaps, missing CAS/concurrency guards, XSS boundary in New Run, checkpoint/resume evidence, Harness source tracking). Fixes are being applied and re-verified before Phase 4 starts. All write operations (Phase 4+) remain staged.
+Phase 3 exit review **passed**: the independent adversarial review initially returned `CHANGES_REQUIRED` with eight blocking findings; all eight are fixed and re-verified across three review rounds (final: PASS), including unified expiry/revocation/state/capability guards, optimistic-lock CAS with cancel-race protection and failure recovery, model enhancement wired into `plan_run` with persisted evidence and hard `max_tokens` budget, FTS5 permission-scope filtering, Runs pagination, XSS hardening, and Harness source tracking. Phase 4 startup remains a user decision. All write operations (Phase 4+) remain staged.
 
 This status is an evidence boundary, not a reduction in product standards. Synora is being designed and developed as a production-grade enterprise product; this README does not present planned behavior as working software.
 

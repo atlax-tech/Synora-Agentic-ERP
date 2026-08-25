@@ -120,7 +120,7 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "007859d02d3656a1763d6d4bb7447a40628a9bbec107f7159dd377840cdb4b17"
+      "sha256": "4a3d99af2a9604808505edb25939229c8750ca67db40130d866fe6214a76f307"
     },
     {
       "path": ".harness/unresolved.json",
@@ -132,13 +132,13 @@
       "path": "README.md",
       "owner": "user",
       "mode": "user",
-      "sha256": "731b1f942f1e07ac6af37f7e79be8bbc26fc6cb3199f1c8969328d4e4110d755"
+      "sha256": "7daa90280e253103a46cc2ea1f77f5fbc85a245df606abc2814d9b1a55eeae07"
     },
     {
       "path": "README.zh-CN.md",
       "owner": "user",
       "mode": "user",
-      "sha256": "0a98437ace190f0983163c149ad3f6c21ce0c6aee6d70fa7481a09dc4a72c720"
+      "sha256": "64c0575f70184189167823e6340776ce01c47ada31921231224e0f18593f3120"
     },
     {
       "path": "LICENSE",
@@ -150,7 +150,7 @@
       "path": "docs/development-log/20260825-Phase-3-开发日志.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "468d938a3278812ee820f70feb869f586fdfd71752f9cfa5a8b98d909584b8cb"
+      "sha256": "412b8885e514623bd377b7cc2465d63beba263ce52118428a97dfe99fd4357a9"
     },
     {
       "path": "docs/security/phase3-security-eval.md",
