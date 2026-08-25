@@ -146,7 +146,16 @@ bash env/dev/scripts/dev/env.sh bash \
 
 ```bash
 uv run --python 3.14 pytest services/agent_runtime/tests/test_providers.py -v
-# 期望：15 passed（含 base_url 校验、fail-closed、secret 防泄漏用例）
+# 期望：18 passed（含 base_url 校验、fail-closed、secret 防泄漏用例）
+```
+
+### 连通性测试（填好 .env 后）
+
+```bash
+source env/dev/.env
+uv run --python 3.14 python services/agent_runtime/scripts/check_provider.py
+# PROVIDER-OK: <响应文本前 80 字符> = 链接生效；PROVIDER-FAIL / PROVIDER-CONFIG-FAIL = 失败原因
+# 任何输出都不包含 API Key；未填 Base URL 时明确报错并退出码 1
 ```
 
 ## Sources
