@@ -24,6 +24,27 @@ ENHANCE_MAX_TOKENS = 256
 
 _NUMBER_TOKEN = re.compile(r"-?\d+(?:\.\d+)?")
 
+# 风险结论反转词 (keyword 级确定性校验, 防止模型把缺货说成充足、把重复采购
+# 风险说成需要采购)。词表与 plan.py 的确定性 recommendation 文案核对过,
+# 不包含"不建议重复采购/供应充足"等合法表达中的子串, 避免误伤。
+_RISK_INVERTED_TERMS: dict[str, tuple[str, ...]] = {
+    "SHORTAGE": ("充足", "足够", "充裕", "无需", "不必", "不需要", "不用补", "无缺口"),
+    "DUPLICATE_RISK": (
+        "建议补货",
+        "需要采购",
+        "应当补货",
+        "建议采购",
+        "立即下单",
+        "急需补货",
+        "需要立即",
+        "必须采购",
+    ),
+}
+# 计划中不存在缺货结论时, 文本声称缺货/断货 -> 编造风险。
+_INVENTED_SHORTAGE_TERMS = ("已缺货", "目前缺货", "严重缺货", "发生短缺", "库存耗尽", "断货")
+# 计划全部为缺货结论时, 文本声称供应过剩 -> 编造风险。
+_INVENTED_SURPLUS_TERMS = ("供应过剩", "完全不需要采购", "过剩")
+
 _SYSTEM_PROMPT = (
     "你是采购助手。系统会给你一份由确定性软件生成的采购风险分析计划。"
     "你的唯一任务是把它转成一段通俗、简洁的中文解释给用户看。"
@@ -57,8 +78,26 @@ def _plan_numbers(plan: dict[str, Any]) -> set[str]:
     return numbers
 
 
+def _risk_semantic_check(text: str, plan: dict[str, Any]) -> str | None:
+    """风险结论反转/编造检查; 返回错误原因或 None。"""
+    findings = plan.get("findings") or []
+    risks = {str(finding.get("risk")) for finding in findings if isinstance(finding, dict)}
+    for risk, terms in _RISK_INVERTED_TERMS.items():
+        if risk in risks and any(term in text for term in terms):
+            return f"inverted {risk} conclusion"
+    if "SHORTAGE" not in risks and any(term in text for term in _INVENTED_SHORTAGE_TERMS):
+        return "invented shortage"
+    if risks and risks <= {"SHORTAGE"} and any(term in text for term in _INVENTED_SURPLUS_TERMS):
+        return "invented surplus"
+    return None
+
+
 def validate_explanation(text: str, plan: dict[str, Any]) -> str | None:
-    """严格校验模型解释; 通过返回原文, 失败返回 None (调用方回退确定性文案)。"""
+    """严格校验模型解释; 通过返回原文, 失败返回 None (调用方回退确定性文案)。
+
+    校验项: 非空; 文本中的数字必须存在于确定性计划数据 (模型不得编造数量);
+    文本不得反转或编造风险结论 (语义 keyword 级确定性校验)。
+    """
     if not text or not text.strip():
         return None
     allowed = _plan_numbers(plan)
@@ -66,6 +105,9 @@ def validate_explanation(text: str, plan: dict[str, Any]) -> str | None:
         if number not in allowed:
             # 模型编造了计划中不存在的数字 (违反"数量由确定性代码生成")。
             return None
+    semantic_error = _risk_semantic_check(text, plan)
+    if semantic_error is not None:
+        return None
     return text
 
 

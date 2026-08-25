@@ -184,7 +184,7 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 			message = xhr.responseJSON.error.message || message;
 			correlation_id = xhr.responseJSON.correlation_id || "";
 		}
-		let html = __("创建运行失败") + "（" + code + "）：" + message;
+		let html = __("创建运行失败") + "（" + frappe.utils.escape_html(code) + "）：" + frappe.utils.escape_html(message);
 		if (correlation_id) {
 			html += "<br>" + __("关联标识") + ": " + frappe.utils.escape_html(correlation_id);
 		}

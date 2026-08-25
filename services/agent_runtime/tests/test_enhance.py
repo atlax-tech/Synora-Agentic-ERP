@@ -62,6 +62,50 @@ def test_validate_rejects_empty_text() -> None:
     assert validate_explanation("   ", PLAN) is None
 
 
+_SHORTAGE_PLAN = {
+    "summary": "共分析 1 个物料：1 个缺货、0 个重复采购风险。",
+    "findings": [
+        {
+            "item_code": "ITEM-9",
+            "risk": "SHORTAGE",
+            "recommendation": "建议补货 ITEM-9：库存 2.0 + 在途 0.0 - 需求 10.0 = -8.0 < 0。",
+            "evidence": ["risk=SHORTAGE", "shortage=8.0"],
+            "matched_goal": True,
+        }
+    ],
+    "generated_at": "2026-08-25T21:00:00+08:00",
+}
+
+
+def test_validate_rejects_inverted_shortage() -> None:
+    # 验收示例: SHORTAGE 结论但模型说"库存充足，无需采购" -> 拒绝 (语义反转)。
+    text = "该物料库存 2.0 充足，无需采购。"
+    assert validate_explanation(text, _SHORTAGE_PLAN) is None
+
+
+def test_validate_accepts_shortage_explanation() -> None:
+    text = "该物料缺口 8.0，建议补货 ITEM-9。"
+    assert validate_explanation(text, _SHORTAGE_PLAN) == text
+
+
+def test_validate_rejects_inverted_duplicate_risk() -> None:
+    # DUPLICATE_RISK 结论但模型说需要采购 -> 拒绝。
+    text = "该物料建议补货，需要采购。"
+    assert validate_explanation(text, PLAN) is None
+
+
+def test_validate_rejects_invented_shortage() -> None:
+    # 计划无缺货结论但模型声称缺货 -> 拒绝 (编造风险)。
+    text = "该物料目前缺货，需尽快安排。"
+    assert validate_explanation(text, PLAN) is None
+
+
+def test_validate_rejects_invented_surplus() -> None:
+    # 计划全部为缺货但模型声称供应过剩 -> 拒绝。
+    text = "该物料供应过剩，完全不需要采购。"
+    assert validate_explanation(text, _SHORTAGE_PLAN) is None
+
+
 def test_enhance_ok_with_deterministic_provider() -> None:
     user_content = build_prompt(PLAN)[1].content
     provider = DeterministicProvider(

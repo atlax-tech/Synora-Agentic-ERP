@@ -77,3 +77,32 @@ class TestPlanRun(FrappeTestCase):
         self.assertEqual(response["run"]["run_state"], "SUCCEEDED")
         self.assertIsNotNone(response["plan"])
         self.assertIn("summary", response["plan"])
+
+    def test_plan_persists_enhancement_evidence(self) -> None:
+        """验收修复(阻断2): 增强证据持久化。
+
+        app-test 无 Runtime sidecar -> 回退确定性摘要, 但 provider/token/
+        耗时/回退原因证据必须落库并可读, 页面不再是无证据的确定性计划。
+        """
+        run = self._analyzed_run()
+        frappe.set_user(BUYER)
+        response = plan_run(str(run["run_id"]), CORRELATION_ID)
+        self.assertTrue(response["ok"])
+        result = response["plan"]
+        plan_result = result["plan"]
+        # 回退路径: enhanced_text 等于确定性摘要, evidence 记录 fallback。
+        self.assertEqual(plan_result["enhanced_text"], plan_result["summary"])
+        self.assertIn("evidence", plan_result)
+        self.assertIn("provider", plan_result["evidence"])
+        self.assertTrue(plan_result["evidence"]["fallback_reason"])
+        # 持久化字段
+        plan_docs = frappe.get_all("Synora Run Plan", filters={"run": run["run_id"]})
+        self.assertEqual(len(plan_docs), 1)
+        plan_doc = frappe.get_doc("Synora Run Plan", plan_docs[0].name)
+        self.assertTrue(plan_doc.enhanced_text)
+        self.assertTrue(plan_doc.fallback_reason)
+        self.assertEqual(plan_doc.completion_tokens, 0)
+        # get_run 返回证据
+        detail = get_run(str(run["run_id"]))
+        self.assertIn("evidence", detail["plan"])
+        self.assertTrue(detail["plan"]["evidence"]["fallback_reason"])

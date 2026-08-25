@@ -19,5 +19,5 @@ def test_health_endpoint() -> None:
     assert response.json() == {"service": "synora-agent-runtime", "status": "ok"}
 
 
-def test_health_is_the_only_http_route() -> None:
-    assert {route.path for route in app.routes} == {"/healthz"}
+def test_health_is_the_only_public_route() -> None:
+    assert {route.path for route in app.routes} == {"/healthz", "/enhance"}

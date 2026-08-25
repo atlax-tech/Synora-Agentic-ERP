@@ -84,3 +84,29 @@ def test_rebuild_is_idempotent_and_recoverable(tmp_path: Path) -> None:
         # 重建后再次摄取 (幂等)
         index.ingest(_sources())
         assert index.search("purchase order")
+
+
+def test_search_filters_permission_scope(tmp_path) -> None:
+    """检索结果必须按 permission_scope 过滤 (低权限上下文读不到高权限知识)。"""
+    from agent_runtime.retrieval.sources import CuratedSource, load_curated_sources
+
+    from agent_runtime.retrieval.index import RetrievalIndex
+
+    index = RetrievalIndex(str(tmp_path / "scope.db"))
+    public = CuratedSource(
+        source_type="erp-docs",
+        path="/knowledge/public.md",
+        revision="v1",
+        erp_version="16.0.0",
+        permission_scope="public",
+        ingested_at="2026-08-25T00:00:00+00:00",
+        title="Public Policy",
+        content="公开采购政策，任何上下文可读。",
+    )
+    index.ingest((public,))
+    # 默认 internal 上下文: 不应命中 public 源
+    assert index.search("公开采购政策", permission_scope="internal") == []
+    hits = index.search("公开采购政策", permission_scope="public")
+    assert len(hits) == 1
+    assert hits[0].permission_scope == "public"
+    index.close()

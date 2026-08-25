@@ -125,8 +125,11 @@ class RetrievalIndex:
     def _contains_cjk(text: str) -> bool:
         return any("\u4e00" <= char <= "\u9fff" for char in text)
 
-    def search(self, query: str, limit: int = 5) -> list[SearchHit]:
+    def search(self, query: str, limit: int = 5, permission_scope: str = "internal") -> list[SearchHit]:
         """按 BM25 排序检索; 非法/空查询返回空列表。
+
+        调用方必须显式传入允许的 permission_scope (默认 "internal"),
+        检索结果只包含该 scope 的源 —— 防止低权限上下文读到高权限知识。
 
         unicode61 分词器把连续中文当作一个 token ("建议补货" != "补货"),
         因此对含 CJK 的查询补充子串召回通道, 避免整词 token 漏检; FTS5
@@ -145,11 +148,11 @@ class RetrievalIndex:
                        snippet(sources_fts, 0, '<b>', '</b>', '…', 12) AS snippet
                 FROM sources_fts
                 JOIN sources s ON s.id = sources_fts.rowid
-                WHERE sources_fts MATCH ?
+                WHERE sources_fts MATCH ? AND s.permission_scope = ?
                 ORDER BY bm25(sources_fts)
                 LIMIT ?
                 """,
-                (f'"{normalized}"', safe_limit * 4),
+                (f'"{normalized}"', permission_scope, safe_limit * 4),
             ).fetchall()
         except sqlite3.OperationalError:
             rows = []
@@ -168,18 +171,18 @@ class RetrievalIndex:
             for row in rows
         ]
         if self._contains_cjk(query):
-            hits = self._append_substring_hits(hits, query, safe_limit)
+            hits = self._append_substring_hits(hits, query, safe_limit, permission_scope)
         return hits[:safe_limit]
 
     def _append_substring_hits(
-        self, hits: list[SearchHit], query: str, limit: int
+        self, hits: list[SearchHit], query: str, limit: int, permission_scope: str = "internal"
     ) -> list[SearchHit]:
         """中文子串补充: FTS 未召回但 content 包含查询子串的源, 按路径序附加。"""
         fts_paths = {hit.path for hit in hits}
         try:
             rows = self._connection.execute(
-                "SELECT * FROM sources WHERE content LIKE ? ORDER BY path",
-                (f"%{query}%",),
+                "SELECT * FROM sources WHERE content LIKE ? AND permission_scope = ? ORDER BY path",
+                (f"%{query}%", permission_scope),
             ).fetchall()
         except sqlite3.OperationalError:
             return hits

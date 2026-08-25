@@ -249,13 +249,33 @@ def _run_summary(run: Any) -> dict[str, Any]:
 
 @frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]
 @do_not_record  # type: ignore[untyped-decorator]
-def list_runs() -> dict[str, Any]:
-    """Runs 页面: 当前用户 (或 System Manager) 的 Run 历史, 最新在前。"""
+def list_runs(limit: int | None = None, offset: int | None = None) -> dict[str, Any]:
+    """Runs 页面: 当前用户 (或 System Manager) 的 Run 历史, 最新在前, 支持分页。
+
+    默认返回最近 50 条; 分页通过 limit/offset 控制 (limit 上限 200), 返回
+    total 供前端计算页数。limit/offset 非法时按默认值处理 (不 fail 请求)。
+    """
     if frappe.session.user == "Guest":
         _set_status(401)
         return error_response(
             GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
         )
+    safe_limit = 50
+    if limit is not None:
+        try:
+            parsed = positive_int(limit, "limit", 200)
+            if parsed > 0:
+                safe_limit = parsed
+        except GatewayFault:
+            safe_limit = 50
+    safe_offset = 0
+    if offset is not None:
+        try:
+            parsed = positive_int(offset, "offset", 10_000)
+            safe_offset = parsed
+        except GatewayFault:
+            safe_offset = 0
+    total = frappe.db.count("Synora Agent Run", filters=_visible_run_filter())
     runs = frappe.get_all(
         "Synora Agent Run",
         filters=_visible_run_filter(),
@@ -273,13 +293,17 @@ def list_runs() -> dict[str, Any]:
             "creation",
         ],
         order_by="creation desc",
-        limit=50,
+        limit=safe_limit,
+        offset=safe_offset,
     )
     return {
         "ok": True,
         "schema_version": SCHEMA_VERSION,
         "runs": [_run_summary(run) for run in runs],
         "count": len(runs),
+        "total": total,
+        "limit": safe_limit,
+        "offset": safe_offset,
     }
 
 
@@ -322,7 +346,17 @@ def get_run(run_id: str) -> dict[str, Any]:
     plans = frappe.get_all(
         "Synora Run Plan",
         filters={"run": safe_run_id},
-        fields=["plan_json", "summary", "creation"],
+        fields=[
+            "plan_json",
+            "summary",
+            "enhanced_text",
+            "provider",
+            "prompt_tokens",
+            "completion_tokens",
+            "elapsed_ms",
+            "fallback_reason",
+            "creation",
+        ],
         order_by="creation desc",
         limit=1,
         ignore_permissions=True,
@@ -333,6 +367,15 @@ def get_run(run_id: str) -> dict[str, Any]:
             plan = frappe.parse_json(plans[0].plan_json)
         except ValueError:
             plan = None
+        if isinstance(plan, dict):
+            plan["enhanced_text"] = plans[0].enhanced_text
+            plan["evidence"] = {
+                "provider": plans[0].provider,
+                "prompt_tokens": plans[0].prompt_tokens,
+                "completion_tokens": plans[0].completion_tokens,
+                "elapsed_ms": plans[0].elapsed_ms,
+                "fallback_reason": plans[0].fallback_reason,
+            }
     return {
         "ok": True,
         "schema_version": SCHEMA_VERSION,

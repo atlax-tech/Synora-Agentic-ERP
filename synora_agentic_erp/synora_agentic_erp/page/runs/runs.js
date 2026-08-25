@@ -242,8 +242,11 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				const plan = data.plan;
 				let rows_html = "";
 				if (plan && plan.findings) {
-					// 可解释计划: 摘要 + 逐项建议 + 来源
-					rows_html = '<div class="mb-2"><b>' + __("计划摘要") + ":</b> " + esc(plan.summary) + "</div>";
+					// 可解释计划: 模型增强解释 (若通过校验) + 确定性摘要 + 逐项建议 + 来源 + 证据
+					const enhanced = plan.enhanced_text && plan.enhanced_text !== plan.summary
+						? '<div class="mb-2"><b>' + __("智能解释") + ":</b> " + esc(plan.enhanced_text) + "</div>"
+						: "";
+					rows_html = '<div class="mb-2"><b>' + __("计划摘要") + ":</b> " + esc(plan.summary) + "</div>" + enhanced;
 					rows_html += "<table class=\"table table-sm table-striped\"><thead><tr>" +
 						"<th>" + __("物料") + "</th>" +
 						"<th>" + __("风险") + "</th>" +
@@ -261,6 +264,15 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 							"</tr>";
 					});
 					rows_html += "</tbody></table>";
+					const ev = plan.evidence || {};
+					const ev_bits = [];
+					if (ev.provider) { ev_bits.push(__("Provider") + ": " + esc(ev.provider)); }
+					if (typeof ev.prompt_tokens === "number") { ev_bits.push("in:" + ev.prompt_tokens + " out:" + ev.completion_tokens); }
+					if (typeof ev.elapsed_ms === "number") { ev_bits.push(ev.elapsed_ms + "ms"); }
+					if (ev.fallback_reason) { ev_bits.push('<span class="text-danger">' + __("已回退") + ": " + esc(ev.fallback_reason) + "</span>"); }
+					if (ev_bits.length) {
+						rows_html += '<div class="small text-muted mt-1">' + ev_bits.join(" · ") + "</div>";
+					}
 				} else if (analyses.length) {
 					rows_html =
 						"<table class=\"table table-sm table-striped\"><thead><tr>" +

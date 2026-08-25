@@ -29,13 +29,15 @@ exclude = [".agents", ".workbuddy", "env/dev"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "RUF"]
 
-# RUF001 只豁免面向用户/模型的中文 UI 文案与文案断言 (全角标点是中文正常排版)。
+# RUF001/003 只豁免面向用户/模型的中文 UI 文案与文案断言 (全角标点是中文正常排版)。
 [tool.ruff.lint.per-file-ignores]
 "synora_agentic_erp/agent/plan.py" = ["RUF001"]
 "tests/test_plan.py" = ["RUF001"]
 "services/agent_runtime/src/agent_runtime/agent/enhance.py" = ["RUF001"]
-"services/agent_runtime/tests/test_enhance.py" = ["RUF001"]
+"services/agent_runtime/tests/test_enhance.py" = ["RUF001", "RUF003"]
 "services/agent_runtime/tests/test_security_eval.py" = ["RUF001"]
+"services/agent_runtime/tests/test_enhance_endpoint.py" = ["RUF001"]
+"services/agent_runtime/src/agent_runtime/app.py" = ["RUF001"]
 
 [tool.ruff.format]
 quote-style = "double"

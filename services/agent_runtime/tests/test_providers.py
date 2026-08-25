@@ -345,3 +345,51 @@ class TestRefusalFieldCompat:
             assert response.text == "hello"
 
         asyncio.run(run())
+
+
+class TestMaxTokensHardBudget:
+    def test_completion_over_budget_is_rejected(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_returns(
+                {
+                    "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 999, "total_tokens": 1009},
+                }
+            )
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434/v1", transport=transport
+            ) as provider:
+                with pytest.raises(ProviderError, match="max_tokens budget"):
+                    await provider.complete(_messages(), max_tokens=16)
+
+        asyncio.run(run())
+
+    def test_completion_within_budget_is_accepted(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_returns(
+                {
+                    "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 4, "total_tokens": 14},
+                }
+            )
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434/v1", transport=transport
+            ) as provider:
+                response = await provider.complete(_messages(), max_tokens=16)
+            assert response.completion_tokens == 4
+
+        asyncio.run(run())
+
+    def test_budget_absent_usage_is_not_rejected(self) -> None:
+        # 服务商不返回 usage 时无法校验, 不误伤 (成本护栏以请求参数为主)。
+        async def run() -> None:
+            transport = _transport_that_returns(
+                {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+            )
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434/v1", transport=transport
+            ) as provider:
+                response = await provider.complete(_messages(), max_tokens=16)
+            assert response.text == "ok"
+
+        asyncio.run(run())

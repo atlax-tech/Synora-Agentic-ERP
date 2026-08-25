@@ -223,6 +223,17 @@ class OpenAICompatibleProvider:
             raise ProviderError("provider returned an invalid response") from error
         if not completion.choices:
             raise ProviderError("provider returned no choices")
+        if (
+            max_tokens is not None
+            and completion.usage is not None
+            and completion.usage.completion_tokens > max_tokens
+        ):
+            # 成本护栏硬上限: 服务商返回的补全 token 超出请求预算视为异常
+            # (服务商可能忽略 max_tokens 或极端情况下超额), fail closed 拒绝使用。
+            raise ProviderError(
+                "provider exceeded max_tokens budget "
+                f"({completion.usage.completion_tokens} > {max_tokens})"
+            )
         message = completion.choices[0].message
         return ProviderResponse(
             text=message.content or "",
