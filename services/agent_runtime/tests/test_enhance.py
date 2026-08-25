@@ -1,0 +1,121 @@
+"""P3.5 模型增强测试: 确定性计算不动摇、模型仅解释、校验回退与证据记录。
+
+CI 使用 DeterministicProvider, 不调用付费真实模型。
+"""
+
+import asyncio
+
+from agent_runtime.agent.enhance import (
+    ENHANCE_MAX_TOKENS,
+    build_prompt,
+    enhance_plan,
+    validate_explanation,
+)
+from agent_runtime.providers import (
+    DeterministicProvider,
+    ProviderError,
+    ProviderResponse,
+)
+
+PLAN = {
+    "goal": "ensure stock for SYNORA-P1-Item-1001",
+    "horizon_days": 90,
+    "company": "SYNORA-P1 Test Company",
+    "warehouse": None,
+    "summary": "共分析 1 个物料：0 个缺货、1 个重复采购风险、0 个输入不足。",
+    "findings": [
+        {
+            "item_code": "SYNORA-P1-Item-1001",
+            "risk": "DUPLICATE_RISK",
+            "recommendation": "不建议重复采购：库存 60.0 + 在途 5.0 - 需求 5.0 = 60.0 ≥ 0。",
+            "evidence": ["risk=DUPLICATE_RISK", "net = actual 60.0 + incoming 5.0 - demand 5.0"],
+            "matched_goal": True,
+        }
+    ],
+    "generated_at": "2026-08-25T21:00:00+08:00",
+}
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def test_build_prompt_includes_deterministic_plan() -> None:
+    messages = build_prompt(PLAN)
+    assert messages[0].role == "system"
+    assert "不得生成" in messages[0].content
+    assert "SYNORA-P1-Item-1001" in messages[1].content
+
+
+def test_validate_accepts_explanation_with_known_numbers() -> None:
+    text = "该物料库存 60.0 充足，且已有在途 5.0，不建议重复采购。"
+    assert validate_explanation(text, PLAN) == text
+
+
+def test_validate_rejects_fabricated_number() -> None:
+    # 模型编造了计划中不存在的数量 -> 拒绝 (数量必须由确定性代码生成)。
+    assert validate_explanation("缺口 100，建议补货。", PLAN) is None
+
+
+def test_validate_rejects_empty_text() -> None:
+    assert validate_explanation("", PLAN) is None
+    assert validate_explanation("   ", PLAN) is None
+
+
+def test_enhance_ok_with_deterministic_provider() -> None:
+    user_content = build_prompt(PLAN)[1].content
+    provider = DeterministicProvider(
+        responses={
+            user_content: ProviderResponse(
+                text="库存充足，不建议重复采购。", prompt_tokens=10, completion_tokens=5
+            )
+        }
+    )
+    text, evidence = _run(enhance_plan(PLAN, provider, provider_name="deterministic"))
+    assert text == "库存充足，不建议重复采购。"
+    assert evidence.status == "ok"
+    assert evidence.provider == "deterministic"
+    assert evidence.prompt_tokens == 10
+    assert evidence.completion_tokens == 5
+    assert evidence.elapsed_ms >= 0
+    assert evidence.fallback_reason is None
+
+
+def test_enhance_falls_back_on_validation_failure() -> None:
+    user_content = build_prompt(PLAN)[1].content
+    provider = DeterministicProvider(
+        responses={
+            user_content: ProviderResponse(
+                text="缺口 999，建议补货！", prompt_tokens=10, completion_tokens=8
+            )
+        }
+    )
+    text, evidence = _run(enhance_plan(PLAN, provider))
+    assert text == PLAN["summary"]  # 回退确定性文案
+    assert evidence.status == "fallback_validation"
+    assert evidence.fallback_reason is not None
+
+
+def test_enhance_falls_back_on_provider_error() -> None:
+    class _BoomProvider:
+        async def complete(self, messages, tools=None, model=None, max_tokens=None):
+            del messages, tools, model, max_tokens
+            raise ProviderError("down")
+
+    text, evidence = _run(enhance_plan(PLAN, _BoomProvider()))
+    assert text == PLAN["summary"]
+    assert evidence.status == "fallback_error"
+    assert "down" in str(evidence.fallback_reason)
+
+
+def test_enhance_uses_cost_guardrail() -> None:
+    captured: dict[str, object] = {}
+
+    class _CaptureProvider:
+        async def complete(self, messages, tools=None, model=None, max_tokens=None):
+            captured["max_tokens"] = max_tokens
+            del messages, tools, model
+            return ProviderResponse(text="ok")
+
+    _run(enhance_plan(PLAN, _CaptureProvider()))
+    assert captured["max_tokens"] == ENHANCE_MAX_TOKENS

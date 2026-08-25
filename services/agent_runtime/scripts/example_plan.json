@@ -1,0 +1,21 @@
+{
+  "goal": "ensure stock for SYNORA-P1-Item-1001",
+  "horizon_days": 90,
+  "company": "SYNORA-P1 Test Company",
+  "warehouse": null,
+  "summary": "共分析 1 个物料：0 个缺货、1 个重复采购风险、0 个输入不足。",
+  "findings": [
+    {
+      "item_code": "SYNORA-P1-Item-1001",
+      "risk": "DUPLICATE_RISK",
+      "recommendation": "不建议重复采购：库存 60.0 + 在途 5.0 - 需求 5.0 = 60.0 ≥ 0，且已有未结需求计划/在途供应。",
+      "evidence": [
+        "risk=DUPLICATE_RISK",
+        "net = actual 60.0 + incoming 5.0 - demand 5.0",
+        "open_mr=5.0, shortage=0"
+      ],
+      "matched_goal": true
+    }
+  ],
+  "generated_at": "2026-08-25T21:00:00+08:00"
+}
