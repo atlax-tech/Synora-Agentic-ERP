@@ -88,6 +88,9 @@ def execute(**payload: Any) -> dict[str, Any]:
     run = None
     try:
         require_capability_only_request()
+        # Frappe RPC 路由会把请求路径注入 form_dict.cmd (frappe/api/v1.py),
+        # 该键不属于 Gateway 契约, 必须在信任边界剥离后再做严格解析。
+        payload.pop("cmd", None)
         request = parse_request(payload)
         safe_correlation_id = request.correlation_id
         run = resolve_run(request.run_id, request.capability)

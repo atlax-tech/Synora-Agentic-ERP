@@ -125,6 +125,16 @@ class TestGatewayContract(FrappeTestCase):
         self.assertEqual(response["error"]["code"], "TOOL_NOT_ALLOWED")
         self.assertNotIn(str(result["capability"]), str(response))
 
+    def test_execute_strips_frappe_rpc_cmd_injection(self) -> None:
+        # Frappe RPC 路由会把请求路径注入 form_dict.cmd (frappe/api/v1.py);
+        # 真实 HTTP 下 execute 必须剥离该键后再做严格契约解析。
+        result = self._issue()
+        payload = _payload(result)
+        payload["cmd"] = "synora_agentic_erp.api.execute"
+        frappe.set_user("Guest")
+        response = execute(**payload)
+        self.assertEqual(response["error"]["code"], "TOOL_NOT_ALLOWED")
+
     def test_registered_tool_has_strict_input_typed_output_and_audit(self) -> None:
         result = self._issue()
         payload = _payload(result)
