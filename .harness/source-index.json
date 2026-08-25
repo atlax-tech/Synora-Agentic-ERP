@@ -31,7 +31,7 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "f5f48d33384fa11ec41e7dbd2dc6aa99fa280d59298ebc5a6be14eb9cfee804a",
+      "sha256": "f1cde2444011b03b46757dc2df228673cf699565c10cee21e93d2a1cb177957e",
       "locator": "risk-tiered workflow, phase selection, learning mode, decision gates, and Phase 0 through Phase 8 order"
     },
     {
@@ -71,7 +71,7 @@
       "path": "docs/development-log/20260825-Phase-2-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "e1d3771433a8e3d1c1903d313a960d320d7cbad7796ea7fb7197ef9b9d3c53bd",
+      "sha256": "b486d50a132c0b8d84ab2bb382b3acfee7d5864713dcf06f333c3435f8182395",
       "locator": "reverse-ordered consolidated Phase 2 gateway implementation, verification, exit, and workflow evidence"
     },
     {
