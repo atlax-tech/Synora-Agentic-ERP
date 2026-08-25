@@ -68,23 +68,31 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			.map(function (run) {
 				const raw_goal = typeof run.goal === "string" ? run.goal : "";
 				const goal = raw_goal.length > 80 ? raw_goal.slice(0, 80) + "…" : raw_goal;
-				const mine = run.initiator === current_user;
-				const cancellable = (run.run_state === "CREATED" || run.run_state === "ANALYZING") && mine;
-				const analyzable = run.run_state === "CREATED" && mine;
-				const analyze_btn = analyzable
-					? '<button class="btn btn-primary btn-xs analyze-run" data-run="' +
-					  esc(run.run_id) +
-					  '">' +
-					  __("开始分析") +
-					  "</button> "
-					: "";
-				const cancel_btn = cancellable
-					? '<button class="btn btn-secondary btn-xs cancel-run" data-run="' +
-					  esc(run.run_id) +
-					  '">' +
-					  __("取消") +
-					  "</button>"
-					: "";
+			const mine = run.initiator === current_user;
+			const cancellable = (run.run_state === "CREATED" || run.run_state === "ANALYZING") && mine;
+			const analyzable = run.run_state === "CREATED" && mine;
+			const plannable = run.run_state === "PROPOSED" && mine;
+			const analyze_btn = analyzable
+				? '<button class="btn btn-primary btn-xs analyze-run" data-run="' +
+				  esc(run.run_id) +
+				  '">' +
+				  __("开始分析") +
+				  "</button> "
+				: "";
+			const plan_btn = plannable
+				? '<button class="btn btn-success btn-xs plan-run" data-run="' +
+				  esc(run.run_id) +
+				  '">' +
+				  __("生成计划") +
+				  "</button> "
+				: "";
+			const cancel_btn = cancellable
+				? '<button class="btn btn-secondary btn-xs cancel-run" data-run="' +
+				  esc(run.run_id) +
+				  '">' +
+				  __("取消") +
+				  "</button>"
+				: "";
 				const detail_btn = '<button class="btn btn-light btn-xs show-detail" data-run="' + esc(run.run_id) + '">' + __("详情") + "</button>";
 				const scope = run.company_scope + (run.warehouse_scope ? " / " + run.warehouse_scope : __(" / 全部仓库"));
 				return (
@@ -110,6 +118,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					"</td>" +
 					"<td>" +
 					analyze_btn +
+					plan_btn +
 					cancel_btn +
 					detail_btn +
 					"</td>" +
@@ -153,6 +162,11 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			const run_id = $(this).data("run");
 			start_analysis(run_id, $(this));
 		});
+		container.find(".plan-run").on("click", function (event) {
+			event.stopPropagation();
+			const run_id = $(this).data("run");
+			start_planning(run_id, $(this));
+		});
 		container.find(".show-detail").on("click", function (event) {
 			event.stopPropagation();
 			const run_id = $(this).data("run");
@@ -186,6 +200,32 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		});
 	}
 
+	function start_planning(run_id, button) {
+		const original = button.html();
+		button.attr("disabled", true).html('<span class="spinner-border spinner-border-sm"></span> ' + __("生成中…"));
+		frappe.call({
+			method: "synora_agentic_erp.api.plan_run",
+			args: {
+				run_id: run_id,
+				correlation_id: crypto.randomUUID(),
+			},
+			callback: function (r) {
+				if (r.message && r.message.ok) {
+					refresh();
+					show_detail(run_id);
+				} else {
+					button.attr("disabled", false).html(original);
+					frappe.msgprint(__("生成计划失败：") + (r.message && r.message.error ? r.message.error.message : ""));
+				}
+			},
+			error: function (xhr) {
+				button.attr("disabled", false).html(original);
+				const message = xhr && xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error.message : __("生成计划失败");
+				frappe.msgprint(message);
+			},
+		});
+	}
+
 	function show_detail(run_id) {
 		frappe.call({
 			method: "synora_agentic_erp.api.get_run",
@@ -199,8 +239,29 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				const data = r.message;
 				const run = data.run;
 				const analyses = data.analyses || [];
+				const plan = data.plan;
 				let rows_html = "";
-				if (analyses.length) {
+				if (plan && plan.findings) {
+					// 可解释计划: 摘要 + 逐项建议 + 来源
+					rows_html = '<div class="mb-2"><b>' + __("计划摘要") + ":</b> " + esc(plan.summary) + "</div>";
+					rows_html += "<table class=\"table table-sm table-striped\"><thead><tr>" +
+						"<th>" + __("物料") + "</th>" +
+						"<th>" + __("风险") + "</th>" +
+						"<th>" + __("建议") + "</th>" +
+						"<th>" + __("来源") + "</th>" +
+						"</tr></thead><tbody>";
+					plan.findings.forEach(function (f) {
+						const goal_tag = f.matched_goal ? ' <span class="badge badge-primary">' + __("目标提及") + "</span>" : "";
+						rows_html +=
+							"<tr>" +
+							"<td>" + esc(f.item_code) + goal_tag + "</td>" +
+							"<td><b>" + (RISK_COPY[f.risk] || esc(f.risk)) + "</b></td>" +
+							"<td class=\"small\">" + esc(f.recommendation) + "</td>" +
+							"<td class=\"small text-muted\">" + (f.evidence || []).map(esc).join("<br>") + "</td>" +
+							"</tr>";
+					});
+					rows_html += "</tbody></table>";
+				} else if (analyses.length) {
 					rows_html =
 						"<table class=\"table table-sm table-striped\"><thead><tr>" +
 						"<th>" + __("物料") + "</th>" +

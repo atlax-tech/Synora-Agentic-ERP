@@ -20,6 +20,7 @@ from synora_agentic_erp.agent.analysis import (
     analyze_item,
     horizon_date,
 )
+from synora_agentic_erp.agent.plan import AnalysisRow, build_plan
 from synora_agentic_erp.agent.state_machine import validate_transition
 from synora_agentic_erp.gateway.contract import (
     GatewayFault,
@@ -208,4 +209,76 @@ def analyze_run(run_id: str, correlation_id: str) -> dict[str, Any]:
         "state_version": run.state_version,
         "items_analyzed": len(analyses),
         "analyses": analyses,
+    }
+
+
+def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
+    """生成可解释只读计划 (PROPOSED -> SUCCEEDED, 只读无写入)。
+
+    计划由确定性规则基于分析结果生成, 数量/金额/阈值不经过模型;
+    每项结论带来源引用与未知说明。
+    """
+    if not frappe.db.exists("Synora Agent Run", run_id):
+        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
+    run = frappe.get_doc("Synora Agent Run", run_id)
+    actor = frappe.session.user
+    if actor != run.initiator and "System Manager" not in frappe.get_roles(actor):
+        raise GatewayFault("PERMISSION_DENIED", "run is not available", 403)
+    if run.run_state != "PROPOSED":
+        raise GatewayFault("CONFLICT", "run is not ready for planning", 409)
+
+    analysis_docs = frappe.get_all(
+        "Synora Item Analysis",
+        filters={"run": run_id},
+        fields=[
+            "item_code",
+            "risk",
+            "actual_qty",
+            "demand_qty",
+            "incoming_qty",
+            "open_mr_qty",
+            "net_position",
+            "shortage_qty",
+            "unknowns",
+        ],
+        order_by="item_code asc",
+    )
+    rows = tuple(
+        AnalysisRow(
+            item_code=doc.item_code,
+            risk=doc.risk,
+            actual_qty=str(doc.actual_qty),
+            demand_qty=str(doc.demand_qty),
+            incoming_qty=str(doc.incoming_qty),
+            open_mr_qty=str(doc.open_mr_qty),
+            net_position=str(doc.net_position),
+            shortage_qty=str(doc.shortage_qty),
+            unknowns=doc.unknowns or "",
+        )
+        for doc in analysis_docs
+    )
+    plan = build_plan(
+        goal=run.goal,
+        horizon_days=run.time_window_days,
+        company=run.company_scope,
+        warehouse=run.warehouse_scope or None,
+        analyses=rows,
+    )
+    frappe.get_doc(
+        {
+            "doctype": "Synora Run Plan",
+            "run": run_id,
+            "goal": run.goal,
+            "summary": plan.summary,
+            "plan_json": frappe.as_json(plan.to_dict()),
+            "correlation_id": correlation_id,
+        }
+    ).insert(ignore_permissions=True)
+
+    _set_run_state(run, "SUCCEEDED")
+    return {
+        "run_id": run_id,
+        "run_state": run.run_state,
+        "state_version": run.state_version,
+        "plan": plan.to_dict(),
     }

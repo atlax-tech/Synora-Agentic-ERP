@@ -6,6 +6,7 @@ from frappe.recorder import do_not_record
 from frappe.utils import cint
 
 from synora_agentic_erp.agent.service import analyze_run as analyze_server_run
+from synora_agentic_erp.agent.service import plan_run as plan_server_run
 from synora_agentic_erp.gateway.contract import (
     SCHEMA_VERSION,
     GatewayFault,
@@ -172,6 +173,27 @@ def analyze_run(run_id: str, correlation_id: str) -> dict[str, Any]:
 
 @frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
 @do_not_record  # type: ignore[untyped-decorator]
+def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
+    """生成可解释只读计划 (PROPOSED -> SUCCEEDED, 只读无写入)。"""
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        result = plan_server_run(safe_run_id, safe_correlation_id)
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": safe_correlation_id,
+            "plan": result,
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
 def revoke_run(run_id: str, correlation_id: str) -> dict[str, Any]:
     safe_correlation_id: str | None = None
     try:
@@ -281,11 +303,25 @@ def get_run(run_id: str) -> dict[str, Any]:
         ],
         order_by="item_code asc",
     )
+    plans = frappe.get_all(
+        "Synora Run Plan",
+        filters={"run": safe_run_id},
+        fields=["plan_json", "summary", "creation"],
+        order_by="creation desc",
+        limit=1,
+    )
+    plan = None
+    if plans:
+        try:
+            plan = frappe.parse_json(plans[0].plan_json)
+        except ValueError:
+            plan = None
     return {
         "ok": True,
         "schema_version": SCHEMA_VERSION,
         "run": _run_summary(run),
         "analyses": analyses,
+        "plan": plan,
     }
 
 

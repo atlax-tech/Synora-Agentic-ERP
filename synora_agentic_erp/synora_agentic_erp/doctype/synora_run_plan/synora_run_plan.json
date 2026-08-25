@@ -1,0 +1,29 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-08-25 20:45:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "run", "goal", "summary", "plan_json", "correlation_id"
+ ],
+ "fields": [
+  {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "goal", "fieldtype": "Text", "label": "Goal", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "summary", "fieldtype": "Small Text", "label": "Summary", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "plan_json", "fieldtype": "Long Text", "label": "Plan JSON", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-25 20:45:00.000000",
+ "modified_by": "Administrator",
+ "module": "Synora Agentic ERP",
+ "name": "Synora Run Plan",
+ "owner": "Administrator",
+ "permissions": [{"read": 1, "role": "System Manager"}],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
