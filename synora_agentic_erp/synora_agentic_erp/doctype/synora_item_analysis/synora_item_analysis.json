@@ -1,0 +1,36 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-08-25 19:40:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "run", "item_code", "risk", "actual_qty", "demand_qty", "incoming_qty",
+  "open_mr_qty", "net_position", "shortage_qty", "unknowns", "correlation_id"
+ ],
+ "fields": [
+  {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "item_code", "fieldtype": "Data", "label": "Item Code", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "risk", "fieldtype": "Select", "label": "Risk", "options": "SHORTAGE\nADEQUATE\nDUPLICATE_RISK\nNO_DEMAND\nNEEDS_INPUT\nUNKNOWN", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "actual_qty", "fieldtype": "Float", "label": "Actual Qty", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "demand_qty", "fieldtype": "Float", "label": "Demand Qty (in window)", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "incoming_qty", "fieldtype": "Float", "label": "Incoming Qty (in window)", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "open_mr_qty", "fieldtype": "Float", "label": "Open MR Qty", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "net_position", "fieldtype": "Float", "label": "Net Position", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "shortage_qty", "fieldtype": "Float", "label": "Shortage Qty", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "unknowns", "fieldtype": "Small Text", "label": "Unknowns", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-25 19:40:00.000000",
+ "modified_by": "Administrator",
+ "module": "Synora Agentic ERP",
+ "name": "Synora Item Analysis",
+ "owner": "Administrator",
+ "permissions": [{"read": 1, "role": "System Manager"}],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

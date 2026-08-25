@@ -5,6 +5,7 @@ import frappe
 from frappe.recorder import do_not_record
 from frappe.utils import cint
 
+from synora_agentic_erp.agent.service import analyze_run as analyze_server_run
 from synora_agentic_erp.gateway.contract import (
     SCHEMA_VERSION,
     GatewayFault,
@@ -147,6 +148,30 @@ def cancel_run(run_id: str, correlation_id: str) -> dict[str, Any]:
 
 @frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
 @do_not_record  # type: ignore[untyped-decorator]
+def analyze_run(run_id: str, correlation_id: str) -> dict[str, Any]:
+    """触发确定性采购风险分析 (run_state CREATED -> ANALYZING -> PROPOSED)。
+
+    数量、金额、日期和阈值由确定性代码计算 (PRD F-003), 模型不参与。
+    """
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        result = analyze_server_run(safe_run_id, safe_correlation_id)
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": safe_correlation_id,
+            "analysis": result,
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
 def revoke_run(run_id: str, correlation_id: str) -> dict[str, Any]:
     safe_correlation_id: str | None = None
     try:
@@ -238,7 +263,30 @@ def get_run(run_id: str) -> dict[str, Any]:
     if run.initiator != frappe.session.user and not _is_system_manager():
         _set_status(404)
         return error_response(GatewayFault("RUN_REJECTED", "run is not available", 404))
-    return {"ok": True, "schema_version": SCHEMA_VERSION, "run": _run_summary(run)}
+    analyses = frappe.get_all(
+        "Synora Item Analysis",
+        filters={"run": safe_run_id},
+        fields=[
+            "name",
+            "item_code",
+            "risk",
+            "actual_qty",
+            "demand_qty",
+            "incoming_qty",
+            "open_mr_qty",
+            "net_position",
+            "shortage_qty",
+            "unknowns",
+            "creation",
+        ],
+        order_by="item_code asc",
+    )
+    return {
+        "ok": True,
+        "schema_version": SCHEMA_VERSION,
+        "run": _run_summary(run),
+        "analyses": analyses,
+    }
 
 
 @frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]
