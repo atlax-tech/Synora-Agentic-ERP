@@ -61,15 +61,20 @@ def _log_security_event(code: str, correlation_id: str | None) -> None:
     该路径是 allow_guest 未认证入口, 必须按时间窗口节流, 防止伪造请求刷满
     Error Log (日志放大); 超预算的后续事件静默丢弃。
     """
-    if not _security_event_budget_allowed():
-        return
-    ip = getattr(frappe.local, "request_ip", None) or "-"
-    frappe.log_error(
-        message=(
-            f"synora gateway security event (code={code}, correlation={correlation_id}, ip={ip})"
-        ),
-        title="Synora Gateway Security Event",
-    )
+    try:
+        if not _security_event_budget_allowed():
+            return
+        ip = getattr(frappe.local, "request_ip", None) or "-"
+        frappe.log_error(
+            message=(
+                "synora gateway security event "
+                f"(code={code}, correlation={correlation_id}, ip={ip})"
+            ),
+            title="Synora Gateway Security Event",
+        )
+    except Exception:
+        # 安全事件日志本身不能成为失败路径 (缓存/日志故障时静默降级, 不影响请求)。
+        pass
 
 
 def _security_event_budget_allowed() -> bool:
@@ -302,6 +307,8 @@ def get_run(run_id: str) -> dict[str, Any]:
             "creation",
         ],
         order_by="item_code asc",
+        # run 归属已按发起人校验, 子记录读取统一不看角色权限。
+        ignore_permissions=True,
     )
     plans = frappe.get_all(
         "Synora Run Plan",
@@ -309,6 +316,7 @@ def get_run(run_id: str) -> dict[str, Any]:
         fields=["plan_json", "summary", "creation"],
         order_by="creation desc",
         limit=1,
+        ignore_permissions=True,
     )
     plan = None
     if plans:

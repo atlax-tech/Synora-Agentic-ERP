@@ -242,6 +242,8 @@ def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
             "unknowns",
         ],
         order_by="item_code asc",
+        # run 归属已在上面按发起人校验, 子记录读取统一不看角色权限。
+        ignore_permissions=True,
     )
     rows = tuple(
         AnalysisRow(
@@ -275,6 +277,12 @@ def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
         }
     ).insert(ignore_permissions=True)
 
+    # SUCCEEDED 是只读终态: 同步撤销 capability, 防止 TTL 内继续调用只读工具。
+    run.flags.synora_revocation = True
+    run.revoked = 1
+    run.status = "REVOKED"
+    run.revoked_at = frappe.utils.now_datetime()
+    run.revoked_by = actor
     _set_run_state(run, "SUCCEEDED")
     return {
         "run_id": run_id,

@@ -158,6 +158,8 @@ class OpenAICompatibleProvider:
             timeout=httpx.Timeout(timeout_seconds),
             transport=transport,
             trust_env=False,
+            # 显式禁止跟随重定向: 防止请求 (含 Bearer Key) 被 3xx 转发到非预期地址。
+            follow_redirects=False,
             headers=headers,
         )
 
