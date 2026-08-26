@@ -1,6 +1,6 @@
 # Phase 4 启动准备包
 
-状态：`IN_PROGRESS / P4.3`。用户于 2026-08-26 明确启动 Phase 4，并选择“Agent 搭骨架、用户完成小范围 Assignment、Agent 验收后继续”的协作方式。P4.1 契约、八个 case、四层评测基线和 P4.2 手写模式已通过当前离线 Runtime 检查；P4.3 Assignment 3 正等待用户完成。文件中仍以 `PLANNED` 标记的目标路径、契约和用例不是已完成能力或验收证据。
+状态：`IN_PROGRESS / P4.3`。用户于 2026-08-26 明确启动 Phase 4，并选择“Agent 搭骨架、用户完成小范围 Assignment、Agent 验收后继续”的协作方式。P4.1 契约、八个 case、四层评测基线和 P4.2 手写模式已通过当前离线 Runtime 检查；P4.3 Assignment 3 已完成并通过验收。文件中仍以 `PLANNED` 标记的目标路径、契约和用例不是已完成能力或验收证据。
 
 ## 1. 业务问题与阶段边界
 
@@ -268,7 +268,7 @@ UV_CACHE_DIR=/private/tmp/synora-uv-cache uv run --offline --no-sync --python 3.
 
 ## 9. P4.3 Assignment 3：构造 provider `tool` role message
 
-状态：`待练习`。P4.3 的 provider 契约已经支持 `assistant.tool_calls` 和 `tool` 结果消息；你只需在实验室完成一个纯函数，把一次已经脱敏的 Observation 变成下一轮 provider 能识别的结果消息。
+状态：`已完成`。P4.3 的 provider 契约已经支持 `assistant.tool_calls` 和 `tool` 结果消息；用户已在实验室完成纯函数，并通过脱敏 Observation 到 provider `tool` 结果消息的验收。
 
 ### 业务背景与必要性
 
@@ -320,6 +320,13 @@ UV_CACHE_DIR=/private/tmp/synora-uv-cache uv run --offline --no-sync --python 3.
 1. 为什么 `tool_call_id` 必须来自 provider，而不能用本地 step 代替？
 2. 为什么工具结果 content 只放 bounded summary，digest 另存于 Trace？
 3. 为什么 helper 可以由实习生完成，但 API key、allowlist 和成本计算不能交给这个练习？
+
+### 验收记录
+
+- `services/agent_runtime/tests/test_tool_message_lab.py`：`1 passed`；用户移除了 starter `xfail`。
+- helper 正确映射 `role`、`tool_call_id`、`name` 和有界 `observation.summary`，没有序列化完整 Observation、digest 或敏感值。
+- Runtime 全部测试：`120 passed`；Ruff、Ruff format 和 mypy targeted 检查通过。
+- 本 Assignment 不涉及 provider 请求、API key、allowlist、成本或 Gateway；P4.3 后续仍需完成 smolagents lab-only 对照与统一评测接入。
 
 ## 10. 启动门禁与人工核对（历史启动前说明）
 

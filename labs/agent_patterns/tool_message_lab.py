@@ -40,9 +40,11 @@ def build_learning_tool_message(
     - ``provider_tool_call_id`` -> ``ProviderMessage.tool_call_id``
     - ``tool_name`` -> ``ProviderMessage.name``
     - ``observation.summary`` -> ``ProviderMessage.content``
-
-    完成后请删除下面的 TODO 和 NotImplementedError, 再移除测试上的 xfail.
     """
-    # TODO(learning): 按上面的对照表构造一个 ProviderMessage.
     # 不要改 ProviderMessage 的契约, 不要把 digest 或完整 Observation 序列化进 content.
-    raise NotImplementedError("Assignment 3 starter")
+    return ProviderMessage(
+        role="tool",
+        tool_call_id=provider_tool_call_id,  # provider 返回的 call id
+        name=tool_name,  # 当前只读工具名
+        content=observation.summary,  # 只能放有界摘要
+    )

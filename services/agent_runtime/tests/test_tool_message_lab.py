@@ -2,7 +2,6 @@
 
 from uuid import UUID
 
-import pytest
 from agent_runtime.agent.contracts import observation_from_summary
 
 from labs.agent_patterns.tool_message_lab import build_learning_tool_message
@@ -10,7 +9,6 @@ from labs.agent_patterns.tool_message_lab import build_learning_tool_message
 RUN_ID = UUID("37e1d8a5-1730-4ad0-bffd-217774ed9fab")
 
 
-@pytest.mark.xfail(strict=True, reason="Assignment 3 starter: learner implements the helper")
 def test_learning_helper_builds_serializable_tool_message() -> None:
     observation = observation_from_summary(
         run_id=RUN_ID,
