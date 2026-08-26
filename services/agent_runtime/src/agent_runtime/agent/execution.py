@@ -34,6 +34,7 @@ from agent_runtime.gateway import (
 )
 from agent_runtime.providers import (
     PROVIDER_MODEL_ENV,
+    Provider,
     provider_from_environment,
 )
 
@@ -221,16 +222,26 @@ async def execute_agent(request: AgentExecuteRequest) -> AgentExecuteResponse:
             detail="pricing is required before a paid Agent call",
         )
         return AgentExecuteResponse(provider=provider_name, model=model_name, result=result)
+    provider: Provider | None = None
+    client: GatewayClient | None = None
     try:
-        provider = provider_from_environment()
+        # Acquire the Gateway client first. If provider construction then fails,
+        # the already-owned client is closed before returning the safe failure.
         client = GatewayClient()
+        provider = provider_from_environment()
     except Exception:
+        if client is not None:
+            try:
+                await client.aclose()
+            except Exception:
+                pass
         result = _failure_result(
             request,
             code="MODEL_ERROR",
             detail="provider or Gateway configuration is unavailable",
         )
         return AgentExecuteResponse(provider=provider_name, model=model_name, result=result)
+    assert provider is not None and client is not None
 
     adapter = GatewayToolAdapter(
         client=client,

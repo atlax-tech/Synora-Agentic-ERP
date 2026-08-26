@@ -279,7 +279,9 @@ def issue_run(
             safe_days = positive_int(time_window_days, "time_window_days", MAX_TIME_WINDOW_DAYS)
             if safe_days == 0:
                 raise GatewayFault("INVALID_INPUT", "time_window_days is invalid")
-        safe_execution_mode = execution_mode or "DETERMINISTIC"
+        safe_execution_mode = (
+            "DETERMINISTIC" if execution_mode is None else execution_mode
+        )
         if not isinstance(safe_execution_mode, str) or safe_execution_mode not in EXECUTION_MODES:
             raise GatewayFault("INVALID_INPUT", "execution_mode is invalid")
         run = create_run(

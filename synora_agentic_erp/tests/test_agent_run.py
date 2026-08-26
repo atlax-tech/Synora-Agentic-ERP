@@ -96,14 +96,15 @@ class TestAgentRun(FrappeTestCase):
             COMPANY, "x" * 1001, warehouse=WAREHOUSE, correlation_id=CORRELATION_ID
         )
         self.assertEqual(response["error"]["code"], "INVALID_INPUT")
-        response = issue_run(
-            COMPANY,
-            GOAL,
-            warehouse=WAREHOUSE,
-            correlation_id=CORRELATION_ID,
-            execution_mode="WRITE_AGENT",
-        )
-        self.assertEqual(response["error"]["code"], "INVALID_INPUT")
+        for mode in ("WRITE_AGENT", ""):
+            response = issue_run(
+                COMPANY,
+                GOAL,
+                warehouse=WAREHOUSE,
+                correlation_id=CORRELATION_ID,
+                execution_mode=mode,
+            )
+            self.assertEqual(response["error"]["code"], "INVALID_INPUT")
 
     def test_goal_and_scope_are_immutable(self) -> None:
         result = self._issue()

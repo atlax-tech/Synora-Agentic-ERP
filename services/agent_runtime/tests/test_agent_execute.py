@@ -210,6 +210,32 @@ def test_execute_agent_observation_drives_second_different_tool(
     assert CAPABILITY not in repr(response)
 
 
+def test_execute_agent_closes_gateway_when_provider_setup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway = _FakeGatewayClient({})
+    pricing = Pricing(
+        input_microusd_per_million=Decimal("0"),
+        output_microusd_per_million=Decimal("0"),
+        reasoning_microusd_per_million=Decimal("0"),
+    )
+
+    monkeypatch.setattr("agent_runtime.agent.execution.pricing_from_environment", lambda: pricing)
+
+    def fail_provider_setup() -> object:
+        raise RuntimeError("provider configuration is invalid")
+
+    monkeypatch.setattr(
+        "agent_runtime.agent.execution.provider_from_environment", fail_provider_setup
+    )
+    monkeypatch.setattr("agent_runtime.agent.execution.GatewayClient", lambda: gateway)
+
+    response = asyncio.run(execute_agent(AgentExecuteRequest.model_validate(_request_payload())))
+
+    assert response.result.stop_reason.code == "MODEL_ERROR"
+    assert gateway.closed is True
+
+
 async def _post_agent(
     payload: Mapping[str, object], headers: Mapping[str, str] | None = None
 ) -> httpx.Response:
