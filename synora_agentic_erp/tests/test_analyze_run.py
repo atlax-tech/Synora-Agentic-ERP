@@ -5,6 +5,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from synora_agentic_erp.agent import service as agent_service
 from synora_agentic_erp.agent.service import _runtime_failure_response
 from synora_agentic_erp.api import (
     analyze_run,
@@ -164,6 +165,30 @@ class TestAnalyzeRun(FrappeTestCase):
             len(frappe.get_all("Synora Agent Trace Attempt", filters={"run": run["run_id"]})),
             1,
         )
+
+    def test_cancelled_run_is_rechecked_before_next_deterministic_tool(self) -> None:
+        """A cancel between two reads must prevent the second ERP call."""
+        run = self._issue()
+        calls = 0
+        original_call = agent_service._call_tool
+
+        def call_then_cancel(ctx, name, tool_input, correlation_id):
+            nonlocal calls
+            result = original_call(ctx, name, tool_input, correlation_id)
+            calls += 1
+            if calls == 1:
+                cancel_response = cancel_run(str(run["run_id"]), CORRELATION_ID)
+                self.assertTrue(cancel_response["ok"])
+            return result
+
+        with patch.object(agent_service, "_call_tool", side_effect=call_then_cancel):
+            frappe.set_user(BUYER)
+            response = analyze_run(str(run["run_id"]), CORRELATION_ID)
+
+        self.assertEqual(response["error"]["code"], "CONFLICT")
+        self.assertEqual(calls, 1)
+        stored = frappe.get_doc("Synora Agent Run", run["run_id"])
+        self.assertEqual(stored.run_state, "CANCELLED")
 
     def test_agent_trace_is_not_visible_to_another_user(self) -> None:
         run = self._issue(execution_mode="AGENT")

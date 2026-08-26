@@ -680,6 +680,21 @@ def _lock_proposed_run(run_id: str) -> Any:
 def _call_tool(
     ctx: RunContext, name: str, tool_input: dict[str, object], correlation_id: str
 ) -> dict[str, Any]:
+    # Deterministic closeout runs in the Frappe process rather than through the
+    # capability-authenticated Runtime HTTP path. Re-read the Run immediately
+    # before every ERP call so a concurrent cancel cannot leave this stale
+    # context executing another read after the Run became CANCELLED.
+    if not frappe.db.exists("Synora Agent Run", ctx.run_id):
+        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
+    current = frappe.get_doc("Synora Agent Run", ctx.run_id)
+    if (
+        current.status != "ACTIVE"
+        or current.revoked
+        or current.run_state != "ANALYZING"
+        or current.state_version != ctx.state_version
+        or get_datetime(current.expires_at) <= now_datetime()
+    ):
+        raise GatewayFault("CONFLICT", "run is no longer active for analysis", 409)
     request = GatewayRequest(
         run_id=ctx.run_id,
         # dispatch 不校验 capability; 权限由 recheck_run_scope 以 initiator 身份重检
@@ -803,12 +818,15 @@ def _analyze_deterministic_run(
     already_analyzing: bool = False,
 ) -> dict[str, Any]:
     """Run the Phase 3 analysis, optionally continuing an Agent exploration."""
-    ctx = _run_context(run)
     analysis_started = already_analyzing
     try:
         if not already_analyzing:
             _set_run_state(run, "ANALYZING")
             analysis_started = True
+        # Capture the version after the CREATED -> ANALYZING transition. The
+        # per-tool cancellation check compares this snapshot with the current
+        # database row to reject stale closeout contexts.
+        ctx = _run_context(run)
 
         # 需求源 = 未结 MR 行; 在途源 = 未收货 PO 行; 各拉取一次后按 item 分组。
         mr_rows = _collect_rows(ctx, "material_request.open", {}, correlation_id)
