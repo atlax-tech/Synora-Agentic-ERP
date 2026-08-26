@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-> A governed Agentic Enterprise Operations product that turns ERP goals into explainable, authorized, verifiable business actions.
+> An Agent-development learning repository and real ERP practice vehicle for explainable, authorized, verifiable business actions.
 
 ## Project status
 
@@ -10,13 +10,15 @@ Synora has completed **Phase 0 through Phase 3** for its read-only scope: the go
 
 Phase 3 exit review **passed**: the independent adversarial review initially returned `CHANGES_REQUIRED` with eight blocking findings; the fixes were re-verified across three review rounds, and the final cleanup also closed the CAS-loser recovery race, Docker sidecar configuration/authentication, redirect handling, reasoning-token accounting, and stale evidence wording. The model guard is accurately described as a request output budget plus provider usage verification—not a provider-side hard cost cap. Phase 4 has not started; approval/workflow mapping remains an explicit gate, and all write operations remain staged.
 
+The approved repository position is **Agent-development job learning repository + real ERP practice vehicle**. It uses one repository and one development line with two code purposes: the business application layer proves Agent techniques against real ERP constraints; the teaching lab builds minimal, runnable comparisons before those techniques are adopted or rejected. This is not two repositories or two long-lived branches, and commercial-minimum scope is not the learning goal.
+
 ## Learning and phase gates
 
-Synora follows a mentor-led Agent development workflow. Every phase step begins with a bounded Assignment covering the business reason, code entry point, expected output, tests, boundaries, hints, and interview questions; the learner attempts safe work first, while security gates and production defects remain mentor-controlled.
+Synora follows a mentor-led Agent development workflow. Every Phase 4–13 topic follows `principle -> minimal lab -> source comparison -> Synora business adaptation -> tests and trace -> adoption/rejection record -> interview questions`. Every phase step begins with a bounded Assignment covering the business reason, code entry point, expected output, tests, boundaries, hints, and interview questions; the learner attempts safe work first, while security gates and production defects remain mentor-controlled.
 
 At each phase exit, the team scores nine Agent-engineering dimensions, records likelihood/impact risks, and runs an independent adversarial review after the final diff and full evidence are ready. `CHANGES_REQUIRED` or `BLOCKED` stops the phase; only a final `PASS` permits the exit report. User questions and blockers are kept verbatim in the phase log, followed by the explanation and evidence. Each exit also produces at least five project- and interview-focused practice questions.
 
-This status is an evidence boundary, not a reduction in product standards. Synora is being designed and developed as a production-grade enterprise product; this README does not present planned behavior as working software.
+This status is an evidence boundary, not a reduction in engineering standards. Synora is a learning project grounded in enterprise constraints; this README does not present a lab, a planned capability, production deployment, or customer adoption as working evidence.
 
 ## Why Synora exists
 
@@ -101,7 +103,7 @@ Then read in this order:
 
 ### Product installation
 
-The Frappe App and Agent Runtime scaffold and their verified commands are documented in `docs/DEVELOPMENT.md`. Product-level Agent capabilities and write operations are not yet installable; the Bench environment, pinned-baseline commands, deterministic seed data, and the Phase 2 real-HTTP verification (`env/dev/p26`) are runnable as described there.
+The Frappe App, Agent Runtime, and Phase 3 read-only procurement Agent are runnable as documented in `docs/DEVELOPMENT.md`, including the `env/dev/p26` and `env/dev/p35` real-HTTP checks. Phase 4–13 capabilities and all ERP writes remain planned rather than installable evidence.
 
 ## System architecture
 
@@ -117,6 +119,7 @@ flowchart TD
     Runtime --> Model[Model Provider Interface]
     Runtime --> Retrieval[Versioned Retrieval]
     Runtime --> Eval[Evaluation and Trace Evidence]
+    Eval --> Labs[Teaching Labs / Golden Tasks]
     ERP --> Database[(MariaDB / authoritative business state)]
 ```
 
@@ -126,6 +129,7 @@ flowchart TD
 | Synora Frappe App | Authenticated entry point, typed gateway, policy, approval, idempotency, execution, receipts |
 | Agent Runtime | Intent, planning, constrained tool use, structured proposals, explanation, checkpoints, evaluation |
 | Retrieval | Versioned sources, FTS5 baseline, citations, permission-aware context, later evidence-gated evolution |
+| Learning and Eval Plane | Minimal Agent labs, golden tasks, trajectory assertions, red-team cases, benchmarks, adoption/rejection evidence |
 | Harness and CI | Durable project knowledge, boundaries, verification roles, drift detection, acceptance evidence |
 
 The Agent Runtime never connects directly to the ERP database and never becomes the final authorization boundary.
@@ -151,9 +155,11 @@ The controlled test baseline permits initiator confirmation for MR Draft and PO 
 
 ## AI and retrieval strategy
 
-### Initial Agent architecture
+### Agent execution learning path
 
-- One Agent with deterministic workflow and state-transition control.
+- Phase 3 provides the single-Agent deterministic baseline; it is not the final Agent architecture.
+- Phase 4 compares Direct, bounded ReAct, Plan-and-Solve, Reflection, a small multi-step kernel, and provider-native tool calling.
+- Phase 5 adds durable Plan-and-Execute, checkpoint, interrupt, resume, cancellation, and recovery.
 - Allowlisted, typed, versioned ERP tools.
 - Model output treated as untrusted input and parsed through versioned schemas.
 - Model-provider abstraction; concrete models selected by evaluation.
@@ -186,7 +192,7 @@ The architecture preserves typed role, state, event, handoff, tool, policy, and 
 | ERP | ERPNext v16, Frappe v16, MariaDB, Redis | Pinned in ADR-0002 (Frappe 16.31.0 / ERPNext 16.32.3) |
 | ERP extension | Root-installable Frappe Custom App | Scaffolded and installed (P2.1) |
 | Agent service | Python, FastAPI, Pydantic v2, HTTPX | Pinned in `services/agent_runtime` (FastAPI 0.141.1, HTTPX 0.28.1, Pydantic 2.12.5) |
-| Workflow | Deterministic services; conditional LangGraph | Phase 3 spike closed; Phase 4 re-evaluates only if write recovery requires it |
+| Workflow | Hand-written Agent kernel, then evaluated LangGraph | Phase 4 execution-loop baseline; Phase 5 durable-workflow comparison |
 | Retrieval | SQLite FTS5/BM25 first | Vector/hybrid/reranking gated by evaluation |
 | Frontend | ERPNext Desk using verified Frappe components | Product form approved; component baseline unresolved |
 | Engineering | `uv`, Ruff, mypy, pytest | Verified (P2.1); commands in `docs/DEVELOPMENT.md` |
@@ -201,6 +207,7 @@ Synora-Agentic-ERP/
 ├── README.zh-CN.md           # Chinese project presentation
 ├── .agents/skills/           # Project-level engineering Skills
 ├── .harness/                 # Managed ownership, sources, unresolved items, fingerprints
+├── labs/                     # Planned teaching labs; not deployed business behavior
 └── docs/
     ├── PRD.md                # Product source of truth
     ├── ARCHITECTURE.md       # Architecture and technology boundaries
@@ -235,11 +242,16 @@ Before a release or version update, an independent adversarial sub-agent must re
 - [x] Phase 1: unmodified Frappe/ERPNext v16 baseline and P2P business archaeology
 - [x] Phase 2: typed read-only ERP gateway
 - [x] Phase 3: read-only procurement Agent and FTS5 evaluation baseline
-- [ ] Phase 4: proposals, approval, MR Draft, PO Draft, receipts, and reconciliation
-- [ ] Phase 5: PO Submit, Receipt, Invoice, and Payment-related controlled operations
-- [ ] Phase 6: contextual ERP Coach and full RAG evolution
-- [ ] Phase 7: Multi-Agent evaluation and conditional adoption
-- [ ] Phase 8: hardening, failure drills, benchmarks, and interview evidence
+- [ ] Phase 4: Agent execution kernel, native Tool Calling, stop governance, and first trajectory eval
+- [ ] Phase 5: durable workflow, Plan-and-Execute, checkpoint, HITL, and recovery
+- [ ] Phase 6: governed MR/PO Draft actions, approval, idempotency, receipt, and reconciliation
+- [ ] Phase 7: Prompt, Context Engineering, and Skills
+- [ ] Phase 8: Memory, RAG, and Contextual ERP Coach
+- [ ] Phase 9: Multi-Agent, MCP, and A2A experiments with evidence-gated adoption
+- [ ] Phase 10: complete P2P operating Agent
+- [ ] Phase 11: Web/GUI Agents and multimodal observation
+- [ ] Phase 12: self-improvement, post-training, and Agentic RL experiments
+- [ ] Phase 13: AI Infra, hardening, benchmarks, and capstone evidence
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for milestone entry and exit conditions.
 
@@ -255,7 +267,7 @@ No. Natural language is an input surface; typed tools, deterministic services, E
 
 ### Why not start with Multi-Agent orchestration?
 
-A single Agent provides a simpler evaluation baseline and avoids coordination risk. Multi-Agent roles are adopted only when they demonstrate measurable value without weakening governance.
+The learning plan includes Multi-Agent, MCP, and A2A in Phase 9. A single Agent provides the comparison baseline; only roles with measurable net benefit enter the business path, while rejected roles keep runnable learning evidence.
 
 ### Why start retrieval with FTS5 instead of a vector database?
 
@@ -263,7 +275,7 @@ FTS5 is local, inspectable, inexpensive, and provides a clear baseline. The comp
 
 ### Can I run Synora today?
 
-The Phase 3 read-only Gateway and procurement Agent are runnable against the pinned Bench environment: see `docs/DEVELOPMENT.md` and the `env/dev/p26`/`env/dev/p35` real-HTTP checks. Phase 4 proposals, approvals, and ERP writes are not yet available; `approval-workflow-mapping` must be resolved before write enablement.
+The Phase 3 read-only Gateway and procurement Agent are runnable against the pinned Bench environment: see `docs/DEVELOPMENT.md` and the `env/dev/p26`/`env/dev/p35` real-HTTP checks. Phase 4–13 remain planned; the first governed writes are Phase 6, and `approval-workflow-mapping` must be resolved before they are enabled.
 
 ## License
 

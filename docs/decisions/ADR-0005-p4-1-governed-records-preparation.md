@@ -1,14 +1,14 @@
-# ADR-0005：P4.1 受治理记录的只读取证与设计准备
+# ADR-0005：P4.1 受治理记录的只读取证与设计准备（已被纠偏路线取代）
 
-- 状态：`PROPOSED`（仅 P4.1 只读取证与治理设计；未授权实现）
+- 状态：`SUPERSEDED`（历史取证保留；由 2026-08-26 已批准纠偏路线取代，治理记录移至 Phase 6）
 - 日期：2026-08-25
 - 关联：`docs/PLAN.md` §13 P4.1、`docs/SPEC.md` §7.2–§7.4/§8.2/§10/§11、`docs/ARCHITECTURE.md` 的 Approval and Workflow Authority、`docs/ACCEPTANCE.md` 的首个受治理写入验收
 
 ## 1. 背景与范围
 
-Phase 3 已完成只读 Run、确定性分析、计划和 FTS5 基线。Phase 4 之前需要把 Proposed Action、Approval Decision、Execution Receipt 的字段、摘要、状态和门禁设计固定下来，避免把模型文本、用户确认或 ERP 当前状态混成一个不可审计的“执行结果”。
+Phase 3 已完成只读 Run、确定性分析、计划和 FTS5 基线。原排期把治理记录准备放在 Phase 4；2026-08-26 纠偏后，Phase 4 只建立执行内核与评测，Phase 5 建立持久工作流，治理记录和首次写入统一移至 Phase 6。
 
-本 ADR 只完成 P4.1 的证据整理和设计准备：不创建 Phase 4 DocType，不增加写 API/写工具，不创建 MR/PO，不修改 ERPNext/Frappe 上游，不解析或批准 `approval-workflow-mapping`。任何写入实现都需要新的明确阶段指令和独立验收。
+本 ADR 只保留原 P4.1 的证据整理和设计准备：不创建 DocType，不增加写 API/写工具，不创建 MR/PO，不修改 ERPNext/Frappe 上游，不解析或批准 `approval-workflow-mapping`。任何写入实现都需要 Phase 6 的明确阶段指令和独立验收。
 
 ## 2. 已确认的外部事实
 
@@ -20,7 +20,7 @@ Phase 3 已完成只读 Run、确定性分析、计划和 FTS5 基线。Phase 4 
 - Approval Decision 必须绑定 action/proposal digest、审批人、决定、匹配的 Workflow/Policy、状态快照、过期信息、时间和理由；
 - Execution Receipt 必须绑定 run/action/approval/idempotency/correlation 标识、payload digest、ERP DocType/name、核验字段、成功/失败类别、最终状态和对账链接；
 - 合法状态为 `DRAFT → INVALID/POLICY_REJECTED/AWAITING_APPROVAL`、`AWAITING_APPROVAL → APPROVED/DECLINED/EXPIRED`、`APPROVED → EXECUTED/EXPIRED`；未知状态和非法转换必须 fail closed；
-- Phase 4 首批写入仅允许 MR Draft/PO Draft，禁止任意 DocType、任意字段、SQL 或 MCP 写入。
+- 原 Phase 4 首批写入仅允许 MR Draft/PO Draft；该范围现移至 Phase 6，仍禁止任意 DocType、任意字段、SQL 或 MCP 写入。
 
 ### 2.2 固定 ERP 基线事实
 
@@ -34,7 +34,7 @@ Phase 3 已完成只读 Run、确定性分析、计划和 FTS5 基线。Phase 4 
 | Approval Decision | SPEC 要求 digest、审批人、Workflow/Policy、快照和理由 | 固定 ERP Workflow/Role/Policy 映射、独立审批人和拒绝/修改/过期测试 |
 | Execution Receipt | SPEC 要求最终 ERP 状态、失败类别、对账链接和 correlation | ERP controller 创建/读回、响应丢失、重复请求、对账和审计事件实测 |
 | Digest | 架构要求在审批和执行前绑定不可变 payload/状态快照 | 规范化编码、版本兼容、digest 变化冲突和重算测试 |
-| Workflow engine | ADR-0004 只关闭 Phase 3 的 LangGraph 采用；Phase 4 仍按实测恢复需要重估 | 写入中断、approval、resume、reconciliation 的最小实测；需要成立后才选引擎 |
+| Workflow engine | ADR-0004 只关闭 Phase 3 的 LangGraph 采用；Phase 5 按纠偏路线重新对照 | interruption、resume、recovery 的实验；Phase 6 写入前完成安全门禁 |
 
 ## 4. P4.1 建议的记录契约
 
@@ -83,7 +83,7 @@ Receipt 是执行事实的摘要，不是“API 返回 200”的别名。ERP 返
 ### 5.1 模型调用成本与并发门禁
 
 - Phase 3 当前已实现单请求 `max_tokens`、completion/reasoning usage 校验、超预算 fail closed、实际拒绝用量证据，以及同一 Run 的数据库行锁；这些是请求级安全边界，不是账户计费上限。
-- P3.5 真实验收只产生一次受控的 BYOK 调用；不同 Run 之间仍没有账户级频率、并发或日额度账本。为避免把该风险带入写入阶段，P4 写入启用前必须先确定并取证：`initiator + provider + model` 配额键、最大 in-flight 数、时间窗 token 额度、调用前预算预留/调用后 usage 结算、usage 缺失时的冻结/人工对账，以及超额审计事件。
+- P3.5 真实验收只产生一次受控的 BYOK 调用；不同 Run 之间仍没有账户级频率、并发或日额度账本。为避免把该风险带入写入阶段，Phase 6 写入启用前必须先确定并取证：`initiator + provider + model` 配额键、最大 in-flight 数、时间窗 token 额度、调用前预算预留/调用后 usage 结算、usage 缺失时的冻结/人工对账，以及超额审计事件。
 - 该门禁应由受治理的 Synora 记录或部署级限流实现，并在多 worker/进程下保持一致；不能依赖单进程 semaphore 或客户端自报额度。本 ADR 只固定设计要求，不实现额度账本或限流器。
 
 ## 6. P4.1 验收门禁
@@ -99,11 +99,11 @@ Receipt 是执行事实的摘要，不是“API 返回 200”的别名。ERP 返
 
 ## 7. 风险与未决项
 
-- 当前没有解决 `approval-workflow-mapping`，因此本 ADR 不能作为 Phase 4 写入授权。
+- 当前没有解决 `approval-workflow-mapping`，因此本 ADR 不能作为 Phase 6 写入授权。
 - Runtime token 只保护本地 sidecar 调用，不替代 Frappe 登录、ERP 权限或审批；生产部署还需要受管网络、密钥轮换和调用额度设计。
-- Provider 的 reasoning token、usage 缺失和服务商忽略请求预算只能通过 fail-closed 降低风险，不能追回已产生的费用；账户级额度、频率和并发门禁已在 §5.1 固定为 P4 写入启用前的设计/取证门槛，当前未实现。
-- 若 P4 真实故障显示需要跨请求恢复，再按 ADR-0004 重新做 workflow-engine Spike；本 ADR 不预埋 LangGraph/Temporal 依赖。
+- Provider 的 reasoning token、usage 缺失和服务商忽略请求预算只能通过 fail-closed 降低风险，不能追回已产生的费用；账户级额度、频率和并发门禁已在 §5.1 固定为 Phase 6 写入启用前的设计/取证门槛，当前未实现。
+- Phase 5 按纠偏路线重新进行 workflow-engine 对照；本 ADR 不预埋 LangGraph/Temporal 依赖。
 
 ## 8. 结论
 
-P4.1 的只读取证和治理设计已形成可审阅基线；Phase 4 尚未启动，也没有任何 ERP 写入实现。下一步必须先由用户批准 P4.1 的实现范围并完成 `approval-workflow-mapping`，再进入 P4.2/P4.3。
+原 P4.1 的只读取证和治理设计保留为历史基线；Phase 4 尚未启动，也没有任何 ERP 写入实现。按纠偏路线，Phase 5 先完成持久工作流对照，Phase 6 再批准治理实现范围并完成 `approval-workflow-mapping`。

@@ -1,12 +1,13 @@
 # Synora Agentic ERP
 
-Synora 是构建在 ERPNext 上的受治理 Agentic Enterprise Operations 产品。ERPNext/Frappe 是只读上游和事务事实源；不得修改上游核心、直写 ERP 数据库，或绕过权限、校验、Workflow 与审计。
+Synora 是“Agent 开发岗位学习仓库 + 真实 ERP 实践载体”，在同一仓库内以业务应用层验证真实 ERP 价值，以教学实验层学习和对比 Agent 模式。这不代表两个仓库或两条长期分支。ERPNext/Frappe 仍是只读上游和事务事实源；不得修改上游核心、直写 ERP 数据库，或绕过权限、校验、Workflow 与审计。
 
 ## 阅读顺序
 
 1. `docs/PLAN.md`：当前阶段、工作方式与停止条件；
-2. 当前任务直接涉及的 `docs/PRD.md`、`docs/ARCHITECTURE.md`、`docs/DESIGN.md`、`docs/SPEC.md`；
-3. 对应阶段的 `docs/development-log/`、ADR、源码和测试。
+2. `docs/项目方向纠偏.md`：已批准的学习定位、同仓双层结构与 Phase 4–13 路线；
+3. 当前任务直接涉及的 `docs/PRD.md`、`docs/ARCHITECTURE.md`、`docs/DESIGN.md`、`docs/SPEC.md`；
+4. 对应阶段的 `docs/development-log/`、ADR、源码和测试。
 
 只读完整仓库不是默认动作。普通增量只加载当前业务链路所需上下文；ERP 行为不明确时再查固定上游源码和官方测试。
 

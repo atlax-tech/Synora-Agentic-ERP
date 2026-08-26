@@ -12,18 +12,18 @@ Phase 3 的实际实现证据（2026-08-25）：
 
 - **P3.2**：Run 生命周期由 Frappe 侧确定性状态机（`agent/state_machine.py`，SPEC §8.1 全转换表，非法转换 fail-closed）驱动；取消即终态，capability 同步失效。
 - **P3.3/P3.5**：分析（CREATED→ANALYZING→PROPOSED）与计划（PROPOSED→SUCCEEDED）都是**同步的确定性步骤**（Frappe 进程内调用 typed 只读工具 + 纯函数计算），无长时间运行、无跨请求状态需要保存/恢复。
-- **Phase 3 无写操作**：interruption、approval、resume、reconciliation 都是 Phase 4 写操作阶段（PO Submit 超时、响应丢失、对账）才出现的概念；Phase 3 的只读链路中不存在"执行到一半需要恢复"的状态。
+- **Phase 3 无写操作**：持久 interruption/resume 在 Phase 5 验证，approval/reconciliation 等写入语义在 Phase 6 才启用；Phase 3 的只读链路中不存在"执行到一半需要恢复"的状态。
 
 ## 决策（Decision）
 
 1. **Phase 3 不采用 LangGraph**，保持确定性服务（Frappe 状态机 + Runtime 同步编排）。
 2. `workflow-engine-spike` 未决项以本 ADR 为 Phase 3 出口证据：**无明确收益则不引入**（符合 PLAN P3.6 默认）。
-3. Phase 4 启用写入（审批/执行/对账）时，若出现"中断恢复、多步审批编排、响应丢失恢复"的实测需要，再以独立 Spike 评估 LangGraph 或 Frappe 后台任务方案；在需要成立之前不引入编排框架。
+3. Phase 5 进行持久工作流实验时，以独立 Spike 对比手写工作流、LangGraph 或 Frappe 后台任务方案；Phase 6 启用写入前必须完成中断恢复、审批编排和响应丢失恢复的安全门禁。
 
 ## 备选方案（Alternatives）
 
 1. **采用 LangGraph checkpoint/resume**：Phase 3 无多步模型编排、无跨请求持久状态（检查点只存在于 Runtime 存储，且 SPEC §6 禁止把 checkpoint 当业务事实）；引入框架增加依赖与复杂度而无实测收益。否决。
-2. **引入通用工作流引擎（如 Frappe Workflow 用于业务、Temporal 用于编排）**：ERP Workflow 属企业配置未决项（`approval-workflow-mapping`），Phase 4 启用写入前才取证；Temporal 类基础设施在无实测需要时违反"无测量需求不引入复杂基础设施"（PLAN §7）。否决。
+2. **引入通用工作流引擎（如 Frappe Workflow 用于业务、Temporal 用于编排）**：ERP Workflow 属企业配置未决项（`approval-workflow-mapping`），Phase 6 启用写入前完成取证；Temporal 类基础设施在无实测需要时违反"无测量需求不引入复杂基础设施"（PLAN §7）。否决。
 
 ## 后果（Consequences）
 
@@ -37,4 +37,4 @@ Phase 3 的实际实现证据（2026-08-25）：
 - `tests/test_run_state_machine.py`：上述 Phase 4 场景转换被单测覆盖（_LEGAL/_ILLEGAL 全表），"中断→恢复"所需的状态权威已有可测落点；实测需要不成立的是"引入编排框架"本身，不是状态机能力。
 - `synora_agentic_erp/agent/service.py`：analyze_run / plan_run 同步编排（无 checkpoint、无跨请求状态）。
 - P3.2–P3.5 集成测试：app-test 59/59；真实 HTTP 冒烟：issue→analyze→plan 全链路 SUCCEEDED。
-- ARCHITECTURE "Stateful Agent workflow"：`CONDITIONAL`，采用条件是实测需要成立——本 ADR 记录 Phase 3 该条件不成立，Phase 4 写入门禁保留重估。
+- ARCHITECTURE "Stateful Agent workflow"：`CONDITIONAL`，采用条件是实测需要成立——本 ADR 记录 Phase 3 该条件不成立，Phase 5 重新对照，Phase 6 写入门禁前完成取舍。

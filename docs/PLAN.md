@@ -10,8 +10,9 @@
 
 1. 根目录 `AGENTS.md`；
 2. 本文；
-3. 本文为当前阶段指定的权威文档、上阶段证据、ADR、源码和测试；
-4. 当前增量直接涉及的实现文件。
+3. `docs/项目方向纠偏.md`；
+4. 本文为当前阶段指定的权威文档、上阶段证据、ADR、源码和测试；
+5. 当前增量直接涉及的实现文件。
 
 事实权威保持不变：
 
@@ -31,6 +32,8 @@
 
 - 仓库是 `MANAGED_HARNESS`；产品、架构、设计、开发、测试、验收、Roadmap 和 SPEC 已建立；
 - Phase 0–Phase 3 的出口证据已经形成；Phase 3 交付的是只读采购 Agent，出口复核已通过；Phase 4 尚未开始；
+- Phase 4 启动准备包见 `docs/phase4-kickoff.md`；它只固定边界、契约草案、首批 golden cases、Trace schema 和用户 Assignment，不代表 P4.1 已启动或任何实现已经完成；
+- 项目定位为“Agent 开发岗位学习仓库 + 真实 ERP 实践载体”；业务应用层与教学实验层共存于同一仓库和开发主线，不是两个仓库或长期分支；
 - `approval-workflow-mapping` 仍是启用 ERP 写入前的强制门禁，当前不得把 Proposed Action、Approval、Draft、Receipt 或其他写工具当作已实现能力；
 - Frappe/ERPNext 是只读上游依赖，不能修改其核心，也不能绕过其权限、校验、Workflow、事务和审计；
 - 当前工作应由最近开发日志、提交历史、测试输出、运行证据和阶段出口条件共同判定。
@@ -40,7 +43,7 @@
 阶段选择算法：
 
 1. 读取最近的开发日志、提交历史和工作区状态；
-2. 按 Phase 0 到 Phase 8 顺序核对出口证据；
+2. 按 Phase 0 到 Phase 13 顺序核对出口证据；
 3. 第一个缺少完整出口证据的阶段就是“下个阶段”；
 4. 阶段内从编号最小且缺少验收证据的步骤继续；
 5. 上一步未通过时不得开始下一步，上阶段未通过时不得开始下一阶段。
@@ -173,35 +176,36 @@
 | F-001 Agent Run 与目标输入 | Phase 3 | 身份、范围、状态、输入和 UI 正常/异常证据。 |
 | F-002 授权上下文与 Typed ERP Tools | Phase 2 | 契约、权限、分页、超时和真实 ERP 集成证据。 |
 | F-003 确定性采购风险分析 | Phase 3 | 固定输入的确定性计算和 UNKNOWN/NEEDS_INPUT 证据。 |
-| F-004 可解释计划与 ProposedAction | Phase 4 | 版本化 schema、证据、冲突、过期和 fail-closed 证据。 |
-| F-005 Policy / RBAC / Approval | Phase 4 | Workflow、权限、Draft 确认、职责分离和状态重检证据。 |
-| F-006 MR Draft / PO Draft 受控执行 | Phase 4 | 真实创建、读回、权限、重复和失败恢复证据。 |
-| F-007 Receipt、幂等与对账 | Phase 4 | replay、响应丢失、对账和人工介入证据。 |
-| F-008 Audit / Trace / Failure Evidence | Phase 4 | correlation、脱敏、访问控制和失败分类证据。 |
-| F-009 PO Submit | Phase 5 | 独立审批、当前状态、影响和恢复证据。 |
-| F-010 Purchase Receipt | Phase 5 | 部分收货、库存、取消、幂等和恢复证据。 |
-| F-011 Purchase Invoice | Phase 5 | 部分开票、税务/会计、取消、幂等和恢复证据。 |
-| F-012 Payment 相关流程 | Phase 5 | 会计权威、职责分离、状态、对账和审计证据。 |
-| F-013 Contextual ERP Coach | Phase 6 | 引用、拒答、权限、版本、冲突和注入评测。 |
-| F-014 完整 RAG 演进 | Phase 6 | FTS5 基线和每个后续候选技术的采用或拒绝证据。 |
-| F-015 条件式 Multi-Agent | Phase 7 | 相同数据集 A/B 和每个候选角色的采用或拒绝证据。 |
+| F-004 可解释计划与 ProposedAction | Phase 4 动态规划基线；Phase 6 写入提议 | Tool Calling/Trace 与版本化 schema、证据、冲突、过期、fail-closed 证据。 |
+| F-005 Policy / RBAC / Approval | Phase 6 | Workflow、权限、Draft 确认、职责分离和状态重检证据。 |
+| F-006 MR Draft / PO Draft 受控执行 | Phase 6 | 真实创建、读回、权限、重复和失败恢复证据。 |
+| F-007 Receipt、幂等与对账 | Phase 6 | replay、响应丢失、对账和人工介入证据。 |
+| F-008 Audit / Trace / Failure Evidence | Phase 4 建基线；Phase 6 补写入证据 | Action/Observation/stop reason 与 correlation、脱敏、访问控制、写入失败分类证据。 |
+| F-009 PO Submit | Phase 10 | 独立审批、当前状态、影响和恢复证据。 |
+| F-010 Purchase Receipt | Phase 10 | 部分收货、库存、取消、幂等和恢复证据。 |
+| F-011 Purchase Invoice | Phase 10 | 部分开票、税务/会计、取消、幂等和恢复证据。 |
+| F-012 Payment 相关流程 | Phase 10 | 会计权威、职责分离、状态、对账和审计证据。 |
+| F-013 Contextual ERP Coach | Phase 8 | 引用、拒答、权限、版本、冲突和注入评测。 |
+| F-014 完整 RAG 演进 | Phase 8 | FTS5 基线和每个后续候选技术的采用或拒绝证据。 |
+| F-015 条件式 Multi-Agent | Phase 9 | 相同数据集 A/B 和每个候选角色的采用或拒绝证据。 |
+| F-016 Agent 学习实验与采用证据 | Phase 4–13 | 最小实验、开源对照、Synora 转译、Trace、评测、Adoption Card、Assignment 与面试追问。 |
 
 ## 7. 未决项路由
 
 | 未决项 | 最迟解决阶段 | 默认处理 |
 | --- | --- | --- |
 | `erp-version-pair` | Phase 1 | 通过真实 P2P 基线唯一收敛；固定版本前做独立对抗审查。 |
-| `approval-workflow-mapping` | Phase 1 提证，Phase 4 启用写入前完成 | 从固定版本权限和 Workflow 取证；具体企业政策或多级规则交用户决定。 |
+| `approval-workflow-mapping` | Phase 1 提证，Phase 6 启用写入前完成 | 从固定版本权限和 Workflow 取证；具体企业政策或多级规则交用户决定。 |
 | `runtime-user-authorization` | Phase 2 | 做安全 Spike 和 ADR 选项，必须交用户批准后实施。 |
 | `product-commands` | Phase 2 | 由实际脚手架和成功命令输出解决，不能从 README 推断。 |
 | `frontend-design-baseline` | Phase 3 | 从固定 Frappe v16 取证；浏览器、可访问性和双语术语等产品选择交用户批准。 |
 | Goal 长度及默认公司、仓库、时间范围 | Phase 3 | 提交产品决策包，用户批准后固化到 PRD/SPEC。 |
 | `model-selection` | Phase 3 | 使用同一评测集比较；涉及远程数据、成本或安全边界时交用户决定。 |
-| `workflow-engine-spike` | Phase 3（已闭环，ADR-0004） | Phase 3 只读链路无中断/恢复实测需要 → 不采用 LangGraph；Phase 4 写入门禁：实测需要成立时以独立 Spike 重估。 |
+| `workflow-engine-spike` | Phase 3 只读结论已闭环；Phase 5 重评 | ADR-0004 仅证明 Phase 3 不需要 LangGraph；Phase 5 必须用中断/恢复实验与手写内核对比后决定主线范围。 |
 | 性能、并发、保留期、浏览器与可访问性目标 | 首次受影响阶段 | 先取得基线数据，再由用户批准验收目标，禁止编造数字。 |
-| `vector-retrieval-threshold` | Phase 6 | 用 FTS5 原始结果形成阈值决策包，用户批准后才允许采用后续检索技术。 |
-| `multi-agent-adoption-threshold` | Phase 7 | 用单 Agent 原始结果形成阈值决策包，用户批准后才允许采用角色。 |
-| `third-party-licenses` | Phase 8 前，任何公开发布前必须完成 | 调查 MIT、GPL-3.0、CC BY-NC、NOTICE 和分发边界，实质发布选择交用户批准。 |
+| `vector-retrieval-threshold` | Phase 8 | 用 FTS5 原始结果形成阈值决策包，用户批准后才允许技术进入业务主线；教学对照实验不因未采用而删除。 |
+| `multi-agent-adoption-threshold` | Phase 9 | 用单 Agent 原始结果形成阈值决策包；业务主线只采用有净收益的角色，教学实验保留全部候选的对照证据。 |
+| `third-party-licenses` | Phase 13 前，任何公开发布前必须完成 | 调查 MIT、GPL-3.0、CC BY-NC、NOTICE 和分发边界，实质发布选择交用户批准。 |
 | 生产 checkpoint、存储和扩展路径 | 首次声称超出单实例能力前 | 没有测量需求时保持未决；不得提前引入复杂基础设施。 |
 
 ## 8. 必须停止并交给用户的情况
@@ -263,76 +267,97 @@
 - **P3.3 确定性采购分析**：实现库存、需求、在途采购、重复采购、UOM、日期和 UNKNOWN/NEEDS_INPUT；LLM 不处理数量、金额和阈值计算。
 - **P3.4 Provider 基线**：建立 provider 接口、CI 确定性响应和同一数据集模型评测；远程数据、成本或安全变化先交用户决定。
 - **P3.5 单 Agent 只读计划**：实现目标理解、受限上下文、tool allowlist、可解释结果、来源、未知和失败恢复，不产生可执行写入。
-- **P3.6 FTS5 与工作流 Spike**：建立 curated source 和 SQLite FTS5/BM25 基线。checkpoint/resume 验证结论（ADR-0004）：Phase 3 只读生命周期为同步确定性步骤、无跨请求状态，interruption/approval/resume/reconciliation 的实测需要不成立，不采用 LangGraph；Phase 4 启用写入（审批/执行/对账）时若实测需要成立，再以独立 Spike 重估。确定性状态机已定义 Phase 4 中断/对账转换（AWAITING_APPROVAL→EXPIRED/EXECUTING、RECONCILIATION_REQUIRED→SUCCEEDED/FAILED）并被 `tests/test_run_state_machine.py` 覆盖。
+- **P3.6 FTS5 与工作流 Spike**：建立 curated source 和 SQLite FTS5/BM25 基线。ADR-0004 只证明 Phase 3 同步只读链路不需要 LangGraph；批准的新路线要求 Phase 5 用 interruption/resume/recovery 实验将手写工作流与 LangGraph 重新对比。确定性状态机已定义后续中断/对账转换并被 `tests/test_run_state_machine.py` 覆盖。
 - **P3.7 安全评测**：固定并运行正常、歧义、无权限、tool failure、恶意目标、恶意 ERP 字段、检索注入和完全无写入场景。
 
 出口证据：单 Agent 和 FTS5 原始基线可复跑；相同输入产生确定性业务计算；所有写工具均不可达。
 
-## 13. Phase 4 — Proposal、审批与首批写入
+## 13. Phase 4 — Agent 执行内核与原生 Tool Calling
 
-必读：PRD F-004–F-008、SPEC 7–11、DESIGN 高风险交互、第一受控写入验收、固定 Workflow/权限证据。
+启动状态：`READY_NOT_STARTED`。只有用户再次明确下达“开始 Phase 4”或等价指令后，才进入 P4.1；准备包存在不能替代启动指令。
 
-- **P4.1 治理记录**：实现版本化 ProposedAction、Approval Decision、Execution Receipt、digest 和合法状态转换；未知和非法状态 fail closed。
-- **P4.2 决策门禁**：严格实现 schema → identity → permission → deterministic checks → Workflow/policy → risk/snapshot/expiry/digest 的顺序，并在执行前全部重检。
-- **P4.3 MR Draft**：先独立交付 MR Draft 的提议、显式确认、幂等预留、ERP controller 创建、读回和 Receipt；同一 idempotency key 与同一 digest 返回已有已验证结果，不同 digest 返回冲突且不得执行。
-- **P4.4 故障与对账**：实现失败分类、响应丢失、`RECONCILIATION_REQUIRED`、查询证据、人工接管和完整 audit correlation，禁止盲重试。
-- **P4.5 Approvals/Audit UI**：展示真实后果、证据、风险、快照、过期、拒绝、要求修改、失败和权限过滤。
-- **P4.6 PO Draft**：只有 MR Draft 全部门禁通过后，才能以独立增量交付 PO Draft 的同等治理闭环。
+必读：`docs/项目方向纠偏.md` Phase 4、`docs/phase4-kickoff.md`、PRD F-002/F-003/F-008/F-016、SPEC Tool Gateway/评测契约、Phase 3 单 Agent 与安全基线。本阶段不实现 ERP 写入。
 
-出口证据：无权限、schema 错误、过期、状态漂移、重复和结果不确定全部安全失败；MR/PO Draft 真实 ERP 场景、读回、Receipt、对账和审计通过。
+- **P4.1 执行契约与评测基线**：定义 Action、Observation、FinalAnswer、Error、StopReason 和 golden tasks，建立 Component/Trajectory/Task/System 评测入口。
+- **P4.2 手写模式实验**：在 `labs/agent_patterns/` 实现 Direct、ReAct、Plan-and-Solve、Reflection 和采购版 MiniStepAgent，与开源源码对照。
+- **P4.3 原生 Tool Calling**：让模型在当前用户 read-tool allowlist 中动态选择工具，严格校验 tool name、schema、参数、权限、返回预算和错误语义。
+- **P4.4 循环与停止治理**：实现 max steps、相同参数重复、工具频率、无进展、token、成本、wall-clock、cancel 和 final-answer checks，保留明确 stop reason。
+- **P4.5 业务接入与 Trace UI**：至少一个真实只读任务必须根据第一次 observation 选择第二个不同工具；页面区分业务结论与可折叠 Trace。
 
-## 14. Phase 5 — 完整 P2P 生命周期
+出口证据：Direct/ReAct/MiniStepAgent/原生 Tool Calling 在同一任务集可比较；真实观察驱动了下一步工具选择；循环攻击和超预算请求以可解释 stop reason 终止；数量、金额和阈值仍由确定性代码决定。
 
-必读：PRD F-009–F-012、SPEC Phase 5、完整 P2P 验收、固定 ERP 源码地图和 Phase 4 治理证据。
+## 14. Phase 5 — 持久工作流与 Plan-and-Execute
 
-每个子里程碑必须单独执行“源码证据 → 契约与审批 → 实现 → 幂等与恢复 → UI → 真实 ERP 测试 → L2 独立 Test 或 Review”，不得合并提交；完整对抗审查留在阶段出口：
+必读：纠偏方案 Phase 5、ARCHITECTURE Agent Execution Modes、SPEC 状态/恢复契约、ADR-0004、Phase 4 Trace 与失败证据。本阶段仍不开放 ERP 写入。
 
-- **P5.1 PO Submit**：不同于发起人的授权审批人、当前状态、Workflow、提交影响、幂等和恢复；
-- **P5.2 Purchase Receipt**：部分收货、库存状态、前置单据、取消、重复、响应丢失和恢复；
-- **P5.3 Purchase Invoice**：部分开票、税务/会计校验、前置单据、取消、重复和恢复；
-- **P5.4 Payment 相关流程**：会计权威、职责分离、状态、受控操作、对账和审计；
-- **P5.5 全流程 E2E**：完整 P2P、部分业务、跨单据状态漂移、人工接管和失败恢复。
+- **P5.1 typed plan/state**：定义 PlanStep、依赖、状态、clarification、replan reason 和版本兼容。
+- **P5.2 手写与框架对照**：比较固定 Workflow、ReAct 子图、Plan-and-Execute、LangGraph，并用 Dify/n8n 复刻一个只读流程作为低代码对照。
+- **P5.3 持久恢复**：实现 checkpoint、interrupt、resume、cancel、expiry、crash recovery；checkpoint 不是 Frappe 业务事实。
+- **P5.4 竞态与内部边界**：处理并发恢复、取消/过期、Runtime 内部认证、短期 capability 和已完成工具不重放。
+- **P5.5 可视化与取舍**：Run 页面展示计划、步骤、观察摘要、中断与停止原因；Adoption Card 记录主线是否采用 LangGraph。
 
-出口证据：F-009–F-012 各自拥有实现、权限、会计、审批、幂等、恢复和真实 ERP 验收证据，没有任何阶段被静默删除。
+出口证据：进程重启后从最近安全点恢复；取消/过期后不再调工具；已完成工具不重复执行；Plan-and-Execute 与 ReAct 有同任务质量、成本、恢复对比。
 
-## 15. Phase 6 — Contextual ERP Coach 与 RAG 演进
+## 15. Phase 6 — 受治理的第一批 ERP 行动
 
-必读：PRD F-013/F-014、SPEC 12、Retrieval Acceptance、Phase 3 FTS5 原始数据。
+必读：PRD F-004–F-008、SPEC 7–11、DESIGN 高风险交互、第一受控写入验收、固定 Workflow/权限证据。`approval-workflow-mapping` 未闭环时禁止开放写工具。
 
-- **P6.1 知识来源**：建立带 source type、path/URL、revision、ERP version、permission scope 和 ingestion time 的 ERP 知识及模拟公司 SOP 摄取，索引必须可重建。
-- **P6.2 ERP Coach**：实现基于当前页面、单据、角色和错误的引用、拒答、来源冲突、未知和权限过滤；检索文本永远是数据，不是指令。
-- **P6.3 FTS5 基线**：固化同一数据集的 recall、ranking、groundedness、refusal、injection、version isolation、permission 和 latency 原始结果。
-- **P6.4 后续准入**：依据基线向用户提交 vector threshold；批准后按 embedding → vector → hybrid → rerank → compression 顺序逐项实验。
-- **P6.5 采用决定**：候选技术只有在同一数据集有可测净收益且无治理回退时采用；无收益时记录“不采用”的 ADR 仍可完成阶段。
+- **P6.1 治理记录与映射**：完成 Workflow/Role/Permission 取证，实现版本化 ProposedAction、PolicyDecision、ApprovalDecision、ExecutionReceipt、digest 和合法状态转换。
+- **P6.2 决策与执行门禁**：按 schema → identity → permission → deterministic checks → Workflow/policy → snapshot/expiry/digest 执行，写入前全部重检。
+- **P6.3 MR Draft**：交付提议、人工确认/审批、幂等预留、ERP controller 创建、read-back 和 Receipt。
+- **P6.4 故障与对账**：处理响应丢失、部分失败、`RECONCILIATION_REQUIRED`、人工接管和 audit correlation，禁止盲重试。
+- **P6.5 PO Draft 与 UI**：MR Draft 闭环通过后再交付 PO Draft；页面展示后果、证据、风险、快照、过期、拒绝、修改、失败和权限过滤。
 
-出口证据：引用、拒答、权限、版本隔离和 Prompt Injection 有可复跑证据；所有已采用检索层都在同一评测集上产生可测净收益且没有治理回退。
+出口证据：Buyer 目标 → Agent 调查 → ProposedAction → 人审 → 单次 MR/PO Draft → read-back/Receipt 的真实链路通过；无权限、未审批、过期、状态漂移、重复和结果不确定全部安全失败。
 
-## 16. Phase 7 — Multi-Agent 条件评估
+## 16. Phase 7 — Prompt、Context Engineering 与 Skills
 
-必读：PRD F-015、SPEC 13、Phase 3/6 单 Agent 原始评测和治理证据。
+必读：纠偏方案 Phase 7、PRD F-016、Phase 4–6 Trace/预算/安全证据。
 
-- **P7.1 准入阈值**：用现有数据形成质量、安全、延迟、成本、trace、恢复和复杂度阈值决策包，用户批准后才实验采用。
-- **P7.2 隔离实验**：分别评估 Procurement Planner、Policy/Compliance Reviewer、ERP Coach、Reconciliation Agent；使用 typed state/event、handoff schema、tool allowlist、deadline、maximum steps、cancellation 和 loop detection。
-- **P7.3 A/B 对比**：每个角色与同一单 Agent 数据集比较，保留原始输入、输出、错误、成本和运行环境。
-- **P7.4 采用或拒绝**：只采用产生净收益且不削弱 Gateway、policy、approval、idempotency 和 audit 的角色；否则保留单 Agent并记录证据。自由对话式 swarm 永久禁止。
+- **P7.1 Prompt 分层与版本**：区分边界、决策、恢复与输出契约，记录 version/hash 和单变量 A/B。
+- **P7.2 ContextBuilder**：实现 Gather/Select/Structure/Compress、JIT context、structured notes、summary 和 token budget，Trace 记录选择与丢失。
+- **P7.3 Procurement Skills**：实现版本、来源、渐进披露、自由度、allowed tools 和回归证据；Skill 不得扩展 capability allowlist。
+- **P7.4 职责对照**：用同一任务说清 Prompt、Tool、Skill、Workflow 和 MCP 的边界，保留采用/拒绝证据。
 
-面试与学习补足路线：Phase 3 先保存单 Agent 的正确率、安全、延迟、Token、工具调用和恢复基线；Phase 7 优先实验 `Procurement Planner → Policy Reviewer` 两角色协作，重点练习 typed handoff、共享状态、角色工具隔离、冲突裁决、超时和失败恢复。目标是形成真实 A/B 证据，不为展示而堆 Agent 数量。
+出口证据：同一任务可复现 Prompt/Context/Skill 版本；精简上下文后安全不退化且 token 有可测变化；恶意 Skill 不能扩权。
 
-出口证据：每个候选角色都有可复跑的采用或拒绝结论；ERP Gateway 和治理边界没有被替换。
+## 17. Phase 8 — Memory、RAG 与 Contextual ERP Coach
 
-## 17. Phase 8 — Hardening 与最终验收
+必读：PRD F-013/F-014/F-016、SPEC Retrieval/Memory 契约、Phase 3 FTS5 与 Phase 7 Context 基线。
 
-必读：全部 PRD、架构、设计、SPEC、开发、测试、验收、Roadmap、ADR、开发日志和原始评测证据。
+- 实现 Working/Episodic/Semantic/Procedural Memory 的写入候选、审核、scope、过期、纠正、删除、召回和污染防护。
+- 用同一语料对比 FTS5/BM25、vector、hybrid 和 rerank；业务主线只采用有净收益的层。
+- 实现带引用的 ERP Coach；库存、订单、权限等实时事实必须重查 ERP，不得信任记忆。
 
-- **P8.1 追踪审计**：逐项核对 F-001–F-015 的阶段、实现、测试和验收链接；缺口只能补齐或明确阻塞，不能降低要求。
-- **P8.2 故障和安全演练**：运行权限攻击、Prompt Injection、状态漂移、重复、超时、响应丢失、secret leakage、恢复、对账和人工接管。
-- **P8.3 Benchmark**：用固定版本、固定数据和固定步骤比较人工流程与 Agent 流程，保存页面跳转、用户输入、审批次数、完成时间和原始结果，不推导未经支持的数字。
-- **P8.4 文档与发布边界**：同步实际命令、架构、测试、验收、feature dossier、许可证/NOTICE 和中英文 README；调用 `readme-writer`，禁止超出证据的公开声明。
-- **P8.5 最终审查**：运行全量自动化与人工验收、Harness 健康检查、阶段复杂度审计和独立发布级对抗审查。
+出口证据：经审核的经验和 SOP 可带来源召回；跨用户/公司、过期、恶意记忆/检索文本 fail closed；Coach 会重查实时 ERP 事实。
 
-出口证据：最终 Review=`PASS`；上游无改动；有限安全套件 100% 通过；所有公开声明可复跑；没有影响已验收范围的阻塞未决项。除非用户另行明确授权，不发布、不打 Tag、不部署，也不声称生产采用。
+## 18. Phase 9 — Multi-Agent、MCP 与 A2A
 
-## 18. 阶段出口报告
+- 实现 Supervisor、Peer-to-Peer、Hierarchical、managed-agent-as-tool 和显式 graph node 的最小对照。
+- 先评估 `Planner → Policy/Risk Reviewer`，只在异常路径启动 Reconciliation Agent；所有 handoff typed、工具隔离、预算有界。
+- 实现本地 MCP server 和最小 A2A Agent Card/Task/status/cancel；ANP 保留概念实验和选型报告。
+
+出口证据：每个候选角色有同任务质量、安全、延迟、成本、恢复对比；只有净收益角色进入业务主线，其他实验保留拒绝证据。
+
+## 19. Phase 10 — 完整 P2P 运营 Agent
+
+按 PO Submit、Purchase Receipt、Purchase Invoice、Payment 相关流程逐项执行“源码证据 → 契约/审批 → 实现 → 幂等/恢复 → UI → 真实 ERP 测试”，覆盖部分收货/开票、取消、会计影响、状态漂移和人工接管。
+
+出口证据：F-009–F-012 各自拥有权限、会计、审批、幂等、恢复和真实 ERP 验收证据，完整 P2P 可运行且无阶段被静默删除。
+
+## 20. Phase 11 — Web/GUI Agent 与多模态观察
+
+实现有界 Web/GUI 实验，覆盖 DOM/视觉观察、元素定位、动作、登录态、异步页面、可访问性和安全；与 typed API tools 比较适用条件。业务主线采用不得绕过 ERP 权限或写入门禁。
+
+## 21. Phase 12 — 自进化、后训练与 Agentic RL
+
+将经审核失败轨迹转为可版本回滚的 Prompt/Skill 候选，并用 held-out eval 筛选；完成 rerank、SFT/DPO、reward design 和 Agentic RL 前置条件的小型离线实验。禁止线上自动改写业务 Prompt、policy、permission 或 tools。
+
+## 22. Phase 13 — AI Infra、系统强化与毕业作品
+
+依据实测需要评估模型路由、缓存、并发、限流、降级、本地推理和部署；运行故障注入、恢复演练、对抗发布审查、人工对 Agent Benchmark 和全系统评测；形成可复跑毕业作品与面试 dossier。除非用户另行授权，不发布、打 Tag、部署或声称生产采用。
+
+## 23. 阶段出口报告
 
 每个阶段完成后必须停止，并用大白话提交：
 

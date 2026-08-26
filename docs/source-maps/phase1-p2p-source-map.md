@@ -70,7 +70,7 @@
 - `[R]` P1.3 失败路径实测（HTTP）：Viewer（无业务角色）创建 MR → 403 `PermissionError`；Accountant 读取 PO → 403 `PermissionError`；Receiver 仅 Stock User 时创建 PR 因无法读取 Account 被拒（Inc-3 卡点 4），补充 Purchase User 后通过——未绕过权限，是按其上游 DocPerm 需求补足最小角色。
 - `[P]` Synora 策略：继承 ERPNext 权限与 Workflow，不在 Agent Runtime 复制审批规则（`PRD.md` 5.5、`ARCHITECTURE.md` "Approval and Workflow Authority"）；规则缺失、冲突或无法验证时 fail closed。
 - `[P]` 审批基线（`PRD.md:232`、`SPEC.md:256-261`）：MR Draft 与 PO Draft 由发起人显式确认即可执行；PO Submit、Purchase Receipt、Purchase Invoice 与 Payment 相关写操作必须由**不同于发起人**的有权审批人授权；始终采用 ERP Workflow 与 Synora 策略中更严格者。默认 DocPerm 允许单用户全链操作是 ERPNext 出厂行为，不代表审批策略已解决。
-- `[U]` 具体企业 Workflow 状态、多级审批、金额阈值与角色→Workflow 映射（`approval-workflow-mapping`）仍需用户决定，最迟 Phase 4 启用写入前完成。
+- `[U]` 具体企业 Workflow 状态、多级审批、金额阈值与角色→Workflow 映射（`approval-workflow-mapping`）仍需用户决定，最迟 Phase 6 启用写入前完成。
 
 ## 4. Workflow 观察
 

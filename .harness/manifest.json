@@ -12,61 +12,61 @@
       "path": "AGENTS.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "106f189ac119dba5bb9dc13754b0567efd4034689ee627b03808823e044d0ddc"
+      "sha256": "ba0d41bf11e5a1b360df4316de05a0e69581ebfb6d49290ceae7f64451cbfc4c"
     },
     {
       "path": "docs/PRD.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "d1554ddd02cfabee1920e56e132539470ec6bcafee38fd424d49663daace1b21"
+      "sha256": "dfd14188d65aa30fbe72dcad454e5cf2bb88978d3d5d69da76343f6a30dc62d3"
     },
     {
       "path": "docs/ARCHITECTURE.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "f60f8f0a26e6b068b33df484dad3b7668b3037ce871cc12f68e1f814406af1e9"
+      "sha256": "4981988385bca4ef5328919bfc617e8019cf393bd61a5bed69e331fdef133598"
     },
     {
       "path": "docs/DESIGN.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "67c01058389dff3d043608e76103e3fc93c78a234a213be5592de409290e24e3"
+      "sha256": "911a70a2afd3a5946f09967ea08f43e7721be6357a31551fa23a3f3271e1bf22"
     },
     {
       "path": "docs/DEVELOPMENT.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "bbe2fa9033116301ddf693773e8cacbf44ebf522130ed198d69b7e16b9e4d619"
+      "sha256": "3f0f60442248e2add68a6013047457635675b3d0e5f3abe13183ae1a29830159"
     },
     {
       "path": "docs/TESTING.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "2c827944aea0c3f4c54270ea532a716d41a00dbebd6021025aeea57ecf489e0f"
+      "sha256": "de686677a52c297bfd63dce3e55de6ebe2a827c7df96e0ac2f9b1428b45e594f"
     },
     {
       "path": "docs/ACCEPTANCE.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "7911e236be1d1eccdf2e62b0008d46252d71bda217821ec6d4a7960e9dc18d10"
+      "sha256": "b15181d21456722735bbca248ffb539c92ced35a12cfee529c3c40a24d2341a0"
     },
     {
       "path": "docs/ROADMAP.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "9220847b9b3357de050e1116e496bf0f4c9798ff3ec051e116030496dbd6e6a3"
+      "sha256": "9044c9a37e650362495c3b5be5bbec55f4ef3d7e0a0f163b153c1218db533ca7"
     },
     {
       "path": "docs/SPEC.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "8055a4c2af58a3aa97da53fe87e62a6e4406b24530435e39a32788aeb1b78e07"
+      "sha256": "a06fdc49e5a4e7d497e5aede64720e2fa32160df6ec80b752823ea4710105804"
     },
     {
       "path": "docs/PLAN.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "ce705976b13a61fb358bedab943cb3c13892e37dd107f558283801f5419f0892"
+      "sha256": "342bd31cead22320209e3ac0cc4cc4f51c5a8078afaeb6017a33559d59381f4d"
     },
     {
       "path": "docs/decisions/README.md",
@@ -84,13 +84,13 @@
       "path": "docs/source-maps/phase1-p2p-source-map.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "03b04bf94a3d0c8dcde042193184f253bd834f9cf7d37c82bea6731cb37320c2"
+      "sha256": "1cb6c13333f5a8e3fd438fb00094fb4ba3da1401e699c32126d170ad9bfaf99c"
     },
     {
       "path": "docs/erp-baselines/phase1-permission-workflow-baseline.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "887ab54ee09711d6a3d0305e5aeb2cd5a5b8915bceb76c907564a2a0b54b3446"
+      "sha256": "40bc28f5b0278640cfa9886a52a63bdbaa30e8d66f857151ea46d5bc5ffe9e0c"
     },
     {
       "path": "docs/development-log/README.md",
@@ -120,25 +120,25 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "465ca4191b1f03f08fee3b91c00d8e0e3e7f2cdc15af860b119fcb7be1f90869"
+      "sha256": "91d3b236ca4a393573370cfddec7af464c3e9a86611e2809446d061e40a84ba3"
     },
     {
       "path": ".harness/unresolved.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "fa87a3e17606197544d4c8d6cda22fb4bbfad9d2db54453181fb432149310676"
+      "sha256": "f244b3486324cf53ddaabae5716d8f21a8886f6523380079b351b3f25c58a0cb"
     },
     {
       "path": "README.md",
       "owner": "user",
       "mode": "user",
-      "sha256": "07d8f9f61a565a455f498bf0e79b8f26a27492aa31a2cd9d1630bf50fde47cdc"
+      "sha256": "86a1aef4711c583c8c8a02d2d1a46fe10d6e2eb8c8396105f7e94b9a9a0b8413"
     },
     {
       "path": "README.zh-CN.md",
       "owner": "user",
       "mode": "user",
-      "sha256": "646c5160015b69a5453521d432a073b98b1e1f486f95695e757ae3cbd21ad127"
+      "sha256": "b0f282744ced3a795e6df620a84abd85fcd425a521c0718b88cb716c08cef4bb"
     },
     {
       "path": "LICENSE",
@@ -150,7 +150,7 @@
       "path": "docs/development-log/20260825-Phase-3-开发日志.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "2ae8a0d3148d43c8646c28e33de6d6963a196c8974ea255c429a422318f51078"
+      "sha256": "bc0dfe0c43ea214aebc56b76984b5b6a48133dd4db7ee0127948ba6236d46246"
     },
     {
       "path": "docs/security/phase3-security-eval.md",
@@ -162,7 +162,7 @@
       "path": "docs/decisions/ADR-0004-workflow-engine-spike.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "21cf346e9c3ee3e49771402764f33ff7d9dbc0efe2c0cac85a5eae207776fb41"
+      "sha256": "51017b9afd5c2c1f7a615cb28a37a69180631bf968e44913b47f77a3fb50f22d"
     },
     {
       "path": "docs/decisions/decision-pack-p3-4-model-provider.md",
@@ -174,7 +174,19 @@
       "path": "docs/decisions/ADR-0005-p4-1-governed-records-preparation.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "e1261d84143c38c0fe235066313c3a9c89decd9ea4ce944a78b0f22ed836564a"
+      "sha256": "f83be310bbfa68293c8eac4e65266d754b24093e4d6c01a72dc9cf28592c5eab"
+    },
+    {
+      "path": "docs/项目方向纠偏.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "c5b565bb3aeb042c58ac15de7ac8ac55265b82e0500ef6310305969f27cc3bb0"
+    },
+    {
+      "path": "docs/phase4-kickoff.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "289925f89301f2baf4cc6bd8cd1cc8d2949e5bded81c91a2d6b50aa4ed9b71b6"
     },
     {
       "path": "env/dev/p35/p35_e2e.py",
@@ -185,5 +197,5 @@
   ],
   "source_index": ".harness/source-index.json",
   "unresolved_index": ".harness/unresolved.json",
-  "last_updated": "2026-08-25T16:14:00Z"
+  "last_updated": "2026-08-26T08:41:00Z"
 }

@@ -28,6 +28,7 @@ The confirmed first desktop experience lives in ERPNext Desk and provides these 
 | Runs | Follow current and historical work | Status, progress, proposals, failures, receipts |
 | Approvals | Review governed business mutations | Consequences, evidence, risks, state snapshot, approve/decline/request changes |
 | Audit | Investigate what happened | Correlated run, tool, policy, approval, execution, and reconciliation evidence |
+| Learning/Eval | Compare Agent patterns without presenting labs as production behavior | Golden task, implementation/version, Action/Observation trace, stop reason, metrics, adoption/rejection result |
 
 These labels are information-architecture identifiers, not a finalized bilingual terminology set.
 
@@ -42,6 +43,8 @@ The canonical page hierarchy is the wireframe in `docs/PRD.md`, section 4.1. The
 5. trace and technical details.
 
 The result must not collapse into a single chat transcript. Conversation may help collect a goal or missing condition, but governed actions require stable, inspectable UI regions.
+
+The procurement user surface stays business-first. Teaching and evaluation details use a separate developer-facing view or clearly labeled secondary panel; experimental output must carry `LAB` or equivalent evidence status and must never look like a completed ERP action.
 
 ## State and Feedback Contract
 
@@ -74,6 +77,8 @@ Loading, empty, partial, stale, error, and permission states are required design
 - Label authoritative ERP facts, deterministic calculations, retrieved sources, Agent recommendations, warnings, and unknowns as different information types.
 - Every material recommendation must expose its supporting source or calculation path.
 - Long evidence and traces may be collapsed, but their existence and status must remain visible.
+- Phase 4 and later traces distinguish plan, action, tool arguments, observation summary, error, retry/replan, final answer, and stop reason; hidden chain-of-thought is neither required nor displayed.
+- Same-task comparison views identify execution mode, prompt/model/tool/skill versions, latency, tokens/cost when available, and the resulting Adoption Card decision.
 - Conflicting or missing sources must be displayed as uncertainty, not blended into a confident answer.
 - Audit views must minimize sensitive data and follow the viewer's ERP permissions.
 
@@ -130,6 +135,7 @@ Until detailed visual tokens are produced during Phase 3 implementation:
 - Silent retries after an uncertain write result.
 - Dense technical traces as the default view for procurement users.
 - Mock-only UI paths presented as completed enterprise behavior.
+- Teaching-lab output presented without an explicit experimental label or mixed into authoritative ERP state.
 
 ## Frontend Acceptance Checks
 
@@ -139,6 +145,7 @@ Until detailed visual tokens are produced during Phase 3 implementation:
 - Evidence and unknowns remain accessible from the primary decision surface.
 - Keyboard and non-color state cues are included in component acceptance criteria.
 - The frontend does not expose actions that bypass the typed gateway, policy, approval, or receipt boundaries.
+- Developer-facing Trace and comparison views preserve permission filtering and make experimental versus business evidence unmistakable.
 
 ## Open Design Decisions
 
@@ -149,5 +156,6 @@ Resolved by the P3.1 decision pack (user-approved 2026-08-25): component baselin
 
 ## Sources
 
+- `docs/项目方向纠偏.md` — approved business/teaching separation and Trace/evaluation learning path.
 - `docs/PRD.md` — product form, users, workflow, states, content rules, and the canonical desktop wireframe.
 - `docs/ARCHITECTURE.md` — system, trust, authorization, and execution boundaries the frontend must preserve.

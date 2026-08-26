@@ -14,6 +14,18 @@ A feature is not complete because a model produced a plausible answer. Completio
 - updated development history and affected documentation;
 - honest reporting of unrun or unresolved checks.
 
+## Agent Learning Acceptance
+
+For Phase 4–13, a topic is not complete because a framework demo runs. Acceptance requires:
+
+- a plain-language principle explanation and a bounded user Assignment;
+- a runnable minimal lab using an ERP/procurement task or an explicit domain-mismatch explanation;
+- named open-source source comparison without overstating reading depth or execution evidence;
+- a Synora business adaptation or a documented reason not to adopt it;
+- success and failure traces, same-task evaluation, and explicit stop/failure reasons;
+- an Adoption Card and interview questions; unanswered learner work stays `待练习`;
+- clear separation between experimental evidence and deployed business behavior.
+
 ## First Governed-Write Acceptance
 
 - A procurement goal produces an explainable, typed MR Draft or PO Draft proposal.
@@ -43,8 +55,10 @@ Receipt, Invoice, Payment, and PO submission are staged requirements, not remove
 - Upstream is unchanged.
 - No documentation or README claim exceeds current evidence.
 - Manual acceptance steps are repeatable.
+- Required phase learning evidence is runnable and no lab or planned capability is presented as production adoption.
 
 ## Sources
 
+- `docs/项目方向纠偏.md` — approved learning evidence and same-repository business/lab boundary.
 - `docs/PRD.md` — approved complete scope, non-functional requirements, acceptance summary, and benchmark boundaries.
 - `docs/ROADMAP.md` — staged delivery order and milestone exit conditions.

@@ -1,6 +1,6 @@
 # Synora Agentic ERP Engineering Specification
 
-Status: `CONFIRMED` product and architecture constraints with `UNRESOLVED` implementation details. No product implementation exists yet.
+Status: `CONFIRMED` product and architecture constraints. Phase 0–3 implementation exists; Phase 4–13 contracts remain planned until each phase produces exit evidence.
 
 ## 1. Authority and Change Rules
 
@@ -18,7 +18,9 @@ An implementation may stage a requirement but may not delete, demote, or silentl
 
 ## 2. Product Scope and Delivery Boundary
 
-The complete product scope covers governed Procure-to-Pay operations:
+The repository serves two approved purposes in one codebase and one development line: the business application layer proves governed Procure-to-Pay behavior against real ERPNext, while the teaching lab implements runnable Agent-pattern comparisons and adoption/rejection evidence. A lab is never evidence that business behavior is deployed.
+
+The complete ERP business scope covers governed Procure-to-Pay operations:
 
 ```text
 Material Request
@@ -28,9 +30,9 @@ Material Request
   -> Payment-related status and controlled operations
 ```
 
-The first controlled-write milestone enables MR Draft and PO Draft only. PO Submit, Receipt, Invoice, and Payment-related writes remain required later milestones with separate accounting, permission, approval, idempotency, recovery, and evaluation gates.
+Phase 4 builds the bounded Agent execution kernel without writes. Phase 5 adds durable workflow. The first controlled-write milestone is Phase 6 and enables MR Draft and PO Draft only. PO Submit, Receipt, Invoice, and Payment-related writes remain required Phase 10 milestones with separate accounting, permission, approval, idempotency, recovery, and evaluation gates.
 
-The first implementation baseline is one Agent plus deterministic workflow control. Multi-Agent is an evidence-gated extension, not a default topology. Retrieval starts with versioned curated sources and SQLite FTS5/BM25; the complete vector/hybrid/reranking path remains specified below.
+Phase 3 is the one-Agent deterministic baseline. Phase 4 compares Direct, bounded ReAct, Plan-and-Solve, Reflection, a minimal multi-step kernel, and provider-native Tool Calling. Phase 5 compares durable workflow choices. Multi-Agent learning is required in Phase 9, while business-path adoption remains evidence-gated. Retrieval starts with versioned curated sources and SQLite FTS5/BM25; the complete vector/hybrid/reranking comparison moves to Phase 8.
 
 ## 3. Requirement Traceability
 
@@ -39,18 +41,19 @@ The first implementation baseline is one Agent plus deterministic workflow contr
 | F-001 Agent Run and goal input | Phase 3 | Frappe App + Runtime | permission, validation, state, error, and UI scenario tests |
 | F-002 Authorized typed ERP tools | Phase 2 | Frappe Tool Gateway | schema, permission, pagination, timeout, and real ERP integration tests |
 | F-003 Deterministic procurement analysis | Phase 3 | Deterministic domain services | repeatable unit and integration calculations; no LLM arithmetic |
-| F-004 Explainable plan and ProposedAction | Phase 4 | Runtime + Gateway | schema rejection, evidence coverage, conflict, and expiry tests |
-| F-005 Policy, RBAC, and approval | Phase 4 | Frappe App | Workflow/Role mapping, self-confirmation, separation-of-duties, stale approval tests |
-| F-006 MR/PO Draft execution | Phase 4 | Frappe App + ERPNext | real document creation, permission, read-back, duplicate, and rollback evidence |
-| F-007 Receipt, idempotency, reconciliation | Phase 4 | Frappe App | replay, lost-response, ambiguous-result, and reconciliation scenarios |
-| F-008 Audit and failure evidence | Phase 4 | Frappe App + Runtime | correlation, redaction, access-control, and failure-classification tests |
-| F-009 PO Submit | Phase 5 | Frappe App + ERPNext | independent approval, current-state, accounting impact, and recovery evidence |
-| F-010 Purchase Receipt | Phase 5 | Frappe App + ERPNext | partial receipt, stock state, cancellation, idempotency, and recovery evidence |
-| F-011 Purchase Invoice | Phase 5 | Frappe App + ERPNext | partial billing, accounting, tax, duplicate, cancellation, and recovery evidence |
-| F-012 Payment-related flow | Phase 5 | Frappe App + ERPNext | accounting authority, separation-of-duties, status, reconciliation, and audit evidence |
-| F-013 Contextual ERP Coach | Phase 6 | Runtime + Retrieval | citation, refusal, permission, version, conflict, and injection evaluations |
-| F-014 Complete RAG evolution | Phase 6 | Retrieval + Eval | FTS5 baseline and same-dataset vector/hybrid/reranking comparison |
-| F-015 Conditional Multi-Agent | Phase 7 | Runtime + Eval | A/B quality, safety, latency, cost, trace, loop, and complexity evidence |
+| F-004 Explainable plan and ProposedAction | Phase 4 dynamic-plan baseline; Phase 6 write proposal | Runtime + Gateway | tool/trace evidence plus schema rejection, conflict, expiry, and fail-closed tests |
+| F-005 Policy, RBAC, and approval | Phase 6 | Frappe App | Workflow/Role mapping, self-confirmation, separation-of-duties, stale approval tests |
+| F-006 MR/PO Draft execution | Phase 6 | Frappe App + ERPNext | real document creation, permission, read-back, duplicate, and rollback evidence |
+| F-007 Receipt, idempotency, reconciliation | Phase 6 | Frappe App | replay, lost-response, ambiguous-result, and reconciliation scenarios |
+| F-008 Audit and failure evidence | Phase 4 trace baseline; Phase 6 write evidence | Frappe App + Runtime | Action/Observation/StopReason plus correlation, redaction, access-control, and write-failure classification |
+| F-009 PO Submit | Phase 10 | Frappe App + ERPNext | independent approval, current-state, accounting impact, and recovery evidence |
+| F-010 Purchase Receipt | Phase 10 | Frappe App + ERPNext | partial receipt, stock state, cancellation, idempotency, and recovery evidence |
+| F-011 Purchase Invoice | Phase 10 | Frappe App + ERPNext | partial billing, accounting, tax, duplicate, cancellation, and recovery evidence |
+| F-012 Payment-related flow | Phase 10 | Frappe App + ERPNext | accounting authority, separation-of-duties, status, reconciliation, and audit evidence |
+| F-013 Contextual ERP Coach | Phase 8 | Runtime + Retrieval | citation, refusal, permission, version, conflict, and injection evaluations |
+| F-014 Complete RAG evolution | Phase 8 | Retrieval + Eval | FTS5 baseline and same-dataset vector/hybrid/reranking comparison |
+| F-015 Conditional Multi-Agent | Phase 9 | Runtime + Eval | A/B quality, safety, latency, cost, trace, loop, and complexity evidence |
+| F-016 Agent learning labs and adoption evidence | Phase 4–13 | Learning + Eval Plane | runnable lab, source comparison, Synora adaptation, traces, evaluation, Adoption Card, Assignment, interview questions |
 
 ## 4. System Context and Dependency Direction
 
@@ -63,6 +66,7 @@ flowchart TD
     Runtime --> Model[Model Provider]
     Runtime --> Retrieval[Retrieval]
     Runtime --> Eval[Evaluation]
+    Eval --> Labs[Teaching Labs]
     ERP --> DB[(MariaDB)]
 ```
 
@@ -71,6 +75,7 @@ Allowed dependencies:
 ```text
 UI -> Frappe App -> typed gateway -> ERPNext/Frappe
                 -> Agent Runtime -> provider/retrieval/eval adapters
+                -> Learning/Eval -> labs through public contracts or declared test doubles
 ```
 
 Forbidden dependencies:
@@ -80,6 +85,7 @@ Forbidden dependencies:
 - Model output to ERP mutation without typed parsing and deterministic gates.
 - Retrieval content to system instruction, authorization, policy, or tool selection.
 - Synora code changes to upstream ERPNext/Frappe core.
+- Teaching labs to production credentials, hidden ERP internals, or claims of deployed business behavior.
 
 ## 5. Identity, Authorization, and Trust
 
@@ -88,7 +94,7 @@ Forbidden dependencies:
 - Frappe records the authenticated initiator when an Agent Run is created.
 - Runtime requests refer to a server-side Run identity; they cannot assert or replace the Frappe user.
 - Approval and final execution originate from an authenticated Frappe context.
-- The exact user-bound Runtime authorization mechanism is `UNRESOLVED` and requires a focused security decision.
+- The user-bound Runtime authorization mechanism is `CONFIRMED` by ADR-0003: Frappe binds the authenticated initiator to a server-side Agent Run, issues an opaque short-lived capability, and rechecks permission and Run scope on every gateway call. Phase 2 verified the path over real HTTP.
 
 ### 5.2 Untrusted inputs
 
@@ -262,7 +268,7 @@ threshold** checked after the handler returns; it does not interrupt an
 executing ERP call. A permanently stuck upstream call is bounded by the
 Runtime HTTP client deadline (the caller disconnects; server-side work
 continues but its result is unreachable). True execution cutoff requires
-worker/process isolation and is deferred to the first write stage (Phase 4),
+worker/process isolation and is deferred to the first write stage (Phase 6),
 where interrupted execution semantics and rollback become safety-relevant.
 
 ## 10. Policy and Approval Evaluation Order
@@ -394,13 +400,14 @@ The intended implementation layout is:
 repository root                 # installable Frappe App repository
 ├── synora_agentic_erp/         # Frappe App package
 ├── services/agent_runtime/     # separate Python project boundary
+├── labs/agent_patterns/       # teaching experiments; not deployed business behavior
 ├── evals/                      # fixed datasets, evaluators, raw results
 ├── tests/                      # architecture, contract, integration, scenarios
 ├── docs/                       # durable product and engineering knowledge
 └── .agents/ / .harness/        # project Skills and managed Harness state
 ```
 
-This is a target layout, not evidence that the directories or packages already exist. Frappe Bench sites, databases, credentials, caches, generated assets, and upstream source checkouts are not committed as product code.
+This is a target layout, not evidence that every directory or package already exists. Labs share public contracts and evaluation datasets with the business layer but cannot receive production credentials or bypass the Control Plane. Frappe Bench sites, databases, credentials, caches, generated assets, and upstream source checkouts are not committed as product code.
 
 ## 16. Verification Matrix
 
@@ -411,7 +418,10 @@ This is a target layout, not evidence that the directories or packages already e
 | Contract | versioned input/output/error schemas, unknown model output fails closed |
 | Integration | pinned real ERP permissions, DocType state, Workflow, mutation, read-back |
 | Scenario/E2E | goal through context, proposal, approval, execution, receipt, audit, reconciliation |
-| Agent Eval | intent, tool selection, arguments, plan, groundedness, refusal, recovery |
+| Component Eval | intent/router, tool selection, argument schema, policy, memory/retrieval, final-answer checks |
+| Trajectory Eval | action/observation order, evidence use, repetition, no progress, stop reason, recovery, handoff |
+| Task Eval | end-to-end goal success, business correctness, refusal, human intervention, final ERP state |
+| System Eval | latency, token/cost, concurrency, long-run stability, security, observability, maintainability |
 | Retrieval Eval | recall, ranking, citation, version, permission, injection, latency |
 | Multi-Agent Eval | quality, safety, latency, cost, loops, trace, complexity versus single Agent |
 | Failure/security | timeout, rate limit, stale approval, state drift, duplicate, lost response, unauthorized tool, secret leakage |
@@ -438,25 +448,42 @@ CI must not depend on a paid or nondeterministic model. Assertions check ERP fin
 - deterministic shortage calculations and explainable planning work without writes;
 - single-Agent and FTS5 baselines cover normal, ambiguous, unauthorized, failure, and malicious-content cases.
 
-### Phase 4 — First writes
+### Phase 4 — Agent execution kernel
 
-- MR Draft and PO Draft proposals use the confirmed approval baseline;
-- schema, policy, permission, state revalidation, idempotency, receipt, and reconciliation gates pass real ERP scenarios;
-- unauthorized, stale, duplicated, and ambiguous writes fail safely.
+- Direct, bounded ReAct, Plan-and-Solve, Reflection, minimal multi-step, and native Tool Calling run on the same golden tasks;
+- at least one real read-only task chooses its next tool from an observation;
+- steps, repeated arguments, no progress, tokens, cost, wall time, cancellation, and final answers have explicit guards and stop reasons.
 
-### Phase 5 and later
+### Phase 5 — Durable workflow
+
+- typed plans, checkpoints, interrupts, resume, cancellation, expiry, replanning, and crash recovery are repeatable;
+- completed tools are not replayed after recovery and checkpoint state never becomes an ERP business fact;
+- hand-written and framework approaches have same-task comparison evidence.
+
+### Phase 6 — First governed writes
+
+- approval/workflow mapping is resolved before write enablement;
+- MR Draft and PO Draft proposals use schema, policy, permission, state revalidation, idempotency, receipt, and reconciliation gates;
+- unauthorized, stale, duplicated, and ambiguous writes fail safely in real ERP scenarios.
+
+### Phase 7–9 — Context, memory, retrieval, protocols, and collaboration
+
+- Prompt/Context/Skill versions are reproducible and cannot expand capability;
+- scoped Memory/RAG re-query live ERP facts and resist cross-user access and injection;
+- Multi-Agent, MCP, and A2A labs are required learning evidence, while business adoption requires same-task net benefit.
+
+### Phase 10–13 — Complete operations and advanced learning
 
 - each P2P action receives its own accounting, approval, state, idempotency, recovery, and evaluation contract;
-- RAG and Multi-Agent changes cross their evidence gates rather than entering for technology display.
+- Web/GUI, self-improvement, post-training, Agentic RL, and AI Infra remain bounded experiments unless adoption evidence supports the business path;
+- the final capstone links requirements, traces, failures, trade-offs, recovery, benchmarks, and interview evidence without unsupported production claims.
 
 ## 18. Unresolved Decisions
 
 Implementation must not fill these by guesswork:
 
-- exact Frappe v16 and ERPNext v16 commit pair;
-- user-bound Runtime authorization mechanism;
 - concrete ERP Roles, permissions, Workflow states, multi-level approval, and policy configuration;
-- exact dependency versions and verified commands;
+- dependency versions not already fixed by the lockfiles and any commands not yet observed successfully;
 - LangGraph checkpoint/resume Spike outcome;
 - local and optional provider model baseline;
 - performance, concurrency, and retention targets;
@@ -465,6 +492,8 @@ Implementation must not fill these by guesswork:
 - MIT, GPL-3.0, CC BY-NC, attribution, and distribution boundary.
 
 Each decision is resolved through an ADR, pinned-source/runtime evidence, or a user-approved requirement change as appropriate.
+
+Resolved baselines intentionally omitted from the list above: ADR-0002 fixes the Frappe/ERPNext pair; ADR-0003 fixes Runtime user binding; `docs/DEVELOPMENT.md` records the verified project commands.
 
 ## 19. Definition of Done for a Change
 

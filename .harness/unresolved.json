@@ -41,7 +41,7 @@
       "sources": [
         "docs/decisions/ADR-0004-workflow-engine-spike.md"
       ],
-      "resolution": "ADR-0004 (2026-08-25): Phase 3 read-only lifecycle has no cross-request state - analyze/plan are synchronous deterministic steps, so interruption/approval/resume/reconciliation needs do not hold this phase; LangGraph not adopted. Phase 4 write enablement keeps a gate: re-evaluate with a fresh spike when approval/execution/reconciliation actually require resume. Deterministic state machine already defines Phase 4 transitions (AWAITING_APPROVAL->EXPIRED/EXECUTING, RECONCILIATION_REQUIRED->SUCCEEDED/FAILED) covered by tests/test_run_state_machine.py."
+      "resolution": "ADR-0004 (2026-08-25, remapped 2026-08-26): Phase 3 read-only lifecycle has no cross-request state, so LangGraph was not adopted. The approved Phase 4-13 route keeps Phase 4 focused on an in-process bounded execution kernel; Phase 5 must re-evaluate hand-written durable workflow versus LangGraph using interruption, resume, cancellation, expiry, and crash-recovery evidence before any mainline adoption. ERP writes remain disabled until the separate Phase 6 gates pass."
     },
     {
       "id": "model-selection",
@@ -62,7 +62,7 @@
         "docs/DEVELOPMENT.md#Verified Commands",
         "docs/development-log/20260825-Phase-2-开发日志.md"
       ],
-      "resolution": "Resolved by commit e10a4dd (2026-08-24) and the P2.1 engineering-skeleton development log. The root Makefile provides make setup, make format, make format-check, make lint, make type, make unit, make integration, and make runtime; runtime verification uses curl --fail http://127.0.0.1:8001/healthz and the expected service JSON. The recorded P2.1 command and Bench/Runtime checks passed. runtime-user-authorization remains UNRESOLVED."
+      "resolution": "Resolved by commit e10a4dd (2026-08-24) and the P2.1 engineering-skeleton development log. The root Makefile provides make setup, make format, make format-check, make lint, make type, make unit, make integration, and make runtime; runtime verification uses curl --fail http://127.0.0.1:8001/healthz and the expected service JSON. The recorded P2.1 command and Bench/Runtime checks passed."
     },
     {
       "id": "third-party-licenses",
@@ -95,8 +95,8 @@
     {
       "id": "frontend-design-baseline",
       "status": "UNRESOLVED",
-      "question": "Which exact Frappe v16 components, tokens, desktop browser and viewport matrix, accessibility target, and bilingual terminology form the verified frontend baseline?",
-      "impact": "Detailed visual design and frontend acceptance cannot be finalized without inventing host-product constraints or unsupported compatibility claims.",
+      "question": "Which detailed custom Synora visual tokens and component APIs are needed beyond the approved Frappe Desk component, browser, viewport, accessibility, and bilingual terminology baseline?",
+      "impact": "P3.1 resolved the host components, browser matrix, 1280px viewport, WCAG 2.1 AA target, and glossary. Only custom visual tokens and component APIs remain unresolved and must not be invented before an affected frontend increment.",
       "sources": [
         "docs/DESIGN.md#Open Design Decisions",
         "docs/PRD.md#12-待确认问题"

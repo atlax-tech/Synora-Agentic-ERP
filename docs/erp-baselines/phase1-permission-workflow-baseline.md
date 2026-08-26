@@ -23,7 +23,7 @@
 ## 2. Workflow 基线
 
 - 运行观察：候选 site 的 `Workflow` DocType 无任何记录，MR/PO/PR/PI 均未启用 Workflow。
-- 结论：**"无 Workflow"是运行观察，不代表审批策略已解决**。Synora 审批基线（产品策略）见下节；具体企业 Workflow、多级审批、金额阈值与角色→Workflow 映射（`approval-workflow-mapping`）仍为未决项，最迟 Phase 4 启用写入前由用户决定。
+- 结论：**"无 Workflow"是运行观察，不代表审批策略已解决**。Synora 审批基线（产品策略）见下节；具体企业 Workflow、多级审批、金额阈值与角色→Workflow 映射（`approval-workflow-mapping`）仍为未决项，最迟 Phase 6 启用写入前由用户决定。
 - 本阶段未在候选 site 启用任何 Workflow（属企业配置决策，不在本阶段擅自更改）。
 
 ## 3. 审批基线（产品策略，引用权威文档）
@@ -45,7 +45,7 @@
 
 ## 5. 未决项（不受本基线影响）
 
-- `approval-workflow-mapping`：企业 Workflow/多级审批/角色映射（Phase 4 前用户决定）。
+- `approval-workflow-mapping`：企业 Workflow/多级审批/角色映射（Phase 6 前用户决定）。
 - `third-party-licenses`、`runtime-user-authorization`、`frontend-design-baseline`、`product-commands`、`model-selection`、`workflow-engine-spike` 等保持 UNRESOLVED（见 `.harness/unresolved.json`）。
 - `erp-version-pair`：已由 ADR-0002 解决。
 

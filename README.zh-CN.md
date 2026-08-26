@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-> 将 ERP 业务目标转化为可解释、可授权、可验证企业行动的受治理 Agentic Operations 产品。
+> 一个 Agent 开发岗位学习仓库与真实 ERP 实践载体，将业务目标转化为可解释、可授权、可验证的行动。
 
 ## 项目状态
 
@@ -10,9 +10,11 @@ Synora 已完成 **Phase 0 至 Phase 3 的只读范围**：经治理的工程基
 
 Phase 3 阶段出口审查**已通过**：独立对抗审查最初返回 `CHANGES_REQUIRED`（8 项阻断），修复经过三轮复评；本轮最终收尾又关闭了 CAS 失败者误回滚、Docker sidecar 配置/认证、重定向、推理 token 成本记录和过时证据口径。模型护栏准确来说是“请求级输出预算 + Provider 用量校验”，不是服务商计费前的硬成本上限。Phase 4 尚未启动；`approval-workflow-mapping` 仍是启用写入前的明确门禁，全部写操作仍处于分阶段交付状态。
 
+已批准的项目定位是**“Agent 开发岗位学习仓库 + 真实 ERP 实践载体”**。同一仓库、同一开发主线中同时保留业务应用层和教学实验层：前者证明 Agent 技术能在真实 ERP 约束下工作，后者在采用或拒绝一项技术前做最小可运行对照。这不是两个仓库或两条长期分支，商业化最小范围也不是学习目标。
+
 ## 学习与阶段门禁
 
-Synora 采用导师制 Agent 开发流程。每个阶段步骤开始前都会布置一个边界清晰的 Assignment，说明业务必要性、代码入口、预期输出、测试、不可修改边界、提示梯度和面试追问；安全可控的工作先由学习者尝试，安全门禁和生产缺陷仍由导师接管。
+Synora 采用导师制 Agent 开发流程。Phase 4–13 每个主题都按“原理→最小实验→开源对照→Synora 业务魔改→测试/Trace→采用或拒绝记录→面试追问”展开。每个阶段步骤开始前都会布置一个边界清晰的 Assignment；安全可控的工作先由学习者尝试，安全门禁和生产缺陷仍由导师接管。
 
 每个阶段结束时，先按 9 个 Agent 开发维度评分并登记 likelihood/impact 风险，再在最终 diff 和完整证据准备好后执行独立对抗审查。审查结果为 `CHANGES_REQUIRED` 或 `BLOCKED` 时阶段不能结束，只有最终 `PASS` 才能提交出口报告。用户的问题和卡点会在阶段日志中逐字记录，并紧跟导师解释与证据；每个阶段还会生成至少 5 道结合真实工作的项目与面试练习题。
 
@@ -101,7 +103,7 @@ python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .
 
 ### 产品安装状态
 
-Frappe App 与 Agent Runtime 的工程脚手架及已验证命令见 `docs/DEVELOPMENT.md`。产品级 Agent 能力与写操作尚不可安装；Bench 环境、固定基线命令、确定性种子数据与 Phase 2 真实 HTTP 验证（`env/dev/p26`）可按该文档实际运行。
+Frappe App、Agent Runtime 与 Phase 3 只读采购 Agent 可按 `docs/DEVELOPMENT.md` 运行，包括 `env/dev/p26` 和 `env/dev/p35` 真实 HTTP 检查。Phase 4–13 能力与全部 ERP 写入仍是规划，不是可安装完成度证据。
 
 ## 系统架构
 
@@ -117,6 +119,7 @@ flowchart TD
     Runtime --> Model[模型 Provider 接口]
     Runtime --> Retrieval[版本化检索]
     Runtime --> Eval[评测与 Trace 证据]
+    Eval --> Labs[教学实验 / Golden Tasks]
     ERP --> Database[(MariaDB / 权威业务状态)]
 ```
 
@@ -126,6 +129,7 @@ flowchart TD
 | Synora Frappe App | 登录入口、类型化网关、Policy、审批、幂等、执行和回执 |
 | Agent Runtime | 意图、规划、受限工具调用、结构化提议、解释、Checkpoint 和评测 |
 | Retrieval | 版本化来源、FTS5 基线、引用、权限过滤和后续证据驱动演进 |
+| Learning & Eval Plane | 最小 Agent 实验、golden tasks、轨迹断言、红队用例、benchmark 与采用/拒绝证据 |
 | Harness 与 CI | 项目知识、修改边界、独立验证角色、漂移检查和验收证据 |
 
 Agent Runtime 不直连 ERP 数据库，也不成为最终授权边界。
@@ -151,9 +155,11 @@ flowchart LR
 
 ## AI 与检索方案
 
-### 第一阶段 Agent 架构
+### Agent 执行学习路线
 
-- 单 Agent + 确定性工作流和状态转换。
+- Phase 3 保留单 Agent 与确定性基线，但它不是最终 Agent 架构。
+- Phase 4 对比 Direct、有界 ReAct、Plan-and-Solve、Reflection、最小多步内核和 Provider 原生 Tool Calling。
+- Phase 5 增加持久 Plan-and-Execute、checkpoint、interrupt、resume、cancel 和恢复。
 - Allowlist 中的类型化、版本化 ERP 工具。
 - 模型输出一律视为不可信输入，必须经过版本化 Schema 解析。
 - 通过 Provider 接口隔离具体模型，模型选择由评测决定。
@@ -186,7 +192,7 @@ flowchart LR
 | ERP | ERPNext v16、Frappe v16、MariaDB、Redis | ADR-0002 已固定（Frappe 16.31.0 / ERPNext 16.32.3） |
 | ERP 扩展 | 根目录可安装的 Frappe Custom App | P2.1 已创建脚手架并安装 |
 | Agent 服务 | Python、FastAPI、Pydantic v2、HTTPX | `services/agent_runtime` 已固定（FastAPI 0.141.1、HTTPX 0.28.1、Pydantic 2.12.5） |
-| Workflow | 确定性服务；条件式 LangGraph | Phase 3 Spike 已关闭；只有 Phase 4 写入恢复有实测需要时才重估 |
+| Workflow | 手写 Agent 内核，再评测 LangGraph | Phase 4 执行循环基线；Phase 5 持久工作流对照 |
 | Retrieval | SQLite FTS5/BM25 优先 | Vector/Hybrid/Rerank 由评测门禁控制 |
 | 前端 | ERPNext Desk 与已验证的 Frappe 组件 | 产品形态已确认；组件基线待验证 |
 | 工程工具 | `uv`、Ruff、mypy、pytest | P2.1 已验证；命令见 `docs/DEVELOPMENT.md` |
@@ -201,6 +207,7 @@ Synora-Agentic-ERP/
 ├── README.zh-CN.md           # 中文项目说明
 ├── .agents/skills/           # 项目级工程 Skills
 ├── .harness/                 # 所有权、来源、未决项与指纹
+├── labs/                     # 规划中的教学实验；不等于已部署业务能力
 └── docs/
     ├── PRD.md                # 产品需求事实源
     ├── ARCHITECTURE.md       # 架构与技术边界
@@ -235,11 +242,16 @@ Synora-Agentic-ERP/
 - [x] Phase 1：未修改的 Frappe/ERPNext v16 基线与 P2P 业务考古
 - [x] Phase 2：类型化只读 ERP Gateway
 - [x] Phase 3：只读 Procurement Agent 与 FTS5 评测基线
-- [ ] Phase 4：Proposal、审批、MR Draft、PO Draft、Receipt 与对账
-- [ ] Phase 5：PO Submit、Receipt、Invoice 和 Payment 相关受控流程
-- [ ] Phase 6：Contextual ERP Coach 与完整 RAG 演进
-- [ ] Phase 7：Multi-Agent 评测与条件式采用
-- [ ] Phase 8：工程强化、故障演练、Benchmark 与面试证据
+- [ ] Phase 4：Agent 执行内核、原生 Tool Calling、停止治理与第一版轨迹评测
+- [ ] Phase 5：持久工作流、Plan-and-Execute、checkpoint、HITL 与恢复
+- [ ] Phase 6：受治理 MR/PO Draft、审批、幂等、回执与对账
+- [ ] Phase 7：Prompt、Context Engineering 与 Skills
+- [ ] Phase 8：Memory、RAG 与 Contextual ERP Coach
+- [ ] Phase 9：Multi-Agent、MCP 与 A2A 实验及证据门禁
+- [ ] Phase 10：完整 P2P 运营 Agent
+- [ ] Phase 11：Web/GUI Agent 与多模态观察
+- [ ] Phase 12：自进化、后训练与 Agentic RL 实验
+- [ ] Phase 13：AI Infra、系统强化、Benchmark 与毕业作品
 
 各阶段进入和退出条件见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
@@ -255,7 +267,7 @@ Synora-Agentic-ERP/
 
 ### 为什么不一开始就使用 Multi-Agent？
 
-单 Agent 能形成更清晰的评测基线并减少协作风险。只有 Multi-Agent 带来可测量净收益且不削弱治理边界时才会采用。
+学习路线会在 Phase 9 实现 Multi-Agent、MCP 和 A2A。单 Agent 是对比基线；只有有可测净收益的角色进入业务主线，其他角色仍保留可运行学习证据。
 
 ### 为什么先使用 FTS5，而不是直接使用向量数据库？
 
@@ -263,7 +275,7 @@ FTS5 本地、可检查、成本低，适合作为明确基线。完整 RAG 路�
 
 ### 现在能运行 Synora 吗？
 
-Phase 3 只读 Gateway 与采购 Agent 可基于固定 Bench 环境运行：命令见 `docs/DEVELOPMENT.md`，真实 HTTP 检查见 `env/dev/p26` 与 `env/dev/p35`。Phase 4 的 Proposal、审批和 ERP 写入尚不可用；启用写入前必须先解决 `approval-workflow-mapping`。
+Phase 3 只读 Gateway 与采购 Agent 可基于固定 Bench 环境运行：命令见 `docs/DEVELOPMENT.md`，真实 HTTP 检查见 `env/dev/p26` 与 `env/dev/p35`。Phase 4–13 仍在规划中；第一批受治理写入位于 Phase 6，启用前必须先解决 `approval-workflow-mapping`。
 
 ## License
 

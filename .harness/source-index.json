@@ -7,7 +7,7 @@
       "path": "docs/PRD.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "d1554ddd02cfabee1920e56e132539470ec6bcafee38fd424d49663daace1b21",
+      "sha256": "dfd14188d65aa30fbe72dcad454e5cf2bb88978d3d5d69da76343f6a30dc62d3",
       "locator": "single merged product definition and requirements baseline; unresolved decisions remain explicitly marked"
     },
     {
@@ -15,7 +15,7 @@
       "path": "docs/ARCHITECTURE.md",
       "kind": "architecture",
       "status": "CONFIRMED",
-      "sha256": "f60f8f0a26e6b068b33df484dad3b7668b3037ce871cc12f68e1f814406af1e9",
+      "sha256": "4981988385bca4ef5328919bfc617e8019cf393bd61a5bed69e331fdef133598",
       "locator": "approved target architecture; open implementation decisions remain explicit"
     },
     {
@@ -23,7 +23,7 @@
       "path": "docs/SPEC.md",
       "kind": "design",
       "status": "CONFIRMED",
-      "sha256": "8055a4c2af58a3aa97da53fe87e62a6e4406b24530435e39a32788aeb1b78e07",
+      "sha256": "a06fdc49e5a4e7d497e5aede64720e2fa32160df6ec80b752823ea4710105804",
       "locator": "requirement traceability, contracts, state machines, governance, evolution gates, and unresolved decisions"
     },
     {
@@ -31,15 +31,31 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "ce705976b13a61fb358bedab943cb3c13892e37dd107f558283801f5419f0892",
-      "locator": "risk-tiered workflow, current phase status, 9-dimension exit Rubric, likelihood/impact gates, mentor Assignments, independent adversarial review, and Phase 0 through Phase 8 order"
+      "sha256": "342bd31cead22320209e3ac0cc4cc4f51c5a8078afaeb6017a33559d59381f4d",
+      "locator": "risk-tiered workflow, current phase status, 9-dimension exit Rubric, mentor Assignments, independent adversarial review, and Phase 0 through Phase 13 order"
+    },
+    {
+      "id": "approved-project-direction-correction",
+      "path": "docs/项目方向纠偏.md",
+      "kind": "plan",
+      "status": "CONFIRMED",
+      "sha256": "c5b565bb3aeb042c58ac15de7ac8ac55265b82e0500ef6310305969f27cc3bb0",
+      "locator": "2026-08-26 approved same-repository business and teaching layers, four responsibility planes, and remapped Phase 4 through Phase 13 direction"
+    },
+    {
+      "id": "phase4-kickoff-package",
+      "path": "docs/phase4-kickoff.md",
+      "kind": "plan",
+      "status": "CONFIRMED",
+      "sha256": "289925f89301f2baf4cc6bd8cd1cc8d2949e5bded81c91a2d6b50aa4ed9b71b6",
+      "locator": "READY_NOT_STARTED execution boundary, P4.1 contract draft, golden cases, Trace schema, and pending user Assignment; no implementation evidence"
     },
     {
       "id": "agent-governance-entry",
       "path": "AGENTS.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "106f189ac119dba5bb9dc13754b0567efd4034689ee627b03808823e044d0ddc",
+      "sha256": "ba0d41bf11e5a1b360df4316de05a0e69581ebfb6d49290ceae7f64451cbfc4c",
       "locator": "repository execution boundaries, stage-end independent review gate, mentor-led Assignment workflow, and verbatim question/blocker recording"
     },
     {
@@ -55,7 +71,7 @@
       "path": "docs/DEVELOPMENT.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "bbe2fa9033116301ddf693773e8cacbf44ebf522130ed198d69b7e16b9e4d619",
+      "sha256": "3f0f60442248e2add68a6013047457635675b3d0e5f3abe13183ae1a29830159",
       "locator": "implementation evidence protocol, mentor-led Assignment requirement, verbatim blocker recording, and phase/release PASS gate"
     },
     {
@@ -63,7 +79,7 @@
       "path": "README.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "07d8f9f61a565a455f498bf0e79b8f26a27492aa31a2cd9d1630bf50fde47cdc",
+      "sha256": "86a1aef4711c583c8c8a02d2d1a46fe10d6e2eb8c8396105f7e94b9a9a0b8413",
       "locator": "English repository positioning, evidence status, mentor-led learning workflow, phase gates, architecture summary, and roadmap"
     },
     {
@@ -144,7 +160,7 @@
       "kind": "development",
       "locator": "Phase 3 分轮开发日志（P3.1-P3.7、出口验证、最终修复与 P4.1 只读取证准备）",
       "status": "CONFIRMED",
-      "sha256": "2ae8a0d3148d43c8646c28e33de6d6963a196c8974ea255c429a422318f51078"
+      "sha256": "bc0dfe0c43ea214aebc56b76984b5b6a48133dd4db7ee0127948ba6236d46246"
     },
     {
       "id": "phase3-security-eval",
@@ -158,9 +174,9 @@
       "id": "adr-0004-workflow-engine-spike",
       "path": "docs/decisions/ADR-0004-workflow-engine-spike.md",
       "kind": "design",
-      "locator": "工作流引擎 Spike 结论：Phase 3 不采用 LangGraph；Phase 4 写入恢复按实测门禁重估",
+      "locator": "工作流引擎 Spike：Phase 3 不采用 LangGraph；按 2026-08-26 路线在 Phase 5 以持久恢复实验重评",
       "status": "CONFIRMED",
-      "sha256": "21cf346e9c3ee3e49771402764f33ff7d9dbc0efe2c0cac85a5eae207776fb41"
+      "sha256": "51017b9afd5c2c1f7a615cb28a37a69180631bf968e44913b47f77a3fb50f22d"
     },
     {
       "id": "decision-pack-p3-4-model-provider",
@@ -310,9 +326,9 @@
       "id": "p41-governed-records-preparation",
       "path": "docs/decisions/ADR-0005-p4-1-governed-records-preparation.md",
       "kind": "design",
-      "locator": "P4.1 只读取证与 Proposed Action/Approval/Receipt/digest 治理设计；PROPOSED，未授权写入实现",
+      "locator": "纠偏前 P4.1 治理取证保留为历史设计基线；首次治理写入已移至 Phase 6，当前未授权实现",
       "status": "INFERRED",
-      "sha256": "e1261d84143c38c0fe235066313c3a9c89decd9ea4ce944a78b0f22ed836564a"
+      "sha256": "f83be310bbfa68293c8eac4e65266d754b24093e4d6c01a72dc9cf28592c5eab"
     }
   ]
 }

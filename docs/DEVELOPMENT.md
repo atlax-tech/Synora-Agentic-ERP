@@ -23,6 +23,14 @@ During implementation:
 - Work as a mentor: explain why each operation is necessary, let the user attempt safe work first, and take over only for an explicit request, a capability boundary, a security gate, or a production defect; record the reason when taking over.
 - Record every change in `docs/development-log/` in clear Chinese, explaining what changed, why, validation evidence, limitations, and manual acceptance. Preserve each user question, doubt, or blocker verbatim, followed by evidence, explanation, conclusion, and a review action.
 
+For Phase 4–13 Agent-learning work:
+
+- Keep the real ERP business application layer and `labs/agent_patterns/` teaching layer in the same repository and development line; do not create long-lived branches or a second repository for the lab.
+- Labs reuse public typed contracts, fixed datasets, and declared test doubles. They must not receive production credentials, import hidden ERP internals, bypass the Control Plane, or be reported as deployed business behavior.
+- Learn each topic in this order: principle -> minimal lab -> open-source source comparison -> Synora business adaptation -> tests and trace -> trade-off review -> interview questions.
+- Before moving a technique into the business path, write an Adoption Card covering `Problem`, `Preconditions`, `Minimal Lab`, `Alternatives`, `Evidence`, `Decision`, `Real-world Use`, and `Interview Answer`. A rejected technique keeps its runnable learning evidence.
+- Do not let labs become unrelated demo collections: every lab uses an ERP/procurement task or explicitly explains why the technique cannot be meaningfully mapped to this domain.
+
 Before a phase exit, release, or product/dependency version update:
 
 - Run required automated and manual checks.
@@ -199,5 +207,6 @@ was accepted.
 
 ## Sources
 
+- `docs/项目方向纠偏.md` — approved learning workflow, same-repository layer boundary, and Adoption Card contract.
 - `docs/PRD.md` — approved maintainability, testing, acceptance, and unresolved-decision requirements.
 - `docs/ARCHITECTURE.md` — implementation boundaries and open architecture decisions.
