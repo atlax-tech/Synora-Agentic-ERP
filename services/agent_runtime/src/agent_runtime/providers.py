@@ -91,12 +91,17 @@ class ProviderError(Exception):
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
         reasoning_tokens: int = 0,
+        budget_code: Literal["TOKEN_BUDGET"] | None = None,
     ) -> None:
         super().__init__(message)
         # 即使结果因预算门禁被拒绝, 已观测的 usage 仍需进入证据, 便于审计。
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
         self.reasoning_tokens = reasoning_tokens
+        # A provider can fail after reporting usage because its response itself
+        # violated the bounded output contract. Preserve that classification so
+        # the kernel does not turn an auditable budget stop into MODEL_ERROR.
+        self.budget_code = budget_code
 
 
 class Provider(Protocol):
@@ -315,7 +320,10 @@ class OpenAICompatibleProvider:
         if max_tokens is not None and completion.usage is None:
             # 没有 usage 就无法证明服务商遵守输出预算; 宁可回退, 也不接受
             # 未验证的真实模型结果。请求参数仍是服务商侧的首要成本护栏。
-            raise ProviderError("provider omitted usage for budgeted response")
+            raise ProviderError(
+                "provider omitted usage for budgeted response",
+                budget_code="TOKEN_BUDGET",
+            )
         usage = completion.usage
         reasoning_tokens = (
             usage.completion_tokens_details.reasoning_tokens
@@ -324,7 +332,7 @@ class OpenAICompatibleProvider:
         )
         completion_tokens = usage.completion_tokens if usage else 0
         if completion_tokens < 0 or reasoning_tokens < 0:
-            raise ProviderError("provider returned invalid token usage")
+            raise ProviderError("provider returned invalid token usage", budget_code="TOKEN_BUDGET")
         billed_output_tokens = completion_tokens + reasoning_tokens
         if max_tokens is not None and billed_output_tokens > max_tokens:
             # 成本护栏覆盖最终文本与推理 token; 服务商可能忽略请求参数或把
@@ -334,6 +342,7 @@ class OpenAICompatibleProvider:
                 prompt_tokens=usage.prompt_tokens if usage else 0,
                 completion_tokens=completion_tokens,
                 reasoning_tokens=reasoning_tokens,
+                budget_code="TOKEN_BUDGET",
             )
         message = completion.choices[0].message
         return ProviderResponse(

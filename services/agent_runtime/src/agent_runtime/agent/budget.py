@@ -181,8 +181,6 @@ class BudgetAccount:
             < 0
         ):
             return "TOKEN_BUDGET"
-        if per_call_output > self.limits.max_output_tokens:
-            return "TOKEN_BUDGET"
         cumulative_output = (
             self.usage.completion_tokens + self.usage.reasoning_tokens + per_call_output
         )
@@ -199,6 +197,10 @@ class BudgetAccount:
             reasoning_tokens=self.usage.reasoning_tokens + response.reasoning_tokens,
             cost_microusd=next_cost,
         )
+        # Keep provider-reported usage as audit evidence even when that usage
+        # itself exceeds the per-call cap; the caller still stops fail-closed.
+        if per_call_output > self.limits.max_output_tokens:
+            return "TOKEN_BUDGET"
         if cumulative_output > self.limits.max_total_output_tokens:
             return "TOKEN_BUDGET"
         if next_cost > self.limits.max_cost_microusd:

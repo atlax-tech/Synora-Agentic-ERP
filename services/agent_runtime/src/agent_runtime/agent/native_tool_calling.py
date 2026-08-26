@@ -44,7 +44,13 @@ from agent_runtime.gateway import (
     ProjectedStockInput,
     SupplierLookupInput,
 )
-from agent_runtime.providers import Provider, ProviderMessage, ProviderToolSpec
+from agent_runtime.providers import (
+    Provider,
+    ProviderError,
+    ProviderMessage,
+    ProviderResponse,
+    ProviderToolSpec,
+)
 
 _NATIVE_PARSE_ERRORS = (ValueError, TypeError, ValidationError)
 
@@ -293,6 +299,43 @@ async def _run_native_tool_calling(
                 timeout=remaining_seconds,
             )
             budget_code = account.record(response)
+        except ProviderError as error:
+            # Provider-side budget failures can still carry usage. Account for
+            # those numbers before returning the typed stop reason so Trace can
+            # audit what was observed without exposing provider error text.
+            usage_code = account.record(
+                ProviderResponse(
+                    prompt_tokens=error.prompt_tokens,
+                    completion_tokens=error.completion_tokens,
+                    reasoning_tokens=error.reasoning_tokens,
+                )
+            )
+            provider_code = error.budget_code or usage_code
+            if provider_code is not None:
+                recorder.add(
+                    "guard.checked",
+                    {"step": step, "guard": provider_code, "allowed": False},
+                )
+                return _stop(
+                    recorder=recorder,
+                    run_id=run_id,
+                    code=provider_code,
+                    step=step,
+                    detail="provider usage was unavailable or exceeded the bounded budget",
+                    started=started,
+                    usage=account.usage,
+                    elapsed_ms=account.elapsed_ms(),
+                )
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="MODEL_ERROR",
+                step=step,
+                detail="native provider failed",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
         except TimeoutError:
             return _stop(
                 recorder=recorder,

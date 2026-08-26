@@ -28,6 +28,7 @@ from agent_runtime.evaluation.loader import AgentEvaluationCase, load_agent_case
 from agent_runtime.providers import (
     DeterministicProvider,
     Provider,
+    ProviderError,
     ProviderResponse,
     ProviderToolCall,
 )
@@ -351,7 +352,29 @@ def test_per_call_token_budget_fails_closed_after_provider_usage() -> None:
     result = _run(provider, adapter, frozenset({"item.lookup"}))
 
     assert result.stop_reason.code == "TOKEN_BUDGET"
-    assert result.usage.completion_tokens == 0
+    assert result.usage.completion_tokens == 513
+    assert adapter.calls == []
+
+
+def test_provider_budget_error_preserves_reported_usage_and_stop_code() -> None:
+    class BudgetErrorProvider(_CountingProvider):
+        async def complete(self, *_args: object, **_kwargs: object) -> ProviderResponse:
+            self.calls += 1
+            raise ProviderError(
+                "provider exceeded max_tokens budget",
+                prompt_tokens=12,
+                completion_tokens=513,
+                budget_code="TOKEN_BUDGET",
+            )
+
+    provider = BudgetErrorProvider([])
+    adapter = _StepSummaryAdapter()
+
+    result = _run(provider, adapter, frozenset({"item.lookup"}))
+
+    assert result.stop_reason.code == "TOKEN_BUDGET"
+    assert result.usage.prompt_tokens == 12
+    assert result.usage.completion_tokens == 513
     assert adapter.calls == []
 
 
