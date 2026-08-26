@@ -168,7 +168,7 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
         completion_tokens = int(evidence.get("completion_tokens", 0) or 0)
         reasoning_tokens = int(evidence.get("reasoning_tokens", 0) or 0)
         elapsed_ms = int(evidence.get("elapsed_ms", 0) or 0)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         # Runtime 返回异常类型: 证据解析失败回退确定性, 不抛 500。
         return fallback("runtime returned malformed evidence")
     return explanation, {
@@ -257,7 +257,7 @@ def _recover_failed_analysis(run_id: str, correlation_id: str) -> None:
         if current.run_state != "ANALYZING":
             return
         _set_run_state(current, "CREATED")
-    except GatewayFault, frappe.TimestampMismatchError:
+    except (GatewayFault, frappe.TimestampMismatchError):
         # 并发取消/推进已生效: 回退让位, 不覆盖。
         pass
 

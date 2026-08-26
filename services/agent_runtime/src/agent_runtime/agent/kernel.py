@@ -235,7 +235,7 @@ async def run_bounded_react(
                     detail="execution was cancelled after model response",
                     started=started,
                 )
-        except ValidationError, TypeError, ValueError:
+        except (ValidationError, TypeError, ValueError):
             recorder.add("final.rejected", {"step": step, "reason": "invalid model decision"})
             return _stop(
                 recorder=recorder,

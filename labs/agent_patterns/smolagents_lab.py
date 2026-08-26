@@ -613,7 +613,7 @@ def run_smolagents_tool_calling(
     output = getattr(result, "output", None)
     try:
         final = _parse_final(output)
-    except TypeError, ValueError, ValidationError:
+    except (TypeError, ValueError, ValidationError):
         state = getattr(result, "state", "")
         final_code: StopCode = (
             "MAX_STEPS" if state == "max_steps_error" else "UNSUPPORTED_FINAL_ANSWER"

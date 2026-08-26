@@ -171,7 +171,7 @@ class DirectRunner:
                 step=1,
             )
             final = _parse_final(raw)
-        except ValidationError, TypeError, ValueError:
+        except (ValidationError, TypeError, ValueError):
             recorder.add("final.rejected", {"step": 1, "reason": "invalid direct answer"})
             return _stop(
                 recorder=recorder,
@@ -251,7 +251,7 @@ class PlanAndSolveRunner:
                 step=1,
             )
             plan = _Plan.model_validate(raw)
-        except ValidationError, TypeError, ValueError:
+        except (ValidationError, TypeError, ValueError):
             recorder.add("final.rejected", {"step": 1, "reason": "invalid plan"})
             return _stop(
                 recorder=recorder,
@@ -315,7 +315,7 @@ class PlanAndSolveRunner:
                     correlation_id=correlation_id,
                 )
                 validate_action_tool(action)
-            except ValidationError, TypeError, ValueError:
+            except (ValidationError, TypeError, ValueError):
                 recorder.add("action.rejected", {"step": step, "reason": "invalid tool arguments"})
                 return _stop(
                     recorder=recorder,
@@ -465,7 +465,7 @@ class ReflectionRunner:
                 )
             else:
                 final = _parse_final(second)
-        except ValidationError, TypeError, ValueError:
+        except (ValidationError, TypeError, ValueError):
             recorder.add("final.rejected", {"step": 2, "reason": "invalid reflection response"})
             return _stop(
                 recorder=recorder,
