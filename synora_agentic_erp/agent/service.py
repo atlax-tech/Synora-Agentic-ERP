@@ -11,6 +11,7 @@ sidecar 的 /enhance 端点让模型改写解释文本; 数量/风险分类仍�
 CI (app-test) 无 Runtime 服务: 走回退路径, 不依赖付费真实模型。
 """
 
+import hashlib
 import json
 import os
 import re
@@ -103,6 +104,89 @@ _TRACE_SECRET_TEXT = re.compile(
     r"(?i)\b(?:api[_-]?key|bearer|token|secret|password|passwd|capability|authorization|cookie)\b"
     r"\s*[:=]\s*\S+"
 )
+
+
+def _validate_trace_semantics(
+    events: list[dict[str, Any]], *, stop_code: str, final_answer: dict[str, Any] | None = None
+) -> set[str]:
+    """Validate ownership of evidence and the small terminal trace state machine."""
+    if (
+        not events
+        or events[0].get("event_type") != "run.started"
+        or events[-1].get("event_type") != "run.stopped"
+    ):
+        raise ValueError("trace terminal events are invalid")
+    observed: set[str] = set()
+    pending: str | None = None
+    for event in events[1:-1]:
+        kind = event.get("event_type")
+        payload = event.get("payload")
+        if not isinstance(payload, dict):
+            raise ValueError("trace payload is invalid")
+        if kind == "action.proposed":
+            if pending is not None:
+                raise ValueError("trace action overlaps")
+            pending = "action"
+        elif kind in {"action.validated", "action.rejected"}:
+            if kind == "action.validated" and pending != "action":
+                raise ValueError("trace action transition is invalid")
+            pending = None
+        elif kind == "tool.started":
+            if pending not in {"action", None}:
+                raise ValueError("trace tool transition is invalid")
+            pending = "tool"
+        elif kind == "tool.observed":
+            if pending != "tool":
+                raise ValueError("trace observation transition is invalid")
+            summary, digest = payload.get("summary"), payload.get("digest")
+            if (
+                payload.get("ok") is not True
+                or not isinstance(summary, str)
+                or not isinstance(digest, str)
+            ):
+                raise ValueError("trace observation is invalid")
+            if (
+                not re.fullmatch(r"[0-9a-f]{64}", digest)
+                or hashlib.sha256(summary.encode()).hexdigest() != digest
+            ):
+                raise ValueError("trace observation digest is invalid")
+            observed.add(digest)
+            pending = None
+        elif kind == "tool.failed":
+            if pending != "tool":
+                raise ValueError("trace tool failure transition is invalid")
+            pending = None
+        elif kind == "final.proposed":
+            if pending is not None:
+                raise ValueError("trace final transition is invalid")
+            pending = "final"
+        elif kind in {"final.validated", "final.rejected"}:
+            if kind == "final.validated" and pending != "final":
+                raise ValueError("trace final validation transition is invalid")
+            pending = None
+        elif kind == "run.stopped":
+            raise ValueError("trace has events after terminal")
+    stopped = events[-1].get("payload")
+    if not isinstance(stopped, dict) or stopped.get("code") != stop_code or pending is not None:
+        raise ValueError("trace stop reason is inconsistent")
+    if stop_code == "FINAL_ANSWER":
+        proposals = [e for e in events if e.get("event_type") == "final.proposed"]
+        validated = any(e.get("event_type") == "final.validated" for e in events)
+        if not proposals or not validated:
+            raise ValueError("final evidence is missing")
+        proposal = proposals[-1].get("payload")
+        if not isinstance(proposal, dict):
+            raise ValueError("final evidence does not match trace")
+        final_answer = final_answer or proposal
+        if any(
+            proposal.get(k) != final_answer.get(k)
+            for k in ("status", "summary", "evidence_refs", "unknowns")
+        ):
+            raise ValueError("final evidence does not match trace")
+        refs = final_answer.get("evidence_refs")
+        if not isinstance(refs, list) or not refs or not set(refs).issubset(observed):
+            raise ValueError("final evidence reference is not observed")
+    return observed
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -472,6 +556,7 @@ def _validate_agent_runtime_response(body: object, run_id: str) -> dict[str, Any
             "evidence_refs": list(refs),
             "unknowns": [_safe_trace_text(value, 4_000) for value in unknowns],
         }
+    _validate_trace_semantics(events, stop_code=code, final_answer=safe_final_answer)
     return {
         "schema_version": "1",
         "provider": _safe_trace_text(body["provider"], 120),

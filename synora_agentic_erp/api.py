@@ -9,6 +9,7 @@ from frappe.utils import cint, get_datetime, now_datetime
 from synora_agentic_erp.agent.service import (
     _AGENT_EVENT_TYPES,
     _safe_trace_value,
+    _validate_trace_semantics,
 )
 from synora_agentic_erp.agent.service import (
     analyze_run as analyze_server_run,
@@ -109,7 +110,9 @@ def _safe_trace_stop_reason(raw: object) -> dict[str, object]:
     return _safe_trace_value(parsed)  # type: ignore[return-value]
 
 
-def _safe_trace_events(raw: object, run_id: str) -> list[dict[str, object]]:
+def _safe_trace_events(
+    raw: object, run_id: str, *, expected_stop_code: str | None = None
+) -> list[dict[str, object]]:
     events = _parse_trace_json(raw, list)
     if len(events) > 512:
         raise ValueError("trace event count is invalid")
@@ -138,10 +141,12 @@ def _safe_trace_events(raw: object, run_id: str) -> list[dict[str, object]]:
                 "payload": _safe_trace_value(event["payload"]),
             }
         )
-    if not safe_events or safe_events[0]["event_type"] != "run.started":
-        raise ValueError("trace must start with run.started")
-    if safe_events[-1]["event_type"] != "run.stopped":
-        raise ValueError("trace must end with run.stopped")
+    stopped = events[-1].get("payload") if events and isinstance(events[-1], dict) else None
+    actual_stop_code = stopped.get("code") if isinstance(stopped, dict) else None
+    stop_code = expected_stop_code or actual_stop_code
+    if not isinstance(stop_code, str):
+        raise ValueError("trace stop reason is invalid")
+    _validate_trace_semantics(events, stop_code=stop_code)
     return safe_events
 
 
@@ -635,7 +640,10 @@ def get_run_trace(
                 "trace": None,
             }
         doc = attempts[0]
-        events = _safe_trace_events(doc.events_json, safe_run_id)
+        stop_reason = _safe_trace_stop_reason(doc.stop_reason)
+        events = _safe_trace_events(
+            doc.events_json, safe_run_id, expected_stop_code=str(stop_reason["code"])
+        )
         summary = _latest_agent_trace(safe_run_id)
         if summary is None:
             raise ValueError("trace summary is unavailable")

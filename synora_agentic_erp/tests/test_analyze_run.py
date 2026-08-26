@@ -1,5 +1,6 @@
 """Analyze Run: deterministic closeout plus the Phase 4 Agent trace boundary."""
 
+import hashlib
 from unittest.mock import patch
 
 import frappe
@@ -171,18 +172,70 @@ class TestAnalyzeRun(FrappeTestCase):
 
     def test_runtime_final_answer_survives_redacted_frappe_boundary(self) -> None:
         run_id = "37e1d8a5-1730-4ad0-bffd-217774ed9fab"
-        digest = "a" * 64
+        summary = "stock is adequate"
+        digest = hashlib.sha256(summary.encode()).hexdigest()
         body = _runtime_failure_response(run_id)
         result = body["result"]
         result["stop_reason"]["code"] = "FINAL_ANSWER"
-        result["events"][-1]["payload"]["code"] = "FINAL_ANSWER"
         result["final_answer"] = {
             "schema_version": "1",
             "status": "SUCCEEDED",
-            "summary": "stock is adequate",
+            "summary": summary,
             "evidence_refs": [digest],
             "unknowns": ["lead time not observed"],
         }
+        timestamp = result["events"][0]["timestamp"]
+        result["events"] = [
+            result["events"][0],
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 2,
+                "event_type": "tool.started",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"step": 1},
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 3,
+                "event_type": "tool.observed",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"step": 1, "ok": True, "summary": summary, "digest": digest},
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 4,
+                "event_type": "final.proposed",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {
+                    key: result["final_answer"][key]
+                    for key in ("status", "summary", "evidence_refs", "unknowns")
+                },
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 5,
+                "event_type": "final.validated",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"step": 1},
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 6,
+                "event_type": "run.stopped",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"code": "FINAL_ANSWER", "step": 1, "detail": "done"},
+            },
+        ]
 
         validated = _validate_agent_runtime_response(body, run_id)
 
@@ -190,6 +243,81 @@ class TestAnalyzeRun(FrappeTestCase):
             validated["result"]["final_answer"],
             result["final_answer"],
         )
+
+    def test_runtime_final_answer_rejects_unowned_or_tampered_evidence(self) -> None:
+        run_id = "37e1d8a5-1730-4ad0-bffd-217774ed9fab"
+        summary = "observed stock is 10"
+        digest = hashlib.sha256(summary.encode()).hexdigest()
+        body = _runtime_failure_response(run_id)
+        result = body["result"]
+        result["stop_reason"]["code"] = "FINAL_ANSWER"
+        result["final_answer"] = {
+            "schema_version": "1",
+            "status": "SUCCEEDED",
+            "summary": summary,
+            "evidence_refs": [digest],
+            "unknowns": [],
+        }
+        timestamp = result["events"][0]["timestamp"]
+        result["events"] = [
+            result["events"][0],
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 2,
+                "event_type": "tool.started",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {},
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 3,
+                "event_type": "tool.observed",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"ok": True, "summary": summary, "digest": digest},
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 4,
+                "event_type": "final.proposed",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {
+                    key: result["final_answer"][key]
+                    for key in ("status", "summary", "evidence_refs", "unknowns")
+                },
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 5,
+                "event_type": "final.validated",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {},
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 6,
+                "event_type": "run.stopped",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"code": "FINAL_ANSWER"},
+            },
+        ]
+
+        result["events"][2]["payload"]["digest"] = "a" * 64
+        with self.assertRaises(ValueError):
+            _validate_agent_runtime_response(body, run_id)
+        result["events"][2]["payload"]["digest"] = digest
+        result["events"][-1]["payload"]["code"] = "MODEL_ERROR"
+        with self.assertRaises(ValueError):
+            _validate_agent_runtime_response(body, run_id)
 
     def test_cancelled_run_is_rechecked_before_next_deterministic_tool(self) -> None:
         """A cancel between two reads must prevent the second ERP call."""
