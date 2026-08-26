@@ -268,7 +268,13 @@ async def run_bounded_react(
         if isinstance(decision, FinalAnswer):
             recorder.add(
                 "final.proposed",
-                {"step": step, "evidence_refs": list(decision.evidence_refs)},
+                {
+                    "step": step,
+                    "status": decision.status,
+                    "summary": decision.summary,
+                    "evidence_refs": list(decision.evidence_refs),
+                    "unknowns": list(decision.unknowns),
+                },
             )
             known_digests = {observation.digest for observation in observations if observation.ok}
             if not decision.evidence_refs or not set(decision.evidence_refs).issubset(

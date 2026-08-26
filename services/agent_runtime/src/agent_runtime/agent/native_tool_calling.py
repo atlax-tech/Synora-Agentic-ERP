@@ -11,12 +11,13 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import re
 from collections.abc import Callable
 from time import monotonic
-from typing import cast
+from typing import Literal, cast
 from uuid import UUID
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from agent_runtime.agent.budget import BudgetAccount, BudgetLimits, Pricing
 from agent_runtime.agent.contracts import (
@@ -28,6 +29,7 @@ from agent_runtime.agent.contracts import (
     RunResult,
     StopCode,
     StopReason,
+    StrictModel,
     ToolName,
     TraceRecorder,
     UsageSnapshot,
@@ -66,6 +68,17 @@ READ_TOOL_NAMES: tuple[ToolName, ...] = (
 
 class NativeToolCallingLimits(BudgetLimits):
     """Balanced P4.4 limits used by the native provider path."""
+
+
+class _ProviderFinalAnswer(StrictModel):
+    """Strict wire shape accepted from a provider's final text response."""
+
+    type: Literal["final"] = "final"
+    schema_version: Literal["1"] = "1"
+    status: Literal["SUCCEEDED", "NEEDS_INPUT", "FAILED"]
+    summary: str = Field(min_length=1, max_length=4_000)
+    evidence_refs: list[str] = Field(default_factory=list, max_length=32)
+    unknowns: list[str] = Field(default_factory=list, max_length=32)
 
 
 _TOOL_INPUTS: dict[ToolName, type[BaseModel]] = {
@@ -146,14 +159,30 @@ def _parse_final_text(text: str) -> FinalAnswer:
     )
     if not isinstance(raw, dict):
         raise ValueError("final answer must be a JSON object")
-    values = dict(raw)
-    values.pop("type", None)
-    values.pop("schema_version", None)
-    values.pop("stop_reason", None)
-    for name in ("evidence_refs", "unknowns"):
-        if isinstance(values.get(name), list):
-            values[name] = tuple(values[name])
-    return FinalAnswer.model_validate(values)
+    wire = _ProviderFinalAnswer.model_validate(raw)
+    return FinalAnswer(
+        status=wire.status,
+        summary=wire.summary,
+        evidence_refs=tuple(wire.evidence_refs),
+        unknowns=tuple(wire.unknowns),
+    )
+
+
+_NUMBER_TOKEN = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?")
+
+
+def _has_unsupported_numeric_claim(
+    final: FinalAnswer,
+    observations: list[Observation],
+) -> bool:
+    """Reject numeric claims not present in the observations they cite."""
+    cited = set(final.evidence_refs)
+    evidence_text = "\n".join(
+        observation.summary
+        for observation in observations
+        if observation.ok and observation.digest in cited
+    )
+    return any(number not in evidence_text for number in _NUMBER_TOKEN.findall(final.summary))
 
 
 def _stop(
@@ -426,7 +455,13 @@ async def _run_native_tool_calling(
                 )
             recorder.add(
                 "final.proposed",
-                {"step": step, "evidence_refs": list(final.evidence_refs)},
+                {
+                    "step": step,
+                    "status": final.status,
+                    "summary": final.summary,
+                    "evidence_refs": list(final.evidence_refs),
+                    "unknowns": list(final.unknowns),
+                },
             )
             known_digests = {observation.digest for observation in observations if observation.ok}
             if not final.evidence_refs or not set(final.evidence_refs).issubset(known_digests):
@@ -437,6 +472,21 @@ async def _run_native_tool_calling(
                     code="UNSUPPORTED_FINAL_ANSWER",
                     step=step,
                     detail="final answer did not cite an observed digest",
+                    started=started,
+                    usage=account.usage,
+                    elapsed_ms=account.elapsed_ms(),
+                )
+            if _has_unsupported_numeric_claim(final, observations):
+                recorder.add(
+                    "final.rejected",
+                    {"step": step, "reason": "unsupported numeric claim"},
+                )
+                return _stop(
+                    recorder=recorder,
+                    run_id=run_id,
+                    code="UNSUPPORTED_FINAL_ANSWER",
+                    step=step,
+                    detail="final answer contained a number absent from cited observations",
                     started=started,
                     usage=account.usage,
                     elapsed_ms=account.elapsed_ms(),

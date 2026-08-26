@@ -50,18 +50,33 @@ class AgentEvaluationReport:
 
 
 def _actual_tool_sequence(result: RunResult) -> tuple[str, ...]:
-    validated_actions = {
-        (event.payload.get("step"), event.payload.get("tool_name"))
-        for event in result.events
-        if event.event_type == "action.validated"
-    }
-    return tuple(
-        str(event.payload["tool_name"])
-        for event in result.events
-        if event.event_type == "action.proposed"
-        and "tool_name" in event.payload
-        and (event.payload.get("step"), event.payload.get("tool_name")) in validated_actions
-    )
+    validated_actions: set[tuple[int, str]] = set()
+    for event in result.events:
+        if event.event_type != "action.validated":
+            continue
+        step = event.payload.get("step")
+        tool_name = event.payload.get("tool_name")
+        if (
+            isinstance(step, int)
+            and not isinstance(step, bool)
+            and isinstance(tool_name, str)
+        ):
+            validated_actions.add((step, tool_name))
+
+    actual_tools: list[str] = []
+    for event in result.events:
+        if event.event_type != "action.proposed":
+            continue
+        step = event.payload.get("step")
+        tool_name = event.payload.get("tool_name")
+        if (
+            isinstance(step, int)
+            and not isinstance(step, bool)
+            and isinstance(tool_name, str)
+            and (step, tool_name) in validated_actions
+        ):
+            actual_tools.append(tool_name)
+    return tuple(actual_tools)
 
 
 def _observation_count(result: RunResult) -> int:

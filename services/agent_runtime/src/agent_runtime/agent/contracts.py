@@ -155,6 +155,13 @@ class Observation(StrictModel):
     error_code: str | None = Field(default=None, max_length=80)
     retryable: bool = False
 
+    @model_validator(mode="after")
+    def validate_digest(self) -> Observation:
+        expected = hashlib.sha256(self.summary.encode("utf-8")).hexdigest()
+        if self.digest != expected:
+            raise ValueError("observation digest does not match summary")
+        return self
+
 
 class BudgetSnapshot(StrictModel):
     steps: int = Field(default=0, ge=0)

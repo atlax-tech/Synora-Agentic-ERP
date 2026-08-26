@@ -6,7 +6,10 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from synora_agentic_erp.agent import service as agent_service
-from synora_agentic_erp.agent.service import _runtime_failure_response
+from synora_agentic_erp.agent.service import (
+    _runtime_failure_response,
+    _validate_agent_runtime_response,
+)
 from synora_agentic_erp.api import (
     analyze_run,
     cancel_run,
@@ -164,6 +167,28 @@ class TestAnalyzeRun(FrappeTestCase):
         self.assertEqual(
             len(frappe.get_all("Synora Agent Trace Attempt", filters={"run": run["run_id"]})),
             1,
+        )
+
+    def test_runtime_final_answer_survives_redacted_frappe_boundary(self) -> None:
+        run_id = "37e1d8a5-1730-4ad0-bffd-217774ed9fab"
+        digest = "a" * 64
+        body = _runtime_failure_response(run_id)
+        result = body["result"]
+        result["stop_reason"]["code"] = "FINAL_ANSWER"
+        result["events"][-1]["payload"]["code"] = "FINAL_ANSWER"
+        result["final_answer"] = {
+            "schema_version": "1",
+            "status": "SUCCEEDED",
+            "summary": "stock is adequate",
+            "evidence_refs": [digest],
+            "unknowns": ["lead time not observed"],
+        }
+
+        validated = _validate_agent_runtime_response(body, run_id)
+
+        self.assertEqual(
+            validated["result"]["final_answer"],
+            result["final_answer"],
         )
 
     def test_cancelled_run_is_rechecked_before_next_deterministic_tool(self) -> None:

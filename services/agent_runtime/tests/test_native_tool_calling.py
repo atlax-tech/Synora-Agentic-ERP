@@ -224,6 +224,111 @@ def test_final_answer_must_reference_an_observed_digest() -> None:
     assert result.stop_reason.code == "UNSUPPORTED_FINAL_ANSWER"
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "type": "final",
+            "schema_version": "2",
+            "status": "SUCCEEDED",
+            "summary": "unsupported version",
+            "evidence_refs": [],
+        },
+        {
+            "type": "final",
+            "status": "SUCCEEDED",
+            "summary": "unexpected field",
+            "evidence_refs": [],
+            "unexpected": True,
+        },
+    ],
+)
+def test_final_answer_wire_shape_rejects_version_and_unknown_fields(
+    payload: dict[str, object],
+) -> None:
+    provider = DeterministicProvider(
+        scripted_responses=[ProviderResponse(text=json.dumps(payload))]
+    )
+    adapter = RecordedToolAdapter({"item.lookup": _observation("item.lookup", "unused")})
+
+    result = _run(provider, adapter, frozenset({"item.lookup"}))
+
+    assert result.stop_reason.code == "UNSUPPORTED_FINAL_ANSWER"
+
+
+def test_final_answer_rejects_numeric_claim_absent_from_cited_observation() -> None:
+    observation = _observation("stock.projected", "projected stock is 60")
+    provider = DeterministicProvider(
+        scripted_responses=[
+            ProviderResponse(
+                tool_calls=(
+                    ProviderToolCall(
+                        id="call-1",
+                        name="stock.projected",
+                        arguments='{"item_code":"SYNORA-P1-Item-1001"}',
+                    ),
+                )
+            ),
+            ProviderResponse(
+                text=json.dumps(
+                    {
+                        "type": "final",
+                        "status": "SUCCEEDED",
+                        "summary": "projected stock is 999",
+                        "evidence_refs": [observation.digest],
+                    }
+                )
+            ),
+        ]
+    )
+    adapter = RecordedToolAdapter({"stock.projected": observation})
+
+    result = _run(provider, adapter, frozenset({"stock.projected"}))
+
+    assert result.stop_reason.code == "UNSUPPORTED_FINAL_ANSWER"
+    assert any(
+        event.event_type == "final.rejected"
+        and event.payload.get("reason") == "unsupported numeric claim"
+        for event in result.events
+    )
+
+
+def test_final_proposed_trace_contains_safe_answer_fields() -> None:
+    observation = _observation("stock.projected", "projected stock is 60")
+    provider = DeterministicProvider(
+        scripted_responses=[
+            ProviderResponse(
+                tool_calls=(
+                    ProviderToolCall(
+                        id="call-1",
+                        name="stock.projected",
+                        arguments='{"item_code":"SYNORA-P1-Item-1001"}',
+                    ),
+                )
+            ),
+            ProviderResponse(
+                text=json.dumps(
+                    {
+                        "status": "SUCCEEDED",
+                        "summary": "facts collected",
+                        "evidence_refs": [observation.digest],
+                        "unknowns": ["lead time not observed"],
+                    }
+                )
+            ),
+        ]
+    )
+    adapter = RecordedToolAdapter({"stock.projected": observation})
+
+    result = _run(provider, adapter, frozenset({"stock.projected"}))
+
+    final_event = next(event for event in result.events if event.event_type == "final.proposed")
+    assert final_event.payload["status"] == "SUCCEEDED"
+    assert final_event.payload["summary"] == "facts collected"
+    assert final_event.payload["evidence_refs"] == [observation.digest]
+    assert final_event.payload["unknowns"] == ["lead time not observed"]
+
+
 def test_tool_result_helper_contains_only_bounded_observation() -> None:
     observation = _observation("item.lookup", "bounded summary")
 

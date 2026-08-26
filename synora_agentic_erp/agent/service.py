@@ -441,6 +441,7 @@ def _validate_agent_runtime_response(body: object, run_id: str) -> dict[str, Any
     if not isinstance(elapsed_ms, int) or isinstance(elapsed_ms, bool) or elapsed_ms < 0:
         raise ValueError("runtime elapsed time is invalid")
     final_answer = result.get("final_answer")
+    safe_final_answer: dict[str, object] | None = None
     if code == "FINAL_ANSWER":
         if not isinstance(final_answer, dict):
             raise ValueError("runtime final answer is invalid")
@@ -458,6 +459,19 @@ def _validate_agent_runtime_response(body: object, run_id: str) -> dict[str, Any
             raise ValueError("runtime evidence reference is invalid")
         if any(not isinstance(value, str) for value in unknowns):
             raise ValueError("runtime final answer unknowns are invalid")
+        if len(final_answer["summary"].encode("utf-8")) > 4_000:
+            raise ValueError("runtime final answer summary is too long")
+        if len(refs) > 32 or len(unknowns) > 32:
+            raise ValueError("runtime final answer references are too many")
+        if any(len(value.encode("utf-8")) > 4_000 for value in unknowns):
+            raise ValueError("runtime final answer unknown is too long")
+        safe_final_answer = {
+            "schema_version": "1",
+            "status": final_answer["status"],
+            "summary": _safe_trace_text(final_answer["summary"], 4_000),
+            "evidence_refs": list(refs),
+            "unknowns": [_safe_trace_text(value, 4_000) for value in unknowns],
+        }
     return {
         "schema_version": "1",
         "provider": _safe_trace_text(body["provider"], 120),
@@ -472,6 +486,7 @@ def _validate_agent_runtime_response(body: object, run_id: str) -> dict[str, Any
                 "detail": detail[:500],
                 "budget_snapshot": {field: snapshot[field] for field in snapshot_fields},
             },
+            "final_answer": safe_final_answer,
             "events": safe_events,
             "usage": {field: usage[field] for field in usage_fields},
             "elapsed_ms": elapsed_ms,

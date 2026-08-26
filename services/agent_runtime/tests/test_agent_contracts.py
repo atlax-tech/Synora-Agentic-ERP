@@ -7,6 +7,7 @@ from agent_runtime.agent.contracts import (
     Action,
     BudgetSnapshot,
     FinalAnswer,
+    Observation,
     StopReason,
     TraceRecorder,
     canonical_json,
@@ -57,6 +58,17 @@ def test_observation_digest_is_sha256_of_bounded_summary() -> None:
     )
     assert len(observation.digest) == 64
     assert observation.summary == "1 item found"
+
+
+def test_observation_rejects_digest_that_does_not_match_summary() -> None:
+    with pytest.raises(ValidationError):
+        Observation(
+            step=1,
+            tool_name="item.lookup",
+            ok=True,
+            summary="1 item found",
+            digest="0" * 64,
+        )
 
 
 def test_trace_recorder_orders_events_and_redacts_sensitive_payload() -> None:

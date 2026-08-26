@@ -164,3 +164,26 @@ def test_component_layer_excludes_invalid_argument_proposals() -> None:
 
     assert report.component.passed
     assert report.trajectory.passed
+
+
+def test_actual_tool_sequence_ignores_malformed_unvalidated_action_payload() -> None:
+    from agent_runtime.evaluation.evaluator import _actual_tool_sequence
+
+    reason = StopReason(
+        code="MODEL_ERROR",
+        step=1,
+        detail="malformed action",
+        budget_snapshot=BudgetSnapshot(steps=1),
+    )
+    result = RunResult(
+        execution_mode="AGENT",
+        final_answer=None,
+        stop_reason=reason,
+        events=(
+            _event(1, "run.started"),
+            _event(2, "action.proposed", {"step": [], "tool_name": {"name": "item.lookup"}}),
+            _event(3, "run.stopped", {"code": "MODEL_ERROR"}),
+        ),
+    )
+
+    assert _actual_tool_sequence(result) == ()
