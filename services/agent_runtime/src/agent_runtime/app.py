@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import hmac
 import os
 from typing import Any
@@ -41,6 +43,28 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+
+
+async def _execute_with_disconnect_guard(
+    request: AgentExecuteRequest, http_request: Request
+) -> AgentExecuteResponse:
+    """Cancel the bounded kernel promptly when Frappe's request disappears."""
+    task = asyncio.create_task(execute_agent(request))
+    try:
+        while not task.done():
+            if await http_request.is_disconnected():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                raise HTTPException(status_code=499, detail="request disconnected")
+            await asyncio.sleep(0.05)
+        return await task
+    except BaseException:
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        raise
 
 
 @app.get("/healthz", response_model=HealthResponse)
@@ -101,4 +125,4 @@ async def execute_agent_run(
         raise HTTPException(status_code=503, detail="runtime authentication is unavailable")
     if not hmac.compare_digest(supplied_token, expected_token):
         raise HTTPException(status_code=401, detail="runtime authentication required")
-    return await execute_agent(request)
+    return await _execute_with_disconnect_guard(request, http_request)

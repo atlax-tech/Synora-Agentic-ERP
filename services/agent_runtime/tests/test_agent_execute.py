@@ -16,13 +16,14 @@ from agent_runtime.agent.execution import (
     _bounded_summary,
     execute_agent,
 )
-from agent_runtime.app import app
+from agent_runtime.app import _execute_with_disconnect_guard, app
 from agent_runtime.gateway import GatewayRequest, GatewaySuccess
 from agent_runtime.providers import (
     DeterministicProvider,
     ProviderResponse,
     ProviderToolCall,
 )
+from fastapi import HTTPException
 from pydantic import SecretStr, ValidationError
 
 RUN_ID = UUID("37e1d8a5-1730-4ad0-bffd-217774ed9fab")
@@ -83,6 +84,15 @@ class _ClosableProvider(DeterministicProvider):
         self.closed = True
 
 
+class _DisconnectingRequest:
+    def __init__(self) -> None:
+        self.polls = 0
+
+    async def is_disconnected(self) -> bool:
+        self.polls += 1
+        return self.polls > 1
+
+
 def _request_payload() -> dict[str, str]:
     return {
         "run_id": str(RUN_ID),
@@ -101,6 +111,27 @@ def test_agent_request_validates_and_hides_capability() -> None:
         AgentExecuteRequest.model_validate({**_request_payload(), "unexpected": True})
     with pytest.raises(ValidationError):
         AgentExecuteRequest.model_validate({**_request_payload(), "capability": "short"})
+
+
+def test_disconnect_guard_cancels_inflight_execution(monkeypatch) -> None:
+    closed = False
+
+    async def slow_execution(_: AgentExecuteRequest) -> object:
+        nonlocal closed
+        try:
+            await asyncio.sleep(60)
+        finally:
+            closed = True
+
+    monkeypatch.setattr("agent_runtime.app.execute_agent", slow_execution)
+
+    async def exercise() -> None:
+        request = AgentExecuteRequest.model_validate(_request_payload())
+        with pytest.raises(HTTPException, match="request disconnected"):
+            await _execute_with_disconnect_guard(request, _DisconnectingRequest())  # type: ignore[arg-type]
+
+    asyncio.run(exercise())
+    assert closed
 
 
 def test_gateway_adapter_sends_capability_only_to_typed_gateway_and_bounds_summary() -> None:
