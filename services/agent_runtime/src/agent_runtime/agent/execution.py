@@ -34,7 +34,6 @@ from agent_runtime.gateway import (
 )
 from agent_runtime.providers import (
     PROVIDER_MODEL_ENV,
-    ProviderError,
     provider_from_environment,
 )
 
@@ -116,7 +115,8 @@ def _failure_result(
 def _safe_row(row: Mapping[str, object]) -> dict[str, object]:
     safe: dict[str, object] = {}
     for key, value in list(row.items())[:20]:
-        if key.lower() in _SENSITIVE_KEYS:
+        normalized_key = key.lower().replace("-", "_")
+        if any(marker in normalized_key for marker in _SENSITIVE_KEYS):
             continue
         if isinstance(value, (str, int, float, bool)) or value is None:
             safe[key] = str(value)[:200] if isinstance(value, str) else value

@@ -85,10 +85,30 @@ def test_final_answer_requires_stop_reason_for_final_answer_stop() -> None:
     answer = FinalAnswer(
         status="SUCCEEDED",
         summary="done",
-        evidence_refs=("abc",),
+        evidence_refs=("a" * 64,),
         stop_reason=reason,
     )
     assert answer.status == "SUCCEEDED"
+
+
+def test_final_answer_rejects_non_digest_evidence_reference() -> None:
+    with pytest.raises(ValidationError):
+        FinalAnswer(status="SUCCEEDED", summary="done", evidence_refs=("abc",))
+
+
+def test_trace_recorder_redacts_secret_like_text_and_bounds_nested_payload() -> None:
+    recorder = TraceRecorder(RUN_ID)
+    event = recorder.add(
+        "run.started",
+        {
+            "detail": "capability=do-not-persist",
+            "nested": [[[[["too deep"]]]]],
+            "long": "x" * 5_000,
+        },
+    )
+    assert event.payload["detail"] == "[REDACTED]"
+    assert event.payload["nested"] == [[[["[TRUNCATED]"]]]]
+    assert len(event.payload["long"]) == 4_000
 
 
 def test_canonical_json_is_strict_about_non_standard_numbers() -> None:

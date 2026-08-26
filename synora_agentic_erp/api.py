@@ -138,6 +138,10 @@ def _safe_trace_events(raw: object, run_id: str) -> list[dict[str, object]]:
                 "payload": _safe_trace_value(event["payload"]),
             }
         )
+    if not safe_events or safe_events[0]["event_type"] != "run.started":
+        raise ValueError("trace must start with run.started")
+    if safe_events[-1]["event_type"] != "run.stopped":
+        raise ValueError("trace must end with run.stopped")
     return safe_events
 
 

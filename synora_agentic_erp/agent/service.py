@@ -100,7 +100,8 @@ _SENSITIVE_TRACE_KEYS = {
     "prompt",
 }
 _TRACE_SECRET_TEXT = re.compile(
-    r"(?i)(?:api[_-]?key|bearer|token|secret|password|authorization)\s*[:=]\s*\S+"
+    r"(?i)\b(?:api[_-]?key|bearer|token|secret|password|passwd|capability|authorization|cookie)\b"
+    r"\s*[:=]\s*\S+"
 )
 
 
@@ -250,7 +251,7 @@ def _safe_trace_value(value: object, *, depth: int = 0) -> object:
     if depth > 4:
         return "[TRUNCATED]"
     if isinstance(value, str):
-        return value[:4_000]
+        return _TRACE_SECRET_TEXT.sub("[REDACTED]", value[:4_000])
     if isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
         return "[TRUNCATED]"
     if isinstance(value, (int, float, bool)) or value is None:

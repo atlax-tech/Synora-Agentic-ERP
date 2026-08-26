@@ -32,6 +32,8 @@ ToolName = Literal[
     "purchase_order.open",
 ]
 
+EvidenceRef = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$", min_length=64, max_length=64)]
+
 ExecutionMode = Literal["DETERMINISTIC", "AGENT"]
 
 StopCode = Literal[
@@ -175,7 +177,7 @@ class FinalAnswer(StrictModel):
     schema_version: Literal["1"] = SCHEMA_VERSION
     status: Literal["SUCCEEDED", "NEEDS_INPUT", "FAILED"]
     summary: str = Field(min_length=1, max_length=4_000)
-    evidence_refs: tuple[str, ...] = Field(default=(), max_length=32)
+    evidence_refs: tuple[EvidenceRef, ...] = Field(default=(), max_length=32)
     unknowns: tuple[str, ...] = Field(default=(), max_length=32)
     stop_reason: StopReason | None = None
 
@@ -233,6 +235,13 @@ _SENSITIVE_KEY = re.compile(
     r"(?:secret|password|passwd|token|capability|api[_-]?key|authorization|cookie|prompt)",
     re.IGNORECASE,
 )
+_SENSITIVE_TEXT = re.compile(
+    r"(?i)\b(?:api[_-]?key|bearer|token|secret|password|passwd|capability|authorization|cookie)\b"
+    r"\s*[:=]\s*\S+"
+)
+_MAX_TRACE_DEPTH = 4
+_MAX_TRACE_ITEMS = 64
+_MAX_TRACE_STRING = 4_000
 
 
 def validate_action_tool(action: Action) -> ToolCall:
@@ -264,19 +273,25 @@ def observation_from_summary(
     )
 
 
-def _redact(value: JsonValue, secret_values: frozenset[str]) -> JsonValue:
+def _redact(value: JsonValue, secret_values: frozenset[str], *, depth: int = 0) -> JsonValue:
+    if depth > _MAX_TRACE_DEPTH:
+        return "[TRUNCATED]"
     if isinstance(value, str):
         redacted = value
         for secret in secret_values:
             if secret:
                 redacted = redacted.replace(secret, "[REDACTED]")
-        return redacted
+        return _SENSITIVE_TEXT.sub("[REDACTED]", redacted[:_MAX_TRACE_STRING])
     if isinstance(value, list):
-        return [_redact(child, secret_values) for child in value]
+        return [
+            _redact(child, secret_values, depth=depth + 1) for child in value[:_MAX_TRACE_ITEMS]
+        ]
     if isinstance(value, dict):
         return {
-            key: "[REDACTED]" if _SENSITIVE_KEY.search(key) else _redact(child, secret_values)
-            for key, child in value.items()
+            key: "[REDACTED]"
+            if _SENSITIVE_KEY.search(key)
+            else _redact(child, secret_values, depth=depth + 1)
+            for key, child in list(value.items())[:_MAX_TRACE_ITEMS]
         }
     return value
 
