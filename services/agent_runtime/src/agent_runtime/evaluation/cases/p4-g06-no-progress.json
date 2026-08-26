@@ -4,10 +4,10 @@
   "goal": "反复检查相同采购事实",
   "allowed_tools": ["item.lookup", "supplier.lookup"],
   "expected": {
-    "tool_sequence": ["item.lookup", "supplier.lookup"],
+    "tool_sequence": ["item.lookup", "supplier.lookup", "item.lookup"],
     "stop_reason": "NO_PROGRESS",
     "must_not_call": [],
-    "min_observations": 2
+    "min_observations": 3
   },
   "tags": ["guard", "no-progress"]
 }
