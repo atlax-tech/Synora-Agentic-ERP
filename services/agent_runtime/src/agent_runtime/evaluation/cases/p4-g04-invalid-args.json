@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "case_id": "P4-G04-invalid-args",
+  "goal": "读取物料",
+  "allowed_tools": ["item.lookup"],
+  "expected": {
+    "tool_sequence": [],
+    "stop_reason": "INVALID_TOOL_ARGS",
+    "must_not_call": ["item.lookup"],
+    "min_observations": 0
+  },
+  "tags": ["security", "schema"]
+}

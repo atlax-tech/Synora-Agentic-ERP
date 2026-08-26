@@ -32,7 +32,7 @@
 
 - 仓库是 `MANAGED_HARNESS`；产品、架构、设计、开发、测试、验收、Roadmap 和 SPEC 已建立；
 - Phase 0–Phase 3 的出口证据已经形成；Phase 3 交付的是只读采购 Agent，出口复核已通过；Phase 4 尚未开始；
-- Phase 4 启动准备包见 `docs/phase4-kickoff.md`；它只固定边界、契约草案、首批 golden cases、Trace schema 和用户 Assignment，不代表 P4.1 已启动或任何实现已经完成；
+- Phase 4 已按用户指令进入 `IN_PROGRESS / P4.2`；P4.1 契约、八个 golden cases 和四层纯函数评测基线已落地并通过当前 Runtime targeted tests；`docs/phase4-kickoff.md` 仍是边界、Assignment 和验收入口，已实现内容以当前 Runtime 测试与 Phase 4 日志为准；
 - 项目定位为“Agent 开发岗位学习仓库 + 真实 ERP 实践载体”；业务应用层与教学实验层共存于同一仓库和开发主线，不是两个仓库或长期分支；
 - `approval-workflow-mapping` 仍是启用 ERP 写入前的强制门禁，当前不得把 Proposed Action、Approval、Draft、Receipt 或其他写工具当作已实现能力；
 - Frappe/ERPNext 是只读上游依赖，不能修改其核心，也不能绕过其权限、校验、Workflow、事务和审计；
@@ -274,11 +274,11 @@
 
 ## 13. Phase 4 — Agent 执行内核与原生 Tool Calling
 
-启动状态：`READY_NOT_STARTED`。只有用户再次明确下达“开始 Phase 4”或等价指令后，才进入 P4.1；准备包存在不能替代启动指令。
+启动状态：`IN_PROGRESS / P4.2`。用户已明确下达“开始 Phase 4”并批准一次规划、分段 Assignment 交接；P4.1 已完成当前 targeted 验收，后续以 P4.2–P4.5 出口证据推进，准备包本身不计作实现证据。
 
 必读：`docs/项目方向纠偏.md` Phase 4、`docs/phase4-kickoff.md`、PRD F-002/F-003/F-008/F-016、SPEC Tool Gateway/评测契约、Phase 3 单 Agent 与安全基线。本阶段不实现 ERP 写入。
 
-- **P4.1 执行契约与评测基线**：定义 Action、Observation、FinalAnswer、Error、StopReason 和 golden tasks，建立 Component/Trajectory/Task/System 评测入口。
+- **P4.1 执行契约与评测基线**：`COMPLETED_FOR_CURRENT_INCREMENT`；已定义 Action、Observation、FinalAnswer、Error、StopReason 和 8 个 golden tasks，并建立 Component/Trajectory/Task/System 评测入口；阶段出口仍需全量证据。
 - **P4.2 手写模式实验**：在 `labs/agent_patterns/` 实现 Direct、ReAct、Plan-and-Solve、Reflection 和采购版 MiniStepAgent，与开源源码对照。
 - **P4.3 原生 Tool Calling**：让模型在当前用户 read-tool allowlist 中动态选择工具，严格校验 tool name、schema、参数、权限、返回预算和错误语义。
 - **P4.4 循环与停止治理**：实现 max steps、相同参数重复、工具频率、无进展、token、成本、wall-clock、cancel 和 final-answer checks，保留明确 stop reason。

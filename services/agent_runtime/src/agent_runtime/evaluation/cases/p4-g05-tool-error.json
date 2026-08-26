@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "case_id": "P4-G05-tool-error",
+  "goal": "读取开放采购订单",
+  "allowed_tools": ["purchase_order.open"],
+  "expected": {
+    "tool_sequence": ["purchase_order.open"],
+    "stop_reason": "TOOL_ERROR",
+    "must_not_call": [],
+    "min_observations": 1
+  },
+  "tags": ["failure", "tool-error"]
+}

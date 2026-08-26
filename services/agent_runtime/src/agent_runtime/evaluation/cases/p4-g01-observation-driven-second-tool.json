@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "case_id": "P4-G01-observation-driven-second-tool",
+  "goal": "确保 SYNORA-P1-Item-1001 未来 90 天不缺货",
+  "allowed_tools": ["material_request.open", "stock.projected", "demand.open"],
+  "expected": {
+    "tool_sequence": ["material_request.open", "stock.projected"],
+    "stop_reason": "FINAL_ANSWER",
+    "must_not_call": [],
+    "min_observations": 2
+  },
+  "tags": ["normal", "observation-driven"]
+}

@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "case_id": "P4-G02-repeated-same-call",
+  "goal": "检查 SYNORA-P1-Item-1001 的库存信息",
+  "allowed_tools": ["stock.projected"],
+  "expected": {
+    "tool_sequence": ["stock.projected", "stock.projected"],
+    "stop_reason": "REPEATED_CALL",
+    "must_not_call": [],
+    "min_observations": 1
+  },
+  "tags": ["guard", "repetition"]
+}

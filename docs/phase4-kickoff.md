@@ -1,6 +1,6 @@
 # Phase 4 启动准备包
 
-状态：`READY_NOT_STARTED`。本文件于 2026-08-26 完成启动前准备；只有用户再次明确指令后才进入 P4.1。文件中出现的目标路径、契约和用例均为待实现设计，不是已存在能力或验收证据。
+状态：`IN_PROGRESS / P4.2`。用户于 2026-08-26 明确启动 Phase 4，并选择“Agent 搭骨架、用户完成小范围 Assignment、Agent 验收后继续”的协作方式。P4.1 契约、八个 case 和四层评测基线已通过当前 Runtime targeted tests；文件中仍以 `PLANNED` 标记的目标路径、契约和用例不是已完成能力或验收证据。
 
 ## 1. 业务问题与阶段边界
 
@@ -120,7 +120,7 @@ P4.1 只负责把这些契约和用例落成可运行的最小评测基线；Dir
 
 ## 6. 用户 Assignment：手写最小采购 ReAct loop
 
-状态：`待练习`；尚未开始，等待用户明确启动 Phase 4。
+状态：`已完成`；用户补齐了 G02 的期望轨迹与 loader/evaluator 断言，并报告 targeted pytest `6 passed`。Agent 随后复核并完成了 P4.1 四层纯函数评测入口，当前进入 P4.2。
 
 ### 业务背景与必要性
 
@@ -172,7 +172,86 @@ P4.1 只负责把这些契约和用例落成可运行的最小评测基线；Dir
 2. 为什么 tool allowlist 必须在服务端重检，不能只写进 system prompt？
 3. 为什么 Trace 应保存显式 Action/Observation，却不依赖隐藏 chain-of-thought？
 
-## 7. 启动门禁与人工核对
+## 7. P4.2 Assignment 2：实现实验室版 RepeatedCallGuard
+
+状态：`已完成`。用户完成了重复调用判断，指定 kernel 测试已达到 `6 passed`；共享 kernel 的安全边界没有被练习修改。
+
+### 业务背景
+
+Agent 如果连续用同一个工具、同一组参数查询，通常不会得到新事实，却会继续消耗 token、时间和费用。内核需要在第二次完全相同调用时停止，并返回 `REPEATED_CALL`；不同工具、不同参数，或仅 JSON 键顺序不同，都不能误判成重复。
+
+### 代码入口（请直接打开这个文件）
+
+打开 `/Users/qilong.lu/WorkDir/atlax-tech/Synora-Agentic-ERP/labs/agent_patterns/react_lab.py`，定位 `LearningRepeatedCallGuard.check()`（当前约第 105 行）。类上方的 docstring 已放好 `TODO(learning)`、输入/输出说明和半成品传统写法。`Action.call_key()` 的定义在 `/Users/qilong.lu/WorkDir/atlax-tech/Synora-Agentic-ERP/services/agent_runtime/src/agent_runtime/agent/contracts.py` 的 `Action` 类中（当前约第 141 行），不需要自己重新拼 JSON。
+
+### 你要完成的行为
+
+| 第几次收到同一 key | `check(action)` 应返回 | 内核行为 |
+| --- | --- | --- |
+| 第一次 | `False` | 允许工具执行 |
+| 第二次及以后 | `True` | 在调用工具前停止，`StopReason.code == "REPEATED_CALL"` |
+
+同一 key 的比较由 `action.call_key()` 完成：它固定使用 `tool_name + canonical_json(canonical_args)`，canonical JSON 会把对象键排序。因此不要比较 Python 字典的原始字符串，也不要把 `step` 当作 key 的一部分。
+
+### 半成品 sample（不是答案）
+
+下面是可以逐行对照的传统写法。两个 `______` 需要你根据上面的行为表填写；变量名和三步顺序已经给出，但关键布尔返回值仍由你决定：
+
+```python
+seen_keys = self._seen
+current_key = action.call_key()
+
+if current_key in seen_keys:
+    return ______       # 第二次看到时，告诉 kernel “应该停止”
+
+seen_keys.add(current_key)
+return ______           # 第一次看到时，告诉 kernel “可以继续”
+```
+
+运行时的小例子（只帮助你理解输入/输出，不需要把它写进生产代码）：
+
+```python
+guard = LearningRepeatedCallGuard()
+first_result = guard.check(first_action)
+second_result = guard.check(same_action)
+# 期望：first_result 是 False，second_result 是 True
+```
+
+传统写法的含义是：先取出集合和 key，再用 `if` 判断是否见过；没见过就 `add`；最后返回布尔值。等练习通过后，你可以再思考用 `set.add()` 或其他高级写法怎样表达，但本 Assignment 不要求压缩成一行。
+
+### 不要修改的范围
+
+- 只修改 `LearningRepeatedCallGuard.check()` 的练习部分；不要修改 `kernel.py`、`contracts.py`、Gateway、Provider 或真实业务计算。
+- 不要改变测试里的期望值、第二次调用的参数或 `ReferenceRepeatedCallGuard`（它是测试 oracle）。
+- 当前测试上方的 `@pytest.mark.xfail(...)` 是练习开关：先保留它运行 starter；行为通过后再删除这一行和相邻的 TODO 注释，然后重新运行测试。
+
+### 验收命令
+
+请从仓库根目录执行：
+
+```bash
+UV_CACHE_DIR=/private/tmp/synora-uv-cache uv run --offline --no-sync --python 3.14 \
+  pytest services/agent_runtime/tests/test_agent_kernel.py -q
+```
+
+完成前预期是 `5 passed, 1 xfailed`；完成并移除 xfail 后预期是 `6 passed`。如果结果不是这样，先把完整输出贴回来，不要改动共享内核来“绕过”测试。
+
+### 提示梯度
+
+1. 看懂 `self._seen` 的类型：它是保存字符串 key 的 `set[str]`。
+2. 先在脑中写出第一次调用和第二次调用的集合状态：第一次之前为空，第一次之后含一个 key。
+3. 用 `if current_key in seen_keys` 区分两条路径；只有“第一次”路径需要 `add`。
+4. 如果不同参数被误判，检查自己是否调用了 `action.call_key()`，以及是否意外把整个 `Action` 或 `step` 放进比较逻辑。
+
+### 面试追问
+
+1. 为什么第二次相同调用必须在工具执行前停止？
+2. 为什么不能只比较 `tool_name`，而要把 canonical args 放进 key？
+3. 为什么 JSON 键顺序变化不应产生两个不同的调用？
+
+## 8. 启动门禁与人工核对（历史启动前说明）
+
+本节记录的是 Phase 4 启动前的门禁，当前阶段已经启动；不应覆盖上面的 P4.1/P4.2 实施状态。
 
 收到用户明确的 Phase 4 启动指令前：
 

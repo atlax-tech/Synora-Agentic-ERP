@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "case_id": "P4-G07-output-budget",
+  "goal": "在预算内生成采购分析",
+  "allowed_tools": ["item.lookup"],
+  "expected": {
+    "tool_sequence": [],
+    "stop_reason": "TOKEN_BUDGET",
+    "must_not_call": ["item.lookup"],
+    "min_observations": 0
+  },
+  "tags": ["budget", "fail-closed"]
+}
