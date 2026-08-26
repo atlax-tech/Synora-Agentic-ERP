@@ -143,6 +143,10 @@ def test_native_calling_uses_first_observation_for_second_tool() -> None:
     ]
     assert result.usage.prompt_tokens == 36
     assert result.usage.completion_tokens == 12
+    proposed = [event for event in result.events if event.event_type == "action.proposed"]
+    started = [event for event in result.events if event.event_type == "tool.started"]
+    assert proposed[1].payload["canonical_args"] == {"item_code": "SYNORA-P1-Item-1001"}
+    assert started[1].payload["canonical_args"] == proposed[1].payload["canonical_args"]
 
 
 def test_parallel_native_calls_are_rejected_before_any_tool_execution() -> None:

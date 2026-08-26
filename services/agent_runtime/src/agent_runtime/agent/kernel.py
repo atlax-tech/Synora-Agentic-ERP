@@ -401,7 +401,14 @@ async def run_bounded_react(
                 "count": frequency_guard.count(action.tool_name),
             },
         )
-        recorder.add("tool.started", {"step": step, "tool_name": action.tool_name})
+        recorder.add(
+            "tool.started",
+            {
+                "step": step,
+                "tool_name": action.tool_name,
+                "canonical_args": action.canonical_args,
+            },
+        )
         try:
             observation = await tool_adapter.execute(action)
         except ToolExecutionFailure as error:

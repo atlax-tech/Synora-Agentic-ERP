@@ -509,10 +509,6 @@ async def _run_native_tool_calling(
             )
 
         provider_call = response.tool_calls[0]
-        recorder.add(
-            "action.proposed",
-            {"step": step, "tool_name": provider_call.name},
-        )
         if provider_call.name not in allowed_tools:
             recorder.add("action.rejected", {"step": step, "reason": "tool is not allowed"})
             return _stop(
@@ -546,6 +542,14 @@ async def _run_native_tool_calling(
                 usage=account.usage,
                 elapsed_ms=account.elapsed_ms(),
             )
+        recorder.add(
+            "action.proposed",
+            {
+                "step": step,
+                "tool_name": action.tool_name,
+                "canonical_args": action.canonical_args,
+            },
+        )
         recorder.add("action.validated", {"step": step, "tool_name": action.tool_name})
         if repeat_guard.check(action):
             recorder.add(
@@ -592,7 +596,14 @@ async def _run_native_tool_calling(
             },
         )
         recorder.add("guard.checked", {"step": step, "guard": "repeated_call", "allowed": True})
-        recorder.add("tool.started", {"step": step, "tool_name": action.tool_name})
+        recorder.add(
+            "tool.started",
+            {
+                "step": step,
+                "tool_name": action.tool_name,
+                "canonical_args": action.canonical_args,
+            },
+        )
         remaining_seconds = max(
             0.0,
             (effective_limits.max_wall_time_ms - account.elapsed_ms()) / 1000,
