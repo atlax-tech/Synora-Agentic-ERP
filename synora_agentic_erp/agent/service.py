@@ -104,11 +104,12 @@ _TRACE_SECRET_TEXT = re.compile(
     r"(?i)\b(?:api[_-]?key|bearer|token|secret|password|passwd|capability|authorization|cookie)\b"
     r"\s*[:=]\s*\S+"
 )
+_NUMBER_TOKEN = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
 
 
 def _validate_trace_semantics(
     events: list[dict[str, Any]], *, stop_code: str, final_answer: dict[str, Any] | None = None
-) -> set[str]:
+) -> dict[str, str]:
     """Validate ownership of evidence and the small terminal trace state machine."""
     if (
         not events
@@ -116,7 +117,7 @@ def _validate_trace_semantics(
         or events[-1].get("event_type") != "run.stopped"
     ):
         raise ValueError("trace terminal events are invalid")
-    observed: set[str] = set()
+    observed: dict[str, str] = {}
     pending: str | None = None
     for event in events[1:-1]:
         kind = event.get("event_type")
@@ -150,7 +151,7 @@ def _validate_trace_semantics(
                 or hashlib.sha256(summary.encode()).hexdigest() != digest
             ):
                 raise ValueError("trace observation digest is invalid")
-            observed.add(digest)
+            observed[digest] = summary
             pending = None
         elif kind == "tool.failed":
             if pending != "tool":
@@ -186,6 +187,10 @@ def _validate_trace_semantics(
         refs = final_answer.get("evidence_refs")
         if not isinstance(refs, list) or not refs or not set(refs).issubset(observed):
             raise ValueError("final evidence reference is not observed")
+        claimed_numbers = set(_NUMBER_TOKEN.findall(str(final_answer.get("summary", ""))))
+        evidence_text = "\n".join(observed[ref] for ref in refs)
+        if not claimed_numbers.issubset(set(_NUMBER_TOKEN.findall(evidence_text))):
+            raise ValueError("final numeric claim is not observed")
     return observed
 
 

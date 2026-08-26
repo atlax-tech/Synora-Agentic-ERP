@@ -318,6 +318,11 @@ class TestAnalyzeRun(FrappeTestCase):
         result["events"][-1]["payload"]["code"] = "MODEL_ERROR"
         with self.assertRaises(ValueError):
             _validate_agent_runtime_response(body, run_id)
+        result["events"][-1]["payload"]["code"] = "FINAL_ANSWER"
+        result["final_answer"]["summary"] = "observed stock is 999"
+        result["events"][3]["payload"]["summary"] = "observed stock is 999"
+        with self.assertRaises(ValueError):
+            _validate_agent_runtime_response(body, run_id)
 
     def test_cancelled_run_is_rechecked_before_next_deterministic_tool(self) -> None:
         """A cancel between two reads must prevent the second ERP call."""
