@@ -19,5 +19,8 @@ def test_health_endpoint() -> None:
     assert response.json() == {"service": "synora-agent-runtime", "status": "ok"}
 
 
-def test_health_is_the_only_public_route() -> None:
-    assert {route.path for route in app.routes} == {"/healthz", "/enhance"}
+def test_agent_route_is_internal_and_documentation_is_disabled() -> None:
+    assert {route.path for route in app.routes} == {"/healthz", "/enhance", "/agent/execute"}
+    assert app.docs_url is None
+    assert app.redoc_url is None
+    assert app.openapi_url is None
