@@ -9,6 +9,11 @@ from agent_runtime.agent.enhance import (
     EnhancementEvidence,
     enhance_plan,
 )
+from agent_runtime.agent.execution import (
+    AgentExecuteRequest,
+    AgentExecuteResponse,
+    execute_agent,
+)
 from agent_runtime.providers import PROVIDER_MODEL_ENV, ProviderError, provider_from_environment
 
 _RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
@@ -82,3 +87,18 @@ async def enhance(request: EnhanceRequest, http_request: Request) -> EnhanceResp
         if close is not None:
             await close()
     return EnhanceResponse(explanation=explanation, evidence=evidence.__dict__)
+
+
+@app.post("/agent/execute", response_model=AgentExecuteResponse)
+async def execute_agent_run(
+    request: AgentExecuteRequest,
+    http_request: Request,
+) -> AgentExecuteResponse:
+    """Internal Frappe-to-Runtime read-only Agent execution endpoint."""
+    expected_token = os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
+    supplied_token = http_request.headers.get(_RUNTIME_TOKEN_HEADER, "")
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="runtime authentication is unavailable")
+    if not hmac.compare_digest(supplied_token, expected_token):
+        raise HTTPException(status_code=401, detail="runtime authentication required")
+    return await execute_agent(request)
