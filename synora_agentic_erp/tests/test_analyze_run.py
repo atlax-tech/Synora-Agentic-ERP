@@ -13,6 +13,8 @@ from synora_agentic_erp.api import (
     get_run_trace,
     issue_run,
 )
+from synora_agentic_erp.gateway.contract import GatewayFault
+from synora_agentic_erp.gateway.security import resolve_run
 
 BUYER = "synora-p1-buyer@dev.localhost"
 ACCOUNTANT = "synora-p1-accountant@dev.localhost"
@@ -97,6 +99,8 @@ class TestAnalyzeRun(FrappeTestCase):
 
     def test_agent_analyze_persists_trace_then_deterministically_closes(self) -> None:
         run = self._issue(execution_mode="AGENT")
+        original_capability = str(run["capability"])
+        original_digest = frappe.get_doc("Synora Agent Run", run["run_id"]).capability_digest
         runtime_response = _runtime_failure_response(str(run["run_id"]))
         with patch(
             "synora_agentic_erp.agent.service._execute_agent_via_runtime",
@@ -107,6 +111,10 @@ class TestAnalyzeRun(FrappeTestCase):
 
         self.assertTrue(response["ok"])
         self.assertEqual(response["analysis"]["run_state"], "PROPOSED")
+        rotated = frappe.get_doc("Synora Agent Run", run["run_id"])
+        self.assertNotEqual(rotated.capability_digest, original_digest)
+        with self.assertRaises(GatewayFault):
+            resolve_run(str(run["run_id"]), original_capability)
         traces = frappe.get_all(
             "Synora Agent Trace Attempt",
             filters={"run": run["run_id"]},

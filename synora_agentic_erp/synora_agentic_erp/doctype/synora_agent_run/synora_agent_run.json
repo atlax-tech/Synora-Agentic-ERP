@@ -84,7 +84,7 @@
    "label": "Capability Digest",
    "read_only": 1,
    "reqd": 1,
-   "set_only_once": 1
+   "set_only_once": 0
   },
   {
    "fieldname": "capability_audience",
@@ -101,7 +101,7 @@
    "label": "Issued At",
    "read_only": 1,
    "reqd": 1,
-   "set_only_once": 1
+   "set_only_once": 0
   },
   {
    "fieldname": "expires_at",
@@ -109,7 +109,7 @@
    "label": "Expires At",
    "read_only": 1,
    "reqd": 1,
-   "set_only_once": 1
+   "set_only_once": 0
   },
   {
    "default": "0",

@@ -14,6 +14,7 @@ IMMUTABLE_FIELDS = {
     "expires_at",
     "correlation_id",
 }
+CAPABILITY_FIELDS = {"capability_digest", "issued_at", "expires_at"}
 LIFECYCLE_FIELDS = {
     "revoked",
     "status",
@@ -29,7 +30,15 @@ class SynoraAgentRun(Document):  # type: ignore[misc]
     def validate(self) -> None:
         if self.is_new():
             return
-        if any(self.has_value_changed(field) for field in IMMUTABLE_FIELDS):
+        identity_fields_changed = any(
+            self.has_value_changed(field) for field in IMMUTABLE_FIELDS - CAPABILITY_FIELDS
+        )
+        capability_fields_changed = any(
+            self.has_value_changed(field) for field in CAPABILITY_FIELDS
+        )
+        if identity_fields_changed or (
+            capability_fields_changed and not self.flags.synora_capability_rotation
+        ):
             frappe.throw("Synora Agent Run identity and scope are immutable")
         lifecycle_changed = any(self.has_value_changed(field) for field in LIFECYCLE_FIELDS)
         controlled = (
