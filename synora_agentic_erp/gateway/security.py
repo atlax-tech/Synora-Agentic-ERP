@@ -17,6 +17,7 @@ from synora_agentic_erp.gateway.contract import GatewayFault
 
 CAPABILITY_AUDIENCE = "synora-agent-runtime"
 CAPABILITY_TTL = timedelta(minutes=5)
+EXECUTION_MODES = frozenset({"DETERMINISTIC", "AGENT"})
 
 
 @dataclass(frozen=True)
@@ -53,11 +54,18 @@ def reject_mixed_user_credentials(headers: Mapping[str, str] | None = None) -> N
 
 
 def issue_run(
-    company: str, goal: str, warehouse: str | None, time_window_days: int, correlation_id: str
+    company: str,
+    goal: str,
+    warehouse: str | None,
+    time_window_days: int,
+    correlation_id: str,
+    execution_mode: str = "DETERMINISTIC",
 ) -> dict[str, str | int]:
     initiator = frappe.session.user
     if not initiator or initiator == "Guest":
         raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
+    if not isinstance(execution_mode, str) or execution_mode not in EXECUTION_MODES:
+        raise GatewayFault("INVALID_INPUT", "execution_mode is invalid")
     if company not in frappe.get_list("Company", pluck="name", filters={"name": company}, limit=1):
         raise GatewayFault("SCOPE_DENIED", "requested scope is not available", 403)
     if warehouse:
@@ -82,6 +90,7 @@ def issue_run(
             "name": run_id,
             "initiator": initiator,
             "goal": goal,
+            "execution_mode": execution_mode,
             "time_window_days": time_window_days,
             "company_scope": company,
             "warehouse_scope": warehouse,
@@ -103,6 +112,7 @@ def issue_run(
         "expires_at": str(expires_at),
         "state_version": 1,
         "run_state": "CREATED",
+        "execution_mode": execution_mode,
     }
 
 

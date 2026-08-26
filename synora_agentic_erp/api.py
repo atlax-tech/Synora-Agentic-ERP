@@ -22,16 +22,17 @@ from synora_agentic_erp.gateway.contract import (
 )
 from synora_agentic_erp.gateway.registry import dispatch
 from synora_agentic_erp.gateway.security import (
-    cancel_run as cancel_server_run,
-)
-from synora_agentic_erp.gateway.security import (
-    issue_run as create_run,
-)
-from synora_agentic_erp.gateway.security import (
+    EXECUTION_MODES,
     record_gateway_audit,
     reject_mixed_user_credentials,
     require_capability_only_request,
     resolve_run,
+)
+from synora_agentic_erp.gateway.security import (
+    cancel_run as cancel_server_run,
+)
+from synora_agentic_erp.gateway.security import (
+    issue_run as create_run,
 )
 from synora_agentic_erp.gateway.security import (
     revoke_run as revoke_server_run,
@@ -98,6 +99,7 @@ def issue_run(
     warehouse: str | None = None,
     time_window_days: int | None = None,
     correlation_id: str | None = None,
+    execution_mode: str | None = None,
 ) -> dict[str, Any]:
     safe_correlation_id: str | None = None
     try:
@@ -119,7 +121,17 @@ def issue_run(
             safe_days = positive_int(time_window_days, "time_window_days", MAX_TIME_WINDOW_DAYS)
             if safe_days == 0:
                 raise GatewayFault("INVALID_INPUT", "time_window_days is invalid")
-        run = create_run(safe_company, safe_goal, safe_warehouse, safe_days, safe_correlation_id)
+        safe_execution_mode = execution_mode or "DETERMINISTIC"
+        if not isinstance(safe_execution_mode, str) or safe_execution_mode not in EXECUTION_MODES:
+            raise GatewayFault("INVALID_INPUT", "execution_mode is invalid")
+        run = create_run(
+            safe_company,
+            safe_goal,
+            safe_warehouse,
+            safe_days,
+            safe_correlation_id,
+            safe_execution_mode,
+        )
         return {
             "ok": True,
             "schema_version": SCHEMA_VERSION,
@@ -236,6 +248,7 @@ def _run_summary(run: Any) -> dict[str, Any]:
     return {
         "run_id": run.name,
         "goal": run.goal,
+        "execution_mode": getattr(run, "execution_mode", "DETERMINISTIC") or "DETERMINISTIC",
         "run_state": "EXPIRED" if capability_expired else run.run_state,
         "status": run.status,
         "initiator": run.initiator,
@@ -282,6 +295,7 @@ def list_runs(limit: int | None = None, offset: int | None = None) -> dict[str, 
         fields=[
             "name",
             "goal",
+            "execution_mode",
             "run_state",
             "status",
             "revoked",

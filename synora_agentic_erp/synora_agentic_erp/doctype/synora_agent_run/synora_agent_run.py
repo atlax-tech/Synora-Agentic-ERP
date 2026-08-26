@@ -6,6 +6,7 @@ IMMUTABLE_FIELDS = {
     "company_scope",
     "warehouse_scope",
     "goal",
+    "execution_mode",
     "time_window_days",
     "capability_digest",
     "capability_audience",

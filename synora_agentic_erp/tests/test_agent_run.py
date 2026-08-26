@@ -51,6 +51,8 @@ class TestAgentRun(FrappeTestCase):
         self.assertEqual(run.goal, GOAL)
         # P3.1 批准: time_window 缺省 = 当前库存 + 在途 + 未来 90 天需求。
         self.assertEqual(run.time_window_days, 90)
+        self.assertEqual(run.execution_mode, "DETERMINISTIC")
+        self.assertEqual(result["execution_mode"], "DETERMINISTIC")
         self.assertEqual(run.run_state, "CREATED")
         self.assertEqual(result["run_state"], "CREATED")
         # 新 Run 可直接签发 capability 供后续只读分析使用。
@@ -61,6 +63,20 @@ class TestAgentRun(FrappeTestCase):
         result = self._issue(time_window_days=30)
         run = frappe.get_doc("Synora Agent Run", result["run_id"])
         self.assertEqual(run.time_window_days, 30)
+
+    def test_issue_run_accepts_agent_execution_mode(self) -> None:
+        frappe.set_user(BUYER)
+        agent_result = issue_run(
+            COMPANY,
+            GOAL,
+            warehouse=WAREHOUSE,
+            correlation_id="2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e",
+            execution_mode="AGENT",
+        )
+        self.assertTrue(agent_result["ok"])
+        self.assertEqual(agent_result["run"]["execution_mode"], "AGENT")
+        stored = frappe.get_doc("Synora Agent Run", agent_result["run"]["run_id"])
+        self.assertEqual(stored.execution_mode, "AGENT")
 
     def test_issue_run_rejects_invalid_inputs(self) -> None:
         frappe.set_user(BUYER)
@@ -78,6 +94,14 @@ class TestAgentRun(FrappeTestCase):
         self.assertEqual(response["error"]["code"], "INVALID_INPUT")
         response = issue_run(
             COMPANY, "x" * 1001, warehouse=WAREHOUSE, correlation_id=CORRELATION_ID
+        )
+        self.assertEqual(response["error"]["code"], "INVALID_INPUT")
+        response = issue_run(
+            COMPANY,
+            GOAL,
+            warehouse=WAREHOUSE,
+            correlation_id=CORRELATION_ID,
+            execution_mode="WRITE_AGENT",
         )
         self.assertEqual(response["error"]["code"], "INVALID_INPUT")
 

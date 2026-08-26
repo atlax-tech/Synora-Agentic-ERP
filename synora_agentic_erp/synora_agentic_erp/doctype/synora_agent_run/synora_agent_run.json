@@ -7,6 +7,7 @@
  "field_order": [
   "initiator",
   "goal",
+  "execution_mode",
   "time_window_days",
   "company_scope",
   "warehouse_scope",
@@ -37,6 +38,16 @@
    "fieldname": "goal",
    "fieldtype": "Text",
    "label": "Goal",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "default": "DETERMINISTIC",
+   "fieldname": "execution_mode",
+   "fieldtype": "Select",
+   "label": "Execution Mode",
+   "options": "DETERMINISTIC\nAGENT",
    "read_only": 1,
    "reqd": 1,
    "set_only_once": 1
