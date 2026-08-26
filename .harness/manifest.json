@@ -12,7 +12,7 @@
       "path": "AGENTS.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "ba0d41bf11e5a1b360df4316de05a0e69581ebfb6d49290ceae7f64451cbfc4c"
+      "sha256": "9626a43bd1d08d82f30ebef924920c0f678b132cd5add5891d83217c94e0d9bd"
     },
     {
       "path": "docs/PRD.md",
@@ -120,7 +120,7 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "91d3b236ca4a393573370cfddec7af464c3e9a86611e2809446d061e40a84ba3"
+      "sha256": "1fcdffd98a92e3279648e90a24a691a5ad6d0ae9c8d7c39c4d21c58ed0292817"
     },
     {
       "path": ".harness/unresolved.json",
@@ -150,7 +150,7 @@
       "path": "docs/development-log/20260825-Phase-3-开发日志.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "bc0dfe0c43ea214aebc56b76984b5b6a48133dd4db7ee0127948ba6236d46246"
+      "sha256": "af6ff815a27f2be4c07817045945b69f4a96ea236d71d2fab9cd83bdcfba1340"
     },
     {
       "path": "docs/security/phase3-security-eval.md",
@@ -189,6 +189,18 @@
       "sha256": "289925f89301f2baf4cc6bd8cd1cc8d2949e5bded81c91a2d6b50aa4ed9b71b6"
     },
     {
+      "path": "docs/learning-notes/README.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "9a647b707e67a76b474dc05e6f5589788f0590f740654a6127fcf6f1c023fa4a"
+    },
+    {
+      "path": "docs/learning-notes/20260826-Phase3-学习笔记.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "1a100b1c34b7b56ae9b23c163e109b1af79067b6ffe32eb917e99ef739a50612"
+    },
+    {
       "path": "env/dev/p35/p35_e2e.py",
       "owner": "harness-armor",
       "mode": "managed",
@@ -197,5 +209,5 @@
   ],
   "source_index": ".harness/source-index.json",
   "unresolved_index": ".harness/unresolved.json",
-  "last_updated": "2026-08-26T08:41:00Z"
+  "last_updated": "2026-08-26T09:51:16Z"
 }

@@ -51,11 +51,27 @@
       "locator": "READY_NOT_STARTED execution boundary, P4.1 contract draft, golden cases, Trace schema, and pending user Assignment; no implementation evidence"
     },
     {
+      "id": "learning-notes-rules",
+      "path": "docs/learning-notes/README.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "9a647b707e67a76b474dc05e6f5589788f0590f740654a6127fcf6f1c023fa4a",
+      "locator": "学习笔记命名、原文记录、事实口径、回答结构、覆盖旧答案和 Git 保留规则"
+    },
+    {
+      "id": "phase3-learning-notes",
+      "path": "docs/learning-notes/20260826-Phase3-学习笔记.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "1a100b1c34b7b56ae9b23c163e109b1af79067b6ffe32eb917e99ef739a50612",
+      "locator": "五个用户问题的当前纠偏口径答疑；原始问题保留，旧答案已覆盖"
+    },
+    {
       "id": "agent-governance-entry",
       "path": "AGENTS.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "ba0d41bf11e5a1b360df4316de05a0e69581ebfb6d49290ceae7f64451cbfc4c",
+      "sha256": "9626a43bd1d08d82f30ebef924920c0f678b132cd5add5891d83217c94e0d9bd",
       "locator": "repository execution boundaries, stage-end independent review gate, mentor-led Assignment workflow, and verbatim question/blocker recording"
     },
     {
@@ -160,7 +176,7 @@
       "kind": "development",
       "locator": "Phase 3 分轮开发日志（P3.1-P3.7、出口验证、最终修复与 P4.1 只读取证准备）",
       "status": "CONFIRMED",
-      "sha256": "bc0dfe0c43ea214aebc56b76984b5b6a48133dd4db7ee0127948ba6236d46246"
+      "sha256": "af6ff815a27f2be4c07817045945b69f4a96ea236d71d2fab9cd83bdcfba1340"
     },
     {
       "id": "phase3-security-eval",
