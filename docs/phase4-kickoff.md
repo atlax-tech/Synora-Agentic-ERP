@@ -1,6 +1,6 @@
 # Phase 4 启动准备包
 
-状态：`IN_PROGRESS / 阶段出口审查准备`。用户于 2026-08-26 明确要求本阶段由 Agent 全部接手，不再新增 Assignment。P4.1–P4.5 的实现、自动测试、Frappe app-test、真实 ERP P4-G01 和 Trace UI 证据已整理；最终状态须以独立对抗审查和出口收尾记录为准。文件中历史 Assignment/准备说明不替代当前 Phase 4 开发日志、测试和运行证据。
+状态：`COMPLETED / PASS`。用户于 2026-08-26 明确要求本阶段由 Agent 全部接手，不再新增 Assignment。P4.1–P4.5 的实现、自动测试、Frappe app-test、真实 ERP P4-G01、Trace UI 证据和最终独立对抗审查均已整理；阶段出口记录见 Phase 4 开发日志。文件中历史 Assignment/准备说明不替代当前 Phase 4 开发日志、测试和运行证据。
 
 ## 1. 业务问题与阶段边界
 
