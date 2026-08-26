@@ -5,6 +5,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
 import frappe
 from frappe.utils import get_datetime, now_datetime
@@ -137,7 +138,7 @@ def revoke_run(run_id: str, correlation_id: str) -> dict[str, str | int]:
     return {"run_id": run.name, "status": run.status, "state_version": run.state_version}
 
 
-def rotate_run_capability(run: object) -> str:
+def rotate_run_capability(run: Any) -> str:
     """Issue one fresh short-lived capability for the internal Agent request."""
     if (
         getattr(run, "status", None) != "ACTIVE"
