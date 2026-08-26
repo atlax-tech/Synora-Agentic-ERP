@@ -30,7 +30,6 @@ from agent_runtime.gateway import (
     GatewayRequest,
     GatewaySuccess,
     GatewayTimeoutError,
-    GatewayTransportError,
     ToolCall,
 )
 from agent_runtime.providers import (
@@ -182,7 +181,7 @@ class GatewayToolAdapter(ToolAdapter):
             raise ToolExecutionFailure(error.code, retryable=error.retryable) from None
         except GatewayTimeoutError:
             raise ToolExecutionFailure("TIMEOUT", retryable=True) from None
-        except GatewayTransportError, GatewayClientError:
+        except GatewayClientError:
             raise ToolExecutionFailure("GATEWAY_ERROR", retryable=True) from None
         except Exception:
             raise ToolExecutionFailure("GATEWAY_ERROR", retryable=False) from None
@@ -225,7 +224,7 @@ async def execute_agent(request: AgentExecuteRequest) -> AgentExecuteResponse:
     try:
         provider = provider_from_environment()
         client = GatewayClient()
-    except ProviderError, GatewayClientError, ValueError:
+    except Exception:
         result = _failure_result(
             request,
             code="MODEL_ERROR",

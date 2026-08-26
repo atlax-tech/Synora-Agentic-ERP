@@ -13,6 +13,7 @@ CI (app-test) 无 Runtime 服务: 走回退路径, 不依赖付费真实模型�
 
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -60,6 +61,47 @@ _RUNTIME_DEFAULT_URL = "http://127.0.0.1:8001"
 # 超时后回退确定性摘要。该上限不是成本上限, 成本仍由 max_tokens/usage 校验控制。
 _RUNTIME_TIMEOUT_SECONDS = 20.0
 _RUNTIME_RESPONSE_BYTES = 1_000_000
+_AGENT_FALLBACK_CODES = {
+    "MODEL_ERROR",
+    "REPEATED_CALL",
+    "NO_PROGRESS",
+    "TOKEN_BUDGET",
+    "COST_BUDGET",
+    "WALL_TIME_BUDGET",
+    "MAX_STEPS",
+    "TOOL_FREQUENCY",
+    "TOOL_NOT_ALLOWED",
+    "INVALID_TOOL_ARGS",
+    "UNSUPPORTED_FINAL_ANSWER",
+}
+_AGENT_EVENT_TYPES = {
+    "run.started",
+    "model.requested",
+    "action.proposed",
+    "action.validated",
+    "action.rejected",
+    "tool.started",
+    "tool.observed",
+    "tool.failed",
+    "guard.checked",
+    "final.proposed",
+    "final.validated",
+    "final.rejected",
+    "run.stopped",
+}
+_AGENT_STOP_CODES = _AGENT_FALLBACK_CODES | {"FINAL_ANSWER", "CANCELLED", "TOOL_ERROR"}
+_SENSITIVE_TRACE_KEYS = {
+    "secret",
+    "password",
+    "token",
+    "capability",
+    "authorization",
+    "cookie",
+    "prompt",
+}
+_TRACE_SECRET_TEXT = re.compile(
+    r"(?i)(?:api[_-]?key|bearer|token|secret|password|authorization)\s*[:=]\s*\S+"
+)
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -73,7 +115,7 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         )
 
 
-def _runtime_enhance_url() -> str:
+def _runtime_url(path: str) -> str:
     configured = os.environ.get(_RUNTIME_URL_ENV, "").strip().rstrip("/")
     if configured:
         # 严格校验: 仅接受 http(s) 回环地址; 拒绝 userinfo/凭据/任意 host,
@@ -100,8 +142,16 @@ def _runtime_enhance_url() -> str:
                 )
         elif hostname not in loopback_hosts:
             raise GatewayFault("CONFIG_ERROR", "runtime url must be a loopback address", 500)
-        return f"{configured.rstrip('/')}/enhance"
-    return f"{_RUNTIME_DEFAULT_URL}/enhance"
+        return f"{configured.rstrip('/')}/{path.lstrip('/')}"
+    return f"{_RUNTIME_DEFAULT_URL}/{path.lstrip('/')}"
+
+
+def _runtime_enhance_url() -> str:
+    return _runtime_url("enhance")
+
+
+def _runtime_agent_url() -> str:
+    return _runtime_url("agent/execute")
 
 
 def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -168,7 +218,7 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
         completion_tokens = int(evidence.get("completion_tokens", 0) or 0)
         reasoning_tokens = int(evidence.get("reasoning_tokens", 0) or 0)
         elapsed_ms = int(evidence.get("elapsed_ms", 0) or 0)
-    except (TypeError, ValueError):
+    except Exception:
         # Runtime 返回异常类型: 证据解析失败回退确定性, 不抛 500。
         return fallback("runtime returned malformed evidence")
     return explanation, {
@@ -180,6 +230,346 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
         "elapsed_ms": elapsed_ms,
         "fallback_reason": str(evidence.get("fallback_reason") or "")[:200],
     }
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant: {value}")
+
+
+def _unique_json_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def _safe_trace_value(value: object, *, depth: int = 0) -> object:
+    """Bound and redact Runtime data before it can reach a Synora Trace DocType."""
+    if depth > 4:
+        return "[TRUNCATED]"
+    if isinstance(value, str):
+        return value[:4_000]
+    if isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
+        return "[TRUNCATED]"
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    if isinstance(value, list):
+        return [_safe_trace_value(child, depth=depth + 1) for child in value[:64]]
+    if isinstance(value, dict):
+        safe: dict[str, object] = {}
+        for key, child in list(value.items())[:64]:
+            if not isinstance(key, str):
+                continue
+            normalized_key = key.lower().replace("-", "_")
+            if any(marker in normalized_key for marker in _SENSITIVE_TRACE_KEYS):
+                safe[key] = "[REDACTED]"
+            else:
+                safe[key] = _safe_trace_value(child, depth=depth + 1)
+        return safe
+    return "[TRUNCATED]"
+
+
+def _safe_trace_text(value: object, maximum: int) -> str:
+    text = value if isinstance(value, str) else ""
+    return _TRACE_SECRET_TEXT.sub("[REDACTED]", text)[:maximum]
+
+
+def _runtime_failure_response(
+    run_id: str,
+    *,
+    code: str = "MODEL_ERROR",
+    detail: str = "runtime Agent execution was unavailable",
+) -> dict[str, Any]:
+    timestamp = str(now_datetime())
+    event = {
+        "schema_version": "1",
+        "run_id": run_id,
+        "sequence": 1,
+        "event_type": "run.started",
+        "timestamp": timestamp,
+        "payload_version": "1",
+        "payload": {"execution_mode": "AGENT", "tool_calling": "native"},
+    }
+    stopped = {
+        "schema_version": "1",
+        "run_id": run_id,
+        "sequence": 2,
+        "event_type": "run.stopped",
+        "timestamp": timestamp,
+        "payload_version": "1",
+        "payload": {"code": code, "step": 0, "detail": detail[:500]},
+    }
+    return {
+        "schema_version": "1",
+        "provider": "runtime",
+        "model": "",
+        "prompt_schema_version": "1",
+        "tool_schema_version": "1",
+        "result": {
+            "schema_version": "1",
+            "execution_mode": "AGENT",
+            "final_answer": None,
+            "stop_reason": {
+                "schema_version": "1",
+                "code": code,
+                "step": 0,
+                "detail": detail[:500],
+                "budget_snapshot": {
+                    "steps": 0,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "reasoning_tokens": 0,
+                    "cost_microusd": 0,
+                    "elapsed_ms": 0,
+                },
+            },
+            "events": [event, stopped],
+            "usage": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "reasoning_tokens": 0,
+                "cost_microusd": 0,
+            },
+            "elapsed_ms": 0,
+        },
+    }
+
+
+def _validate_agent_runtime_response(body: object, run_id: str) -> dict[str, Any]:
+    if not isinstance(body, dict) or set(body) != {
+        "schema_version",
+        "provider",
+        "model",
+        "prompt_schema_version",
+        "tool_schema_version",
+        "result",
+    }:
+        raise ValueError("runtime response shape is invalid")
+    if any(
+        body.get(name) != "1"
+        for name in ("schema_version", "prompt_schema_version", "tool_schema_version")
+    ):
+        raise ValueError("runtime response version is invalid")
+    if not isinstance(body.get("provider"), str) or not isinstance(body.get("model"), str):
+        raise ValueError("runtime provider metadata is invalid")
+    result = body.get("result")
+    if (
+        not isinstance(result, dict)
+        or result.get("schema_version") != "1"
+        or result.get("execution_mode") != "AGENT"
+    ):
+        raise ValueError("runtime result is invalid")
+    events = result.get("events")
+    if not isinstance(events, list) or len(events) > 512:
+        raise ValueError("runtime events are invalid")
+    safe_events: list[dict[str, object]] = []
+    for expected_sequence, event in enumerate(events, 1):
+        if not isinstance(event, dict):
+            raise ValueError("runtime event is invalid")
+        if (
+            event.get("schema_version") != "1"
+            or event.get("payload_version") != "1"
+            or event.get("run_id") != run_id
+            or event.get("sequence") != expected_sequence
+            or event.get("event_type") not in _AGENT_EVENT_TYPES
+            or not isinstance(event.get("timestamp"), str)
+            or not isinstance(event.get("payload"), dict)
+        ):
+            raise ValueError("runtime event ordering or shape is invalid")
+        safe_events.append(
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": expected_sequence,
+                "event_type": event["event_type"],
+                "timestamp": str(event["timestamp"])[:64],
+                "payload_version": "1",
+                "payload": _safe_trace_value(event["payload"]),
+            }
+        )
+    if not safe_events or safe_events[0]["event_type"] != "run.started":
+        raise ValueError("runtime trace must start with run.started")
+    if safe_events[-1]["event_type"] != "run.stopped":
+        raise ValueError("runtime trace must end with run.stopped")
+    stop_reason = result.get("stop_reason")
+    if not isinstance(stop_reason, dict):
+        raise ValueError("runtime stop reason is invalid")
+    code = stop_reason.get("code")
+    if code not in _AGENT_STOP_CODES:
+        raise ValueError("runtime stop code is invalid")
+    step = stop_reason.get("step")
+    detail = stop_reason.get("detail", "")
+    snapshot = stop_reason.get("budget_snapshot")
+    if (
+        not isinstance(step, int)
+        or isinstance(step, bool)
+        or step < 0
+        or step > 64
+        or not isinstance(detail, str)
+    ):
+        raise ValueError("runtime stop reason fields are invalid")
+    if not isinstance(snapshot, dict):
+        raise ValueError("runtime budget snapshot is invalid")
+    snapshot_fields = (
+        "steps",
+        "prompt_tokens",
+        "completion_tokens",
+        "reasoning_tokens",
+        "cost_microusd",
+        "elapsed_ms",
+    )
+    if any(
+        not isinstance(snapshot.get(field), int)
+        or isinstance(snapshot[field], bool)
+        or snapshot[field] < 0
+        for field in snapshot_fields
+    ):
+        raise ValueError("runtime budget fields are invalid")
+    usage = result.get("usage")
+    if not isinstance(usage, dict):
+        raise ValueError("runtime usage is invalid")
+    usage_fields = ("prompt_tokens", "completion_tokens", "reasoning_tokens", "cost_microusd")
+    if any(
+        not isinstance(usage.get(field), int) or isinstance(usage[field], bool) or usage[field] < 0
+        for field in usage_fields
+    ):
+        raise ValueError("runtime usage fields are invalid")
+    elapsed_ms = result.get("elapsed_ms")
+    if not isinstance(elapsed_ms, int) or isinstance(elapsed_ms, bool) or elapsed_ms < 0:
+        raise ValueError("runtime elapsed time is invalid")
+    final_answer = result.get("final_answer")
+    if code == "FINAL_ANSWER":
+        if not isinstance(final_answer, dict):
+            raise ValueError("runtime final answer is invalid")
+        if final_answer.get("schema_version") != "1":
+            raise ValueError("runtime final answer version is invalid")
+        if final_answer.get("status") not in {"SUCCEEDED", "NEEDS_INPUT", "FAILED"}:
+            raise ValueError("runtime final answer status is invalid")
+        if not isinstance(final_answer.get("summary"), str) or not final_answer["summary"].strip():
+            raise ValueError("runtime final answer summary is invalid")
+        refs = final_answer.get("evidence_refs")
+        unknowns = final_answer.get("unknowns")
+        if not isinstance(refs, list) or not isinstance(unknowns, list):
+            raise ValueError("runtime final answer references are invalid")
+        if any(not isinstance(ref, str) or not re.fullmatch(r"[0-9a-f]{64}", ref) for ref in refs):
+            raise ValueError("runtime evidence reference is invalid")
+        if any(not isinstance(value, str) for value in unknowns):
+            raise ValueError("runtime final answer unknowns are invalid")
+    return {
+        "schema_version": "1",
+        "provider": _safe_trace_text(body["provider"], 120),
+        "model": _safe_trace_text(body["model"], 200),
+        "prompt_schema_version": "1",
+        "tool_schema_version": "1",
+        "result": {
+            "stop_reason": {
+                "schema_version": "1",
+                "code": code,
+                "step": step,
+                "detail": detail[:500],
+                "budget_snapshot": {field: snapshot[field] for field in snapshot_fields},
+            },
+            "events": safe_events,
+            "usage": {field: usage[field] for field in usage_fields},
+            "elapsed_ms": elapsed_ms,
+        },
+    }
+
+
+def _execute_agent_via_runtime(
+    run: Any,
+    capability: str,
+    correlation_id: str,
+) -> dict[str, Any]:
+    """Call the internal Runtime and return only a validated, redacted response."""
+    payload: dict[str, object] = {
+        "schema_version": "1",
+        "run_id": run.name,
+        "correlation_id": correlation_id,
+        "goal": run.goal,
+        "capability": capability,
+    }
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    runtime_token = os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
+    if runtime_token:
+        headers["X-Synora-Runtime-Token"] = runtime_token
+    request: urllib.request.Request | None = None
+    try:
+        request = urllib.request.Request(
+            _runtime_agent_url(),
+            data=json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        opener = urllib.request.build_opener(_NoRedirectHandler())
+        with opener.open(request, timeout=_RUNTIME_TIMEOUT_SECONDS) as response:
+            raw = response.read(_RUNTIME_RESPONSE_BYTES + 1)
+        if len(raw) > _RUNTIME_RESPONSE_BYTES or capability.encode() in raw:
+            raise ValueError("runtime response is unsafe")
+        body = json.loads(
+            raw,
+            parse_constant=_reject_json_constant,
+            object_pairs_hook=_unique_json_pairs,
+        )
+        return _validate_agent_runtime_response(body, run.name)
+    except Exception:
+        return _runtime_failure_response(run.name)
+    finally:
+        payload.clear()
+        headers.clear()
+        request = None
+        runtime_token = ""
+
+
+def _agent_trace_status(code: str) -> str:
+    if code == "FINAL_ANSWER":
+        return "SUCCEEDED"
+    if code in _AGENT_FALLBACK_CODES:
+        return "FALLBACK"
+    return "FAILED"
+
+
+def _persist_agent_trace(
+    run: Any,
+    response: dict[str, Any],
+    correlation_id: str,
+) -> dict[str, Any]:
+    result = response["result"]
+    stop_reason = result["stop_reason"]
+    events = result["events"]
+    usage = result["usage"]
+    try:
+        attempt = int(frappe.db.count("Synora Agent Trace Attempt", filters={"run": run.name})) + 1
+    except Exception:
+        attempt = 1
+    status = _agent_trace_status(stop_reason["code"])
+    stop_json = frappe.as_json(_safe_trace_value(stop_reason))
+    events_json = frappe.as_json(_safe_trace_value(events))
+    frappe.get_doc(
+        {
+            "doctype": "Synora Agent Trace Attempt",
+            "run": run.name,
+            "attempt": attempt,
+            "mode": "AGENT",
+            "provider": response["provider"],
+            "model": response["model"],
+            "prompt_schema_version": response["prompt_schema_version"],
+            "tool_schema_version": response["tool_schema_version"],
+            "events_json": events_json,
+            "events_count": len(events),
+            "stop_reason": stop_json,
+            "prompt_tokens": usage["prompt_tokens"],
+            "completion_tokens": usage["completion_tokens"],
+            "reasoning_tokens": usage["reasoning_tokens"],
+            "cost_microusd": usage["cost_microusd"],
+            "elapsed_ms": result["elapsed_ms"],
+            "status": status,
+            "correlation_id": correlation_id,
+        }
+    ).insert(ignore_permissions=True)
+    return {"status": status, "code": stop_reason["code"], "attempt": attempt}
 
 
 def _load_active_run(run_id: str, expected_states: frozenset[str]) -> Any:
@@ -257,7 +647,10 @@ def _recover_failed_analysis(run_id: str, correlation_id: str) -> None:
         if current.run_state != "ANALYZING":
             return
         _set_run_state(current, "CREATED")
-    except (GatewayFault, frappe.TimestampMismatchError):
+    except GatewayFault:
+        # 并发取消/推进已生效: 回退让位, 不覆盖。
+        pass
+    except frappe.TimestampMismatchError:
         # 并发取消/推进已生效: 回退让位, 不覆盖。
         pass
 
@@ -402,15 +795,19 @@ def _persist_analysis(run_id: str, analysis: ItemAnalysis, correlation_id: str) 
     ).insert(ignore_permissions=True)
 
 
-def analyze_run(run_id: str, correlation_id: str) -> dict[str, Any]:
-    """对 Run 执行确定性采购风险分析 (仅 CREATED 可开始)。"""
-    run = _load_active_run(run_id, frozenset({"CREATED"}))
-
+def _analyze_deterministic_run(
+    run: Any,
+    correlation_id: str,
+    *,
+    already_analyzing: bool = False,
+) -> dict[str, Any]:
+    """Run the Phase 3 analysis, optionally continuing an Agent exploration."""
     ctx = _run_context(run)
-    analysis_started = False
+    analysis_started = already_analyzing
     try:
-        _set_run_state(run, "ANALYZING")
-        analysis_started = True
+        if not already_analyzing:
+            _set_run_state(run, "ANALYZING")
+            analysis_started = True
 
         # 需求源 = 未结 MR 行; 在途源 = 未收货 PO 行; 各拉取一次后按 item 分组。
         mr_rows = _collect_rows(ctx, "material_request.open", {}, correlation_id)
@@ -424,26 +821,71 @@ def analyze_run(run_id: str, correlation_id: str) -> dict[str, Any]:
             item_analysis = _analyze_item(
                 ctx, item_code, run.time_window_days, mr_rows, po_rows, correlation_id
             )
-            _persist_analysis(run_id, item_analysis, correlation_id)
+            _persist_analysis(run.name, item_analysis, correlation_id)
             analyses.append(item_analysis.to_dict())
 
         _set_run_state(run, "PROPOSED")
     except GatewayFault:
         # 工具失败/结果超限/并发冲突: 回退可重试, 不留永久中间态。
         if analysis_started:
-            _recover_failed_analysis(run_id, correlation_id)
+            _recover_failed_analysis(run.name, correlation_id)
         raise
     except Exception:
         if analysis_started:
-            _recover_failed_analysis(run_id, correlation_id)
+            _recover_failed_analysis(run.name, correlation_id)
         raise
     return {
-        "run_id": run_id,
+        "run_id": run.name,
         "run_state": run.run_state,
         "state_version": run.state_version,
         "items_analyzed": len(analyses),
         "analyses": analyses,
     }
+
+
+def analyze_run(run_id: str, correlation_id: str) -> dict[str, Any]:
+    """Analyze a Run; Agent mode explores first, then deterministic code closes it."""
+    run = _load_active_run(run_id, frozenset({"CREATED"}))
+    if getattr(run, "execution_mode", "DETERMINISTIC") == "AGENT":
+        return _analyze_agent_run(run, correlation_id)
+    return _analyze_deterministic_run(run, correlation_id)
+
+
+def _analyze_agent_run(run: Any, correlation_id: str) -> dict[str, Any]:
+    analysis_started = False
+    capability = ""
+    try:
+        _set_run_state(run, "ANALYZING")
+        analysis_started = True
+        from synora_agentic_erp.gateway.security import rotate_run_capability
+
+        capability = rotate_run_capability(run)
+        try:
+            response = _execute_agent_via_runtime(run, capability, correlation_id)
+        finally:
+            capability = ""
+        trace = _persist_agent_trace(run, response, correlation_id)
+        code = str(trace["code"])
+        if code in _AGENT_FALLBACK_CODES or code == "FINAL_ANSWER":
+            current = _load_active_run(run.name, frozenset({"ANALYZING"}))
+            return _analyze_deterministic_run(
+                current,
+                correlation_id,
+                already_analyzing=True,
+            )
+        if code == "CANCELLED":
+            raise GatewayFault("CONFLICT", "run was cancelled", 409)
+        raise GatewayFault("ERP_ERROR", "Agent tool execution failed", 502)
+    except GatewayFault:
+        if analysis_started:
+            _recover_failed_analysis(run.name, correlation_id)
+        raise
+    except Exception:
+        if analysis_started:
+            _recover_failed_analysis(run.name, correlation_id)
+        raise
+    finally:
+        capability = ""
 
 
 def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:

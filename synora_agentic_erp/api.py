@@ -1,3 +1,4 @@
+import json
 from typing import Any
 from uuid import uuid4
 
@@ -5,8 +6,16 @@ import frappe
 from frappe.recorder import do_not_record
 from frappe.utils import cint, get_datetime, now_datetime
 
-from synora_agentic_erp.agent.service import analyze_run as analyze_server_run
-from synora_agentic_erp.agent.service import plan_run as plan_server_run
+from synora_agentic_erp.agent.service import (
+    _AGENT_EVENT_TYPES,
+    _safe_trace_value,
+)
+from synora_agentic_erp.agent.service import (
+    analyze_run as analyze_server_run,
+)
+from synora_agentic_erp.agent.service import (
+    plan_run as plan_server_run,
+)
 from synora_agentic_erp.gateway.contract import (
     SCHEMA_VERSION,
     GatewayFault,
@@ -46,6 +55,151 @@ SECURITY_EVENT_BUDGET = 60
 GOAL_MAX_LENGTH = 1000
 DEFAULT_TIME_WINDOW_DAYS = 90
 MAX_TIME_WINDOW_DAYS = 365
+TRACE_DEFAULT_LIMIT = 50
+TRACE_MAX_LIMIT = 200
+TRACE_MAX_OFFSET = 10_000
+
+
+def _reject_trace_json_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant: {value}")
+
+
+def _unique_trace_json_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def _parse_trace_json(raw: object, expected: type[list[Any]] | type[dict[str, Any]]) -> Any:
+    if not isinstance(raw, str) or len(raw.encode("utf-8")) > 2_000_000:
+        raise ValueError("trace payload is invalid")
+    value = json.loads(
+        raw,
+        parse_constant=_reject_trace_json_constant,
+        object_pairs_hook=_unique_trace_json_pairs,
+    )
+    if not isinstance(value, expected):
+        raise ValueError("trace payload is invalid")
+    return value
+
+
+def _safe_trace_stop_reason(raw: object) -> dict[str, object]:
+    parsed = _parse_trace_json(raw, dict)
+    code = parsed.get("code")
+    if not isinstance(code, str) or code not in {
+        "FINAL_ANSWER",
+        "MAX_STEPS",
+        "REPEATED_CALL",
+        "NO_PROGRESS",
+        "TOKEN_BUDGET",
+        "COST_BUDGET",
+        "WALL_TIME_BUDGET",
+        "CANCELLED",
+        "TOOL_NOT_ALLOWED",
+        "TOOL_FREQUENCY",
+        "INVALID_TOOL_ARGS",
+        "TOOL_ERROR",
+        "MODEL_ERROR",
+        "UNSUPPORTED_FINAL_ANSWER",
+    }:
+        raise ValueError("trace stop reason is invalid")
+    return _safe_trace_value(parsed)  # type: ignore[return-value]
+
+
+def _safe_trace_events(raw: object, run_id: str) -> list[dict[str, object]]:
+    events = _parse_trace_json(raw, list)
+    if len(events) > 512:
+        raise ValueError("trace event count is invalid")
+    safe_events: list[dict[str, object]] = []
+    for expected_sequence, event in enumerate(events, 1):
+        if not isinstance(event, dict):
+            raise ValueError("trace event is invalid")
+        if (
+            event.get("schema_version") != "1"
+            or event.get("payload_version") != "1"
+            or event.get("run_id") != run_id
+            or event.get("sequence") != expected_sequence
+            or event.get("event_type") not in _AGENT_EVENT_TYPES
+            or not isinstance(event.get("timestamp"), str)
+            or not isinstance(event.get("payload"), dict)
+        ):
+            raise ValueError("trace event ordering or shape is invalid")
+        safe_events.append(
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": expected_sequence,
+                "event_type": event["event_type"],
+                "timestamp": str(event["timestamp"])[:64],
+                "payload_version": "1",
+                "payload": _safe_trace_value(event["payload"]),
+            }
+        )
+    return safe_events
+
+
+def _latest_agent_trace(run_id: str) -> dict[str, Any] | None:
+    """Return a redacted summary; callers must authorize the parent Run first."""
+    try:
+        attempts = frappe.get_all(
+            "Synora Agent Trace Attempt",
+            filters={"run": run_id},
+            fields=[
+                "attempt",
+                "mode",
+                "provider",
+                "model",
+                "prompt_schema_version",
+                "tool_schema_version",
+                "events_count",
+                "stop_reason",
+                "prompt_tokens",
+                "completion_tokens",
+                "reasoning_tokens",
+                "cost_microusd",
+                "elapsed_ms",
+                "status",
+                "correlation_id",
+                "creation",
+            ],
+            order_by="attempt desc, creation desc",
+            limit=1,
+            ignore_permissions=True,
+        )
+    except Exception:
+        # During an older site migration the new Trace table may not exist yet;
+        # keep existing deterministic Run reads available without exposing detail.
+        return None
+    if not attempts:
+        return None
+    doc = attempts[0]
+    try:
+        stop_reason = _safe_trace_stop_reason(doc.stop_reason)
+    except Exception:
+        stop_reason = {"code": "TRACE_INVALID", "detail": "trace payload unavailable"}
+    return {
+        "attempt": int(doc.attempt or 0),
+        "mode": str(doc.mode or "AGENT"),
+        "provider": str(doc.provider or "")[:120],
+        "model": str(doc.model or "")[:200],
+        "prompt_schema_version": str(doc.prompt_schema_version or "1"),
+        "tool_schema_version": str(doc.tool_schema_version or "1"),
+        "events_count": int(doc.events_count or 0),
+        "stop_reason": stop_reason,
+        "usage": {
+            "prompt_tokens": int(doc.prompt_tokens or 0),
+            "completion_tokens": int(doc.completion_tokens or 0),
+            "reasoning_tokens": int(doc.reasoning_tokens or 0),
+            "cost_microusd": int(doc.cost_microusd or 0),
+        },
+        "elapsed_ms": int(doc.elapsed_ms or 0),
+        "status": str(doc.status or "FAILED"),
+        "correlation_id": str(doc.correlation_id or "")[:36],
+        "created_at": str(doc.creation or ""),
+    }
 
 
 def _set_status(status_code: int) -> None:
@@ -245,10 +399,16 @@ def _run_summary(run: Any) -> dict[str, Any]:
         and not run.revoked
         and get_datetime(run.expires_at) <= now_datetime()
     )
+    execution_mode = getattr(run, "execution_mode", "DETERMINISTIC") or "DETERMINISTIC"
+    agent_trace = _latest_agent_trace(run.name) if execution_mode == "AGENT" else None
     return {
         "run_id": run.name,
         "goal": run.goal,
-        "execution_mode": getattr(run, "execution_mode", "DETERMINISTIC") or "DETERMINISTIC",
+        "execution_mode": execution_mode,
+        "agent_status": (agent_trace or {}).get("status", "NOT_STARTED")
+        if execution_mode == "AGENT"
+        else None,
+        "agent_trace": agent_trace,
         "run_state": "EXPIRED" if capability_expired else run.run_state,
         "status": run.status,
         "initiator": run.initiator,
@@ -399,6 +559,98 @@ def get_run(run_id: str) -> dict[str, Any]:
         "analyses": analyses,
         "plan": plan,
     }
+
+
+@frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def get_run_trace(
+    run_id: str,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> dict[str, Any]:
+    """读取当前用户有权访问的最近 Agent Trace 事件页。"""
+    try:
+        safe_run_id = canonical_uuid(run_id, "run_id")
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, None)
+    if frappe.session.user == "Guest" or not frappe.db.exists("Synora Agent Run", safe_run_id):
+        _set_status(404)
+        return error_response(GatewayFault("RUN_REJECTED", "run is not available", 404))
+    run = frappe.get_doc("Synora Agent Run", safe_run_id)
+    if run.initiator != frappe.session.user and not _is_system_manager():
+        _set_status(404)
+        return error_response(GatewayFault("RUN_REJECTED", "run is not available", 404))
+    safe_limit = TRACE_DEFAULT_LIMIT
+    if limit is not None:
+        try:
+            safe_limit = positive_int(limit, "limit", TRACE_MAX_LIMIT)
+            if safe_limit == 0:
+                safe_limit = TRACE_DEFAULT_LIMIT
+        except GatewayFault:
+            safe_limit = TRACE_DEFAULT_LIMIT
+    safe_offset = 0
+    if offset is not None:
+        try:
+            safe_offset = positive_int(offset, "offset", TRACE_MAX_OFFSET)
+        except GatewayFault:
+            safe_offset = 0
+    try:
+        attempts = frappe.get_all(
+            "Synora Agent Trace Attempt",
+            filters={"run": safe_run_id},
+            fields=[
+                "name",
+                "attempt",
+                "mode",
+                "provider",
+                "model",
+                "prompt_schema_version",
+                "tool_schema_version",
+                "events_json",
+                "events_count",
+                "stop_reason",
+                "prompt_tokens",
+                "completion_tokens",
+                "reasoning_tokens",
+                "cost_microusd",
+                "elapsed_ms",
+                "status",
+                "correlation_id",
+                "creation",
+            ],
+            order_by="attempt desc, creation desc",
+            limit=1,
+            ignore_permissions=True,
+        )
+        if not attempts:
+            return {
+                "ok": True,
+                "schema_version": SCHEMA_VERSION,
+                "run_id": safe_run_id,
+                "trace": None,
+            }
+        doc = attempts[0]
+        events = _safe_trace_events(doc.events_json, safe_run_id)
+        summary = _latest_agent_trace(safe_run_id)
+        if summary is None:
+            raise ValueError("trace summary is unavailable")
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "run_id": safe_run_id,
+            "trace": {
+                **summary,
+                "events": events[safe_offset : safe_offset + safe_limit],
+                "count": len(events[safe_offset : safe_offset + safe_limit]),
+                "total": len(events),
+                "limit": safe_limit,
+                "offset": safe_offset,
+            },
+        }
+    except Exception:
+        _set_status(500)
+        return error_response(GatewayFault("ERP_ERROR", "trace is unavailable", 500))
 
 
 @frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]

@@ -32,7 +32,11 @@ class SynoraAgentRun(Document):  # type: ignore[misc]
         if any(self.has_value_changed(field) for field in IMMUTABLE_FIELDS):
             frappe.throw("Synora Agent Run identity and scope are immutable")
         lifecycle_changed = any(self.has_value_changed(field) for field in LIFECYCLE_FIELDS)
-        controlled = self.flags.synora_revocation or self.flags.synora_state_change
+        controlled = (
+            self.flags.synora_revocation
+            or self.flags.synora_state_change
+            or self.flags.synora_capability_rotation
+        )
         if lifecycle_changed and not controlled:
             frappe.throw(
                 "Synora Agent Run lifecycle changes require the controlled transition path"

@@ -18,6 +18,7 @@ from synora_agentic_erp.gateway.contract import GatewayFault
 CAPABILITY_AUDIENCE = "synora-agent-runtime"
 CAPABILITY_TTL = timedelta(minutes=5)
 EXECUTION_MODES = frozenset({"DETERMINISTIC", "AGENT"})
+CAPABILITY_FIELDS = frozenset({"capability_digest", "issued_at", "expires_at"})
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,25 @@ def revoke_run(run_id: str, correlation_id: str) -> dict[str, str | int]:
     run.state_version += 1
     run.save(ignore_permissions=True)
     return {"run_id": run.name, "status": run.status, "state_version": run.state_version}
+
+
+def rotate_run_capability(run: object) -> str:
+    """Issue one fresh short-lived capability for the internal Agent request."""
+    if (
+        getattr(run, "status", None) != "ACTIVE"
+        or getattr(run, "revoked", False)
+        or getattr(run, "run_state", None) != "ANALYZING"
+    ):
+        raise GatewayFault("CONFLICT", "run is not active", 409)
+    capability = secrets.token_urlsafe(32)
+    issued_at = now_datetime()
+    expires_at = issued_at + CAPABILITY_TTL
+    run.flags.synora_capability_rotation = True
+    run.capability_digest = _digest(run.name, capability)
+    run.issued_at = issued_at
+    run.expires_at = expires_at
+    run.save(ignore_permissions=True)
+    return capability
 
 
 def cancel_run(run_id: str, correlation_id: str) -> dict[str, str | int]:
