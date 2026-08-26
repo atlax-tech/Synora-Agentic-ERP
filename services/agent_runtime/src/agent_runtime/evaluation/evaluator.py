@@ -50,10 +50,17 @@ class AgentEvaluationReport:
 
 
 def _actual_tool_sequence(result: RunResult) -> tuple[str, ...]:
+    validated_actions = {
+        (event.payload.get("step"), event.payload.get("tool_name"))
+        for event in result.events
+        if event.event_type == "action.validated"
+    }
     return tuple(
         str(event.payload["tool_name"])
         for event in result.events
-        if event.event_type == "action.proposed" and "tool_name" in event.payload
+        if event.event_type == "action.proposed"
+        and "tool_name" in event.payload
+        and (event.payload.get("step"), event.payload.get("tool_name")) in validated_actions
     )
 
 
