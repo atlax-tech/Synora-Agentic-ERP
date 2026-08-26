@@ -249,7 +249,24 @@ UV_CACHE_DIR=/private/tmp/synora-uv-cache uv run --offline --no-sync --python 3.
 2. 为什么不能只比较 `tool_name`，而要把 canonical args 放进 key？
 3. 为什么 JSON 键顺序变化不应产生两个不同的调用？
 
-## 8. 启动门禁与人工核对（历史启动前说明）
+## 8. P4.2 手写模式实验实现
+
+状态：`COMPLETED_FOR_CURRENT_INCREMENT`。本增量已在离线 recorded adapter 上完成五个最小模式，并统一返回 `RunResult`：
+
+- `labs/agent_patterns/handwritten.py`：Direct 单次回答、共享 bounded ReAct、一次性 Plan-and-Solve、最多一次 Reflection，以及采购版 `MiniStepAgent`。
+- `labs/agent_patterns/comparison.py`：把每次运行转换为统一的成功率、轨迹正确性、工具次数、Observation 次数、停止原因、耗时、usage、成本、Trace 事件数和复杂度记录。
+- `services/agent_runtime/tests/test_handwritten_patterns.py`：用固定 P4-G01 recorded 响应验证五种模式和比较顺序；不访问网络、ERP、capability 或生产凭证。
+
+这些模式是学习实验，不会被 Frappe 业务 Runtime 导入。它们复用 P4.2 共享 kernel 的 allowlist、typed ToolCall 校验、重复调用守卫、Observation digest 和 Trace；完整 token/cost/wall-clock/取消/并发门禁留给 P4.4。
+
+### 当前增量验收
+
+- handwritten pattern tests：`6 passed`。
+- Runtime tests：`108 passed`。
+- labs、kernel 与新增测试的 Ruff 和 mypy targeted 检查：通过。
+- 真实 BYOK、Frappe API、浏览器 Trace UI 和 P4-G01 ERP 验收：尚未开始，不把实验结果写成生产收益。
+
+## 9. 启动门禁与人工核对（历史启动前说明）
 
 本节记录的是 Phase 4 启动前的门禁，当前阶段已经启动；不应覆盖上面的 P4.1/P4.2 实施状态。
 

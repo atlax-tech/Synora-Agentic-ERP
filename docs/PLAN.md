@@ -279,7 +279,7 @@
 必读：`docs/项目方向纠偏.md` Phase 4、`docs/phase4-kickoff.md`、PRD F-002/F-003/F-008/F-016、SPEC Tool Gateway/评测契约、Phase 3 单 Agent 与安全基线。本阶段不实现 ERP 写入。
 
 - **P4.1 执行契约与评测基线**：`COMPLETED_FOR_CURRENT_INCREMENT`；已定义 Action、Observation、FinalAnswer、Error、StopReason 和 8 个 golden tasks，并建立 Component/Trajectory/Task/System 评测入口；阶段出口仍需全量证据。
-- **P4.2 手写模式实验**：在 `labs/agent_patterns/` 实现 Direct、ReAct、Plan-and-Solve、Reflection 和采购版 MiniStepAgent，与开源源码对照。
+- **P4.2 手写模式实验**：`COMPLETED_FOR_CURRENT_INCREMENT`；在 `labs/agent_patterns/` 完成 Direct、bounded ReAct、Plan-and-Solve、Reflection 和采购版 MiniStepAgent 的离线 recorded 对照，并统一记录比较指标；阶段出口仍需全量证据。
 - **P4.3 原生 Tool Calling**：让模型在当前用户 read-tool allowlist 中动态选择工具，严格校验 tool name、schema、参数、权限、返回预算和错误语义。
 - **P4.4 循环与停止治理**：实现 max steps、相同参数重复、工具频率、无进展、token、成本、wall-clock、cancel 和 final-answer checks，保留明确 stop reason。
 - **P4.5 业务接入与 Trace UI**：至少一个真实只读任务必须根据第一次 observation 选择第二个不同工具；页面区分业务结论与可折叠 Trace。
