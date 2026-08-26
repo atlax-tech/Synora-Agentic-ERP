@@ -861,11 +861,20 @@ def _analyze_agent_run(run: Any, correlation_id: str) -> dict[str, Any]:
         from synora_agentic_erp.gateway.security import rotate_run_capability
 
         capability = rotate_run_capability(run)
+        # Runtime -> Gateway is a separate HTTP request/DB transaction. Publish
+        # ANALYZING plus the fresh digest before handing the short-lived
+        # capability across that process boundary; otherwise Gateway can still
+        # observe the pre-rotation CREATED snapshot.
+        frappe.db.commit()
         try:
             response = _execute_agent_via_runtime(run, capability, correlation_id)
         finally:
             capability = ""
         trace = _persist_agent_trace(run, response, correlation_id)
+        # Trace evidence must survive a later deterministic-analysis failure or
+        # recovery rollback. It is an audit fact, not part of the analysis
+        # result transaction.
+        frappe.db.commit()
         code = str(trace["code"])
         if code in _AGENT_FALLBACK_CODES or code == "FINAL_ANSWER":
             current = _load_active_run(run.name, frozenset({"ANALYZING"}))

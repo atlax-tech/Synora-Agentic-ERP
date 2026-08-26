@@ -137,6 +137,34 @@ class TestAnalyzeRun(FrappeTestCase):
         self.assertEqual(len(trace["trace"]["events"]), 1)
         self.assertEqual(trace["trace"]["events"][0]["event_type"], "run.started")
 
+    def test_agent_boundary_commits_capability_and_trace_before_closeout(self) -> None:
+        run = self._issue(execution_mode="AGENT")
+        runtime_response = _runtime_failure_response(str(run["run_id"]))
+        original_commit = frappe.db.commit
+        commit_calls = 0
+
+        def counted_commit() -> None:
+            nonlocal commit_calls
+            commit_calls += 1
+            original_commit()
+
+        with (
+            patch(
+                "synora_agentic_erp.agent.service._execute_agent_via_runtime",
+                return_value=runtime_response,
+            ),
+            patch.object(frappe.db, "commit", side_effect=counted_commit),
+        ):
+            frappe.set_user(BUYER)
+            response = analyze_run(str(run["run_id"]), CORRELATION_ID)
+
+        self.assertTrue(response["ok"])
+        self.assertGreaterEqual(commit_calls, 2)
+        self.assertEqual(
+            len(frappe.get_all("Synora Agent Trace Attempt", filters={"run": run["run_id"]})),
+            1,
+        )
+
     def test_agent_trace_is_not_visible_to_another_user(self) -> None:
         run = self._issue(execution_mode="AGENT")
         frappe.set_user(ACCOUNTANT)
