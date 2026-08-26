@@ -58,12 +58,13 @@ def test_phase4_filter_tags_is_deterministic() -> None:
     assert filtered.cases
     assert all("security" in case.tags for case in filtered.cases)
 
+
 # G02 的规则是：Agent 调用 stock.projected，第二次又用完全相同的参数调用它时，
 # 应该因为重复而停止。
 # 所以这不是实现“停止功能”，而是在写一张“期望结果清单”
 def test_repeated_case_declares_stop_contract() -> None:
     # 定义一个测试函数。-> None 表示这个函数不反悔结果。
-    evaluation = load_agent_cases(CASES_DIR) # 这里调用了已经存在的函数 load_agent_cases(...)
+    evaluation = load_agent_cases(CASES_DIR)  # 这里调用了已经存在的函数 load_agent_cases(...)
 
     # 这段写法采用了Python的生成器和next(),对新手不太友好
     # case = next(
@@ -73,16 +74,16 @@ def test_repeated_case_declares_stop_contract() -> None:
     # )
 
     # 传统写法：
-    case = None # 准备一个空变量
-    for candidate in evaluation.cases: # 遍历所有case，依次拿出每一个case称为candidate
-        if candidate.case_id == "P4-G02-repeated-same-call": # 判断是不是G02
+    case = None  # 准备一个空变量
+    for candidate in evaluation.cases:  # 遍历所有case，依次拿出每一个case称为candidate
+        if candidate.case_id == "P4-G02-repeated-same-call":  # 判断是不是G02
             case = candidate
             break
     assert case is not None
 
     # 含义：工具调用顺序
     # 表示期望的工具调用顺序必须是第一次 stock.projected，第二次还是 stock.projected
-    #语法解释，使用元组的原因：定义一组固定顺序的数据
+    # 语法解释，使用元组的原因：定义一组固定顺序的数据
     # 这里有两个相同的字符串，所以表示两次调用。
     # JSON 里的数组：
     # ["stock.projected", "stock.projected"]

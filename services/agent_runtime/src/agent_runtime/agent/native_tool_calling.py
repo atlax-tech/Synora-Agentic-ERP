@@ -46,6 +46,8 @@ from agent_runtime.gateway import (
 )
 from agent_runtime.providers import Provider, ProviderMessage, ProviderToolSpec
 
+_NATIVE_PARSE_ERRORS = (ValueError, TypeError, ValidationError)
+
 READ_TOOL_NAMES: tuple[ToolName, ...] = (
     "item.lookup",
     "supplier.lookup",
@@ -367,7 +369,7 @@ async def _run_native_tool_calling(
         if not response.tool_calls:
             try:
                 final = _parse_final_text(response.text)
-            except (ValueError, TypeError, ValidationError):
+            except _NATIVE_PARSE_ERRORS:
                 recorder.add("final.rejected", {"step": step, "reason": "invalid final JSON"})
                 return _stop(
                     recorder=recorder,
@@ -435,7 +437,7 @@ async def _run_native_tool_calling(
                 correlation_id=correlation_id,
             )
             validate_action_tool(action)
-        except (ValidationError, TypeError, ValueError):
+        except _NATIVE_PARSE_ERRORS:
             recorder.add("action.rejected", {"step": step, "reason": "invalid tool arguments"})
             return _stop(
                 recorder=recorder,

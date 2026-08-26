@@ -1,7 +1,6 @@
 import frappe
 from frappe.model.document import Document
 
-
 IMMUTABLE_FIELDS = {
     "run",
     "attempt",

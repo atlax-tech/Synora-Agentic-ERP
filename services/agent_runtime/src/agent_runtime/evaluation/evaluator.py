@@ -45,8 +45,7 @@ class AgentEvaluationReport:
     @property
     def passed(self) -> bool:
         return all(
-            layer.passed
-            for layer in (self.component, self.trajectory, self.task, self.system)
+            layer.passed for layer in (self.component, self.trajectory, self.task, self.system)
         )
 
 
@@ -59,9 +58,7 @@ def _actual_tool_sequence(result: RunResult) -> tuple[str, ...]:
 
 
 def _observation_count(result: RunResult) -> int:
-    return sum(
-        event.event_type in {"tool.observed", "tool.failed"} for event in result.events
-    )
+    return sum(event.event_type in {"tool.observed", "tool.failed"} for event in result.events)
 
 
 def _check(name: str, passed: bool, detail: str) -> CheckResult:

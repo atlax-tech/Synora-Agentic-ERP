@@ -202,10 +202,10 @@ seen_keys = self._seen
 current_key = action.call_key()
 
 if current_key in seen_keys:
-    return ______       # 第二次看到时，告诉 kernel “应该停止”
+    return ______  # 第二次看到时，告诉 kernel “应该停止”
 
 seen_keys.add(current_key)
-return ______           # 第一次看到时，告诉 kernel “可以继续”
+return ______  # 第一次看到时，告诉 kernel “可以继续”
 ```
 
 运行时的小例子（只帮助你理解输入/输出，不需要把它写进生产代码）：

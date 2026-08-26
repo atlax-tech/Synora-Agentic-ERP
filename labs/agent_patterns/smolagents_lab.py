@@ -37,6 +37,8 @@ from agent_runtime.agent.native_tool_calling import provider_tool_specs
 from agent_runtime.evaluation.loader import AgentEvaluationCase
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+_SMOLAGENTS_PARSE_ERRORS = (TypeError, ValueError, ValidationError)
+
 SMOLAGENTS_COMMIT = "30bb1161095dbae2271e6bc3cc4c219cc3897a57"
 SMOLAGENTS_ENTRYPOINTS = (
     "smolagents.agents.MultiStepAgent",
@@ -613,7 +615,7 @@ def run_smolagents_tool_calling(
     output = getattr(result, "output", None)
     try:
         final = _parse_final(output)
-    except (TypeError, ValueError, ValidationError):
+    except _SMOLAGENTS_PARSE_ERRORS:
         state = getattr(result, "state", "")
         final_code: StopCode = (
             "MAX_STEPS" if state == "max_steps_error" else "UNSUPPORTED_FINAL_ANSWER"

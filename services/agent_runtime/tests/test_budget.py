@@ -41,11 +41,14 @@ def _messages_and_tools() -> tuple[list[ProviderMessage], list[ProviderToolSpec]
 def test_pricing_uses_decimal_and_rounds_up_micro_usd() -> None:
     pricing = _pricing()
 
-    assert pricing.cost_microusd(
-        prompt_tokens=1_001,
-        completion_tokens=2_001,
-        reasoning_tokens=3_001,
-    ) == 15
+    assert (
+        pricing.cost_microusd(
+            prompt_tokens=1_001,
+            completion_tokens=2_001,
+            reasoning_tokens=3_001,
+        )
+        == 15
+    )
     assert pricing.maximum_output_cost_microusd(512) == 2
 
 
