@@ -117,6 +117,7 @@ def test_native_calling_uses_first_observation_for_second_tool() -> None:
                 text=json.dumps(
                     {
                         "type": "final",
+                        "schema_version": "1",
                         "status": "SUCCEEDED",
                         "summary": "facts collected",
                         "evidence_refs": [second.digest],
@@ -209,6 +210,7 @@ def test_final_answer_must_reference_an_observed_digest() -> None:
                 text=json.dumps(
                     {
                         "type": "final",
+                        "schema_version": "1",
                         "status": "SUCCEEDED",
                         "summary": "unsupported claim",
                         "evidence_refs": ["f" * 64],
@@ -236,6 +238,7 @@ def test_final_answer_must_reference_an_observed_digest() -> None:
         },
         {
             "type": "final",
+            "schema_version": "1",
             "status": "SUCCEEDED",
             "summary": "unexpected field",
             "evidence_refs": [],
@@ -273,6 +276,7 @@ def test_final_answer_rejects_numeric_claim_absent_from_cited_observation() -> N
                 text=json.dumps(
                     {
                         "type": "final",
+                        "schema_version": "1",
                         "status": "SUCCEEDED",
                         "summary": "projected stock is 999",
                         "evidence_refs": [observation.digest],
@@ -293,6 +297,39 @@ def test_final_answer_rejects_numeric_claim_absent_from_cited_observation() -> N
     )
 
 
+def test_final_answer_does_not_match_numeric_substrings_inside_observation_numbers() -> None:
+    observation = _observation("stock.projected", "projected stock is 1999")
+    provider = DeterministicProvider(
+        scripted_responses=[
+            ProviderResponse(
+                tool_calls=(
+                    ProviderToolCall(
+                        id="call-1",
+                        name="stock.projected",
+                        arguments='{"item_code":"SYNORA-P1-Item-1001"}',
+                    ),
+                )
+            ),
+            ProviderResponse(
+                text=json.dumps(
+                    {
+                        "type": "final",
+                        "schema_version": "1",
+                        "status": "SUCCEEDED",
+                        "summary": "projected stock is 999",
+                        "evidence_refs": [observation.digest],
+                    }
+                )
+            ),
+        ]
+    )
+    adapter = RecordedToolAdapter({"stock.projected": observation})
+
+    result = _run(provider, adapter, frozenset({"stock.projected"}))
+
+    assert result.stop_reason.code == "UNSUPPORTED_FINAL_ANSWER"
+
+
 def test_final_proposed_trace_contains_safe_answer_fields() -> None:
     observation = _observation("stock.projected", "projected stock is 60")
     provider = DeterministicProvider(
@@ -309,6 +346,8 @@ def test_final_proposed_trace_contains_safe_answer_fields() -> None:
             ProviderResponse(
                 text=json.dumps(
                     {
+                        "type": "final",
+                        "schema_version": "1",
                         "status": "SUCCEEDED",
                         "summary": "facts collected",
                         "evidence_refs": [observation.digest],
@@ -658,6 +697,8 @@ def _golden_provider_and_adapter(
                     ProviderResponse(
                         text=json.dumps(
                             {
+                                "type": "final",
+                                "schema_version": "1",
                                 "status": "SUCCEEDED",
                                 "summary": "facts collected",
                                 "evidence_refs": [
@@ -835,6 +876,8 @@ def _golden_provider_and_adapter(
                     ProviderResponse(
                         text=json.dumps(
                             {
+                                "type": "final",
+                                "schema_version": "1",
                                 "status": "SUCCEEDED",
                                 "summary": "facts collected",
                                 "evidence_refs": [

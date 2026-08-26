@@ -175,6 +175,8 @@ def test_execute_agent_observation_drives_second_different_tool(
             ProviderResponse(
                 text=json.dumps(
                     {
+                        "type": "final",
+                        "schema_version": "1",
                         "status": "SUCCEEDED",
                         "summary": "facts collected",
                         "evidence_refs": [stock_digest],

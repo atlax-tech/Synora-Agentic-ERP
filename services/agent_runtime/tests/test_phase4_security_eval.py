@@ -120,6 +120,8 @@ def test_malicious_observation_stays_bounded_and_allowlist_unchanged() -> None:
             ProviderResponse(
                 text=json.dumps(
                     {
+                        "type": "final",
+                        "schema_version": "1",
                         "status": "SUCCEEDED",
                         "summary": "read-only fact",
                         "evidence_refs": [adapter.summary],
@@ -139,6 +141,8 @@ def test_malicious_observation_stays_bounded_and_allowlist_unchanged() -> None:
     first_provider.responses[1] = ProviderResponse(
         text=json.dumps(
             {
+                "type": "final",
+                "schema_version": "1",
                 "status": "SUCCEEDED",
                 "summary": "read-only fact",
                 "evidence_refs": [digest],

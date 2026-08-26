@@ -73,8 +73,10 @@ class NativeToolCallingLimits(BudgetLimits):
 class _ProviderFinalAnswer(StrictModel):
     """Strict wire shape accepted from a provider's final text response."""
 
-    type: Literal["final"] = "final"
-    schema_version: Literal["1"] = "1"
+    # Both discriminator fields are required on the provider wire. Defaults
+    # would turn a truncated or legacy response into an apparently valid answer.
+    type: Literal["final"]
+    schema_version: Literal["1"]
     status: Literal["SUCCEEDED", "NEEDS_INPUT", "FAILED"]
     summary: str = Field(min_length=1, max_length=4_000)
     evidence_refs: list[str] = Field(default_factory=list, max_length=32)
@@ -168,7 +170,7 @@ def _parse_final_text(text: str) -> FinalAnswer:
     )
 
 
-_NUMBER_TOKEN = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?")
+_NUMBER_TOKEN = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
 
 
 def _has_unsupported_numeric_claim(
@@ -182,7 +184,9 @@ def _has_unsupported_numeric_claim(
         for observation in observations
         if observation.ok and observation.digest in cited
     )
-    return any(number not in evidence_text for number in _NUMBER_TOKEN.findall(final.summary))
+    claimed_numbers = set(_NUMBER_TOKEN.findall(final.summary))
+    observed_numbers = set(_NUMBER_TOKEN.findall(evidence_text))
+    return not claimed_numbers.issubset(observed_numbers)
 
 
 def _stop(
