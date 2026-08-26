@@ -328,6 +328,16 @@ UV_CACHE_DIR=/private/tmp/synora-uv-cache uv run --offline --no-sync --python 3.
 - Runtime 全部测试：`120 passed`；Ruff、Ruff format 和 mypy targeted 检查通过。
 - 本 Assignment 不涉及 provider 请求、API key、allowlist、成本或 Gateway；P4.3 后续仍需完成 smolagents lab-only 对照与统一评测接入。
 
+## 9.1 P4.3 smolagents lab-only 对照（Agent 接手）
+
+状态：`COMPLETED_FOR_CURRENT_INCREMENT`。P4.3 的第三方对照不进入业务 Runtime，也不再向用户布置新的练习。适配器位于 `/Users/qilong.lu/WorkDir/atlax-tech/Synora-Agentic-ERP/labs/agent_patterns/smolagents_lab.py`，只接受 recorded `ToolAdapter`，把 smolagents 的结果转换为 Synora `RunResult`。
+
+- 依赖组 `lab` 固定 `smolagents` Git commit `30bb1161095d`，并已写入 `uv.lock`；默认 `dev`、Runtime 依赖和业务代码不导入它。
+- `ToolCallingAgent` 需要 Python 标识符工具名，因此适配器只在 lab 内把 `material_request.open` 等 canonical name 映射为 `material_request_open` 等别名，Trace 仍保存 canonical name。
+- wrapper 在调用 recorded adapter 前重新构造并校验 Synora `Action`，只返回 bounded Observation summary；重复调用、未知工具、非法参数和并行调用不会进入 ERP。
+- 只读取并记录 `MultiStepAgent`、`ToolCallingAgent`、`ActionStep` 和 `AgentMemory` 入口；不把 smolagents memory、raw prompt、隐藏 reasoning 或完整结果带入业务 Trace。
+- 测试使用 fake agent 和 recorded responses，CI 不安装付费模型、不访问网络、不交付 capability；真实 BYOK/Frappe 验证仍留在 P4.5 阶段门禁。
+
 ## 10. 启动门禁与人工核对（历史启动前说明）
 
 本节记录的是 Phase 4 启动前的门禁，当前阶段已经启动；不应覆盖上面的 P4.1/P4.2 实施状态。
