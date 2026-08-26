@@ -32,7 +32,7 @@
 
 - 仓库是 `MANAGED_HARNESS`；产品、架构、设计、开发、测试、验收、Roadmap 和 SPEC 已建立；
 - Phase 0–Phase 3 的出口证据已经形成；Phase 3 交付的是只读采购 Agent，出口复核已通过；Phase 4 尚未开始；
-- Phase 4 已按用户指令进入 `IN_PROGRESS / P4.2`；P4.1 契约、八个 golden cases 和四层纯函数评测基线已落地并通过当前 Runtime targeted tests；`docs/phase4-kickoff.md` 仍是边界、Assignment 和验收入口，已实现内容以当前 Runtime 测试与 Phase 4 日志为准；
+- Phase 4 已按用户指令进入 `IN_PROGRESS / P4.3`；P4.1 契约、八个 golden cases、四层纯函数评测基线和 P4.2 手写模式已落地并通过当前离线 Runtime 检查；P4.3 provider/native skeleton 已落地，Assignment 3 正等待用户完成；`docs/phase4-kickoff.md` 仍是边界、Assignment 和验收入口，已实现内容以当前 Runtime 测试与 Phase 4 日志为准；
 - 项目定位为“Agent 开发岗位学习仓库 + 真实 ERP 实践载体”；业务应用层与教学实验层共存于同一仓库和开发主线，不是两个仓库或长期分支；
 - `approval-workflow-mapping` 仍是启用 ERP 写入前的强制门禁，当前不得把 Proposed Action、Approval、Draft、Receipt 或其他写工具当作已实现能力；
 - Frappe/ERPNext 是只读上游依赖，不能修改其核心，也不能绕过其权限、校验、Workflow、事务和审计；
@@ -92,7 +92,7 @@
 
 - 实现、最小充分测试和必要契约文档放在同一增量；不为普通小修复单独同步 Harness/README。
 - 每个 commit 前只更新当前 Phase 的一份开发日志，在文件顶部追加一轮；格式见 `docs/development-log/README.md`。
-- 日志写业务结果、真实测试、手工验收、风险、Assignment、用户原话问题和学习说明，不复制完整 diff 或整段 Agent 对话；用户问题和阻塞点本身必须逐字保留。
+- 日志写业务结果、真实测试、手工验收、风险和必要的 Assignment/学习说明，不复制完整 diff 或 Agent 对话；只有用户明确要求记录时才保留问题、阻塞或反馈原文。
 - 使用一个小而完整的 Conventional Commit；不推送、不发布、不改写历史。
 - 阶段出口完成后停止，不自动进入下一阶段；出口前必须完成本节 4.6 的 Rubric、风险登记和独立对抗审查。
 
@@ -104,7 +104,7 @@
 - 可在练习入口添加 `TODO(learning)` 结构提示；练习完成后应删除或关闭，不能成为无人负责的生产 TODO。
 - 用户实现期间，Agent 默认只解释、给提示、审查和帮助定位；用户明确求助、任务确实超出能力或安全关键路径受阻时才接手。
 - 每轮交付先回答五个大白话问题：解决什么业务问题、用户看到什么、数据怎样流动、最重要的三个文件、怎样手工验证。
-- 用户提出的每个关键困惑、问题和阻塞点必须逐字写入当前 Phase 日志，并在其后记录证据、解释、结论和复习动作；阶段结束时基于真实工作定制一组项目/技术栈/Agent 开发问答并引导用户作答。
+- 用户明确要求记录的关键困惑、问题和阻塞点才逐字写入当前 Phase 日志，并在其后记录证据、解释、结论和复习动作；阶段结束时基于真实工作定制一组项目/技术栈/Agent 开发问答并引导用户作答。
 
 ### 4.5 成本预算与停止纠偏
 
@@ -114,7 +114,7 @@
 - **审查上限**：L1 不调用子 Agent；L2 默认最多一个独立 Test 或 Review；同一问题最多两轮，第三轮仍失败时停止调用并提交根因、证据和下一步，不靠堆 Agent 碰运气。
 - **30 分钟停止线**：连续 30 分钟没有业务代码、可运行测试、已确认决定或明确阻塞证据，必须暂停并回答“当前用户结果是什么、还缺什么、哪一步没有产生价值”，随后缩小范围或报告阻塞。
 - **文档比例提示**：普通实现若文档改动明显多于业务代码与测试，需要在日志解释；比例是跑偏提示，不是删除必要契约、安全说明或验收证据的理由。
-- **成本记账**：每轮记录大致耗时、Token（宿主可见时）、子 Agent 数、测试命令/次数，以及业务代码、测试、文档的改动量。数据只用于发现浪费，不作为跳过质量门禁的授权。
+- **成本记账**：每次正常开发日志更新时，记录该增量的大致耗时、Token（宿主可见时）、子 Agent 数、测试命令/次数，以及业务代码、测试、文档的改动量。数据只用于发现浪费，不作为跳过质量门禁的授权。
 - **Phase 3 评估**：P3.2–P3.7 每步默认最多一个主业务提交和一次必要 Harness 同步（优先阶段出口）；阶段出口用日志比较新旧流程的耗时、Token、审查次数和可见业务结果，再决定是否继续收紧。阶段出口必须按 4.6 打分，并自动执行 4.7 的独立对抗审查。
 
 预算超出不等于任务失败，但 Agent 必须在继续消耗前说明原因。权限、金额、ERP 写入、幂等、审计、安全、真实集成和阶段出口验证永远不因预算取消。
@@ -149,7 +149,7 @@
 每个阶段完成时按以下顺序执行，不能跳过最后一步：
 
 1. Execute 完成本阶段实现、Assignment 反馈、相关测试、手工验收和开发日志；日志保留真实失败与修复过程。
-2. Execute 生成阶段 Rubric、风险登记和阶段报告草稿，列出所有未运行检查、P2/P3 延期项、用户原话问题和定制问答。
+2. Execute 生成阶段 Rubric、风险登记和阶段报告草稿，列出所有未运行检查、P2/P3 延期项、用户明确要求记录的原话问题和定制问答。
 3. 自动启动一个独立对抗审查角色，输入需求、权威文档、最终 diff、测试输出、运行证据和阶段报告草稿；不输入 Execute 的辩护性结论作为唯一依据。
 4. 审查 `PASS`：更新阶段日志、Harness/README（若事实变化），提交阶段报告并停止。审查 `CHANGES_REQUIRED`：Execute 修复、重跑受影响检查，再进行最多两轮复查。审查 `BLOCKED` 或第三轮仍失败：阶段状态为 `BLOCKED`，交用户决定，不得进入下一阶段。
 5. 导师交付阶段问答：至少覆盖本阶段 5 个真实追问（业务、代码入口、信任边界、失败恢复、取舍/面试追问），先让用户作答，再给逐题提示和参考答案；未作答项保留为 `待练习`。
@@ -280,7 +280,7 @@
 
 - **P4.1 执行契约与评测基线**：`COMPLETED_FOR_CURRENT_INCREMENT`；已定义 Action、Observation、FinalAnswer、Error、StopReason 和 8 个 golden tasks，并建立 Component/Trajectory/Task/System 评测入口；阶段出口仍需全量证据。
 - **P4.2 手写模式实验**：`COMPLETED_FOR_CURRENT_INCREMENT`；在 `labs/agent_patterns/` 完成 Direct、bounded ReAct、Plan-and-Solve、Reflection 和采购版 MiniStepAgent 的离线 recorded 对照，并统一记录比较指标；阶段出口仍需全量证据。
-- **P4.3 原生 Tool Calling**：让模型在当前用户 read-tool allowlist 中动态选择工具，严格校验 tool name、schema、参数、权限、返回预算和错误语义。
+- **P4.3 原生 Tool Calling**：`IN_PROGRESS`；provider/native skeleton 已支持六类只读 function definitions、provider call id、tool result message、单调用拒绝并行、allowlist/schema/evidence 校验；Assignment 3 待用户完成，smolagents 对照和真实验证仍未开始。
 - **P4.4 循环与停止治理**：实现 max steps、相同参数重复、工具频率、无进展、token、成本、wall-clock、cancel 和 final-answer checks，保留明确 stop reason。
 - **P4.5 业务接入与 Trace UI**：至少一个真实只读任务必须根据第一次 observation 选择第二个不同工具；页面区分业务结论与可折叠 Trace。
 
@@ -370,7 +370,7 @@
 - ERP 上游是否保持干净；
 - 未运行检查、限制、未决项和被拒绝的技术；
 - 可重复人工验收步骤；
-- 本阶段每个步骤的 Assignment 完成情况、用户原话问题/卡点及导师解释；
+- 本阶段每个步骤的 Assignment 完成情况、用户明确要求记录的原话问题/卡点及导师解释；
 - 基于真实工作的至少 5 个面试问答练习和用户待练习项；
 - 下一阶段编号和为什么尚未开始。
 
