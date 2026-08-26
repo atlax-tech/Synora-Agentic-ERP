@@ -1,6 +1,6 @@
 # Phase 4 启动准备包
 
-状态：`IN_PROGRESS / P4.3`。用户于 2026-08-26 明确启动 Phase 4，并选择“Agent 搭骨架、用户完成小范围 Assignment、Agent 验收后继续”的协作方式。P4.1 契约、八个 case、四层评测基线和 P4.2 手写模式已通过当前离线 Runtime 检查；P4.3 Assignment 3 已完成并通过验收。文件中仍以 `PLANNED` 标记的目标路径、契约和用例不是已完成能力或验收证据。
+状态：`IN_PROGRESS / 阶段出口审查准备`。用户于 2026-08-26 明确要求本阶段由 Agent 全部接手，不再新增 Assignment。P4.1–P4.5 的实现、自动测试、Frappe app-test、真实 ERP P4-G01 和 Trace UI 证据已整理；最终状态须以独立对抗审查和出口收尾记录为准。文件中历史 Assignment/准备说明不替代当前 Phase 4 开发日志、测试和运行证据。
 
 ## 1. 业务问题与阶段边界
 
