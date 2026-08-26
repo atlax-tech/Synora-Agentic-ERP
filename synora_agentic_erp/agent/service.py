@@ -118,7 +118,7 @@ def _validate_trace_semantics(
     ):
         raise ValueError("trace terminal events are invalid")
     observed: dict[str, str] = {}
-    pending: str | None = None
+    pending: tuple[str, str, int] | None = None
     for event in events[1:-1]:
         kind = event.get("event_type")
         payload = event.get("payload")
@@ -127,18 +127,34 @@ def _validate_trace_semantics(
         if kind == "action.proposed":
             if pending is not None:
                 raise ValueError("trace action overlaps")
-            pending = "action"
+            tool_name, step = payload.get("tool_name"), payload.get("step")
+            if not isinstance(tool_name, str) or not isinstance(step, int) or isinstance(step, bool):
+                raise ValueError("trace action identity is invalid")
+            pending = ("action", tool_name, step)
         elif kind in {"action.validated", "action.rejected"}:
-            if kind == "action.validated" and pending != "action":
+            tool_name, step = payload.get("tool_name"), payload.get("step")
+            if kind == "action.validated" and (
+                pending is None
+                or pending[0] != "action"
+                or payload.get("tool_name") != pending[1]
+                or payload.get("step") != pending[2]
+            ):
                 raise ValueError("trace action transition is invalid")
-            pending = None
+            if kind == "action.validated":
+                pending = ("validated", tool_name, step)
+            else:
+                pending = None
         elif kind == "tool.started":
-            if pending not in {"action", None}:
+            if pending is None or pending[0] != "validated":
                 raise ValueError("trace tool transition is invalid")
-            pending = "tool"
+            if payload.get("tool_name") != pending[1] or payload.get("step") != pending[2]:
+                raise ValueError("trace tool ownership is invalid")
+            pending = ("tool", pending[1], pending[2])
         elif kind == "tool.observed":
-            if pending != "tool":
+            if pending is None or pending[0] != "tool":
                 raise ValueError("trace observation transition is invalid")
+            if payload.get("tool_name") != pending[1] or payload.get("step") != pending[2]:
+                raise ValueError("trace observation ownership is invalid")
             summary, digest = payload.get("summary"), payload.get("digest")
             if (
                 payload.get("ok") is not True
@@ -154,15 +170,17 @@ def _validate_trace_semantics(
             observed[digest] = summary
             pending = None
         elif kind == "tool.failed":
-            if pending != "tool":
+            if pending is None or pending[0] != "tool":
                 raise ValueError("trace tool failure transition is invalid")
+            if payload.get("tool_name") != pending[1] or payload.get("step") != pending[2]:
+                raise ValueError("trace failure ownership is invalid")
             pending = None
         elif kind == "final.proposed":
             if pending is not None:
                 raise ValueError("trace final transition is invalid")
-            pending = "final"
+            pending = ("final", "", 0)
         elif kind in {"final.validated", "final.rejected"}:
-            if kind == "final.validated" and pending != "final":
+            if kind == "final.validated" and (pending is None or pending[0] != "final"):
                 raise ValueError("trace final validation transition is invalid")
             pending = None
         elif kind == "run.stopped":
