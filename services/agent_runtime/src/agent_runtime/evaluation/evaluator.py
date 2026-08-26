@@ -56,11 +56,7 @@ def _actual_tool_sequence(result: RunResult) -> tuple[str, ...]:
             continue
         step = event.payload.get("step")
         tool_name = event.payload.get("tool_name")
-        if (
-            isinstance(step, int)
-            and not isinstance(step, bool)
-            and isinstance(tool_name, str)
-        ):
+        if isinstance(step, int) and not isinstance(step, bool) and isinstance(tool_name, str):
             validated_actions.add((step, tool_name))
 
     actual_tools: list[str] = []
