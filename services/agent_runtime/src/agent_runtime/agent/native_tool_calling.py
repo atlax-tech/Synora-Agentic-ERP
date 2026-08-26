@@ -8,14 +8,17 @@ existing Gateway ToolCall union both accept it.
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 from collections.abc import Callable
 from time import monotonic
 from typing import cast
 from uuid import UUID
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ValidationError
 
+from agent_runtime.agent.budget import BudgetAccount, BudgetLimits, Pricing
 from agent_runtime.agent.contracts import (
     Action,
     BudgetSnapshot,
@@ -25,13 +28,13 @@ from agent_runtime.agent.contracts import (
     RunResult,
     StopCode,
     StopReason,
-    StrictModel,
     ToolName,
     TraceRecorder,
     UsageSnapshot,
     observation_from_summary,
     validate_action_tool,
 )
+from agent_runtime.agent.guards import NoProgressGuard, RepeatedCallGuard, ToolFrequencyGuard
 from agent_runtime.agent.kernel import ToolAdapter, ToolExecutionFailure
 from agent_runtime.gateway import (
     ItemLookupInput,
@@ -41,12 +44,7 @@ from agent_runtime.gateway import (
     ProjectedStockInput,
     SupplierLookupInput,
 )
-from agent_runtime.providers import (
-    Provider,
-    ProviderMessage,
-    ProviderResponse,
-    ProviderToolSpec,
-)
+from agent_runtime.providers import Provider, ProviderMessage, ProviderToolSpec
 
 READ_TOOL_NAMES: tuple[ToolName, ...] = (
     "item.lookup",
@@ -58,11 +56,8 @@ READ_TOOL_NAMES: tuple[ToolName, ...] = (
 )
 
 
-class NativeToolCallingLimits(StrictModel):
-    """Small P4.3 limits; P4.4 owns the complete budget policy."""
-
-    max_steps: int = Field(default=6, ge=1, le=64)
-    max_output_tokens: int = Field(default=512, ge=1, le=512)
+class NativeToolCallingLimits(BudgetLimits):
+    """Balanced P4.4 limits used by the native provider path."""
 
 
 _TOOL_INPUTS: dict[ToolName, type[BaseModel]] = {
@@ -109,18 +104,6 @@ def build_tool_result_message(
     )
 
 
-class _SetRepeatGuard:
-    def __init__(self) -> None:
-        self._seen: set[str] = set()
-
-    def check(self, action: Action) -> bool:
-        key = action.call_key()
-        if key in self._seen:
-            return True
-        self._seen.add(key)
-        return False
-
-
 def _reject_constant(value: str) -> None:
     raise ValueError(f"non-standard JSON constant: {value}")
 
@@ -165,15 +148,6 @@ def _parse_final_text(text: str) -> FinalAnswer:
     return FinalAnswer.model_validate(values)
 
 
-def _usage(response: ProviderResponse, current: UsageSnapshot) -> UsageSnapshot:
-    return UsageSnapshot(
-        prompt_tokens=current.prompt_tokens + response.prompt_tokens,
-        completion_tokens=current.completion_tokens + response.completion_tokens,
-        reasoning_tokens=current.reasoning_tokens + response.reasoning_tokens,
-        cost_microusd=current.cost_microusd,
-    )
-
-
 def _stop(
     *,
     recorder: TraceRecorder,
@@ -183,6 +157,7 @@ def _stop(
     detail: str,
     started: float,
     usage: UsageSnapshot,
+    elapsed_ms: int | None = None,
     final_answer: FinalAnswer | None = None,
 ) -> RunResult:
     del run_id
@@ -196,7 +171,11 @@ def _stop(
             completion_tokens=usage.completion_tokens,
             reasoning_tokens=usage.reasoning_tokens,
             cost_microusd=usage.cost_microusd,
-            elapsed_ms=max(0, int((monotonic() - started) * 1000)),
+            elapsed_ms=(
+                elapsed_ms
+                if elapsed_ms is not None
+                else max(0, int((monotonic() - started) * 1000))
+            ),
         ),
     )
     if final_answer is not None:
@@ -212,7 +191,7 @@ def _stop(
     )
 
 
-async def run_native_tool_calling(
+async def _run_native_tool_calling(
     *,
     run_id: UUID,
     correlation_id: UUID,
@@ -222,11 +201,20 @@ async def run_native_tool_calling(
     allowed_tools: frozenset[ToolName],
     limits: NativeToolCallingLimits | None = None,
     cancelled: Callable[[], bool] | None = None,
+    pricing: Pricing | None = None,
+    require_pricing: bool = False,
+    clock: Callable[[], float] = monotonic,
 ) -> RunResult:
-    """Execute one-at-a-time native tool calls with typed local guards."""
+    """Execute one-at-a-time native tool calls with the P4.4 budget policy."""
     effective_limits = limits or NativeToolCallingLimits()
-    started = monotonic()
-    usage = UsageSnapshot()
+    started = clock()
+    account = BudgetAccount(
+        limits=effective_limits,
+        pricing=pricing,
+        require_pricing=require_pricing,
+        started=started,
+        clock=clock,
+    )
     recorder = TraceRecorder(run_id)
     recorder.add(
         "run.started",
@@ -245,7 +233,9 @@ async def run_native_tool_calling(
         ProviderMessage(role="user", content=goal),
     ]
     observations: list[Observation] = []
-    guard = _SetRepeatGuard()
+    repeat_guard = RepeatedCallGuard()
+    frequency_guard = ToolFrequencyGuard(max_calls_per_tool=effective_limits.max_calls_per_tool)
+    no_progress_guard = NoProgressGuard(threshold=effective_limits.no_progress_threshold)
 
     for step in range(1, effective_limits.max_steps + 1):
         if cancelled is not None and cancelled():
@@ -256,16 +246,73 @@ async def run_native_tool_calling(
                 step=step,
                 detail="execution was cancelled",
                 started=started,
-                usage=usage,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
+        budget_code = account.preflight(messages=messages, tools=tools)
+        if budget_code is not None:
+            recorder.add(
+                "guard.checked",
+                {"step": step, "guard": budget_code, "allowed": False},
+            )
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code=budget_code,
+                step=step,
+                detail="budget preflight failed before provider call",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
+        remaining_seconds = max(
+            0.0,
+            (effective_limits.max_wall_time_ms - account.elapsed_ms()) / 1000,
+        )
+        if remaining_seconds <= 0:
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="WALL_TIME_BUDGET",
+                step=step,
+                detail="wall-clock budget expired before provider call",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
             )
         recorder.add("model.requested", {"step": step, "tool_count": len(tools)})
         try:
-            response = await provider.complete(
-                messages,
-                tools=list(tools),
-                max_tokens=effective_limits.max_output_tokens,
+            response = await asyncio.wait_for(
+                provider.complete(
+                    messages,
+                    tools=list(tools),
+                    max_tokens=effective_limits.max_output_tokens,
+                ),
+                timeout=remaining_seconds,
             )
-            usage = _usage(response, usage)
+            budget_code = account.record(response)
+        except TimeoutError:
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="WALL_TIME_BUDGET",
+                step=step,
+                detail="provider call exceeded the wall-clock budget",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
+        except asyncio.CancelledError:
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="CANCELLED",
+                step=step,
+                detail="provider call was cancelled",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
         except Exception:
             return _stop(
                 recorder=recorder,
@@ -274,7 +321,35 @@ async def run_native_tool_calling(
                 step=step,
                 detail="native provider failed",
                 started=started,
-                usage=usage,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
+
+        if budget_code is not None:
+            recorder.add(
+                "guard.checked",
+                {"step": step, "guard": budget_code, "allowed": False},
+            )
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code=budget_code,
+                step=step,
+                detail="provider usage exceeded the bounded run budget",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
+        if cancelled is not None and cancelled():
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="CANCELLED",
+                step=step,
+                detail="execution was cancelled after provider response",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
             )
 
         if len(response.tool_calls) > 1:
@@ -286,12 +361,13 @@ async def run_native_tool_calling(
                 step=step,
                 detail="parallel tool calls are not supported",
                 started=started,
-                usage=usage,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
             )
         if not response.tool_calls:
             try:
                 final = _parse_final_text(response.text)
-            except ValueError, TypeError, ValidationError:
+            except (ValueError, TypeError, ValidationError):
                 recorder.add("final.rejected", {"step": step, "reason": "invalid final JSON"})
                 return _stop(
                     recorder=recorder,
@@ -300,7 +376,8 @@ async def run_native_tool_calling(
                     step=step,
                     detail="native provider final answer was not typed JSON",
                     started=started,
-                    usage=usage,
+                    usage=account.usage,
+                    elapsed_ms=account.elapsed_ms(),
                 )
             recorder.add(
                 "final.proposed",
@@ -316,7 +393,8 @@ async def run_native_tool_calling(
                     step=step,
                     detail="final answer did not cite an observed digest",
                     started=started,
-                    usage=usage,
+                    usage=account.usage,
+                    elapsed_ms=account.elapsed_ms(),
                 )
             recorder.add("final.validated", {"step": step})
             return _stop(
@@ -326,7 +404,8 @@ async def run_native_tool_calling(
                 step=step,
                 detail="validated native final answer",
                 started=started,
-                usage=usage,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
                 final_answer=final,
             )
 
@@ -344,7 +423,8 @@ async def run_native_tool_calling(
                 step=step,
                 detail="native tool is outside the current allowlist",
                 started=started,
-                usage=usage,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
             )
         try:
             arguments = _parse_arguments(provider_call.arguments)
@@ -355,7 +435,7 @@ async def run_native_tool_calling(
                 correlation_id=correlation_id,
             )
             validate_action_tool(action)
-        except ValidationError, TypeError, ValueError:
+        except (ValidationError, TypeError, ValueError):
             recorder.add("action.rejected", {"step": step, "reason": "invalid tool arguments"})
             return _stop(
                 recorder=recorder,
@@ -364,10 +444,11 @@ async def run_native_tool_calling(
                 step=step,
                 detail="native tool arguments failed typed validation",
                 started=started,
-                usage=usage,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
             )
         recorder.add("action.validated", {"step": step, "tool_name": action.tool_name})
-        if guard.check(action):
+        if repeat_guard.check(action):
             recorder.add(
                 "guard.checked",
                 {"step": step, "guard": "repeated_call", "allowed": False},
@@ -379,12 +460,83 @@ async def run_native_tool_calling(
                 step=step,
                 detail="the same native tool call was already used",
                 started=started,
-                usage=usage,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
             )
+        if frequency_guard.check(action):
+            recorder.add(
+                "guard.checked",
+                {
+                    "step": step,
+                    "guard": "tool_frequency",
+                    "allowed": False,
+                    "count": frequency_guard.count(action.tool_name),
+                },
+            )
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="TOOL_FREQUENCY",
+                step=step,
+                detail="the same tool exceeded its per-run call frequency",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
+        recorder.add(
+            "guard.checked",
+            {
+                "step": step,
+                "guard": "tool_frequency",
+                "allowed": True,
+                "count": frequency_guard.count(action.tool_name),
+            },
+        )
         recorder.add("guard.checked", {"step": step, "guard": "repeated_call", "allowed": True})
         recorder.add("tool.started", {"step": step, "tool_name": action.tool_name})
+        remaining_seconds = max(
+            0.0,
+            (effective_limits.max_wall_time_ms - account.elapsed_ms()) / 1000,
+        )
+        if remaining_seconds <= 0:
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="WALL_TIME_BUDGET",
+                step=step,
+                detail="wall-clock budget expired before tool call",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
         try:
-            observation = await tool_adapter.execute(action)
+            observation = await asyncio.wait_for(
+                tool_adapter.execute(action),
+                timeout=remaining_seconds,
+            )
+        except TimeoutError:
+            recorder.add("tool.failed", {"step": step, "tool_name": action.tool_name})
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="WALL_TIME_BUDGET",
+                step=step,
+                detail="tool call exceeded the wall-clock budget",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
+        except asyncio.CancelledError:
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="CANCELLED",
+                step=step,
+                detail="tool call was cancelled",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
         except ToolExecutionFailure as error:
             observation = observation_from_summary(
                 run_id=run_id,
@@ -407,7 +559,8 @@ async def run_native_tool_calling(
                 step=step,
                 detail="native tool adapter returned a classified failure",
                 started=started,
-                usage=usage,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
             )
         except Exception:
             recorder.add("tool.failed", {"step": step, "tool_name": action.tool_name})
@@ -418,7 +571,8 @@ async def run_native_tool_calling(
                 step=step,
                 detail="native tool adapter failed",
                 started=started,
-                usage=usage,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
             )
         if observation.tool_name != action.tool_name or observation.step != step:
             recorder.add(
@@ -436,7 +590,8 @@ async def run_native_tool_calling(
                 step=step,
                 detail="native observation did not match the action context",
                 started=started,
-                usage=usage,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
             )
         observations.append(observation)
         recorder.add(
@@ -449,6 +604,57 @@ async def run_native_tool_calling(
                 "summary": observation.summary,
             },
         )
+        if no_progress_guard.check(observation):
+            recorder.add(
+                "guard.checked",
+                {
+                    "step": step,
+                    "guard": "no_progress",
+                    "allowed": False,
+                    "stale_count": no_progress_guard.stale_count,
+                },
+            )
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="NO_PROGRESS",
+                step=step,
+                detail="observations produced no new digest",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
+        recorder.add(
+            "guard.checked",
+            {
+                "step": step,
+                "guard": "no_progress",
+                "allowed": True,
+                "stale_count": no_progress_guard.stale_count,
+            },
+        )
+        if cancelled is not None and cancelled():
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="CANCELLED",
+                step=step,
+                detail="execution was cancelled after tool response",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
+        if account.elapsed_ms() >= effective_limits.max_wall_time_ms:
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code="WALL_TIME_BUDGET",
+                step=step,
+                detail="wall-clock budget expired after tool response",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
         messages.append(
             ProviderMessage(
                 role="assistant",
@@ -471,5 +677,55 @@ async def run_native_tool_calling(
         step=effective_limits.max_steps,
         detail="maximum native tool-calling steps reached",
         started=started,
-        usage=usage,
+        usage=account.usage,
+        elapsed_ms=account.elapsed_ms(),
     )
+
+
+async def _close_resource(resource: object) -> None:
+    """Close owned clients on every terminal path without leaking exceptions."""
+    for method_name in ("aclose", "close"):
+        method = getattr(resource, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            result = method()
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            pass
+        return
+
+
+async def run_native_tool_calling(
+    *,
+    run_id: UUID,
+    correlation_id: UUID,
+    goal: str,
+    provider: Provider,
+    tool_adapter: ToolAdapter,
+    allowed_tools: frozenset[ToolName],
+    limits: NativeToolCallingLimits | None = None,
+    cancelled: Callable[[], bool] | None = None,
+    pricing: Pricing | None = None,
+    require_pricing: bool = False,
+    clock: Callable[[], float] = monotonic,
+) -> RunResult:
+    """Run native calling and always close provider/tool clients afterwards."""
+    try:
+        return await _run_native_tool_calling(
+            run_id=run_id,
+            correlation_id=correlation_id,
+            goal=goal,
+            provider=provider,
+            tool_adapter=tool_adapter,
+            allowed_tools=allowed_tools,
+            limits=limits,
+            cancelled=cancelled,
+            pricing=pricing,
+            require_pricing=require_pricing,
+            clock=clock,
+        )
+    finally:
+        await _close_resource(provider)
+        await _close_resource(tool_adapter)

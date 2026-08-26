@@ -374,7 +374,7 @@ class GatewayClient:
             if not isinstance(response_payload, dict) or set(response_payload) != {"message"}:
                 raise ValueError
             envelope = _ENVELOPE_ADAPTER.validate_python(response_payload["message"])
-        except ValueError, TypeError, RecursionError:
+        except (ValueError, TypeError, RecursionError):
             body.clear()
             if isinstance(response_payload, (dict, list)):
                 response_payload.clear()

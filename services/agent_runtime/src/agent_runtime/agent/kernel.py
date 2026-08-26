@@ -30,6 +30,7 @@ from agent_runtime.agent.contracts import (
     observation_from_summary,
     validate_action_tool,
 )
+from agent_runtime.agent.guards import NoProgressGuard, ToolFrequencyGuard
 from agent_runtime.providers import ProviderMessage, ProviderToolSpec
 
 
@@ -37,6 +38,9 @@ class KernelLimits(StrictModel):
     """P4.2 limits; P4.4 adds the full token/cost/time policy."""
 
     max_steps: int = Field(default=6, ge=1, le=64)
+    max_wall_time_ms: int = Field(default=180_000, ge=1, le=180_000)
+    max_calls_per_tool: int = Field(default=3, ge=1, le=3)
+    no_progress_threshold: int = Field(default=2, ge=1, le=2)
 
 
 class ModelAdapter(Protocol):
@@ -104,6 +108,7 @@ def _stop(
         "WALL_TIME_BUDGET",
         "CANCELLED",
         "TOOL_NOT_ALLOWED",
+        "TOOL_FREQUENCY",
         "INVALID_TOOL_ARGS",
         "TOOL_ERROR",
         "MODEL_ERROR",
@@ -175,6 +180,8 @@ async def run_bounded_react(
     limits: KernelLimits | None = None,
     cancelled: Callable[[], bool] | None = None,
     goal: str = "Complete the supplied procurement goal.",
+    no_progress_guard: NoProgressGuard | None = None,
+    tool_frequency_guard: ToolFrequencyGuard | None = None,
 ) -> RunResult:
     """Run a short prompt-oriented ReAct loop over typed read tools."""
     effective_limits = limits or KernelLimits()
@@ -189,6 +196,12 @@ async def run_bounded_react(
         ProviderMessage(role="user", content=goal),
     ]
     observations: list[Observation] = []
+    progress_guard = no_progress_guard or NoProgressGuard(
+        threshold=effective_limits.no_progress_threshold
+    )
+    frequency_guard = tool_frequency_guard or ToolFrequencyGuard(
+        max_calls_per_tool=effective_limits.max_calls_per_tool
+    )
 
     for step in range(1, effective_limits.max_steps + 1):
         if cancelled is not None and cancelled():
@@ -200,10 +213,28 @@ async def run_bounded_react(
                 detail="execution was cancelled",
                 started=started,
             )
+        if max(0, int((monotonic() - started) * 1000)) >= effective_limits.max_wall_time_ms:
+            return _stop(
+                recorder=recorder,
+                mode="AGENT",
+                code="WALL_TIME_BUDGET",
+                step=step,
+                detail="wall-clock budget expired before model call",
+                started=started,
+            )
         recorder.add("model.requested", {"step": step, "tool_count": len(tools)})
         try:
             raw = await model.next(messages=tuple(messages), tools=tools, step=step)
             decision = _decode(raw, correlation_id=correlation_id, step=step)
+            if cancelled is not None and cancelled():
+                return _stop(
+                    recorder=recorder,
+                    mode="AGENT",
+                    code="CANCELLED",
+                    step=step,
+                    detail="execution was cancelled after model response",
+                    started=started,
+                )
         except ValidationError, TypeError, ValueError:
             recorder.add("final.rejected", {"step": step, "reason": "invalid model decision"})
             return _stop(
@@ -229,7 +260,7 @@ async def run_bounded_react(
                 "final.proposed",
                 {"step": step, "evidence_refs": list(decision.evidence_refs)},
             )
-            known_digests = {observation.digest for observation in observations}
+            known_digests = {observation.digest for observation in observations if observation.ok}
             if not decision.evidence_refs or not set(decision.evidence_refs).issubset(
                 known_digests
             ):
@@ -327,6 +358,33 @@ async def run_bounded_react(
                 started=started,
             )
         recorder.add("guard.checked", {"step": step, "guard": "repeated_call", "allowed": True})
+        if frequency_guard.check(action):
+            recorder.add(
+                "guard.checked",
+                {
+                    "step": step,
+                    "guard": "tool_frequency",
+                    "allowed": False,
+                    "count": frequency_guard.count(action.tool_name),
+                },
+            )
+            return _stop(
+                recorder=recorder,
+                mode="AGENT",
+                code="TOOL_FREQUENCY",
+                step=step,
+                detail="the same tool exceeded its per-run call frequency",
+                started=started,
+            )
+        recorder.add(
+            "guard.checked",
+            {
+                "step": step,
+                "guard": "tool_frequency",
+                "allowed": True,
+                "count": frequency_guard.count(action.tool_name),
+            },
+        )
         recorder.add("tool.started", {"step": step, "tool_name": action.tool_name})
         try:
             observation = await tool_adapter.execute(action)
@@ -367,6 +425,15 @@ async def run_bounded_react(
                 detail="tool adapter failed",
                 started=started,
             )
+        if cancelled is not None and cancelled():
+            return _stop(
+                recorder=recorder,
+                mode="AGENT",
+                code="CANCELLED",
+                step=step,
+                detail="execution was cancelled after tool response",
+                started=started,
+            )
         if observation.tool_name != action.tool_name or observation.step != step:
             recorder.add(
                 "tool.failed",
@@ -393,6 +460,33 @@ async def run_bounded_react(
                 "ok": observation.ok,
                 "digest": observation.digest,
                 "summary": observation.summary,
+            },
+        )
+        if progress_guard.check(observation):
+            recorder.add(
+                "guard.checked",
+                {
+                    "step": step,
+                    "guard": "no_progress",
+                    "allowed": False,
+                    "stale_count": progress_guard.stale_count,
+                },
+            )
+            return _stop(
+                recorder=recorder,
+                mode="AGENT",
+                code="NO_PROGRESS",
+                step=step,
+                detail="observations produced no new digest",
+                started=started,
+            )
+        recorder.add(
+            "guard.checked",
+            {
+                "step": step,
+                "guard": "no_progress",
+                "allowed": True,
+                "stale_count": progress_guard.stale_count,
             },
         )
         messages.append(

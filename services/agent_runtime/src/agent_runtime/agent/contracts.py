@@ -44,6 +44,7 @@ StopCode = Literal[
     "WALL_TIME_BUDGET",
     "CANCELLED",
     "TOOL_NOT_ALLOWED",
+    "TOOL_FREQUENCY",
     "INVALID_TOOL_ARGS",
     "TOOL_ERROR",
     "MODEL_ERROR",
