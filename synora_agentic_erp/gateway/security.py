@@ -19,7 +19,6 @@ from synora_agentic_erp.gateway.contract import GatewayFault
 CAPABILITY_AUDIENCE = "synora-agent-runtime"
 CAPABILITY_TTL = timedelta(minutes=5)
 EXECUTION_MODES = frozenset({"DETERMINISTIC", "AGENT"})
-CAPABILITY_FIELDS = frozenset({"capability_digest", "issued_at", "expires_at"})
 
 
 @dataclass(frozen=True)
