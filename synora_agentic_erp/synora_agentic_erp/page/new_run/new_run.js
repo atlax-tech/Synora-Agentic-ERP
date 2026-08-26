@@ -51,6 +51,15 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 		fieldtype: "Int",
 		default: 90,
 	});
+	page.execution_mode_field = page.add_field({
+		fieldname: "execution_mode",
+		label: __("分析模式"),
+		fieldtype: "Select",
+		options: "DETERMINISTIC\nAGENT",
+		default: "DETERMINISTIC",
+		description: __("确定性分析计算业务结论；Agent 动态分析只做只读探索，最终仍由确定性代码收口。"),
+	});
+	page.execution_mode_field.set_value("DETERMINISTIC");
 
 	page.status_area = $('<div style="padding: 0 8px 8px;" aria-live="polite"></div>');
 	page.main.append(page.status_area);
@@ -145,6 +154,11 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 			set_status(__("时间窗口需为 1–365 之间的天数。"), "danger");
 			return;
 		}
+		const execution_mode = page.execution_mode_field.value || "DETERMINISTIC";
+		if (execution_mode !== "DETERMINISTIC" && execution_mode !== "AGENT") {
+			set_status(__("分析模式无效，请重新选择。"), "danger");
+			return;
+		}
 		// 提交中: 禁止重复提交 (PRD F-001 交互处理)
 		page.btn_primary.attr("disabled", true);
 		page.btn_primary.html('<span class="spinner-border spinner-border-sm"></span> ' + __("正在创建运行…"));
@@ -152,6 +166,7 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 			company: company,
 			goal: goal,
 			time_window_days: days,
+			execution_mode: execution_mode,
 		};
 		if (page.warehouse_field.value) {
 			args.warehouse = page.warehouse_field.value;

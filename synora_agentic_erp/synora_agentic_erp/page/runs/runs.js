@@ -20,6 +20,50 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		DECLINED: __("已拒绝"),
 		EXPIRED: __("已过期"),
 	};
+	const EXECUTION_MODE_COPY = {
+		DETERMINISTIC: __("确定性分析"),
+		AGENT: __("Agent 动态分析"),
+	};
+	const AGENT_STATUS_COPY = {
+		NOT_STARTED: __("未开始"),
+		SUCCEEDED: __("探索完成"),
+		FALLBACK: __("已回退到确定性分析"),
+		FAILED: __("探索失败"),
+		UNAVAILABLE: __("Trace 不可用"),
+	};
+	const TRACE_STOP_COPY = {
+		FINAL_ANSWER: __("Agent 完成探索"),
+		MODEL_ERROR: __("模型错误"),
+		REPEATED_CALL: __("重复调用"),
+		NO_PROGRESS: __("观察结果无进展"),
+		TOKEN_BUDGET: __("Token 预算已到"),
+		COST_BUDGET: __("成本预算已到"),
+		WALL_TIME_BUDGET: __("时间预算已到"),
+		MAX_STEPS: __("步骤预算已到"),
+		TOOL_NOT_ALLOWED: __("工具不在允许范围"),
+		TOOL_FREQUENCY: __("工具调用频率超限"),
+		INVALID_TOOL_ARGS: __("工具参数无效"),
+		UNSUPPORTED_FINAL_ANSWER: __("最终答案缺少证据"),
+		TOOL_ERROR: __("只读工具失败"),
+		CANCELLED: __("运行已取消"),
+		TRACE_INVALID: __("Trace 数据不可用"),
+	};
+	const TRACE_EVENT_COPY = {
+		"run.started": __("运行开始"),
+		"model.requested": __("请求模型"),
+		"action.proposed": __("模型提出动作"),
+		"action.validated": __("动作通过校验"),
+		"action.rejected": __("动作被拒绝"),
+		"tool.started": __("调用只读工具"),
+		"tool.observed": __("收到观察结果"),
+		"tool.failed": __("只读工具失败"),
+		"guard.checked": __("守卫检查"),
+		"final.proposed": __("提出最终答案"),
+		"final.validated": __("最终答案通过校验"),
+		"final.rejected": __("最终答案被拒绝"),
+		"run.stopped": __("运行停止"),
+	};
+	const TRACE_SENSITIVE_KEY = /(?:secret|password|passwd|token|capability|api[_-]?key|authorization|cookie|prompt)/i;
 	// P3.3 确定性风险判定文案
 	const RISK_COPY = {
 		SHORTAGE: __("缺货"),
@@ -37,6 +81,164 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 
 	function esc(value) {
 		return frappe.utils.escape_html(value === null || value === undefined ? "" : value);
+	}
+
+	function safe_payload_text(value) {
+		if (value === null || value === undefined) {
+			return "";
+		}
+		if (typeof value === "string") {
+			return value;
+		}
+		try {
+			return JSON.stringify(value);
+		} catch (_error) {
+			return "[unavailable]";
+		}
+	}
+
+	function render_trace_payload(payload) {
+		if (!payload || typeof payload !== "object") {
+			return '<span class="text-muted">' + __("无附加信息") + "</span>";
+		}
+		const fields = Object.keys(payload)
+			.filter(function (key) {
+				return !TRACE_SENSITIVE_KEY.test(key);
+			})
+			.map(function (key) {
+				return esc(key) + ": " + esc(safe_payload_text(payload[key]));
+			})
+			.filter(Boolean);
+		return fields.length
+			? fields.join(" · ")
+			: '<span class="text-muted">' + __("无附加信息") + "</span>";
+	}
+
+	function render_trace_events(events) {
+		if (!events || !events.length) {
+			return '<div class="text-muted py-2">' + __("暂无 Trace 事件。") + "</div>";
+		}
+		return events
+			.map(function (event) {
+				const event_type = typeof event.event_type === "string" ? event.event_type : "unknown";
+				const label = TRACE_EVENT_COPY[event_type] || esc(event_type);
+				return (
+					'<article class="border rounded p-2 mb-2" style="overflow-wrap:anywhere;">' +
+					'<div><b>' +
+					label +
+					"</b> <span class=\"text-muted small\">#" +
+					esc(event.sequence) +
+					" · " +
+					esc(event.timestamp) +
+					"</span></div>" +
+					'<div class="small text-muted mt-1">' +
+					render_trace_payload(event.payload) +
+					"</div></article>"
+				);
+			})
+			.join("");
+	}
+
+	function render_trace_content(wrapper, trace) {
+		if (!trace) {
+			wrapper.html('<div class="text-muted py-2">' + __("暂无 Agent Trace。") + "</div>");
+			return;
+		}
+		const stop_reason = trace.stop_reason || {};
+		const stop_code = stop_reason.code || "TRACE_INVALID";
+		const usage = trace.usage || {};
+		const summary =
+			'<div class="small mb-2" role="status">' +
+			"<b>" +
+			__("停止原因") +
+			":</b> " +
+			esc(TRACE_STOP_COPY[stop_code] || stop_code) +
+			(stop_reason.detail ? " — " + esc(stop_reason.detail) : "") +
+			"</div>" +
+			'<div class="small text-muted mb-2">' +
+			__("Provider") +
+			": " +
+			esc(trace.provider) +
+			" · " +
+			__("Model") +
+			": " +
+			esc(trace.model || __("未配置")) +
+			" · " +
+			__("步骤") +
+			": " +
+			esc(trace.events_count) +
+			" · " +
+			__("Token") +
+			": " +
+			esc(usage.prompt_tokens || 0) +
+			" / " +
+			esc(usage.completion_tokens || 0) +
+			" / " +
+			esc(usage.reasoning_tokens || 0) +
+			" · " +
+			__("成本") +
+			": " +
+			esc(usage.cost_microusd || 0) +
+			" micro-USD · " +
+			esc(trace.elapsed_ms || 0) +
+			"ms</div>";
+		wrapper.html(summary + render_trace_events(trace.events || []));
+	}
+
+	function load_trace(run_id, wrapper, button) {
+		wrapper.html('<div class="text-muted py-2">' + __("加载 Trace…") + "</div>");
+		button.attr("disabled", true);
+		frappe.call({
+			method: "synora_agentic_erp.api.get_run_trace",
+			args: { run_id: run_id, limit: 200, offset: 0 },
+			type: "GET",
+			callback: function (r) {
+				button.attr("disabled", false).data("loaded", true);
+				if (!r.message || !r.message.ok) {
+					wrapper.html('<div class="text-danger py-2" role="status">' + __("Trace 读取失败，请稍后重试。") + "</div>");
+					return;
+				}
+				render_trace_content(wrapper, r.message.trace);
+			},
+			error: function () {
+				button.attr("disabled", false);
+				wrapper.html('<div class="text-danger py-2" role="status">' + __("Trace 读取失败，请稍后重试。") + "</div>");
+			},
+		});
+	}
+
+	function build_trace_panel(run) {
+		if (run.execution_mode !== "AGENT") {
+			return "";
+		}
+		const trace_id = "agent-trace-" + String(run.run_id).replace(/[^a-zA-Z0-9_-]/g, "");
+		const status = run.agent_status || "NOT_STARTED";
+		const status_copy = AGENT_STATUS_COPY[status] || status;
+		return (
+			'<section class="agent-trace mt-3" aria-labelledby="' +
+			trace_id +
+			'-label">' +
+			'<h5 id="' +
+			trace_id +
+			'-label">' +
+			__("Agent Trace") +
+			"</h5>" +
+			'<div class="small text-muted mb-2" role="status">' +
+			__("Agent 结果") +
+			": " +
+			esc(status_copy) +
+			"</div>" +
+			'<button type="button" class="btn btn-light btn-sm trace-toggle" aria-expanded="false" aria-controls="' +
+			trace_id +
+			'-content" data-run="' +
+			esc(run.run_id) +
+			'">' +
+			__("展开 Agent Trace") +
+			"</button>" +
+			'<div id="' +
+			trace_id +
+			'-content" class="mt-2" hidden></div></section>'
+		);
 	}
 
 	function refresh() {
@@ -68,33 +270,43 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			.map(function (run) {
 				const raw_goal = typeof run.goal === "string" ? run.goal : "";
 				const goal = raw_goal.length > 80 ? raw_goal.slice(0, 80) + "…" : raw_goal;
-			const mine = run.initiator === current_user;
-			const cancellable = (run.run_state === "CREATED" || run.run_state === "ANALYZING") && mine;
-			const analyzable = run.run_state === "CREATED" && mine;
-			const plannable = run.run_state === "PROPOSED" && mine;
-			const analyze_btn = analyzable
-				? '<button class="btn btn-primary btn-xs analyze-run" data-run="' +
-				  esc(run.run_id) +
-				  '">' +
-				  __("开始分析") +
-				  "</button> "
-				: "";
-			const plan_btn = plannable
-				? '<button class="btn btn-success btn-xs plan-run" data-run="' +
-				  esc(run.run_id) +
-				  '">' +
-				  __("生成计划") +
-				  "</button> "
-				: "";
-			const cancel_btn = cancellable
-				? '<button class="btn btn-secondary btn-xs cancel-run" data-run="' +
-				  esc(run.run_id) +
-				  '">' +
-				  __("取消") +
-				  "</button>"
-				: "";
-				const detail_btn = '<button class="btn btn-light btn-xs show-detail" data-run="' + esc(run.run_id) + '">' + __("详情") + "</button>";
-				const scope = run.company_scope + (run.warehouse_scope ? " / " + run.warehouse_scope : __(" / 全部仓库"));
+				const mode = run.execution_mode || "DETERMINISTIC";
+				const agent_status = run.agent_status || "NOT_STARTED";
+				const mine = run.initiator === current_user;
+				const cancellable =
+					(run.run_state === "CREATED" || run.run_state === "ANALYZING") && mine;
+				const analyzable = run.run_state === "CREATED" && mine;
+				const plannable = run.run_state === "PROPOSED" && mine;
+				const analyze_btn = analyzable
+					? '<button class="btn btn-primary btn-xs analyze-run" data-run="' +
+					  esc(run.run_id) +
+					  '">' +
+					  __("开始分析") +
+					  "</button> "
+					: "";
+				const plan_btn = plannable
+					? '<button class="btn btn-success btn-xs plan-run" data-run="' +
+					  esc(run.run_id) +
+					  '">' +
+					  __("生成计划") +
+					  "</button> "
+					: "";
+				const cancel_btn = cancellable
+					? '<button class="btn btn-secondary btn-xs cancel-run" data-run="' +
+					  esc(run.run_id) +
+					  '">' +
+					  __("取消") +
+					  "</button>"
+					: "";
+				const detail_btn =
+					'<button class="btn btn-light btn-xs show-detail" data-run="' +
+					esc(run.run_id) +
+					'">' +
+					__("详情") +
+					"</button>";
+				const scope =
+					run.company_scope +
+					(run.warehouse_scope ? " / " + run.warehouse_scope : __(" / 全部仓库"));
 				return (
 					'<tr data-run="' +
 					esc(run.run_id) +
@@ -109,6 +321,14 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					"</td>" +
 					"<td>" +
 					(STATE_COPY[run.run_state] || esc(run.run_state)) +
+					"</td>" +
+					"<td>" +
+					( EXECUTION_MODE_COPY[mode] || esc(mode)) +
+					"</td>" +
+					"<td class=\"small\">" +
+					(mode === "AGENT"
+						? AGENT_STATUS_COPY[agent_status] || esc(agent_status)
+						: esc("—")) +
 					"</td>" +
 					"<td class=\"small text-muted\">" +
 					esc(scope) +
@@ -139,6 +359,12 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				"</th>" +
 				"<th scope=\"col\">" +
 				__("状态") +
+				"</th>" +
+				"<th scope=\"col\">" +
+				__("分析模式") +
+				"</th>" +
+				"<th scope=\"col\">" +
+				__("Agent 结果") +
 				"</th>" +
 				"<th scope=\"col\">" +
 				__("范围") +
@@ -313,13 +539,29 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					},
 				});
 				const scope = esc(run.company_scope + (run.warehouse_scope ? " / " + run.warehouse_scope : __(" / 全部仓库")));
-				dialog.fields_dict.content.$wrapper.html(
+				const trace_panel = build_trace_panel(run);
+				const content_wrapper = dialog.fields_dict.content.$wrapper;
+				content_wrapper.html(
 					"<div class=\"mb-2\"><b>" + __("目标") + ":</b> " + esc(run.goal) + "</div>" +
 					"<div class=\"mb-2\"><b>" + __("状态") + ":</b> " + (STATE_COPY[run.run_state] || esc(run.run_state)) +
+					" &nbsp; <b>" + __("模式") + ":</b> " +
+					(EXECUTION_MODE_COPY[run.execution_mode] || esc(run.execution_mode)) +
 					" &nbsp; <b>" + __("范围") + ":</b> " + scope +
 					" &nbsp; <b>" + __("时间窗口") + ":</b> " + esc(run.time_window_days) + " " + __("天") + "</div>" +
-					rows_html
+					rows_html +
+					trace_panel
 				);
+				content_wrapper.find(".trace-toggle").on("click", function () {
+					const button = $(this);
+					const expanded = button.attr("aria-expanded") === "true";
+					const trace_content = content_wrapper.find("#" + button.attr("aria-controls"));
+					button.attr("aria-expanded", expanded ? "false" : "true");
+					button.text(expanded ? __("展开 Agent Trace") : __("收起 Agent Trace"));
+					trace_content.prop("hidden", expanded);
+					if (!expanded && !button.data("loaded")) {
+						load_trace(run.run_id, trace_content, button);
+					}
+				});
 				dialog.show();
 			},
 		});
