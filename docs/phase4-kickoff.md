@@ -1,6 +1,6 @@
 # Phase 4 启动准备包
 
-状态：`IN_PROGRESS / P4.2`。用户于 2026-08-26 明确启动 Phase 4，并选择“Agent 搭骨架、用户完成小范围 Assignment、Agent 验收后继续”的协作方式。P4.1 契约、八个 case 和四层评测基线已通过当前 Runtime targeted tests；文件中仍以 `PLANNED` 标记的目标路径、契约和用例不是已完成能力或验收证据。
+状态：`IN_PROGRESS / P4.3`。用户于 2026-08-26 明确启动 Phase 4，并选择“Agent 搭骨架、用户完成小范围 Assignment、Agent 验收后继续”的协作方式。P4.1 契约、八个 case、四层评测基线和 P4.2 手写模式已通过当前离线 Runtime 检查；P4.3 Assignment 3 正等待用户完成。文件中仍以 `PLANNED` 标记的目标路径、契约和用例不是已完成能力或验收证据。
 
 ## 1. 业务问题与阶段边界
 
@@ -266,7 +266,62 @@ UV_CACHE_DIR=/private/tmp/synora-uv-cache uv run --offline --no-sync --python 3.
 - labs、kernel 与新增测试的 Ruff 和 mypy targeted 检查：通过。
 - 真实 BYOK、Frappe API、浏览器 Trace UI 和 P4-G01 ERP 验收：尚未开始，不把实验结果写成生产收益。
 
-## 9. 启动门禁与人工核对（历史启动前说明）
+## 9. P4.3 Assignment 3：构造 provider `tool` role message
+
+状态：`待练习`。P4.3 的 provider 契约已经支持 `assistant.tool_calls` 和 `tool` 结果消息；你只需在实验室完成一个纯函数，把一次已经脱敏的 Observation 变成下一轮 provider 能识别的结果消息。
+
+### 业务背景与必要性
+
+原生 Tool Calling 的顺序是“provider 给出 call id 和工具名 → Gateway 返回有界 Observation → Runtime 用 `tool` role 把结果配回这次调用”。少了 call id，provider 无法可靠配对；把完整 ERP 返回塞入 content，则会扩大上下文和敏感数据边界。这个练习只训练消息字段映射，不训练网络或权限代码。
+
+### 代码入口（直接打开）
+
+打开 `/Users/qilong.lu/WorkDir/atlax-tech/Synora-Agentic-ERP/labs/agent_patterns/tool_message_lab.py`，定位 `build_learning_tool_message()`（文件中已有 `TODO(learning)`、字段对照表和传统半成品 sample）。配套测试在 `/Users/qilong.lu/WorkDir/atlax-tech/Synora-Agentic-ERP/services/agent_runtime/tests/test_tool_message_lab.py`。
+
+### 输入与期望输出
+
+| 输入 | 输出字段 | 应该放什么 |
+| --- | --- | --- |
+| `provider_tool_call_id: str` | `ProviderMessage.tool_call_id` | provider 原样返回的 call id |
+| `tool_name: ToolName` | `ProviderMessage.name` | 当前已经通过 allowlist 的工具名 |
+| `observation: Observation` | `ProviderMessage.content` | `observation.summary`，不是完整对象、digest 或原始 ERP 数据 |
+
+输出必须是 `ProviderMessage(role="tool", ...)`。不要手动拼 JSON；provider 负责把这个 typed message 序列化成 OpenAI-compatible wire shape。
+
+### 完成标准
+
+- 只修改 `labs/agent_patterns/tool_message_lab.py` 中的练习函数；删除 `NotImplementedError` 和对应 TODO。
+- 删除测试函数上方的 `@pytest.mark.xfail(...)`，让断言真正执行。
+- 指定测试应从 `1 xfailed` 变成 `1 passed`；消息的 role、call id、工具名、摘要和 JSON 可序列化断言都要通过。
+- 不把 `observation.digest`、capability、API key、完整 prompt 或 ERP 原始字段放入消息 content。
+
+### 不应修改的边界
+
+- 不修改 `providers.py`、`native_tool_calling.py`、Gateway、HTTP client、allowlist、成本或预算代码。
+- 不新增 provider 请求，不读取 `.env*`，不连接真实 BYOK 或 ERP。
+- 不改变测试中的输入、期望字段或 xfail 以外的断言来绕过练习。
+
+### 初学者逐步提示
+
+1. 先读函数签名：三个参数已经是 typed 输入，不需要解析字符串。
+2. 打开 `ProviderMessage` 定义，确认 `role`、`tool_call_id`、`name`、`content` 四个字段。
+3. 将上面的输入/输出表逐行翻译成关键字参数；`content` 只取 `observation.summary`。
+4. 保存后删除 xfail，运行：
+
+   ```bash
+   UV_CACHE_DIR=/private/tmp/synora-uv-cache uv run --offline --no-sync --python 3.14 \
+     pytest services/agent_runtime/tests/test_tool_message_lab.py -q
+   ```
+
+5. 如果失败，先看 traceback 指向的字段名；不要为了通过测试修改共享 provider 契约。
+
+### 面试追问
+
+1. 为什么 `tool_call_id` 必须来自 provider，而不能用本地 step 代替？
+2. 为什么工具结果 content 只放 bounded summary，digest 另存于 Trace？
+3. 为什么 helper 可以由实习生完成，但 API key、allowlist 和成本计算不能交给这个练习？
+
+## 10. 启动门禁与人工核对（历史启动前说明）
 
 本节记录的是 Phase 4 启动前的门禁，当前阶段已经启动；不应覆盖上面的 P4.1/P4.2 实施状态。
 

@@ -23,7 +23,7 @@ from agent_runtime.providers import (
     ProviderToolSpec,
     provider_from_environment,
 )
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 
 def _transport_that_returns(body: dict[str, object], status: int = 200) -> httpx.MockTransport:
@@ -98,6 +98,33 @@ class TestDeterministicProvider:
 
         asyncio.run(run())
 
+    def test_supports_fixed_multi_turn_responses(self) -> None:
+        async def run() -> None:
+            provider = DeterministicProvider(
+                scripted_responses=[
+                    ProviderResponse(text="first"),
+                    ProviderResponse(text="second"),
+                ]
+            )
+            first = await provider.complete(_messages())
+            second = await provider.complete(_messages())
+            assert (first.text, second.text) == ("first", "second")
+
+        asyncio.run(run())
+
+    def test_validates_tool_message_fields(self) -> None:
+        with pytest.raises(ValidationError):
+            ProviderMessage(role="tool", content="observation")
+        with pytest.raises(ValidationError):
+            ProviderMessage(role="assistant")
+        message = ProviderMessage(
+            role="tool",
+            content="bounded observation",
+            tool_call_id="call-1",
+            name="item.lookup",
+        )
+        assert message.tool_call_id == "call-1"
+
 
 class TestOpenAICompatibleProvider:
     def test_rejects_non_origin_base_url(self) -> None:
@@ -170,7 +197,11 @@ class TestOpenAICompatibleProvider:
                 response = await provider.complete(_messages())
             assert response.text == ""
             assert response.tool_calls == (
-                ProviderToolCall(name="item.lookup", arguments='{"query": "bearing"}'),
+                ProviderToolCall(
+                    id="call-1",
+                    name="item.lookup",
+                    arguments='{"query": "bearing"}',
+                ),
             )
 
         asyncio.run(run())
@@ -212,6 +243,69 @@ class TestOpenAICompatibleProvider:
             tools = body["tools"]
             assert isinstance(tools, list)
             assert tools[0]["function"]["name"] == "item.lookup"
+
+        asyncio.run(run())
+
+    def test_serializes_assistant_tool_calls_and_tool_results(self) -> None:
+        async def run() -> None:
+            captured: dict[str, object] = {}
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                captured["json"] = json.loads(request.content)
+                return httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"role": "assistant", "content": "done"}}]},
+                    request=request,
+                )
+
+            messages = [
+                ProviderMessage(role="user", content="look up the item"),
+                ProviderMessage(
+                    role="assistant",
+                    tool_calls=(
+                        ProviderToolCall(
+                            id="call-1",
+                            name="item.lookup",
+                            arguments='{"query":"bearing"}',
+                        ),
+                    ),
+                ),
+                ProviderMessage(
+                    role="tool",
+                    tool_call_id="call-1",
+                    name="item.lookup",
+                    content="item found",
+                ),
+            ]
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434/v1",
+                transport=httpx.MockTransport(handler),
+            ) as provider:
+                await provider.complete(messages)
+            body = captured["json"]
+            assert isinstance(body, dict)
+            wire_messages = body["messages"]
+            assert isinstance(wire_messages, list)
+            assert wire_messages[1] == {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "item.lookup",
+                            "arguments": '{"query":"bearing"}',
+                        },
+                    }
+                ],
+            }
+            assert wire_messages[2] == {
+                "role": "tool",
+                "tool_call_id": "call-1",
+                "name": "item.lookup",
+                "content": "item found",
+            }
 
         asyncio.run(run())
 

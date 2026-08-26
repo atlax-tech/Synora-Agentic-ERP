@@ -13,11 +13,11 @@ API key 脱敏约定 (用户要求):
 
 import math
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Literal, Protocol
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 MAX_PROVIDER_RESPONSE_BYTES = 2_000_000
 
@@ -33,20 +33,43 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
 
 
+class ProviderToolCall(StrictModel):
+    id: str = Field(min_length=1, max_length=200)
+    name: str
+    arguments: str
+
+    @property
+    def provider_tool_call_id(self) -> str:
+        """Descriptive alias for the provider's wire-level ``id`` field."""
+        return self.id
+
+
 class ProviderMessage(StrictModel):
-    role: Literal["system", "user", "assistant"]
-    content: str
+    role: Literal["system", "user", "assistant", "tool"]
+    content: str = ""
+    tool_calls: tuple[ProviderToolCall, ...] = ()
+    tool_call_id: str | None = None
+    name: str | None = None
+
+    @model_validator(mode="after")
+    def validate_role_fields(self) -> ProviderMessage:
+        if self.role in {"system", "user"}:
+            if not self.content or self.tool_calls or self.tool_call_id or self.name:
+                raise ValueError("system and user messages only contain content")
+        elif self.role == "assistant":
+            if not self.content and not self.tool_calls:
+                raise ValueError("assistant message requires content or tool calls")
+            if self.tool_call_id or self.name:
+                raise ValueError("assistant message cannot contain tool result fields")
+        elif not self.content or not self.tool_call_id or not self.name or self.tool_calls:
+            raise ValueError("tool message requires name, call id, and content")
+        return self
 
 
 class ProviderToolSpec(StrictModel):
     name: str
     description: str
     parameters: dict[str, object] = Field(default_factory=dict)
-
-
-class ProviderToolCall(StrictModel):
-    name: str
-    arguments: str
 
 
 class ProviderResponse(StrictModel):
@@ -86,6 +109,33 @@ class Provider(Protocol):
     ) -> ProviderResponse: ...
 
 
+def _serialize_tool_call(tool_call: ProviderToolCall) -> dict[str, object]:
+    return {
+        "id": tool_call.id,
+        "type": "function",
+        "function": {
+            "name": tool_call.name,
+            "arguments": tool_call.arguments,
+        },
+    }
+
+
+def _serialize_message(message: ProviderMessage) -> dict[str, object]:
+    """Serialize the internal message contract to OpenAI chat wire shape."""
+    if message.role == "tool":
+        return {
+            "role": "tool",
+            "tool_call_id": message.tool_call_id,
+            "name": message.name,
+            "content": message.content,
+        }
+    payload: dict[str, object] = {"role": message.role, "content": message.content}
+    if message.role == "assistant" and message.tool_calls:
+        payload["content"] = message.content or None
+        payload["tool_calls"] = [_serialize_tool_call(call) for call in message.tool_calls]
+    return payload
+
+
 class DeterministicProvider:
     """CI/测试 provider: 从固定映射返回确定性响应, 无网络、无成本、可复跑。
 
@@ -94,14 +144,26 @@ class DeterministicProvider:
 
     def __init__(
         self,
-        responses: Mapping[str, ProviderResponse] | None = None,
+        responses: Mapping[str, ProviderResponse] | Sequence[ProviderResponse] | None = None,
         default: ProviderResponse | None = None,
+        scripted_responses: Sequence[ProviderResponse] | None = None,
     ) -> None:
-        self._responses = dict(responses or {})
+        if isinstance(responses, Mapping):
+            self._responses = dict(responses)
+            response_sequence: Sequence[ProviderResponse] = ()
+        else:
+            self._responses = {}
+            response_sequence = responses or ()
+        if scripted_responses is not None and responses is not None:
+            raise ValueError("provide either positional or named scripted responses, not both")
+        self._scripted = list(scripted_responses or response_sequence)
         self._default = default
 
     def __repr__(self) -> str:
-        return f"DeterministicProvider(responses={len(self._responses)})"
+        return (
+            f"DeterministicProvider(responses={len(self._responses)}, "
+            f"scripted={len(self._scripted)})"
+        )
 
     async def complete(
         self,
@@ -113,6 +175,8 @@ class DeterministicProvider:
         del tools, model, max_tokens
         if not messages:
             raise ProviderError("provider requires at least one message")
+        if self._scripted:
+            return self._scripted.pop(0)
         # 以最后一条 user 消息内容作为确定性键。
         last_user = next(
             (message.content for message in reversed(messages) if message.role == "user"), ""
@@ -204,7 +268,7 @@ class OpenAICompatibleProvider:
             raise ProviderError("provider requires at least one message")
         payload: dict[str, object] = {
             "model": model or self._model,
-            "messages": [message.model_dump() for message in messages],
+            "messages": [_serialize_message(message) for message in messages],
             "stream": False,
         }
         # 成本护栏: 补全价格通常是输入的 5 倍, 每次调用显式限制最大输出 token,
@@ -275,7 +339,11 @@ class OpenAICompatibleProvider:
         return ProviderResponse(
             text=message.content or "",
             tool_calls=tuple(
-                ProviderToolCall(name=call.function.name, arguments=call.function.arguments)
+                ProviderToolCall(
+                    id=call.id,
+                    name=call.function.name,
+                    arguments=call.function.arguments,
+                )
                 for call in message.tool_calls or ()
             ),
             prompt_tokens=usage.prompt_tokens if usage else 0,
