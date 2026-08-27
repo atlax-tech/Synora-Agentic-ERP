@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from agent_runtime.agent.contracts import Observation, observation_from_summary
+from agent_runtime.agent.kernel import ToolExecutionFailure
 from agent_runtime.app import app
 
 CAPABILITY = "A" * 43
@@ -82,6 +83,18 @@ class _FakeAdapter:
             ok=True,
             summary="recorded read",
         )
+
+    async def aclose(self) -> None:
+        return None
+
+
+class _FailingAdapter:
+    def __init__(self, **kwargs: object) -> None:
+        del kwargs
+
+    async def execute(self, action: object) -> Observation:
+        del action
+        raise ToolExecutionFailure("GATEWAY_ERROR", retryable=False)
 
     async def aclose(self) -> None:
         return None
@@ -176,3 +189,83 @@ def test_workflow_cancel_is_terminal_and_status_is_readable(
     )
     assert status.status_code == 200
     assert status.json()["result"]["state"]["status"] == "CANCELLED"
+
+
+def test_twenty_concurrent_resumes_have_one_winner(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("SYNORA_RUNTIME_TOKEN", TOKEN)
+    monkeypatch.setenv("SYNORA_WORKFLOW_DB_PATH", str(tmp_path / "workflow.sqlite"))
+    monkeypatch.setattr("agent_runtime.workflow.runtime.GatewayClient", _FakeClient)
+    monkeypatch.setattr("agent_runtime.workflow.runtime.GatewayToolAdapter", _FakeAdapter)
+    run_id = uuid4()
+    started = asyncio.run(
+        _post(
+            "/workflow/start",
+            _payload(run_id, steps=_clarification_steps()),
+            {"X-Synora-Runtime-Token": TOKEN},
+        )
+    )
+    assert started.status_code == 200
+    state = started.json()["result"]["state"]
+    resume_payload = {
+        "run_id": str(run_id),
+        "correlation_id": str(uuid4()),
+        "workflow_revision": state["revision"],
+        "interrupt_id": state["clarification"]["interrupt_id"],
+        "answer": "Stores",
+        "capability": CAPABILITY,
+    }
+
+    async def run_many() -> list[httpx.Response]:
+        return list(
+            await asyncio.gather(
+                *(
+                    _post(
+                        "/workflow/resume",
+                        resume_payload,
+                        {"X-Synora-Runtime-Token": TOKEN},
+                    )
+                    for _ in range(20)
+                )
+            )
+        )
+
+    responses = asyncio.run(run_many())
+    assert sum(response.status_code == 200 for response in responses) == 1
+    assert sum(response.status_code == 409 for response in responses) == 19
+
+
+def test_classified_tool_failure_is_durable_and_never_auto_replayed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("SYNORA_RUNTIME_TOKEN", TOKEN)
+    monkeypatch.setenv("SYNORA_WORKFLOW_DB_PATH", str(tmp_path / "workflow.sqlite"))
+    monkeypatch.setattr("agent_runtime.workflow.runtime.GatewayClient", _FakeClient)
+    monkeypatch.setattr("agent_runtime.workflow.runtime.GatewayToolAdapter", _FailingAdapter)
+    response = asyncio.run(
+        _post(
+            "/workflow/start",
+            _payload(
+                uuid4(),
+                steps=[
+                    {
+                        "step_id": "read-mr",
+                        "order": 1,
+                        "type": "TOOL",
+                        "allowed_tools": ["material_request.open"],
+                        "tool_name": "material_request.open",
+                        "parameters": {"offset": 0, "limit": 20},
+                    }
+                ],
+            ),
+            {"X-Synora-Runtime-Token": TOKEN},
+        )
+    )
+    assert response.status_code == 200
+    state = response.json()["result"]["state"]
+    assert state["status"] == "FAILED"
+    assert state["replan_reason"] == "TOOL_ERROR"
+    assert state["steps"][0]["status"] == "FAILED"

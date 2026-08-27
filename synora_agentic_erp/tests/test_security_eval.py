@@ -114,6 +114,23 @@ class TestSecurityEval(FrappeTestCase):
 
     # S-08 完全无写入: 所有注册工具都是 READ; 分析/计划链路不产生任何写工具调用。
     def test_s08_no_write_tools_reachable(self) -> None:
+        expected_tools = {
+            "item.lookup",
+            "supplier.lookup",
+            "stock.projected",
+            "demand.open",
+            "material_request.open",
+            "purchase_order.open",
+        }
+        # The contract test class registers three explicit test doubles under
+        # ``contract.*``; exclude those fixtures while mechanically checking
+        # the production registry remains exactly the six read tools.
+        production_tools = {name for name, _version in _TOOLS if not name.startswith("contract.")}
+        self.assertEqual(production_tools, expected_tools)
+        self.assertEqual(
+            {version for name, version in _TOOLS if name in production_tools},
+            {"1"},
+        )
         for (name, version), spec in _TOOLS.items():
             self.assertEqual(spec.risk, "READ", f"tool {name}@{version} must be READ-only")
             self.assertEqual(spec.required_doctypes, spec.required_doctypes)
