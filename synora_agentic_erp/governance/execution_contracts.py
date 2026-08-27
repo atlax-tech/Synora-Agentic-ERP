@@ -292,9 +292,7 @@ def verify_purchase_order_read_back(action: ProposedAction, doc: object) -> dict
         actual_conversion = _decimal(
             _value(actual, "conversion_factor"), f"{prefix}.conversion_factor"
         )
-        expected_conversion = _decimal(
-            expected["conversion_factor"], f"{prefix}.conversion_factor"
-        )
+        expected_conversion = _decimal(expected["conversion_factor"], f"{prefix}.conversion_factor")
         if actual_conversion != expected_conversion:
             raise ReadBackMismatch(f"{prefix}.conversion_factor does not match approved payload")
         verified[f"{prefix}.conversion_factor"] = format(actual_conversion.normalize(), "f")

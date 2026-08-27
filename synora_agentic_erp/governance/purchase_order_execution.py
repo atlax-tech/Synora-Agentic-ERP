@@ -256,7 +256,7 @@ def _reconciliation_candidates(
         try:
             target = frappe.get_doc(TARGET_DOCTYPE, name)
             matches.append((name, verify_purchase_order_read_back(action, target)))
-        except (ReadBackMismatch, frappe.DoesNotExistError):
+        except ReadBackMismatch, frappe.DoesNotExistError:
             continue
     return names, matches
 

@@ -21,7 +21,7 @@ def test_runs_page_surfaces_governance_evidence_and_identifier_only_actions() ->
         "execute_purchase_order",
         "reconcile_purchase_order",
         "proposal_digest",
-        "aria-live=\"polite\"",
+        'aria-live="polite"',
         'type="button"',
         "frappe.utils.escape_html",
     ):

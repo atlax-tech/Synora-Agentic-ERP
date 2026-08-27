@@ -481,7 +481,7 @@ def _deterministic(action: Any, actor: str) -> GateResult:
             schedule = datetime.strptime(payload["schedule_date"], "%Y-%m-%d").date()
             if schedule < transaction_date:
                 return GateResult("FAIL", "schedule date precedes transaction date")
-    except (InvalidOperation, TypeError, ValueError, KeyError):
+    except InvalidOperation, TypeError, ValueError, KeyError:
         return GateResult("FAIL", "deterministic payload checks failed")
     except Exception:
         return GateResult("UNKNOWN", "current ERP objects could not be verified")
