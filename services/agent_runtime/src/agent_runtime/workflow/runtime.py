@@ -15,6 +15,7 @@ from pydantic import BeforeValidator, ConfigDict, Field, SecretStr, field_valida
 
 from agent_runtime.agent.contracts import Action, StrictModel
 from agent_runtime.agent.execution import GatewayToolAdapter
+from agent_runtime.agent.kernel import ToolExecutionFailure
 from agent_runtime.gateway import GatewayClient
 from agent_runtime.workflow.checkpoint import (
     CheckpointConflict,
@@ -167,15 +168,28 @@ class WorkflowRuntime:
                 resumed,
                 expected_revision=state.revision,
                 lease_id=lease,
-                keep_lease=True,
+                keep_lease=resumed.status == "RUNNING",
             )
         except Exception:
             self.store.release_lease(request.run_id, lease)
             raise
+        if resumed.status != "RUNNING":
+            return WorkflowResponse(result=self.engine.result(resumed, resumed=True))
         return WorkflowResponse(result=await self._advance(resumed, request, lease=lease))
 
     def status(self, request: WorkflowStatusRequest) -> WorkflowResponse:
-        return WorkflowResponse(result=WorkflowResult(state=self.store.load(request.run_id)))
+        state = self.store.load(request.run_id)
+        terminal = {"SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"}
+        if state.status not in terminal and self.engine.is_expired(state):
+            lease = self.store.acquire_lease(request.run_id, expected_revision=state.revision)
+            try:
+                expired = self.engine.expire(state)
+                self.store.save(expired, expected_revision=state.revision, lease_id=lease)
+                state = expired
+            except Exception:
+                self.store.release_lease(request.run_id, lease)
+                raise
+        return WorkflowResponse(result=WorkflowResult(state=state))
 
     def cancel(self, request: WorkflowCancelRequest) -> WorkflowResponse:
         state = self.store.load(request.run_id)
@@ -204,9 +218,9 @@ class WorkflowRuntime:
                 interrupt_id=uuid5(
                     NAMESPACE_URL, f"synora:workflow:{state.run_id}:crash:{state.revision}"
                 ),
-                question="Runtime 在只读工具调用期间重启, 请选择是否创建新的只读重试。",
+                question="Runtime 在只读工具调用期间重启，结果不确定。请选择 inspect；重试必须先创建新的计划版本。",
                 answer_type="CHOICE",
-                choices=("retry", "inspect"),
+                choices=("inspect",),
                 answer_max_length=20,
             )
             try:
@@ -290,6 +304,9 @@ class WorkflowRuntime:
                     return self.engine.result(interrupted)
                 if ready.tool_name is None:
                     raise WorkflowError("WORKFLOW_INVALID", "tool step is incomplete")
+                set_context = getattr(adapter, "set_workflow_context", None)
+                if callable(set_context):
+                    set_context(plan_version=current.plan_version, step_id=ready.step_id)
                 observation = await adapter.execute(
                     Action(
                         step=ready.order,
@@ -307,6 +324,26 @@ class WorkflowRuntime:
                 current = completed
                 held_lease = None
             return self.engine.result(current, resumed=state is not current)
+        except ToolExecutionFailure as exc:
+            # A classified Gateway failure is a durable stop, not an implicit
+            # replay.  The failed step remains visible with an explicit
+            # replan reason; a future planner may replace only unstarted work
+            # under a new plan version.
+            if held_lease and current.status == "RUNNING" and current.current_step_id:
+                failed = self.engine.fail_step(
+                    current,
+                    code="TOOL_ERROR",
+                    detail=exc.code,
+                ).model_copy(update={"replan_reason": "TOOL_ERROR"})
+                self.store.save(
+                    failed,
+                    expected_revision=current.revision,
+                    lease_id=held_lease,
+                )
+                current = failed
+                held_lease = None
+                return self.engine.result(current, resumed=state is not current)
+            raise WorkflowError("TOOL_ERROR", "tool execution failed") from exc
         except CheckpointError:
             raise
         except WorkflowError:

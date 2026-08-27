@@ -20,6 +20,12 @@ from agent_runtime.workflow.checkpoint import (
     CheckpointIncompatible,
     SQLiteCheckpointStore,
 )
+from agent_runtime.workflow.engine import WorkflowClock
+from agent_runtime.workflow.runtime import (
+    WorkflowResumeRequest,
+    WorkflowRuntime,
+    WorkflowStatusRequest,
+)
 from pydantic import ValidationError
 
 
@@ -144,6 +150,23 @@ def test_replan_preserves_completed_step_and_increments_version() -> None:
         engine.replan(completed, changed, "STATE_DRIFT")
 
 
+def test_replan_cannot_mark_an_unstarted_step_completed() -> None:
+    engine = WorkflowEngine()
+    state = engine.start(_state(_step("first", 1), _step("second", 2, depends_on=("first",))))
+    replacement = (
+        state.steps[0],
+        state.steps[1].model_copy(
+            update={
+                "status": "SUCCEEDED",
+                "observation_digest": "a" * 64,
+                "completed_at": _deadline(),
+            }
+        ),
+    )
+    with pytest.raises(WorkflowError, match="unstarted steps"):
+        engine.replan(state, replacement, "TOOL_ERROR")
+
+
 def test_checkpoint_round_trip_cas_lease_and_no_secret(tmp_path: Path) -> None:
     store = SQLiteCheckpointStore(tmp_path / "workflow.sqlite")
     state = _state(_step("first", 1))
@@ -187,3 +210,80 @@ def test_terminal_cancel_and_expiry_are_monotonic() -> None:
     cancelled = engine.cancel(state)
     assert cancelled.status == "CANCELLED"
     assert engine.expire(cancelled) == cancelled
+
+
+def test_status_persists_expiry_at_the_deadline(tmp_path: Path) -> None:
+    current = datetime.now(UTC)
+    store = SQLiteCheckpointStore(tmp_path / "workflow.sqlite", clock=lambda: current)
+    state = WorkflowEngine.create_state(
+        run_id=uuid4(),
+        trace_id=uuid4(),
+        steps=(_step("first", 1),),
+        deadline=(current + timedelta(seconds=1)).isoformat(),
+    )
+    store.create(state)
+    runtime = WorkflowRuntime(store)
+    runtime.engine = WorkflowEngine(clock=WorkflowClock(lambda: current + timedelta(seconds=1)))
+    result = runtime.status(WorkflowStatusRequest(run_id=state.run_id))
+    assert result.result.state.status == "EXPIRED"
+    assert store.load(state.run_id).status == "EXPIRED"
+
+
+def test_recover_marks_orphaned_running_step_as_manual_recovery(tmp_path: Path) -> None:
+    store = SQLiteCheckpointStore(tmp_path / "workflow.sqlite")
+    state = _state(_step("first", 1))
+    store.create(state)
+    lease = store.acquire_lease(state.run_id, expected_revision=state.revision)
+    started = WorkflowEngine().start(state)
+    store.save(started, expected_revision=state.revision, lease_id=lease)
+    store.release_lease(state.run_id, lease)
+    lease = store.acquire_lease(started.run_id, expected_revision=started.revision)
+    running = WorkflowEngine().begin_step(started, "first")
+    store.save(running, expected_revision=started.revision, lease_id=lease)
+    store.release_lease(running.run_id, lease)
+
+    runtime = WorkflowRuntime(store)
+    import asyncio
+
+    assert asyncio.run(runtime.recover()) == 1
+    recovered = store.load(running.run_id)
+    assert recovered.status == "INTERRUPTED"
+    assert recovered.crash_recovered is True
+    assert recovered.replan_reason == "STATE_DRIFT"
+
+
+def test_manual_recovery_never_converts_uncertain_tool_to_success(tmp_path: Path) -> None:
+    store = SQLiteCheckpointStore(tmp_path / "workflow.sqlite")
+    state = _state(_step("first", 1))
+    store.create(state)
+    lease = store.acquire_lease(state.run_id, expected_revision=state.revision)
+    started = WorkflowEngine().start(state)
+    store.save(started, expected_revision=state.revision, lease_id=lease)
+    store.release_lease(state.run_id, lease)
+    lease = store.acquire_lease(started.run_id, expected_revision=started.revision)
+    running = WorkflowEngine().begin_step(started, "first")
+    store.save(running, expected_revision=started.revision, lease_id=lease)
+    store.release_lease(running.run_id, lease)
+
+    runtime = WorkflowRuntime(store)
+    import asyncio
+
+    assert asyncio.run(runtime.recover()) == 1
+    interrupted = store.load(running.run_id)
+    assert interrupted.clarification is not None
+    failed = asyncio.run(
+        runtime.resume(
+            WorkflowResumeRequest(
+                run_id=running.run_id,
+                correlation_id=uuid4(),
+                capability="A" * 43,
+                workflow_revision=interrupted.revision,
+                interrupt_id=interrupted.clarification.interrupt_id,
+                answer="inspect",
+            )
+        )
+    )
+    assert failed.result.state.status == "FAILED"
+    assert failed.result.state.steps[0].status == "FAILED"
+    assert failed.result.state.steps[0].observation_digest is None
+    assert "MANUAL_RECOVERY_REQUIRED" in (failed.result.state.stop_reason or "")

@@ -115,10 +115,6 @@ class WorkflowEngine:
             }
         )
         steps = tuple(updated if item.step_id == step_id else item for item in state.steps)
-        next_step = next(
-            (item for item in steps if item.status in {"PENDING", "READY"}),
-            None,
-        )
         all_done = all(item.status in {"SUCCEEDED", "SKIPPED"} for item in steps)
         if all_done:
             return state.model_copy(
@@ -130,6 +126,16 @@ class WorkflowEngine:
                     "revision": state.revision + 1,
                 }
             )
+        done = {item.step_id for item in steps if item.status == "SUCCEEDED"}
+        next_step = next(
+            (
+                item
+                for item in steps
+                if item.status in {"PENDING", "READY"}
+                and set(item.depends_on) <= done
+            ),
+            None,
+        )
         return state.model_copy(
             update={
                 "steps": steps,
@@ -189,6 +195,36 @@ class WorkflowEngine:
             raise WorkflowError("INVALID_ANSWER", "clarification answer is invalid")
         if request.answer_type == "CHOICE" and answer not in request.choices:
             raise WorkflowError("INVALID_ANSWER", "clarification answer is not an allowed choice")
+        if state.crash_recovered:
+            # A process crash after dispatch leaves the external read result
+            # unknowable.  Never turn an answer into a synthetic success and
+            # never replay the same invocation implicitly.  ``inspect`` is an
+            # explicit, terminal acknowledgement; a real retry must arrive
+            # through a newly planned step/invocation after human review.
+            if answer != "inspect":
+                raise WorkflowError(
+                    "MANUAL_RECOVERY_REQUIRED",
+                    "a new plan version is required before retrying an uncertain tool",
+                )
+            step_id = state.current_step_id
+            if step_id is None:
+                raise WorkflowError("WORKFLOW_CONFLICT", "no recoverable step")
+            failed = self._replace_step(
+                state.steps,
+                step_id,
+                status="FAILED",
+                error="MANUAL_RECOVERY_REQUIRED: inspect uncertain tool result",
+            )
+            return state.model_copy(
+                update={
+                    "status": "FAILED",
+                    "steps": failed,
+                    "clarification": None,
+                    "stop_reason": "MANUAL_RECOVERY_REQUIRED: inspect uncertain tool result",
+                    "replan_reason": "STATE_DRIFT",
+                    "revision": state.revision + 1,
+                }
+            )
         # The answer is intentionally represented only by a bounded marker; raw input
         # must never become a tool parameter without a fresh typed planner decision.
         accepted_digest = hashlib.sha256(b"clarification-answer-accepted").hexdigest()
@@ -223,6 +259,23 @@ class WorkflowEngine:
                 raise WorkflowError("PLAN_CONFLICT", "completed steps cannot be modified")
         if any(item.status == "RUNNING" for item in steps):
             raise WorkflowError("PLAN_CONFLICT", "replacement plan cannot contain running steps")
+        old_steps = {step.step_id: step for step in state.steps}
+        for item in steps:
+            old = old_steps.get(item.step_id)
+            if old is None and item.status not in {"PENDING", "READY"}:
+                raise WorkflowError("PLAN_CONFLICT", "new steps must start pending")
+            if (
+                old is not None
+                and old.status != "SUCCEEDED"
+                and item.status
+                not in {
+                    "PENDING",
+                    "READY",
+                }
+            ):
+                raise WorkflowError(
+                    "PLAN_CONFLICT", "unstarted steps cannot be completed by replan"
+                )
         return state.model_copy(
             update={
                 "steps": steps,
@@ -264,6 +317,10 @@ class WorkflowEngine:
         self, state: WorkflowState, *, observations: tuple[str, ...] = (), resumed: bool = False
     ) -> WorkflowResult:
         return WorkflowResult(state=state, observations=observations, resumed=resumed)
+
+    def is_expired(self, state: WorkflowState) -> bool:
+        """Expose the injected clock for read/status expiry handling."""
+        return self._clock.now() >= parse_deadline(state.deadline)
 
     def _ensure_running(self, state: WorkflowState) -> None:
         self._ensure_not_expired(state)
