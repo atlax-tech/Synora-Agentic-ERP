@@ -199,6 +199,11 @@ class TestWorkflowRun(FrappeTestCase):
             started = analyze_run(run_id, str(uuid4()))
             self.assertTrue(started["ok"])
             self.assertEqual(started["analysis"]["workflow_status"], "INTERRUPTED")
+            self.assertEqual(
+                started["analysis"]["workflow"]["steps"][0]["step_id"],
+                "ask-warehouse",
+            )
+            self.assertEqual(started["analysis"]["workflow"]["steps"][0]["status"], "WAITING")
             stored = frappe.get_doc("Synora Agent Run", run_id)
             self.assertEqual(stored.run_state, "ANALYZING")
             status = get_run_workflow(run_id)

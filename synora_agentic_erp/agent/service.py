@@ -544,7 +544,10 @@ def _validate_workflow_runtime_response(body: object, run_id: str) -> dict[str, 
         raise ValueError("workflow observations are invalid")
     # Do not let a Runtime response smuggle a capability, cookie, prompt or
     # arbitrary ERP payload through the public Run API.
-    safe = _safe_trace_value(body)
+    # The response has already passed the strict workflow schema above. Keep
+    # enough depth for step metadata to survive into the bounded public
+    # summary; the summary still drops parameters and raw observations.
+    safe = _safe_trace_value(body, max_depth=8)
     if not isinstance(safe, dict):
         raise ValueError("workflow response is unsafe")
     return safe
@@ -894,9 +897,9 @@ def _unique_json_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
-def _safe_trace_value(value: object, *, depth: int = 0) -> object:
+def _safe_trace_value(value: object, *, depth: int = 0, max_depth: int = 4) -> object:
     """Bound and redact Runtime data before it can reach a Synora Trace DocType."""
-    if depth > 4:
+    if depth > max_depth:
         return "[TRUNCATED]"
     if isinstance(value, str):
         return _TRACE_SECRET_TEXT.sub("[REDACTED]", value[:4_000])
@@ -905,7 +908,9 @@ def _safe_trace_value(value: object, *, depth: int = 0) -> object:
     if isinstance(value, (int, float, bool)) or value is None:
         return value
     if isinstance(value, list):
-        return [_safe_trace_value(child, depth=depth + 1) for child in value[:64]]
+        return [
+            _safe_trace_value(child, depth=depth + 1, max_depth=max_depth) for child in value[:64]
+        ]
     if isinstance(value, dict):
         safe: dict[str, object] = {}
         for key, child in list(value.items())[:64]:
@@ -915,7 +920,7 @@ def _safe_trace_value(value: object, *, depth: int = 0) -> object:
             if any(marker in normalized_key for marker in _SENSITIVE_TRACE_KEYS):
                 safe[key] = "[REDACTED]"
             else:
-                safe[key] = _safe_trace_value(child, depth=depth + 1)
+                safe[key] = _safe_trace_value(child, depth=depth + 1, max_depth=max_depth)
         return safe
     return "[TRUNCATED]"
 
