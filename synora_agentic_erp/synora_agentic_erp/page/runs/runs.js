@@ -23,6 +23,31 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 	const EXECUTION_MODE_COPY = {
 		DETERMINISTIC: __("确定性分析"),
 		AGENT: __("Agent 动态分析"),
+		PLAN_EXECUTE: __("持久工作流（只读）"),
+	};
+	const WORKFLOW_STATUS_COPY = {
+		READY: __("待开始"),
+		RUNNING: __("执行中"),
+		INTERRUPTED: __("等待澄清"),
+		SUCCEEDED: __("工作流完成"),
+		FAILED: __("工作流失败"),
+		CANCELLED: __("工作流已取消"),
+		EXPIRED: __("工作流已过期"),
+	};
+	const WORKFLOW_STEP_STATUS_COPY = {
+		PENDING: __("待执行"),
+		READY: __("就绪"),
+		RUNNING: __("执行中"),
+		WAITING: __("等待输入"),
+		SUCCEEDED: __("已完成"),
+		FAILED: __("失败"),
+		SKIPPED: __("已跳过"),
+		CANCELLED: __("已取消"),
+	};
+	const WORKFLOW_STEP_TYPE_COPY = {
+		TOOL: __("只读工具"),
+		CLARIFICATION: __("澄清"),
+		FINALIZE: __("收口"),
 	};
 	const AGENT_STATUS_COPY = {
 		NOT_STARTED: __("未开始"),
@@ -183,6 +208,162 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			esc(trace.elapsed_ms || 0) +
 			"ms</div>";
 		wrapper.html(summary + render_trace_events(trace.events || []));
+	}
+
+	function workflow_error_copy(code) {
+		const copies = {
+			UNAVAILABLE: __("Runtime 当前不可用，工作流状态未被伪造成完成。"),
+			CHECKPOINT_INCOMPATIBLE: __("工作流 checkpoint 版本不兼容，需要人工检查。"),
+			CONFLICT: __("工作流版本已变化，请刷新后使用最新状态。"),
+			PERMISSION_DENIED: __("你没有查看或恢复该工作流的权限。"),
+			RUN_REJECTED: __("该运行不可用，可能已被删除或过期。"),
+		};
+		return copies[code] || __("工作流状态读取失败，请稍后重试。 ");
+	}
+
+	function workflow_time(value) {
+		if (!value) {
+			return "—";
+		}
+		return String(value).replace("T", " ").slice(0, 19);
+	}
+
+	function build_workflow_panel(run) {
+		if (run.execution_mode !== "PLAN_EXECUTE") {
+			return "";
+		}
+		const panel_id = "workflow-panel-" + String(run.run_id).replace(/[^a-zA-Z0-9_-]/g, "");
+		return (
+			'<section class="workflow-panel mt-3" aria-labelledby="' + panel_id + '-label" data-workflow-run="' + esc(run.run_id) + '">' +
+			'<h5 id="' + panel_id + '-label">' + __("工作流计划（只读）") + "</h5>" +
+			'<div class="workflow-content" aria-live="polite"><div class="text-muted py-2"><span class="spinner-border spinner-border-sm"></span> ' + __("加载工作流状态…") + "</div></div>" +
+			'</section>'
+		);
+	}
+
+	function render_workflow_content(wrapper, run_id, workflow) {
+		if (!workflow || typeof workflow !== "object") {
+			wrapper.html('<div class="text-muted py-2" role="status">' + __("暂无工作流 checkpoint。") + "</div>");
+			return;
+		}
+		const status = workflow.status || "READY";
+		const steps = Array.isArray(workflow.steps) ? workflow.steps : [];
+		const status_copy = WORKFLOW_STATUS_COPY[status] || status;
+		let html =
+			'<div class="small mb-2" role="status"><b>' + __("工作流状态") + ":</b> " + esc(status_copy) +
+			" · <b>" + __("版本") + ":</b> " + esc(workflow.plan_version) +
+			" · <b>" + __("Revision") + ":</b> " + esc(workflow.revision) +
+			" · <b>" + __("图版本") + ":</b> " + esc(workflow.graph_version) + "</div>";
+		html += '<div class="small text-muted mb-2">' + __("工作流到期") + ": " + esc(workflow_time(workflow.deadline)) +
+			(workflow.trace_id ? " · Trace: " + esc(workflow.trace_id) : "") +
+			(workflow.crash_recovered ? " · " + __("已从崩溃安全点恢复") : "") +
+			(workflow.replan_reason ? " · " + __("重规划原因") + ": " + esc(workflow.replan_reason) : "") + "</div>";
+		if (workflow.stop_reason) {
+			html += '<div class="small mb-2 text-muted"><b>' + __("停止原因") + ":</b> " + esc(workflow.stop_reason) + "</div>";
+		}
+		if (!steps.length) {
+			html += '<div class="text-muted py-2">' + __("暂无步骤。") + "</div>";
+		} else {
+			html += '<div class="table-responsive"><table class="table table-sm table-striped" aria-label="' + esc(__("工作流步骤")) + '"><thead><tr>' +
+				"<th scope=\"col\">" + __("顺序") + "</th>" +
+				"<th scope=\"col\">" + __("步骤") + "</th>" +
+				"<th scope=\"col\">" + __("类型") + "</th>" +
+				"<th scope=\"col\">" + __("依赖") + "</th>" +
+				"<th scope=\"col\">" + __("状态") + "</th>" +
+				"<th scope=\"col\">" + __("观察摘要 / 完成时间") + "</th>" +
+				"</tr></thead><tbody>";
+			steps.forEach(function (step) {
+				const dependencies = Array.isArray(step.depends_on) ? step.depends_on.join(", ") : "—";
+				const digest = step.observation_digest ? __("digest") + ": " + step.observation_digest : "—";
+				const error = step.error ? '<br><span class="text-danger">' + esc(step.error) + "</span>" : "";
+				html += "<tr>" +
+					"<td>" + esc(step.order) + "</td>" +
+					"<td><code>" + esc(step.step_id) + "</code>" + (step.tool_name ? "<br><span class=\"small text-muted\">" + esc(step.tool_name) + "</span>" : "") + "</td>" +
+					"<td>" + esc(WORKFLOW_STEP_TYPE_COPY[step.type] || step.type) + "</td>" +
+					"<td class=\"small\">" + esc(dependencies) + "</td>" +
+					"<td>" + esc(WORKFLOW_STEP_STATUS_COPY[step.status] || step.status) + "</td>" +
+					"<td class=\"small text-muted\">" + esc(digest) + "<br>" + esc(workflow_time(step.completed_at)) + error + "</td>" +
+					"</tr>";
+			});
+			html += "</tbody></table></div>";
+		}
+		if (Array.isArray(workflow.observations) && workflow.observations.length) {
+			html += '<div class="small text-muted mb-2"><b>' + __("观察摘要") + ":</b> " + workflow.observations.map(esc).join(" · ") + "</div>";
+		}
+		const clarification = workflow.clarification;
+		if (status === "INTERRUPTED" && clarification) {
+			const answer_id = "workflow-answer-" + String(run_id).replace(/[^a-zA-Z0-9_-]/g, "");
+			html += '<div class="border rounded p-3 mt-2" data-clarification="1">' +
+				'<div class="mb-2"><b>' + __("需要你的澄清") + ":</b> " + esc(clarification.question) + "</div>" +
+				'<label class="sr-only" for="' + answer_id + '">' + __("澄清答案") + "</label>" +
+				'<input id="' + answer_id + '" class="form-control form-control-sm workflow-answer" maxlength="' + esc(clarification.answer_max_length || 500) + '" aria-describedby="' + answer_id + '-help" />' +
+				'<div id="' + answer_id + '-help" class="small text-muted mt-1">' + __("答案只用于本次只读工作流，旧 revision 不能重复消费。") + "</div>" +
+				'<button type="button" class="btn btn-primary btn-sm mt-2 workflow-resume" data-run="' + esc(run_id) + '">' + __("提交并恢复") + "</button>" +
+				'<div class="workflow-resume-status small mt-2" aria-live="polite"></div></div>';
+		}
+		wrapper.html(html);
+		wrapper.find(".workflow-resume").on("click", function () {
+			const button = $(this);
+			const answer = wrapper.find(".workflow-answer").val() || "";
+			const status_area = wrapper.find(".workflow-resume-status");
+			if (!String(answer).trim()) {
+				status_area.addClass("text-danger").text(__("请输入澄清答案。"));
+				wrapper.find(".workflow-answer").trigger("focus");
+				return;
+			}
+			button.attr("disabled", true);
+			status_area.removeClass("text-danger").text(__("正在恢复工作流…"));
+			frappe.call({
+				method: "synora_agentic_erp.api.resume_run",
+				args: {
+					run_id: run_id,
+					correlation_id: crypto.randomUUID(),
+					workflow_revision: workflow.revision,
+					interrupt_id: clarification.interrupt_id,
+					answer: String(answer),
+				},
+				callback: function (r) {
+					if (r.message && r.message.ok) {
+						const next = r.message.analysis && r.message.analysis.workflow;
+						if (next) {
+							render_workflow_content(wrapper, run_id, next);
+						} else {
+							load_workflow(run_id, wrapper);
+						}
+						refresh();
+						return;
+					}
+					button.attr("disabled", false);
+					status_area.addClass("text-danger").text(__("恢复失败，请刷新后重试。"));
+				},
+				error: function (xhr) {
+					button.attr("disabled", false);
+					const error = xhr && xhr.responseJSON && xhr.responseJSON.error;
+					status_area.addClass("text-danger").text(workflow_error_copy(error && error.code));
+				},
+			});
+		});
+	}
+
+	function load_workflow(run_id, wrapper) {
+		wrapper.html('<div class="text-muted py-2"><span class="spinner-border spinner-border-sm"></span> ' + __("加载工作流状态…") + "</div>");
+		frappe.call({
+			method: "synora_agentic_erp.api.get_run_workflow",
+			args: { run_id: run_id },
+			type: "GET",
+			callback: function (r) {
+				if (!r.message || !r.message.ok) {
+					const error = r.message && r.message.error;
+					wrapper.html('<div class="text-danger py-2" role="status">' + esc(workflow_error_copy(error && error.code)) + "</div>");
+					return;
+				}
+				render_workflow_content(wrapper, run_id, r.message.workflow);
+			},
+			error: function (xhr) {
+				const error = xhr && xhr.responseJSON && xhr.responseJSON.error;
+				wrapper.html('<div class="text-danger py-2" role="status">' + esc(workflow_error_copy(error && error.code)) + "</div>");
+			},
+		});
 	}
 
 	function load_trace(run_id, wrapper, button) {
@@ -540,6 +721,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				});
 				const scope = esc(run.company_scope + (run.warehouse_scope ? " / " + run.warehouse_scope : __(" / 全部仓库")));
 				const trace_panel = build_trace_panel(run);
+				const workflow_panel = build_workflow_panel(run);
 				const content_wrapper = dialog.fields_dict.content.$wrapper;
 				content_wrapper.html(
 					"<div class=\"mb-2\"><b>" + __("目标") + ":</b> " + esc(run.goal) + "</div>" +
@@ -547,10 +729,16 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					" &nbsp; <b>" + __("模式") + ":</b> " +
 					(EXECUTION_MODE_COPY[run.execution_mode] || esc(run.execution_mode)) +
 					" &nbsp; <b>" + __("范围") + ":</b> " + scope +
-					" &nbsp; <b>" + __("时间窗口") + ":</b> " + esc(run.time_window_days) + " " + __("天") + "</div>" +
+					" &nbsp; <b>" + __("时间窗口") + ":</b> " + esc(run.time_window_days) + " " + __("天") +
+					(run.workflow_expires_at ? " &nbsp; <b>" + __("工作流到期") + ":</b> " + esc(workflow_time(run.workflow_expires_at)) : "") +
+					"</div>" +
 					rows_html +
-					trace_panel
+					trace_panel +
+					workflow_panel
 				);
+				if (workflow_panel) {
+					load_workflow(run.run_id, content_wrapper.find(".workflow-content"));
+				}
 				content_wrapper.find(".trace-toggle").on("click", function () {
 					const button = $(this);
 					const expanded = button.attr("aria-expanded") === "true";

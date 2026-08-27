@@ -55,11 +55,15 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 		fieldname: "execution_mode",
 		label: __("分析模式"),
 		fieldtype: "Select",
-		options: "DETERMINISTIC\nAGENT",
+		options: "DETERMINISTIC\nAGENT\nPLAN_EXECUTE",
 		default: "DETERMINISTIC",
-		description: __("确定性分析计算业务结论；Agent 动态分析只做只读探索，最终仍由确定性代码收口。"),
+		description: __("确定性分析计算业务结论；Agent 动态分析只做只读探索；持久工作流可暂停/恢复，但始终只读。"),
 	});
 	page.execution_mode_field.set_value("DETERMINISTIC");
+	page.execution_mode_field.$wrapper.attr(
+		"title",
+		__("PLAN_EXECUTE 会保存只读工作流进度，可在 24 小时内暂停、恢复或取消。")
+	);
 
 	page.status_area = $('<div style="padding: 0 8px 8px;" aria-live="polite"></div>');
 	page.main.append(page.status_area);
@@ -155,7 +159,7 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 			return;
 		}
 		const execution_mode = page.execution_mode_field.value || "DETERMINISTIC";
-		if (execution_mode !== "DETERMINISTIC" && execution_mode !== "AGENT") {
+		if (execution_mode !== "DETERMINISTIC" && execution_mode !== "AGENT" && execution_mode !== "PLAN_EXECUTE") {
 			set_status(__("分析模式无效，请重新选择。"), "danger");
 			return;
 		}
