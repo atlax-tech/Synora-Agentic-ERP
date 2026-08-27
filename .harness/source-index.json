@@ -15,7 +15,7 @@
       "path": "docs/ARCHITECTURE.md",
       "kind": "architecture",
       "status": "CONFIRMED",
-      "sha256": "4981988385bca4ef5328919bfc617e8019cf393bd61a5bed69e331fdef133598",
+      "sha256": "e975f1a1b69a16f758aafa12735ee528f50a1cabc308c471553da7960ea9234f",
       "locator": "approved target architecture; open implementation decisions remain explicit"
     },
     {
@@ -23,7 +23,7 @@
       "path": "docs/SPEC.md",
       "kind": "design",
       "status": "CONFIRMED",
-      "sha256": "a06fdc49e5a4e7d497e5aede64720e2fa32160df6ec80b752823ea4710105804",
+      "sha256": "ca79367ba00c69d06732796f1d90fab11e6774957efd76e8167e9d64cc22b213",
       "locator": "requirement traceability, contracts, state machines, governance, evolution gates, and unresolved decisions"
     },
     {
@@ -31,7 +31,7 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "342bd31cead22320209e3ac0cc4cc4f51c5a8078afaeb6017a33559d59381f4d",
+      "sha256": "7028f35fef2b15b9da74540b47999c317f5c20d14ac87794225ef8e5476d3e50",
       "locator": "risk-tiered workflow, current phase status, 9-dimension exit Rubric, mentor Assignments, independent adversarial review, and Phase 0 through Phase 13 order"
     },
     {
@@ -47,7 +47,7 @@
       "path": "docs/phase4-kickoff.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "289925f89301f2baf4cc6bd8cd1cc8d2949e5bded81c91a2d6b50aa4ed9b71b6",
+      "sha256": "ba0deaf7e690fcea7e3a7d32ff3d25ed59e377edd67c12a09aa9ae6bc4af97c8",
       "locator": "READY_NOT_STARTED execution boundary, P4.1 contract draft, golden cases, Trace schema, and pending user Assignment; no implementation evidence"
     },
     {
@@ -55,7 +55,7 @@
       "path": "docs/learning-notes/README.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "9a647b707e67a76b474dc05e6f5589788f0590f740654a6127fcf6f1c023fa4a",
+      "sha256": "f67d5151b17c8d185611609650ad756d21a1c6ce4a8426dd6bc3914c714a9b54",
       "locator": "学习笔记命名、原文记录、事实口径、回答结构、覆盖旧答案和 Git 保留规则"
     },
     {
@@ -71,7 +71,7 @@
       "path": "AGENTS.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "9626a43bd1d08d82f30ebef924920c0f678b132cd5add5891d83217c94e0d9bd",
+      "sha256": "2168221d1b3880a4ae058176f8d64c81bb00802c5c4f2e5ba08a220d455adc35",
       "locator": "repository execution boundaries, stage-end independent review gate, mentor-led Assignment workflow, and verbatim question/blocker recording"
     },
     {
@@ -79,7 +79,7 @@
       "path": "docs/development-log/README.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "9b90eee95c4fff7aba9962312505a1940fec49cff50ec9f538dda1b27c13f362",
+      "sha256": "95b89f4e619fdf529983290e91f68647b5ffd3ea516ae3570f238fbda08d981b",
       "locator": "per-round log structure for Assignments, mentor evidence, verbatim user questions/blockers, stage Rubric/risk records, adversarial review, and interview practice"
     },
     {
@@ -151,7 +151,7 @@
       "path": "services/agent_runtime/src/agent_runtime/gateway.py",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "9350736057207fda80592e94039bf7d529cb6730a21c6d79ceea10710d29da90",
+      "sha256": "d1948b857a8fbc53710f03033130ec754052c455680b3291e29ccd6915110591",
       "locator": "P2.5 runtime typed gateway HTTPX client implementation"
     },
     {
@@ -216,7 +216,7 @@
       "kind": "code",
       "locator": "Provider 接口：Deterministic(CI)/OpenAI 兼容(BYOK)，SecretStr 脱敏、请求级 max_tokens + usage/reasoning token 校验、fail-closed 解析",
       "status": "CONFIRMED",
-      "sha256": "326d6bfcde4afe8c4fd3cf2d16c9bb133558df1858a47b4b87e598f184be194e"
+      "sha256": "97b1fdae98a7e05d4b8c94d395c1e57d8465190ccd129ae7ee87887aeb28bb4d"
     },
     {
       "id": "p36-retrieval-module",
@@ -248,7 +248,7 @@
       "kind": "code",
       "locator": "Run 确定性状态机（非法转换 fail-closed）；state_version CAS、失败恢复和同 Run plan 行锁已覆盖",
       "status": "CONFIRMED",
-      "sha256": "a7e5811de644a1556028bd74bda66bdebc25a0a36e6eb08703ecb540d26a70ee"
+      "sha256": "6219f2a2f203059482899674ead22ee234c0c97bb3c9be3016d388056e7f92fd"
     },
     {
       "id": "p36-knowledge-source-map",
@@ -272,7 +272,7 @@
       "kind": "testing",
       "locator": "评测集 loader：固定 JSON cases（goal+期望结果+tags）",
       "status": "CONFIRMED",
-      "sha256": "37e5ef72bc049e922c98bfc2ccde13d9ba2ddd0b0f59b2006a11b8690956b650"
+      "sha256": "84b02f2f97b7888fa10afdddf5cf0f3b047c86f1594f8ecdf8796a6a13b558ab"
     },
     {
       "id": "p34-evaluation-case-1001",
@@ -288,7 +288,7 @@
       "kind": "code",
       "locator": "P3.5 plan/analyze 编排、Run capability/state/CAS、失败恢复、Runtime tokenized HTTP boundary",
       "status": "CONFIRMED",
-      "sha256": "bb696117f6d07cbcc753daa968463a0aa72b390a654481dffdbdb3e468c2e97a"
+      "sha256": "48bd93aa5c6c3e45dc266e63d08a60d162b6ce39f95c3ad0ef6d4ca65a1c6b18"
     },
     {
       "id": "p35-runtime-app",
@@ -296,7 +296,7 @@
       "kind": "code",
       "locator": "Runtime /enhance：内部令牌校验、BYOK provider label、确定性回退和 evidence 返回",
       "status": "CONFIRMED",
-      "sha256": "3fdd9e3863d190724e8f7f1822b7333a2e83ecf767350058f5d177d3a7833b72"
+      "sha256": "fa65460bce06e6da8dab15f8825f9daf0d47b3f75a0c3432988ac94e29424740"
     },
     {
       "id": "p35-api-evidence",
@@ -304,7 +304,7 @@
       "kind": "code",
       "locator": "Run Plan evidence API：provider/token/reasoning/elapsed/fallback 字段与当前用户详情边界",
       "status": "CONFIRMED",
-      "sha256": "bb17a99da7ec20a2b1467b87d79f43608b72ac6e514ad23498acd97296202b1b"
+      "sha256": "26c4751e02fa793de80a99cea6e68d6f19b5cb846173c1cd8fa8c9d50345d4f3"
     },
     {
       "id": "p35-run-plan-doctype",
@@ -328,7 +328,7 @@
       "kind": "testing",
       "locator": "Provider MockTransport 契约：usage 缺失、completion/reasoning token 超预算、重试和 BYOK 配置",
       "status": "CONFIRMED",
-      "sha256": "2686dfe22fd7b627d02f893536527844baab1a2eeec5be97aa7997a8453fecf8"
+      "sha256": "0c7798ac64a41a9e47fa055b7d2bbb336675201033954f697bcc109d8a28bb28"
     },
     {
       "id": "p35-real-http-script",
@@ -345,6 +345,126 @@
       "locator": "纠偏前 P4.1 治理取证保留为历史设计基线；首次治理写入已移至 Phase 6，当前未授权实现",
       "status": "INFERRED",
       "sha256": "f83be310bbfa68293c8eac4e65266d754b24093e4d6c01a72dc9cf28592c5eab"
+    },
+    {
+      "id": "phase4-development-log",
+      "path": "docs/development-log/20260826-Phase-4-开发日志.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "56a827cd014945fb3b37a1aac3db3df9b0901d2a7986e6e7929761a46e928aab",
+      "locator": "Phase 4 最终出口、只读执行内核、Trace、安全评测和独立审查证据"
+    },
+    {
+      "id": "phase5-development-log",
+      "path": "docs/development-log/20260827-Phase-5-开发日志.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "6c805f96aad62135a868152c11737b655e303b12d49c9de19497d17e066e924d",
+      "locator": "Phase 5 分轮实现、n8n 实验、浏览器/Runtime 证据、独立审查和 Harness 收口记录"
+    },
+    {
+      "id": "adr-0006-workflow-engine",
+      "path": "docs/decisions/ADR-0006-phase5-workflow-engine.md",
+      "kind": "design",
+      "status": "CONFIRMED",
+      "sha256": "e4cbf63d8802c5a97ba90276f008df5c1ced810de078d3a2508c4a791e7442ec",
+      "locator": "Phase 5 手写 Plan-and-Execute 主线、LangGraph/n8n LAB_ONLY、恢复/幂等/权限边界和出口决策"
+    },
+    {
+      "id": "phase5-adoption-card",
+      "path": "docs/adoption-cards/20260827-Phase5-workflow-engine.md",
+      "kind": "design",
+      "status": "CONFIRMED",
+      "sha256": "99e7e46ea53ca101220f4c510003ad6c16c98ab29294410d901da4cd53301993",
+      "locator": "Phase 5 同任务对照、框架取舍、现实使用边界和不写入 ERP 的采用卡"
+    },
+    {
+      "id": "phase5-workflow-contracts",
+      "path": "services/agent_runtime/src/agent_runtime/workflow/contracts.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "907198d684cd4cec50606274c8707fd8d9b7759015c17aa687747781ea87cbd5",
+      "locator": "版本化 WorkflowState/WorkflowResult、PlanStep、状态转换、澄清和重规划契约"
+    },
+    {
+      "id": "phase5-workflow-checkpoint",
+      "path": "services/agent_runtime/src/agent_runtime/workflow/checkpoint.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "966d1d976ac402d4b258a1620bdc246d6d0d183f01b16c686360efb79a5e5e14",
+      "locator": "SQLite WAL/foreign key、revision CAS、lease 和 JSON-safe checkpoint 存储"
+    },
+    {
+      "id": "phase5-workflow-engine",
+      "path": "services/agent_runtime/src/agent_runtime/workflow/engine.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "f4c513d5a129174b3a616e68f74df325c4747a1367340ac5dcbc24404c61f566",
+      "locator": "engine-neutral WorkflowEngine 协议和手写执行安全边界"
+    },
+    {
+      "id": "phase5-workflow-runtime",
+      "path": "services/agent_runtime/src/agent_runtime/workflow/runtime.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "74e76faf33f4fb8b7e161b261228c2060907d761e7f04c6636313326eeace325",
+      "locator": "Runtime workflow start/resume/cancel/status、短期 capability 和恢复处理"
+    },
+    {
+      "id": "phase5-workflow-engine-tests",
+      "path": "services/agent_runtime/tests/test_workflow_engines.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "06bffc531d3bf437376007a8a6444264f894f4ebef3f24197cb3e3886c5f1e24",
+      "locator": "手写 Fixed/ReAct/Plan-and-Execute 执行、澄清、恢复和安全失败定向测试"
+    },
+    {
+      "id": "phase5-frappe-workflow-tests",
+      "path": "synora_agentic_erp/tests/test_workflow_run.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "3737df5256fbacd51155cc7cea77c69c49d362b3954e863bbf0661986511aa72",
+      "locator": "Frappe workflow deadline、invocation ledger、取消/过期、权限和旧 checkpoint 遮蔽集成测试"
+    },
+    {
+      "id": "phase5-comparison-lab",
+      "path": "labs/workflow_comparison/comparison.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "139b8520ab07e82938597c6c2270590b8658e090b872241a132f49120891fa71",
+      "locator": "同输入/同 recorded observation 的 Fixed Workflow、ReAct 和 Plan-and-Execute 对照"
+    },
+    {
+      "id": "phase5-comparison-readme",
+      "path": "labs/workflow_comparison/README.md",
+      "kind": "acceptance",
+      "status": "CONFIRMED",
+      "sha256": "ade413d01f8520dcdabd73e58e74e302a977d62653cfd26db51c89edf90228f3",
+      "locator": "工作流同任务对照复跑命令和业务主线采用门槛"
+    },
+    {
+      "id": "phase5-n8n-workflow",
+      "path": "labs/workflow_comparison/n8n/n8n-workflow.json",
+      "kind": "configuration",
+      "status": "CONFIRMED",
+      "sha256": "f64b4b804287fed46f6dbde10ff059416e6fe9d5924b160f6d6b2351f1117c1d",
+      "locator": "固定 n8n digest 的 LAB_ONLY Manual Trigger/Set/If/loopback HTTP Request 工作流"
+    },
+    {
+      "id": "phase5-n8n-readme",
+      "path": "labs/workflow_comparison/n8n/README.md",
+      "kind": "acceptance",
+      "status": "CONFIRMED",
+      "sha256": "e2e6b33f2d38ce23692aa9d58427014a60016aebc23b91ede04a1f2da757ffcf",
+      "locator": "n8n 固定镜像、隔离容器、import/execute/audit 复跑命令和风险边界"
+    },
+    {
+      "id": "phase5-n8n-recorded-gateway",
+      "path": "labs/workflow_comparison/n8n/recorded_gateway.js",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "57e699381da5169529bcbaf988247c0d0d35cb96e51711da3401fa0c5dede688",
+      "locator": "loopback recorded Gateway fixture：固定只读请求、体积上限和脱敏 observation digest"
     }
   ]
 }

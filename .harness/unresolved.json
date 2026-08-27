@@ -39,9 +39,11 @@
       "question": "Which LangGraph and checkpoint integration satisfies interruption, approval, resume, and reconciliation requirements?",
       "impact": "The runtime dependency and state model must not be fixed before a focused spike validates the required behavior.",
       "sources": [
-        "docs/decisions/ADR-0004-workflow-engine-spike.md"
+        "docs/decisions/ADR-0004-workflow-engine-spike.md",
+        "docs/decisions/ADR-0006-phase5-workflow-engine.md",
+        "docs/adoption-cards/20260827-Phase5-workflow-engine.md"
       ],
-      "resolution": "ADR-0004 (2026-08-25, remapped 2026-08-26): Phase 3 read-only lifecycle has no cross-request state, so LangGraph was not adopted. The approved Phase 4-13 route keeps Phase 4 focused on an in-process bounded execution kernel; Phase 5 must re-evaluate hand-written durable workflow versus LangGraph using interruption, resume, cancellation, expiry, and crash-recovery evidence before any mainline adoption. ERP writes remain disabled until the separate Phase 6 gates pass."
+      "resolution": "ADR-0004 (2026-08-25, remapped 2026-08-26) deferred the framework choice after the Phase 3 synchronous read-only baseline. ADR-0006 (2026-08-27) closes the Phase 5 re-evaluation: the hand-written durable Plan-and-Execute engine is the business mainline; LangGraph remains a strict workflow-lab adapter and n8n remains LAB_ONLY. The Phase 5 safety, recovery, permission, trace, and no-replay gates passed; ERP writes remain disabled until the separate Phase 6 gates pass."
     },
     {
       "id": "model-selection",
