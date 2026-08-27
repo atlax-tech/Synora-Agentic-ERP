@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "autoname": "field:reservation_id",
+ "creation": "2026-08-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "reservation_id", "action", "run", "idempotency_key", "proposal_digest",
+  "target_doctype", "executor", "status", "target_name", "receipt",
+  "response_category", "failure_category", "started_at", "completed_at",
+  "correlation_id"
+ ],
+ "fields": [
+  {"fieldname": "reservation_id", "fieldtype": "Data", "label": "Reservation ID", "read_only": 1, "reqd": 1, "set_only_once": 1, "unique": 1},
+  {"fieldname": "action", "fieldtype": "Link", "label": "Action", "options": "Synora Proposed Action", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "idempotency_key", "fieldtype": "Data", "label": "Idempotency Key", "read_only": 1, "reqd": 1, "set_only_once": 1, "unique": 1},
+  {"fieldname": "proposal_digest", "fieldtype": "Data", "label": "Proposal Digest", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "target_doctype", "fieldtype": "Select", "label": "Target DocType", "options": "Material Request", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "executor", "fieldtype": "Link", "label": "Executor", "options": "User", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "STARTED\nSUCCEEDED\nFAILED\nRECONCILIATION_REQUIRED", "read_only": 1, "reqd": 1},
+  {"fieldname": "target_name", "fieldtype": "Data", "label": "Target Name", "read_only": 1},
+  {"fieldname": "receipt", "fieldtype": "Link", "label": "Receipt", "options": "Synora Execution Receipt", "read_only": 1},
+  {"fieldname": "response_category", "fieldtype": "Select", "label": "Response Category", "options": "ERP_SUCCESS\nERP_VALIDATION_ERROR\nERP_PERMISSION_ERROR\nERP_NOT_FOUND\nTIMEOUT\nUNCERTAIN_RESULT\nCONFLICT", "read_only": 1},
+  {"fieldname": "failure_category", "fieldtype": "Data", "label": "Failure Category", "read_only": 1},
+  {"fieldname": "started_at", "fieldtype": "Data", "label": "Started At", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "completed_at", "fieldtype": "Data", "label": "Completed At", "read_only": 1},
+  {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Synora Agentic ERP",
+ "name": "Synora Execution Reservation",
+ "owner": "Administrator",
+ "permissions": [{"read": 1, "role": "System Manager"}],
+ "sort_field": "started_at",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

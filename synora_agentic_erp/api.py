@@ -51,6 +51,9 @@ from synora_agentic_erp.gateway.security import (
 from synora_agentic_erp.gateway.security import (
     revoke_run as revoke_server_run,
 )
+from synora_agentic_erp.governance.execution import (
+    execute_material_request as execute_material_request_impl,
+)
 from synora_agentic_erp.governance.policy import (
     decide_action as decide_governed_action_impl,
 )
@@ -857,6 +860,30 @@ def get_governed_action(action_id: object) -> dict[str, Any]:
     except GatewayFault as fault:
         _set_status(fault.status_code)
         return error_response(fault)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def execute_material_request(
+    action_id: object,
+    expected_proposal_digest: object,
+    idempotency_key: object,
+    correlation_id: object,
+) -> dict[str, Any]:
+    """Create one approved Material Request Draft through the ERP controller."""
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        return execute_material_request_impl(
+            action_id,
+            expected_proposal_digest,
+            idempotency_key,
+            safe_correlation_id,
+        )
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])  # type: ignore[untyped-decorator]

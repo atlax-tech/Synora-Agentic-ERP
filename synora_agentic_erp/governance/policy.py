@@ -288,7 +288,8 @@ def _run_identity(
         if (
             str(run.status) != "ACTIVE"
             or bool(run.revoked)
-            or str(run.run_state) not in {"CREATED", "ANALYZING", "PROPOSED", "AWAITING_APPROVAL"}
+            or str(run.run_state)
+            not in {"CREATED", "ANALYZING", "PROPOSED", "AWAITING_APPROVAL", "EXECUTING"}
         ):
             return GateResult("FAIL", "Run is no longer active")
         if _frappe_datetime(run.expires_at) <= _now():
