@@ -1,0 +1,33 @@
+{
+ "actions": [],
+ "autoname": "field:decision_id",
+ "creation": "2026-08-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["decision_id", "action", "proposal_digest", "actor", "decision", "matched_rule", "snapshot_ref", "expires_at", "reason", "decided_at", "correlation_id"],
+ "fields": [
+  {"fieldname": "decision_id", "fieldtype": "Data", "label": "Decision ID", "read_only": 1, "reqd": 1, "set_only_once": 1, "unique": 1},
+  {"fieldname": "action", "fieldtype": "Link", "label": "Action", "options": "Synora Proposed Action", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "proposal_digest", "fieldtype": "Data", "label": "Proposal Digest", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "actor", "fieldtype": "Link", "label": "Actor", "options": "User", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "decision", "fieldtype": "Select", "label": "Decision", "options": "ALLOW\nDECLINE\nCHANGES_REQUESTED", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "matched_rule", "fieldtype": "Data", "label": "Matched Rule", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "snapshot_ref", "fieldtype": "Data", "label": "Snapshot Reference", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "expires_at", "fieldtype": "Data", "label": "Expires At", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "reason", "fieldtype": "Small Text", "label": "Reason", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "decided_at", "fieldtype": "Data", "label": "Decided At", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Synora Agentic ERP",
+ "name": "Synora Approval Decision",
+ "owner": "Administrator",
+ "permissions": [{"read": 1, "role": "System Manager"}],
+ "sort_field": "decided_at",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
