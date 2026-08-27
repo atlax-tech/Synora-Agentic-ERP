@@ -238,6 +238,15 @@ def test_po_contract_rejects_missing_uom_and_zero_rate() -> None:
         build_proposed_action(raw)
 
 
+def test_draft_contract_rejects_independent_approval_class() -> None:
+    raw = _po_action().to_dict()
+    raw["approval_class"] = "INDEPENDENT_APPROVER"
+    raw.pop("proposal_digest", None)
+
+    with pytest.raises(GatewayFault):
+        build_proposed_action(raw)
+
+
 def test_read_back_returns_scalar_receipt_evidence_and_normalizes_quantity() -> None:
     verified = verify_material_request_read_back(_action(), _document(qty="2.000"))
 

@@ -14,7 +14,6 @@ from synora_agentic_erp.gateway.contract import GatewayFault
 from synora_agentic_erp.governance.policy import GateResult, pre_execute_recheck
 
 BUYER = "synora-p1-buyer@dev.localhost"
-APPROVER = "synora-p1-approver@dev.localhost"
 VIEWER = "synora-p1-viewer@dev.localhost"
 COMPANY = "SYNORA-P1 Test Company"
 WAREHOUSE = "SYNORA-P1 Stores - SP1"
@@ -177,28 +176,15 @@ class TestGovernancePolicy(FrappeTestCase):
         self.assertTrue(approved["ok"])
         self.assertEqual(approved["action"]["state"], "APPROVED")
 
-    def test_independent_approval_requires_a_different_effectively_authorized_user(self) -> None:
+    def test_current_draft_contract_rejects_independent_approval_class(self) -> None:
         run_id = self._run()
         proposal = _action(run_id, approval_class="INDEPENDENT_APPROVER")
+        before_actions = frappe.db.count("Synora Proposed Action")
         frappe.set_user(BUYER)
-        reviewed = evaluate_proposal(proposal)
-        self.assertTrue(reviewed["ok"])
-        digest = str(reviewed["action"]["proposal_digest"])
-        denied = decide_action(
-            str(proposal["action_id"]), "ALLOW", digest, "self approve", str(uuid4())
-        )
-        self.assertFalse(denied["ok"])
-        self.assertEqual(denied["error"]["code"], "PERMISSION_DENIED")
-        frappe.set_user(APPROVER)
-        approved = decide_action(
-            str(proposal["action_id"]), "ALLOW", digest, "independent approval", str(uuid4())
-        )
-        self.assertTrue(approved["ok"])
-        self.assertEqual(approved["action"]["state"], "APPROVED")
-        context = pre_execute_recheck(
-            str(proposal["action_id"]), digest, reviewed["action"]["idempotency_key"]
-        )
-        self.assertEqual(context.executor, APPROVER)
+        rejected = evaluate_proposal(proposal)
+        self.assertFalse(rejected["ok"])
+        self.assertEqual(rejected["error"]["code"], "INVALID_INPUT")
+        self.assertEqual(frappe.db.count("Synora Proposed Action"), before_actions)
 
     def test_expired_action_is_expired_by_owner_and_precheck_never_writes_erp(self) -> None:
         before_mr = frappe.db.count("Material Request")

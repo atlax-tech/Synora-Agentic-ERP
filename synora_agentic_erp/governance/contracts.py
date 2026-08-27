@@ -23,6 +23,7 @@ SCHEMA_VERSION = "1"
 ACTION_TYPES = frozenset({"CREATE_MR_DRAFT", "CREATE_PO_DRAFT"})
 RISK_CLASSES = frozenset({"LOW", "MEDIUM", "HIGH"})
 APPROVAL_CLASSES = frozenset({"INITIATOR_CONFIRMATION", "INDEPENDENT_APPROVER"})
+DRAFT_APPROVAL_CLASS = "INITIATOR_CONFIRMATION"
 REVALIDATION_RULE = "FULL_PRE_EXECUTE_RECHECK_V1"
 TARGET_DOCTYPES = {
     "CREATE_MR_DRAFT": "Material Request",
@@ -395,6 +396,12 @@ def build_proposed_action(value: object) -> ProposedAction:
     )
     if action.risk_class not in RISK_CLASSES or action.approval_class not in APPROVAL_CLASSES:
         raise _invalid("risk_class or approval_class is invalid")
+    # Independent approval is reserved for future Submit/P2P actions.  The
+    # Phase 6 action allowlist contains Draft writes only, so accepting it here
+    # would create an approval that the current executor state machine cannot
+    # safely complete.
+    if action.approval_class != DRAFT_APPROVAL_CLASS:
+        raise _invalid("current Draft actions require initiator confirmation")
     if action.revalidation_rule != REVALIDATION_RULE:
         raise _invalid("revalidation_rule is invalid")
     computed = proposal_digest(action)
