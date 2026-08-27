@@ -70,13 +70,15 @@
 - `[R]` P1.3 失败路径实测（HTTP）：Viewer（无业务角色）创建 MR → 403 `PermissionError`；Accountant 读取 PO → 403 `PermissionError`；Receiver 仅 Stock User 时创建 PR 因无法读取 Account 被拒（Inc-3 卡点 4），补充 Purchase User 后通过——未绕过权限，是按其上游 DocPerm 需求补足最小角色。
 - `[P]` Synora 策略：继承 ERPNext 权限与 Workflow，不在 Agent Runtime 复制审批规则（`PRD.md` 5.5、`ARCHITECTURE.md` "Approval and Workflow Authority"）；规则缺失、冲突或无法验证时 fail closed。
 - `[P]` 审批基线（`PRD.md:232`、`SPEC.md:256-261`）：MR Draft 与 PO Draft 由发起人显式确认即可执行；PO Submit、Purchase Receipt、Purchase Invoice 与 Payment 相关写操作必须由**不同于发起人**的有权审批人授权；始终采用 ERP Workflow 与 Synora 策略中更严格者。默认 DocPerm 允许单用户全链操作是 ERPNext 出厂行为，不代表审批策略已解决。
-- `[U]` 具体企业 Workflow 状态、多级审批、金额阈值与角色→Workflow 映射（`approval-workflow-mapping`）仍需用户决定，最迟 Phase 6 启用写入前完成。
+- `[R]` Step 001 只读取证（2026-08-27，固定 `dev.localhost`）：MR/PO Workflow 为空；Buyer/Approver/Receiver/Company-A-only 的 `frappe.has_permission(read/create)` 为 true，Accountant/Viewer 为 false；Company-A-only 仅有 Company A 的 User Permission；目标 permission hooks 与 Server Script 元数据为空。完整脱敏输出见 `env/dev/p6/artifacts/approval-mapping.json`，可由 `env/dev/p6/approval_mapping_probe.py` 重跑。
+- `[P]` ADR-0007（`P6-MAP-20260827-v1`）将固定开发 site 映射为：MR/PO Draft 由当前 session 且等于 Run initiator 的用户显式确认；服务端每次重检目标 `read/create`、company/warehouse scope、controller 依赖、快照、过期和 digest；active Workflow 始终优先，出现未映射/冲突/不可解释配置时 fail closed。角色名只作证据，不作硬编码授权。
+- `[U]` 其他企业 site 的 active Workflow、多级审批、金额阈值和策略来源仍是运行时输入；出现时需新 mapping 版本，不得把当前无 Workflow 观察推广为通用事实。
 
 ## 4. Workflow 观察
 
-- `[R]` 候选 site 只读查询 `frappe.get_all("Workflow")` 返回空列表——MR/PO/PR/PI 均未启用 Workflow，`Workflow` DocType 无记录。
+- `[R]` 候选 site 与 Step 001 probe 的只读查询均返回空列表——MR/PO/PR/PI 均未启用 Workflow，`Workflow` DocType 无记录。
 - `[I]` 依据：P1.3 中 Buyer/Approver 等角色可直接经标准 HTTP API 提交四类单据、无 Workflow 状态字段出现，与"无 Workflow"一致（推断依据：提交路径无 workflow 校验错误；未逐行追踪 frappe Workflow 钩子）。
-- `[P]` "当前 site 无 Workflow"是运行观察，不是审批策略已解决：企业 Workflow 与多级审批仍属 `[U]`，见第 3 节。
+- `[P]` "当前 site 无 Workflow"仍只是运行观察；ADR-0007 仅批准当前固定 site 的 Draft mapping，企业 Workflow 与多级审批出现时必须更严格优先并 fail closed。
 - `[U]` 是否在候选 site 上为四类单据启用 Workflow 以验证 ERP Workflow 门禁，属于企业配置决策，不在本阶段擅自更改（本阶段禁止修改 site 配置中的策略性内容）。
 
 ## 5. 业务不变量
@@ -134,17 +136,17 @@
 
 **`[S]` 源码事实**：转换三函数（MR→PO `material_request.py:561`、PO→PR `purchase_order.py:761`、PR→PI `purchase_receipt.py:1509`）及其数量/金额计算（`purchase_order.py:773-775`）；四 DocType JSON 与状态派生位置；币种链（`accounts_controller.py:1017,2515`、`price_list.py:40`）；Fiscal Year（`accounts/utils.py:51,141`）；提交后字段不可变（`base_document.py:1270`）；超收/超开票（`status_updater.py:423-425,754,796-805`、`stock_controller.py:1776`、`accounts_controller.py:2209,2222`）；官方测试 14 处（第 6 节）。
 
-**`[R]` 运行观察**：候选 site 无任何 Workflow；四类单据默认 DocPerm 矩阵（第 3 节）；`Global Defaults=CNY`、Buying Price List、允许率配置；P1.3 四单据最终状态（docstatus=1，PO/PR/PI CNY，PI `Unpaid` outstanding=500.0）；失败路径 403/417 实测。
+**`[R]` 运行观察**：候选 site 与 Step 001 probe 无任何目标 Workflow；MR/PO 默认 DocPerm/effective permission、Company-A-only scope、hooks/Server Script 元数据见第 3 节；`Global Defaults=CNY`、Buying Price List、允许率配置；P1.3 四单据最终状态（docstatus=1，PO/PR/PI CNY，PI `Unpaid` outstanding=500.0）；失败路径 403/417 实测。
 
-**`[P]` 产品策略**：继承 ERPNext 权限/Workflow、Runtime 不复制审批规则；MR/PO Draft 发起人显式确认、PO Submit 及后续 P2P 写操作独立审批人（`PRD.md:232`、`SPEC.md:256-261`）；规则缺失/冲突/无法验证 fail closed。
+**`[P]` 产品策略**：继承 ERPNext 权限/Workflow、Runtime 不复制审批规则；ADR-0007 将固定开发 site 的 MR/PO Draft 映射为当前 session Run initiator 显式确认，PO Submit 及后续 P2P 写操作仍需独立审批人（`PRD.md:232`、`SPEC.md:256-261`）；规则缺失/冲突/无法验证 fail closed。
 
 **`[I]` 推断**：site 无 Workflow 与 P1.3 无 Workflow 错误一致（依据：提交路径观察，未逐行追踪 frappe Workflow 钩子）；PI 取消回滚实现位置（依据：官方测试覆盖，未逐行追完）。
 
-**`[U]` 未决项**：企业 Workflow 状态/多级审批/金额阈值/角色→Workflow 映射（`approval-workflow-mapping`）；正式 commit pair 冻结（`erp-version-pair`，P1.5 解决）；候选 site 是否启用 Workflow 属企业配置决策。
+**`[U]` 未决项**：固定开发 site 之外的企业 Workflow 状态/多级审批/金额阈值/角色→Workflow overrides（需新 mapping 版本）；正式 commit pair 冻结（`erp-version-pair`，P1.5 解决）；候选/企业 site 是否启用 Workflow 属运行时配置决策。
 
 ## 8. 限制与后续
 
-- 本地图基于**候选 SHA**，按 ADR-0001 约束，冻结前不得用于结论性证据之外的用途；P1.5 独立对抗审查通过后由 ADR-0002 正式冻结。
+- Step 001 probe 基于 ADR-0002 固定 SHA；它只证明当次 `dev.localhost` 观察，不代表其他企业 site 的 Workflow 状态。
 - 所有行号以固定 SHA 为准；冻结后若更换版本必须重新取证。
 - 本阶段未执行取消/退货路径的真实运行，取消行为以官方测试为证据源。
-- 未修改任何上游源码、未直写数据库、未 reset/cleanup 当前 site/volume；seed 与 p2p 脚本只创建主数据、用户与业务单据。
+- Step 001 未修改任何上游源码、site Workflow/Role/DocPerm/User Permission、未直写数据库、未 reset/cleanup 当前 site/volume；probe 只读。

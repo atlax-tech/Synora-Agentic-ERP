@@ -474,7 +474,7 @@ F-009 至 F-012 是完整 P2P 需求的一部分，只是分阶段实现，不�
 
 - [x] Frappe v16 与 ERPNext v16 的完整 baseline commit pair（2026-08-24 由 `docs/decisions/ADR-0002-frozen-baseline-pair.md` 固定：Frappe `6a329d068416768ec47ccd3326b9cc95a8d7bf99` 16.31.0、ERPNext `11e0ba0a1c45f217e2e73e885f699102d06da325` 16.32.3）。
 - [x] Frappe 与 Runtime 之间的用户绑定授权方案（2026-08-25 由 `docs/decisions/ADR-0003-runtime-user-authorization.md` 批准，并在 Phase 2 通过真实 HTTP 链路验证）。
-- [ ] 将已批准的审批基线映射到具体 ERPNext Role/Permission Matrix 与 Workflow 配置。
+- [x] 将已批准的审批基线映射到固定开发 site 的 ERPNext Role/Permission Matrix 与 Workflow 配置（2026-08-27 由 ADR-0007 与只读取证固定；其他企业 site 的更严格 Workflow 仍运行时优先并 fail closed）。
 - [ ] 多级审批、金额阈值和策略配置来源。
 - [x] Goal 长度、默认公司/仓库/时间范围（2026-08-25 由 P3.1 决策包批准并同步到 Run 契约与前端验收）。
 - [ ] 性能、并发和数据保留指标；浏览器、视口与可访问性基线已由 P3.1 解决。

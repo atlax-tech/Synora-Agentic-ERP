@@ -97,7 +97,7 @@ Phase 4 establishes the execution-kernel baseline. Phase 5 establishes durable w
 - The controlled test baseline allows the initiator to explicitly confirm MR Draft and PO Draft actions. This is a confirmation boundary, not permission for silent execution.
 - PO Submit, Purchase Receipt, Purchase Invoice, and Payment-related mutations require an authenticated approver who is different from the initiator.
 - Approval is not execution. The gateway rechecks the approver, initiator, current document state, policy, and idempotency immediately before mutation.
-- Missing, conflicting, stale, or unverifiable Workflow configuration fails closed. The ERP baseline is running, but the exact Frappe Role, Permission Matrix, Workflow, multi-level approval, and policy mapping remains unresolved and must close before Phase 6 enables writes.
+- Missing, conflicting, stale, or unverifiable Workflow configuration fails closed. ADR-0007 resolves the mapping for the fixed `dev.localhost` baseline: MR/PO Draft use authenticated Run-initiator confirmation only after current effective permission and scope rechecks; any stricter active Workflow remains authoritative and requires a new mapping before execution.
 
 ## Technology Selection and Adoption Gates
 
@@ -139,7 +139,7 @@ The initial retrieval implementation uses curated, versioned sources with SQLite
 - Local model and optional provider set selected by evaluation.
 - Production storage and scaling path beyond the first single-instance implementation.
 - Third-party license boundary for GPL and CC BY-NC materials.
-- Exact ERPNext Workflow, Role, permission, and multi-level approval mapping implementing the confirmed approval baseline.
+- Exact enterprise-specific Workflow, Role, permission, and multi-level approval overrides beyond the fixed `dev.localhost` mapping in ADR-0007.
 
 ## Sources
 

@@ -25,13 +25,14 @@
     },
     {
       "id": "approval-workflow-mapping",
-      "status": "UNRESOLVED",
+      "status": "RESOLVED",
       "question": "Which exact ERPNext Roles, permissions, Workflow states, multi-level rules, and policy configuration implement the confirmed Draft confirmation and Submit-or-later separation-of-duties baseline?",
       "impact": "The product approval policy is confirmed, but it cannot be enforced or integration-tested until mapped to a pinned ERPNext/Frappe baseline.",
       "sources": [
         "docs/PRD.md#55-f-005-policy--rbac--approval",
         "docs/ARCHITECTURE.md#Approval and Workflow Authority"
-      ]
+      ],
+      "resolution": "Fixed by docs/decisions/ADR-0007-phase6-approval-workflow-mapping.md (2026-08-27, P6-MAP-20260827-v1): the pinned dev.localhost site has no active MR/PO Workflow; CREATE_MR_DRAFT and CREATE_PO_DRAFT require authenticated Run-initiator confirmation plus current read/create permission, company/warehouse scope, controller dependencies, snapshot, expiry, digest, and idempotency rechecks. Any stricter or unverifiable enterprise Workflow remains authoritative and fail-closed until a new mapping version is captured. Read-only evidence is reproducible with env/dev/p6/approval_mapping_probe.py."
     },
     {
       "id": "workflow-engine-spike",

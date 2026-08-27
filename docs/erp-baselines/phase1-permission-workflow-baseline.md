@@ -22,8 +22,8 @@
 
 ## 2. Workflow 基线
 
-- 运行观察：候选 site 的 `Workflow` DocType 无任何记录，MR/PO/PR/PI 均未启用 Workflow。
-- 结论：**"无 Workflow"是运行观察，不代表审批策略已解决**。Synora 审批基线（产品策略）见下节；具体企业 Workflow、多级审批、金额阈值与角色→Workflow 映射（`approval-workflow-mapping`）仍为未决项，最迟 Phase 6 启用写入前由用户决定。
+- 运行观察：候选 site 与 2026-08-27 Step 001 probe 的 `Workflow` DocType 均无目标记录，MR/PO/PR/PI 未启用 Workflow。
+- 结论：**"无 Workflow"是运行观察，不代表所有企业审批策略都无 Workflow**。ADR-0007 将固定 `dev.localhost` 的 MR/PO Draft 映射为 Run 发起人显式确认；其他 site 的更严格 Workflow、多级审批或金额阈值仍作为运行时输入，未映射或冲突时 fail closed。
 - 本阶段未在候选 site 启用任何 Workflow（属企业配置决策，不在本阶段擅自更改）。
 
 ## 3. 审批基线（产品策略，引用权威文档）
@@ -31,7 +31,8 @@
 - MR Draft / PO Draft：发起人显式确认即可执行（`docs/PRD.md:232`、`docs/SPEC.md:256-261`）。
 - PO Submit、Purchase Receipt、Purchase Invoice、Payment 相关写操作：必须由**不同于发起人**的有权审批人授权。
 - 始终采用 ERP Workflow 与 Synora 策略中更严格者；规则缺失、冲突或无法验证时 fail closed。
-- 默认 DocPerm 的单用户全链能力不构成审批通过的依据，Synora 治理层必须施加更严格的审批门禁（Phase 4 实现）。
+- 默认 DocPerm 的单用户全链能力不构成审批通过的依据，Synora 治理层必须施加更严格的审批门禁（Phase 6 实现）。
+- 固定开发 site mapping（ADR-0007）：`CREATE_MR_DRAFT` / `CREATE_PO_DRAFT` 的 actor 必须是当前 Frappe session 且等于 Run initiator；服务端每次重检目标 `read/create`、company/warehouse scope、controller 依赖、Workflow、snapshot、expiry 和 digest；目标状态只允许 `docstatus=0`。
 
 ## 4. 关键配置基线（确定性数据环境）
 
@@ -45,7 +46,7 @@
 
 ## 5. 未决项（不受本基线影响）
 
-- `approval-workflow-mapping`：企业 Workflow/多级审批/角色映射（Phase 6 前用户决定）。
+- 企业 site 的 Workflow/多级审批/金额阈值 overrides：当前固定开发 site mapping 已由 ADR-0007 固化；其他配置出现时必须创建新的 mapping 版本，不能复用本 baseline。
 - `third-party-licenses`、`runtime-user-authorization`、`frontend-design-baseline`、`product-commands`、`model-selection`、`workflow-engine-spike` 等保持 UNRESOLVED（见 `.harness/unresolved.json`）。
 - `erp-version-pair`：已由 ADR-0002 解决。
 

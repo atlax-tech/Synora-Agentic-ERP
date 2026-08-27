@@ -17,7 +17,8 @@ permission_scope: internal
 - 规则缺失、冲突或无法验证时 fail closed
 
 ## Workflow
-- 候选 site 未启用任何 Workflow (frappe.get_all("Workflow") 为空)
-- 企业 Workflow / 多级审批 / 金额阈值属未决项, 最迟 Phase 4 启用写入前由用户决定
+- 固定 `dev.localhost` 的 Step 001 只读取证显示 MR/PO 没有 active Workflow；这不是企业通用事实。
+- ADR-0007 将固定开发 site 的 MR/PO Draft 映射为当前 session 且等于 Run initiator 的显式确认；有效 DocPerm/User Permission、scope、snapshot、expiry、digest 和 controller 依赖必须每次重检。
+- 任何企业 active Workflow、多级审批、金额阈值或冲突配置都优先于该确认；未映射/不可解释时 fail closed，并要求新 mapping 版本。
 
 来源: docs/erp-baselines/phase1-permission-workflow-baseline.md

@@ -516,7 +516,7 @@ CI must not depend on a paid or nondeterministic model. Assertions check ERP fin
 
 Implementation must not fill these by guesswork:
 
-- concrete ERP Roles, permissions, Workflow states, multi-level approval, and policy configuration;
+- enterprise-specific ERP Roles, permissions, Workflow states, multi-level approval, and policy overrides beyond the fixed `dev.localhost` mapping in ADR-0007;
 - dependency versions not already fixed by the lockfiles and any commands not yet observed successfully;
 - LangGraph checkpoint/resume Spike outcome;
 - local and optional provider model baseline;
