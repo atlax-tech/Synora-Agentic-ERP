@@ -66,6 +66,17 @@ def register(
     return decorator
 
 
+def get_tool_spec(name: str, version: str) -> ToolSpec:
+    """Return the closed read-only tool specification or fail closed."""
+    from synora_agentic_erp.gateway import tools as product_tools
+
+    _ = product_tools
+    spec = _TOOLS.get((name, version))
+    if spec is None:
+        raise GatewayFault("TOOL_NOT_ALLOWED", "tool name or version is not allowed", 404)
+    return spec
+
+
 def dispatch(request: GatewayRequest, run: RunContext) -> dict[str, Any]:
     from synora_agentic_erp.gateway import tools as product_tools
 
@@ -73,9 +84,7 @@ def dispatch(request: GatewayRequest, run: RunContext) -> dict[str, Any]:
     # 超时是"执行完成后的耗时分类" (post-hoc): handler 返回后才比较耗时,
     # 不会中断正在执行的 ERP 查询。永久卡住的上游由 Runtime HTTP 超时兜底。
     started_at = monotonic()
-    spec = _TOOLS.get((request.tool.name, request.tool.version))
-    if spec is None:
-        raise GatewayFault("TOOL_NOT_ALLOWED", "tool name or version is not allowed", 404)
+    spec = get_tool_spec(request.tool.name, request.tool.version)
     recheck_run_scope(run, spec.required_doctypes)
     validated_input = parse_tool_input(request.tool.input, spec.input_fields, spec.max_page_size)
     result = spec.handler(run, validated_input)

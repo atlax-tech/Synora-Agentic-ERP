@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import os
 from typing import Any
@@ -7,6 +8,7 @@ from uuid import UUID
 
 import httpx
 import pytest
+from agent_runtime.agent.contracts import canonical_json
 from agent_runtime.gateway import (
     GATEWAY_ORIGIN_ENV,
     GATEWAY_PATH,
@@ -89,6 +91,36 @@ def test_client_uses_only_fixed_gateway_path_and_no_user_credentials() -> None:
     asyncio.run(run())
     assert CAPABILITY not in repr(_request())
     assert CAPABILITY not in str(_request().model_dump(mode="json"))
+
+
+def test_workflow_invocation_metadata_is_deterministic_and_sent() -> None:
+    args = {"limit": 20, "offset": 0, "query": "bearing"}
+    digest = hashlib.sha256(canonical_json(args).encode()).hexdigest()
+    invocation = hashlib.sha256(f"{RUN_ID}|2|read-item|item.lookup|1|{digest}".encode()).hexdigest()
+    request = GatewayRequest(
+        run_id=RUN_ID,
+        capability=CAPABILITY,
+        correlation_id=CORRELATION_ID,
+        tool=ItemLookupCall(name="item.lookup", input=ItemLookupInput(**args)),
+        invocation_id=invocation,
+        plan_version=2,
+        step_id="read-item",
+        args_digest=digest,
+    )
+
+    async def handler(http_request: httpx.Request) -> httpx.Response:
+        payload = json.loads(http_request.read())
+        assert payload["invocation_id"] == invocation
+        assert payload["plan_version"] == 2
+        assert payload["step_id"] == "read-item"
+        assert payload["args_digest"] == digest
+        return httpx.Response(200, json=_success())
+
+    async def run() -> None:
+        async with _client(handler) as client:
+            assert (await client.execute(request)).ok
+
+    asyncio.run(run())
 
 
 def test_unknown_tool_and_arbitrary_origin_parts_fail_validation() -> None:

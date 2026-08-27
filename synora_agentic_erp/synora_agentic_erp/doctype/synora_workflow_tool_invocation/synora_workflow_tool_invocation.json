@@ -1,0 +1,53 @@
+{
+ "actions": [],
+ "autoname": "field:invocation_id",
+ "creation": "2026-08-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "invocation_id",
+  "run",
+  "initiator",
+  "plan_version",
+  "step_id",
+  "tool_name",
+  "tool_version",
+  "args_digest",
+  "status",
+  "response_json",
+  "observation_digest",
+  "started_at",
+  "completed_at",
+  "correlation_id"
+ ],
+ "fields": [
+  {"fieldname": "invocation_id", "fieldtype": "Data", "label": "Invocation ID", "read_only": 1, "reqd": 1, "set_only_once": 1, "unique": 1},
+  {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "initiator", "fieldtype": "Link", "label": "Initiator", "options": "User", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "plan_version", "fieldtype": "Int", "label": "Plan Version", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "step_id", "fieldtype": "Data", "label": "Step ID", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "tool_name", "fieldtype": "Data", "label": "Tool Name", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "tool_version", "fieldtype": "Data", "label": "Tool Version", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "args_digest", "fieldtype": "Data", "label": "Arguments Digest", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "STARTED\nSUCCEEDED", "read_only": 1, "reqd": 1},
+  {"fieldname": "response_json", "fieldtype": "Long Text", "label": "Response JSON", "read_only": 1},
+  {"fieldname": "observation_digest", "fieldtype": "Data", "label": "Observation Digest", "read_only": 1},
+  {"fieldname": "started_at", "fieldtype": "Datetime", "label": "Started At", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "completed_at", "fieldtype": "Datetime", "label": "Completed At", "read_only": 1},
+  {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Synora Agentic ERP",
+ "name": "Synora Workflow Tool Invocation",
+ "owner": "Administrator",
+ "permissions": [
+  {"read": 1, "role": "System Manager"}
+ ],
+ "sort_field": "started_at",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

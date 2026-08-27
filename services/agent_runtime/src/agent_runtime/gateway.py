@@ -101,6 +101,10 @@ class GatewayRequest(StrictModel):
     capability: SecretStr = Field(repr=False)
     correlation_id: UUID
     tool: ToolCall = Field(repr=False)
+    invocation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    plan_version: int | None = Field(default=None, ge=1, le=10_000)
+    step_id: str | None = Field(default=None, min_length=1, max_length=64)
+    args_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
 
     @field_validator("capability")
     @classmethod
@@ -294,7 +298,7 @@ class GatewayClient:
             request.capability.get_secret_value(),
         ):
             raise GatewayProtocolError("tool input contains a request secret")
-        payload = request.model_dump(mode="json", exclude={"capability"})
+        payload = request.model_dump(mode="json", exclude={"capability"}, exclude_none=True)
         payload["capability"] = request.capability.get_secret_value()
         transport_fault: GatewayTransportError | None = None
         body = bytearray()

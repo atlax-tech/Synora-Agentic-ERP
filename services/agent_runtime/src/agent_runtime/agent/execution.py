@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from collections.abc import Mapping
 from typing import Annotated, Literal, Protocol
@@ -162,6 +163,13 @@ class GatewayToolAdapter(ToolAdapter):
         self._run_id = run_id
         self._correlation_id = correlation_id
         self._capability: SecretStr | None = capability
+        self._plan_version: int | None = None
+        self._step_id: str | None = None
+
+    def set_workflow_context(self, *, plan_version: int, step_id: str) -> None:
+        """Attach deterministic invocation metadata for one durable workflow step."""
+        self._plan_version = plan_version
+        self._step_id = step_id
 
     async def execute(self, action: Action) -> Observation:
         if self._client is None or self._capability is None:
@@ -170,14 +178,28 @@ class GatewayToolAdapter(ToolAdapter):
             tool = _TOOL_CALL_ADAPTER.validate_python(
                 {"name": action.tool_name, "version": "1", "input": action.canonical_args}
             )
-            response = await self._client.execute(
-                GatewayRequest(
-                    run_id=self._run_id,
-                    capability=self._capability,
-                    correlation_id=self._correlation_id,
-                    tool=tool,
-                )
+            request = GatewayRequest(
+                run_id=self._run_id,
+                capability=self._capability,
+                correlation_id=self._correlation_id,
+                tool=tool,
             )
+            if self._plan_version is not None and self._step_id is not None:
+                args_digest = hashlib.sha256(
+                    canonical_json(action.canonical_args).encode("utf-8")
+                ).hexdigest()
+                request = request.model_copy(
+                    update={
+                        "plan_version": self._plan_version,
+                        "step_id": self._step_id,
+                        "args_digest": args_digest,
+                        "invocation_id": hashlib.sha256(
+                            f"{self._run_id}|{self._plan_version}|{self._step_id}|"
+                            f"{tool.name}|{tool.version}|{args_digest}".encode()
+                        ).hexdigest(),
+                    }
+                )
+            response = await self._client.execute(request)
         except GatewayRejected as error:
             raise ToolExecutionFailure(error.code, retryable=error.retryable) from None
         except GatewayTimeoutError:
@@ -198,6 +220,8 @@ class GatewayToolAdapter(ToolAdapter):
         client = self._client
         self._client = None
         self._capability = None
+        self._plan_version = None
+        self._step_id = None
         if client is not None:
             await client.aclose()
 

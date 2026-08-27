@@ -31,6 +31,13 @@ class GatewayRequest:
     capability: str
     correlation_id: str
     tool: ToolCall
+    # Durable workflow metadata is optional so the Phase 2/3 deterministic
+    # callers keep the original Gateway contract.  When present, all four
+    # fields are validated as one idempotency tuple by parse_request.
+    invocation_id: str | None = None
+    plan_version: int | None = None
+    step_id: str | None = None
+    args_digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -47,11 +54,17 @@ class ToolResult:
     omissions: dict[str, int] = dataclass_field(default_factory=dict)
 
 
-def _strict_object(value: object, fields: set[str], label: str) -> dict[str, Any]:
+def _strict_object(
+    value: object,
+    fields: set[str],
+    label: str,
+    *,
+    required_fields: set[str] | None = None,
+) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise GatewayFault("INVALID_INPUT", f"{label} must be an object")
     unknown = set(value) - fields
-    missing = fields - set(value)
+    missing = (required_fields or fields) - set(value)
     if unknown or missing:
         raise GatewayFault("INVALID_INPUT", f"{label} fields are invalid")
     return value
@@ -89,6 +102,13 @@ def correlation_id(value: object) -> str:
     return canonical_uuid(value, "correlation_id")
 
 
+def _hex_digest(value: object, label: str) -> str:
+    text = _required_text(value, label, 64)
+    if len(text) != 64 or any(character not in "0123456789abcdef" for character in text):
+        raise GatewayFault("INVALID_INPUT", f"{label} is invalid")
+    return text
+
+
 def positive_int(value: object, label: str, maximum: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > maximum:
         raise GatewayFault("INVALID_INPUT", f"{label} is invalid")
@@ -119,14 +139,40 @@ def parse_tool_input(
 def parse_request(payload: object) -> GatewayRequest:
     body = _strict_object(
         payload,
-        {"schema_version", "run_id", "capability", "correlation_id", "tool"},
+        {
+            "schema_version",
+            "run_id",
+            "capability",
+            "correlation_id",
+            "tool",
+            "invocation_id",
+            "plan_version",
+            "step_id",
+            "args_digest",
+        },
         "request",
+        required_fields={"schema_version", "run_id", "capability", "correlation_id", "tool"},
     )
     if body["schema_version"] != SCHEMA_VERSION:
         raise GatewayFault("UNSUPPORTED_VERSION", "schema version is not supported")
     tool = _strict_object(body["tool"], {"name", "version", "input"}, "tool")
     if not isinstance(tool["input"], dict):
         raise GatewayFault("INVALID_INPUT", "tool.input must be an object")
+    metadata_fields = ("invocation_id", "plan_version", "step_id", "args_digest")
+    metadata_present = [field in body for field in metadata_fields]
+    if any(metadata_present) and not all(metadata_present):
+        raise GatewayFault("INVALID_INPUT", "workflow invocation metadata is incomplete")
+    invocation_id: str | None = None
+    plan_version: int | None = None
+    step_id: str | None = None
+    args_digest: str | None = None
+    if all(metadata_present):
+        invocation_id = _hex_digest(body["invocation_id"], "invocation_id")
+        plan_version = positive_int(body["plan_version"], "plan_version", 10_000)
+        if plan_version < 1:
+            raise GatewayFault("INVALID_INPUT", "plan_version is invalid")
+        step_id = _required_text(body["step_id"], "step_id", 64)
+        args_digest = _hex_digest(body["args_digest"], "args_digest")
     return GatewayRequest(
         run_id=canonical_uuid(body["run_id"], "run_id"),
         capability=_required_text(body["capability"], "capability", 512),
@@ -136,6 +182,10 @@ def parse_request(payload: object) -> GatewayRequest:
             version=_required_text(tool["version"], "tool.version", 20),
             input=tool["input"],
         ),
+        invocation_id=invocation_id,
+        plan_version=plan_version,
+        step_id=step_id,
+        args_digest=args_digest,
     )
 
 
