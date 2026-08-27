@@ -1,0 +1,1 @@
+{"schema_version":"1","case_id":"P5-G04-tool-error-replan","goal":"replan after a read-only tool error","observations":[{"tool_name":"stock.projected","summary":"gateway unavailable","ok":false}],"expected":{"final_status":"FAILED","completed_steps":[],"expected_tool_calls":1},"tags":["workflow","replan"]}

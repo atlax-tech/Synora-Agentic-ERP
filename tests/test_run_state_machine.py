@@ -15,7 +15,10 @@ from synora_agentic_erp.gateway.contract import GatewayFault
 _LEGAL = [
     ("CREATED", "ANALYZING"),
     ("CREATED", "CANCELLED"),
+    ("CREATED", "EXPIRED"),
     ("ANALYZING", "PROPOSED"),
+    ("ANALYZING", "FAILED"),
+    ("ANALYZING", "EXPIRED"),
     ("ANALYZING", "CANCELLED"),
     # 验收修复: 分析失败回退 CREATED (可重试, 受控路径执行)。
     ("ANALYZING", "CREATED"),

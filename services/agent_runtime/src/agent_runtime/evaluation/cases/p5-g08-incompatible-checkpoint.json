@@ -1,0 +1,1 @@
+{"schema_version":"1","case_id":"P5-G08-incompatible-checkpoint","goal":"reject unknown checkpoint schema","observations":[],"expected":{"final_status":"FAILED","expected_tool_calls":0},"tags":["workflow","compatibility"]}

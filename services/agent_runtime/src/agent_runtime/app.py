@@ -17,6 +17,20 @@ from agent_runtime.agent.execution import (
     execute_agent,
 )
 from agent_runtime.providers import PROVIDER_MODEL_ENV, ProviderError, provider_from_environment
+from agent_runtime.workflow.checkpoint import (
+    CheckpointConflict,
+    CheckpointError,
+    CheckpointIncompatible,
+    CheckpointUnavailable,
+)
+from agent_runtime.workflow.runtime import (
+    WorkflowCancelRequest,
+    WorkflowResponse,
+    WorkflowResumeRequest,
+    WorkflowRuntime,
+    WorkflowStartRequest,
+    WorkflowStatusRequest,
+)
 
 _RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
 _RUNTIME_TOKEN_HEADER = "X-Synora-Runtime-Token"
@@ -37,12 +51,41 @@ class EnhanceResponse(BaseModel):
     evidence: dict[str, Any]
 
 
+def _require_runtime_token(http_request: Request) -> None:
+    expected_token = os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="runtime authentication is unavailable")
+    if not hmac.compare_digest(http_request.headers.get(_RUNTIME_TOKEN_HEADER, ""), expected_token):
+        raise HTTPException(status_code=401, detail="runtime authentication required")
+
+
+def _workflow_error(error: Exception) -> HTTPException:
+    if isinstance(error, CheckpointUnavailable):
+        return HTTPException(status_code=503, detail="workflow checkpoint storage is unavailable")
+    if isinstance(error, CheckpointIncompatible):
+        return HTTPException(status_code=409, detail="workflow checkpoint is incompatible")
+    if isinstance(error, (CheckpointConflict, CheckpointError)):
+        return HTTPException(status_code=409, detail="workflow state conflict")
+    return HTTPException(status_code=409, detail="workflow request was rejected")
+
+
 app = FastAPI(
     title="Synora Agent Runtime",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
 )
+
+
+@app.on_event("startup")
+async def recover_persisted_workflows() -> None:
+    """Convert orphaned in-flight tool steps into explicit manual recovery."""
+    try:
+        await WorkflowRuntime().recover()
+    except CheckpointUnavailable:
+        # PLAN_EXECUTE requests fail closed when storage is not configured; a
+        # Runtime health check must remain available for deterministic/AGENT use.
+        return
 
 
 async def _execute_with_disconnect_guard(
@@ -119,10 +162,51 @@ async def execute_agent_run(
     http_request: Request,
 ) -> AgentExecuteResponse:
     """Internal Frappe-to-Runtime read-only Agent execution endpoint."""
-    expected_token = os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
-    supplied_token = http_request.headers.get(_RUNTIME_TOKEN_HEADER, "")
-    if not expected_token:
-        raise HTTPException(status_code=503, detail="runtime authentication is unavailable")
-    if not hmac.compare_digest(supplied_token, expected_token):
-        raise HTTPException(status_code=401, detail="runtime authentication required")
+    _require_runtime_token(http_request)
     return await _execute_with_disconnect_guard(request, http_request)
+
+
+@app.post("/workflow/start", response_model=WorkflowResponse)
+async def workflow_start(request: WorkflowStartRequest, http_request: Request) -> WorkflowResponse:
+    """Start or idempotently continue one persisted read-only workflow."""
+    _require_runtime_token(http_request)
+    try:
+        return await WorkflowRuntime().start(request)
+    except Exception as error:
+        raise _workflow_error(error) from error
+
+
+@app.post("/workflow/resume", response_model=WorkflowResponse)
+async def workflow_resume(
+    request: WorkflowResumeRequest, http_request: Request
+) -> WorkflowResponse:
+    """Resume exactly one current clarification revision."""
+    _require_runtime_token(http_request)
+    try:
+        return await WorkflowRuntime().resume(request)
+    except Exception as error:
+        raise _workflow_error(error) from error
+
+
+@app.post("/workflow/cancel", response_model=WorkflowResponse)
+async def workflow_cancel(
+    request: WorkflowCancelRequest, http_request: Request
+) -> WorkflowResponse:
+    """Best-effort Runtime checkpoint cancellation after Frappe CAS."""
+    _require_runtime_token(http_request)
+    try:
+        return WorkflowRuntime().cancel(request)
+    except Exception as error:
+        raise _workflow_error(error) from error
+
+
+@app.post("/workflow/status", response_model=WorkflowResponse)
+async def workflow_status(
+    request: WorkflowStatusRequest, http_request: Request
+) -> WorkflowResponse:
+    """Return only persisted orchestration state; no ERP fact is synthesized."""
+    _require_runtime_token(http_request)
+    try:
+        return WorkflowRuntime().status(request)
+    except Exception as error:
+        raise _workflow_error(error) from error

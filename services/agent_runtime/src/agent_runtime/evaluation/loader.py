@@ -86,5 +86,48 @@ def load_agent_cases(directory: Path = CASES_DIR) -> AgentEvaluationSet:
     return AgentEvaluationSet(cases=tuple(_load_agent_case(path) for path in paths))
 
 
+class WorkflowObservation(_Strict):
+    tool_name: ToolName
+    summary: str = Field(min_length=1, max_length=4_000)
+    ok: bool = True
+
+
+class WorkflowExpected(_Strict):
+    final_status: str
+    completed_steps: tuple[str, ...] = ()
+    requires_interrupt: bool = False
+    resume_status: str | None = None
+    expected_tool_calls: int = Field(default=0, ge=0, le=64)
+
+
+class WorkflowEvaluationCase(_Strict):
+    schema_version: Literal["1"] = "1"
+    case_id: str
+    goal: str
+    observations: tuple[WorkflowObservation, ...] = ()
+    expected: WorkflowExpected
+    tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class WorkflowEvaluationSet:
+    cases: tuple[WorkflowEvaluationCase, ...]
+
+    def filter_tags(self, tags: set[str]) -> WorkflowEvaluationSet:
+        return WorkflowEvaluationSet(
+            cases=tuple(case for case in self.cases if tags.issubset(set(case.tags)))
+        )
+
+
+def load_workflow_cases(directory: Path = CASES_DIR) -> WorkflowEvaluationSet:
+    paths = sorted(directory.glob("p5-g*.json"))
+    return WorkflowEvaluationSet(
+        cases=tuple(
+            WorkflowEvaluationCase.model_validate_json(path.read_text(encoding="utf-8"))
+            for path in paths
+        )
+    )
+
+
 def to_json(case: EvaluationCase | AgentEvaluationCase) -> dict[str, Any]:
     return case.model_dump()

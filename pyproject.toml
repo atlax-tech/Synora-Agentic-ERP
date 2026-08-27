@@ -20,6 +20,10 @@ dev = [
 lab = [
     "smolagents @ git+https://github.com/huggingface/smolagents.git@30bb1161095dbae2271e6bc3cc4c219cc3897a57",
 ]
+workflow-lab = [
+    "langgraph==1.2.11",
+    "langgraph-checkpoint-sqlite==3.1.1",
+]
 
 [tool.uv.workspace]
 members = ["services/agent_runtime"]

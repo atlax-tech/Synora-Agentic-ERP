@@ -127,21 +127,24 @@ def _validate_trace_semantics(
         if kind == "action.proposed":
             if pending is not None:
                 raise ValueError("trace action overlaps")
-            tool_name, step = payload.get("tool_name"), payload.get("step")
-            if not isinstance(tool_name, str) or not isinstance(step, int) or isinstance(step, bool):
-                raise ValueError("trace action identity is invalid")
-            pending = ("action", tool_name, step)
-        elif kind in {"action.validated", "action.rejected"}:
-            tool_name, step = payload.get("tool_name"), payload.get("step")
-            if kind == "action.validated" and (
-                pending is None
-                or pending[0] != "action"
-                or payload.get("tool_name") != pending[1]
-                or payload.get("step") != pending[2]
+            raw_tool_name, raw_step = payload.get("tool_name"), payload.get("step")
+            if (
+                not isinstance(raw_tool_name, str)
+                or not isinstance(raw_step, int)
+                or isinstance(raw_step, bool)
             ):
-                raise ValueError("trace action transition is invalid")
+                raise ValueError("trace action identity is invalid")
+            pending = ("action", raw_tool_name, raw_step)
+        elif kind in {"action.validated", "action.rejected"}:
             if kind == "action.validated":
-                pending = ("validated", tool_name, step)
+                if (
+                    pending is None
+                    or pending[0] != "action"
+                    or payload.get("tool_name") != pending[1]
+                    or payload.get("step") != pending[2]
+                ):
+                    raise ValueError("trace action transition is invalid")
+                pending = ("validated", pending[1], pending[2])
             else:
                 pending = None
         elif kind == "tool.started":

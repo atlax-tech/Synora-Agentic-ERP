@@ -31,8 +31,9 @@
 当前确认事实：
 
 - 仓库是 `MANAGED_HARNESS`；产品、架构、设计、开发、测试、验收、Roadmap 和 SPEC 已建立；
-- Phase 0–Phase 3 的出口证据已经形成；Phase 3 交付的是只读采购 Agent，出口复核已通过；Phase 4 尚未开始；
-- Phase 4 已按用户指令进入 `IN_PROGRESS / P4.3`；P4.1 契约、八个 golden cases、四层纯函数评测基线和 P4.2 手写模式已落地并通过当前离线 Runtime 检查；P4.3 provider/native skeleton 已落地，Assignment 3 正等待用户完成；`docs/phase4-kickoff.md` 仍是边界、Assignment 和验收入口，已实现内容以当前 Runtime 测试与 Phase 4 日志为准；
+- Phase 0–Phase 3 的出口证据已经形成；Phase 3 交付的是只读采购 Agent，出口复核已通过；
+- Phase 4 已完成并由最新开发日志和启动包记录 `COMPLETED / PASS`；其只读执行内核、Trace、评测和安全证据以 `docs/development-log/20260826-Phase-4-开发日志.md`、`docs/phase4-kickoff.md` 和提交历史为准；
+- Phase 5 已按用户指令进入 `IN_PROGRESS / P5.1`。用户明确授权 Agent 全程接管代码编写，本阶段不创建 Assignment、不写学习笔记；阶段仍禁止 ERP 写工具，工作流 checkpoint 不得成为 Frappe/ERP 事实；
 - 项目定位为“Agent 开发岗位学习仓库 + 真实 ERP 实践载体”；业务应用层与教学实验层共存于同一仓库和开发主线，不是两个仓库或长期分支；
 - `approval-workflow-mapping` 仍是启用 ERP 写入前的强制门禁，当前不得把 Proposed Action、Approval、Draft、Receipt 或其他写工具当作已实现能力；
 - Frappe/ERPNext 是只读上游依赖，不能修改其核心，也不能绕过其权限、校验、Workflow、事务和审计；
@@ -274,13 +275,13 @@
 
 ## 13. Phase 4 — Agent 执行内核与原生 Tool Calling
 
-启动状态：`IN_PROGRESS / P4.2`。用户已明确下达“开始 Phase 4”并批准一次规划、分段 Assignment 交接；P4.1 已完成当前 targeted 验收，后续以 P4.2–P4.5 出口证据推进，准备包本身不计作实现证据。
+启动状态：`COMPLETED / PASS`。最新出口日志已记录完整验证、独立对抗审查和 Phase 4 限制；准备包本身不计作实现证据。
 
 必读：`docs/项目方向纠偏.md` Phase 4、`docs/phase4-kickoff.md`、PRD F-002/F-003/F-008/F-016、SPEC Tool Gateway/评测契约、Phase 3 单 Agent 与安全基线。本阶段不实现 ERP 写入。
 
 - **P4.1 执行契约与评测基线**：`COMPLETED_FOR_CURRENT_INCREMENT`；已定义 Action、Observation、FinalAnswer、Error、StopReason 和 8 个 golden tasks，并建立 Component/Trajectory/Task/System 评测入口；阶段出口仍需全量证据。
 - **P4.2 手写模式实验**：`COMPLETED_FOR_CURRENT_INCREMENT`；在 `labs/agent_patterns/` 完成 Direct、bounded ReAct、Plan-and-Solve、Reflection 和采购版 MiniStepAgent 的离线 recorded 对照，并统一记录比较指标；阶段出口仍需全量证据。
-- **P4.3 原生 Tool Calling**：`IN_PROGRESS`；provider/native skeleton 已支持六类只读 function definitions、provider call id、tool result message、单调用拒绝并行、allowlist/schema/evidence 校验；Assignment 3 待用户完成，smolagents 对照和真实验证仍未开始。
+- **P4.3 原生 Tool Calling**：`COMPLETED`；provider/native skeleton 已支持六类只读 function definitions、provider call id、tool result message、单调用拒绝并行、allowlist/schema/evidence 校验；smolagents 对照和真实验证已按出口日志记录。
 - **P4.4 循环与停止治理**：实现 max steps、相同参数重复、工具频率、无进展、token、成本、wall-clock、cancel 和 final-answer checks，保留明确 stop reason。
 - **P4.5 业务接入与 Trace UI**：至少一个真实只读任务必须根据第一次 observation 选择第二个不同工具；页面区分业务结论与可折叠 Trace。
 

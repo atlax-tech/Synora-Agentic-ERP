@@ -1,0 +1,1 @@
+{"schema_version":"1","case_id":"P5-G03-crash-safe-point","goal":"recover after first read","observations":[{"tool_name":"material_request.open","summary":"open material request"}],"expected":{"final_status":"RUNNING","completed_steps":["material-request"],"expected_tool_calls":1},"tags":["workflow","crash"]}

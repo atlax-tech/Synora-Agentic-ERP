@@ -190,7 +190,10 @@ Required concepts:
 stateDiagram-v2
     [*] --> CREATED
     CREATED --> ANALYZING
+    CREATED --> EXPIRED
     ANALYZING --> PROPOSED
+    ANALYZING --> FAILED
+    ANALYZING --> EXPIRED
     PROPOSED --> AWAITING_APPROVAL
     PROPOSED --> SUCCEEDED: read-only result
     AWAITING_APPROVAL --> DECLINED
@@ -206,6 +209,16 @@ stateDiagram-v2
 ```
 
 Only deterministic code persists transitions. The model may recommend a next action but cannot set state.
+
+For `PLAN_EXECUTE`, Frappe keeps the Run in `ANALYZING` while the Runtime
+workflow is `INTERRUPTED`; the Runtime checkpoint is not a second Run
+state-machine authority. A workflow may be `READY`, `RUNNING`, `INTERRUPTED`,
+`SUCCEEDED`, `FAILED`, `CANCELLED`, or `EXPIRED`. Its `revision`, `plan_version`,
+`graph_version`, ordered typed steps, bounded observation digests,
+clarification request, deadline, and Trace association are orchestration data
+only. Replanning can replace only steps that have not started, must increment
+`plan_version`, preserve completed step bytes, and pass deterministic acyclic
+DAG validation. Unknown schema/graph versions and malformed JSON fail closed.
 
 Run status copy (Chinese UI text) follows the approved glossary in `docs/DESIGN.md` §Content and Localization:
 

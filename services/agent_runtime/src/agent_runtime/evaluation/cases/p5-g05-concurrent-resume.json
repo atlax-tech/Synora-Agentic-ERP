@@ -1,0 +1,1 @@
+{"schema_version":"1","case_id":"P5-G05-concurrent-resume","goal":"only one resume wins","observations":[],"expected":{"final_status":"RUNNING","expected_tool_calls":0},"tags":["workflow","concurrency"]}

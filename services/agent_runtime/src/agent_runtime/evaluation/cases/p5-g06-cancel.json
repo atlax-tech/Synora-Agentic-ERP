@@ -1,0 +1,1 @@
+{"schema_version":"1","case_id":"P5-G06-cancel","goal":"cancel before next read","observations":[],"expected":{"final_status":"CANCELLED","expected_tool_calls":0},"tags":["workflow","security"]}

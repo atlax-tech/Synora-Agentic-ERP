@@ -34,7 +34,7 @@ ToolName = Literal[
 
 EvidenceRef = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$", min_length=64, max_length=64)]
 
-ExecutionMode = Literal["DETERMINISTIC", "AGENT"]
+ExecutionMode = Literal["DETERMINISTIC", "AGENT", "PLAN_EXECUTE"]
 
 StopCode = Literal[
     "FINAL_ANSWER",

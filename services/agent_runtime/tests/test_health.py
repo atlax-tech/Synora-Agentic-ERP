@@ -20,7 +20,15 @@ def test_health_endpoint() -> None:
 
 
 def test_agent_route_is_internal_and_documentation_is_disabled() -> None:
-    assert {route.path for route in app.routes} == {"/healthz", "/enhance", "/agent/execute"}
+    assert {getattr(route, "path", None) for route in app.routes} == {
+        "/healthz",
+        "/enhance",
+        "/agent/execute",
+        "/workflow/start",
+        "/workflow/resume",
+        "/workflow/cancel",
+        "/workflow/status",
+    }
     assert app.docs_url is None
     assert app.redoc_url is None
     assert app.openapi_url is None
