@@ -274,6 +274,34 @@ def resolve_run(run_id: str, capability: str) -> RunContext:
 
 
 def recheck_run_scope(run: RunContext, required_doctypes: tuple[str, ...]) -> None:
+    # Capability resolution and Handler dispatch are separate transactions.
+    # Lock the current Run row and re-check its lifecycle before every read so
+    # a committed cancel/expiry/state transition cannot leave a stale context
+    # entering an ERP Handler.  The lock also gives cancellation a clear
+    # ordering point: an in-flight read may finish, but a post-cancel request
+    # cannot begin a new Handler call.
+    current_rows = frappe.db.sql(
+        """
+        SELECT status, revoked, state_version, expires_at, execution_mode,
+               workflow_expires_at
+        FROM `tabSynora Agent Run`
+        WHERE name = %s
+        FOR UPDATE
+        """,
+        (run.run_id,),
+        as_dict=True,
+    )
+    if not current_rows:
+        raise GatewayFault("RUN_REJECTED", "run is not available", 401)
+    current = current_rows[0]
+    if (
+        current.status != "ACTIVE"
+        or current.revoked
+        or int(current.state_version) != run.state_version
+        or get_datetime(current.expires_at) <= now_datetime()
+        or (current.execution_mode == "PLAN_EXECUTE" and workflow_expired(current))
+    ):
+        raise GatewayFault("CONFLICT", "run is no longer active", 409)
     enabled = frappe.db.get_value("User", run.initiator, "enabled")
     if not enabled:
         raise GatewayFault("PERMISSION_DENIED", "requested resource is not available", 403)

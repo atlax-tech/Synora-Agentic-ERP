@@ -18,6 +18,7 @@ from synora_agentic_erp.api import (
     issue_run,
     resume_run,
 )
+from synora_agentic_erp.gateway.security import resolve_run
 
 BUYER = "synora-p1-buyer@dev.localhost"
 COMPANY = "SYNORA-P1 Test Company"
@@ -321,4 +322,28 @@ class TestWorkflowRun(FrappeTestCase):
         }
         frappe.set_user("Guest")
         response = execute(**payload)
+        self.assertEqual(response["error"]["code"], "CONFLICT")
+
+    def test_gateway_rechecks_cancel_after_capability_resolution(self) -> None:
+        """A cancel committed after resolution cannot start a read Handler."""
+        result = self._issue(mode="DETERMINISTIC")
+        run_id = str(result["run_id"])
+        capability = str(result["capability"])
+        payload = {
+            "schema_version": "1",
+            "run_id": run_id,
+            "capability": capability,
+            "correlation_id": str(uuid4()),
+            "tool": {
+                "name": "item.lookup",
+                "version": "1",
+                "input": {"query": "SYNORA-P1", "limit": 1, "offset": 0},
+            },
+        }
+        resolved = resolve_run(run_id, capability)
+        cancel = cancel_run(run_id, str(uuid4()))
+        self.assertTrue(cancel["ok"])
+        with patch("synora_agentic_erp.api.resolve_run", return_value=resolved):
+            frappe.set_user("Guest")
+            response = execute(**payload)
         self.assertEqual(response["error"]["code"], "CONFLICT")
