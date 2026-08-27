@@ -173,7 +173,9 @@ def reserve_invocation(
     }
     try:
         frappe.get_doc(values).insert(ignore_permissions=True)
-    except frappe.DuplicateEntryError, frappe.UniqueValidationError:
+    except Exception as error:
+        if not isinstance(error, (frappe.DuplicateEntryError, frappe.UniqueValidationError)):
+            raise
         # Another request won the race.  Re-read its immutable row rather than
         # attempting a second ERP call.
         existing_name = frappe.db.exists(

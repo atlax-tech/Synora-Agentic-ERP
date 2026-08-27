@@ -207,7 +207,9 @@ def workflow_expired(run: Any, *, at: Any | None = None) -> bool:
     current = at or now_datetime()
     try:
         return bool(get_datetime(deadline) <= current)
-    except TypeError, ValueError:
+    except TypeError:
+        return True
+    except ValueError:
         return True
 
 
