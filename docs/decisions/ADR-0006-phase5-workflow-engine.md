@@ -33,7 +33,7 @@ Phase 5 要把一次性只读 Agent 执行变成可暂停、可恢复、可取�
 
 ## 未决与出口阻塞
 
-- 当前环境没有 n8n 固定镜像；`docker pull` 受外部网络/代理阻塞，因此 import、execute、audit 没有通过证据。
+- n8n LAB_ONLY 证据已形成：固定 arm64 digest 的 `docker pull`、CLI `import:workflow`、只读 `execute` 和官方全类别 `audit` 均退出码 0；最终节点返回 `safe_result=recorded read succeeded`。官方 audit 原样报告允许的 `n8n-nodes-base.httpRequest` 为通用风险节点，并显示 hardened 实例设置；该风险被保留为低代码取舍证据，n8n 不进入业务 Runtime。
 - 独立对抗审查已在最终 diff 和全量证据后完成两轮：第一轮 `CHANGES_REQUIRED`，修复终态陈旧 checkpoint 后第二轮 `PASS`；审查角色未修改代码。
 - Harness 已发现历史 managed/source fingerprint drift；未获得针对文件级 Harness proposal 的后续授权，不手工改写 `.harness/`。
 
@@ -41,4 +41,4 @@ Phase 5 要把一次性只读 Agent 执行变成可暂停、可恢复、可取�
 
 ## 复验门禁
 
-关闭阻塞后，必须重新执行 n8n import/execute/audit、浏览器全路径验收、完整阶段命令、`ponytail-audit`/`ponytail-debt`/`harness-check` 和独立对抗审查；只有安全、恢复、权限、Trace、不重放矩阵全部通过且独立审查为 `PASS`，才可把本 ADR 状态改为 `ADOPTED` 或记录明确的后续决策。
+关闭 Harness 阻塞后，必须复核 n8n LAB_ONLY 证据是否仍对应固定 digest，并重新执行浏览器全路径验收、完整阶段命令、`ponytail-audit`/`ponytail-debt`/`harness-check` 和独立对抗审查；只有安全、恢复、权限、Trace、不重放矩阵全部通过且独立审查为 `PASS`，才可把本 ADR 状态改为 `ADOPTED` 或记录明确的后续决策。

@@ -22,7 +22,7 @@
 | 固定 Workflow | 确定性下限 | 用于同任务质量、工具次数和 Trace 对照，不承担澄清/重规划灵活性。 |
 | ReAct 子图 | 对照 | 仍受 typed allowlist、预算、revision 和 Gateway 约束，不改变 ERP 权威。 |
 | LangGraph | `LAB_ONLY` | Python 3.14 Spike 通过，但尚无安全/恢复/运维支配优势；interrupt resume 可能从节点开头重跑，外部调用必须幂等。 |
-| n8n | `LAB_ONLY` | 只允许 recorded Gateway 的低代码取舍证据；当前镜像拉取和安全 audit 未完成。 |
+| n8n | `LAB_ONLY` | 固定 arm64 digest 已完成 import/execute/audit；官方 audit 对允许的 loopback HTTP Request 报告通用风险提示，因此不进入业务主线。 |
 
 ## Evidence
 
@@ -30,7 +30,7 @@
 - Runtime workflow/contract/engine 定向测试最近为 `24 passed, 2 warnings`；Frappe app-test/integration 最近为 `86 tests OK`。
 - 临时 Python 3.14 LangGraph Spike：`langgraph==1.2.11`、`langgraph-checkpoint-sqlite==3.1.1` 的 import/interrupt/resume/SQLite 通过；项目依赖仍是可选 `workflow-lab`。
 - 离线同任务对照已运行 Fixed Workflow、ReAct 子图和 Plan-and-Execute，三者都使用相同 recorded Observation，结果为 `SUCCEEDED`、2 次工具调用、同一摘要 digest；未把不可用的 LangGraph/n8n 填成成功行。
-- 真实 Frappe 只读工具、调用账本、权限隔离、取消/过期顺序和 Trace 保护已由 integration 覆盖；浏览器已形成创建、中断、恢复、取消、过期、Runtime unavailable 和跨用户隔离证据，真实 Runtime 重启恢复也已形成；独立对抗审查第一轮 `CHANGES_REQUIRED` 的终态陈旧 checkpoint 问题已修复，第二轮 `PASS`；n8n 仍未形成出口证据。
+- 真实 Frappe 只读工具、调用账本、权限隔离、取消/过期顺序和 Trace 保护已由 integration 覆盖；浏览器已形成创建、中断、恢复、取消、过期、Runtime unavailable 和跨用户隔离证据，真实 Runtime 重启恢复也已形成；独立对抗审查第一轮 `CHANGES_REQUIRED` 的终态陈旧 checkpoint 问题已修复，第二轮 `PASS`；n8n 固定 digest 的 import/execute/audit 已形成 LAB_ONLY 证据，audit 的 HTTP Request 通用风险提示原样保留并未进入主线。
 
 ## Adoption decision
 
