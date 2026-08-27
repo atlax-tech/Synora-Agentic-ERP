@@ -17,10 +17,10 @@
 ```bash
 IMAGE='n8nio/n8n:2.37.2-arm64@sha256:c087fd5b55f790bdbe998d3e16f27882031b2178fb574abcc4039fbcd96f5029'
 docker run -d --rm --name synora-p5-recorded-gateway \
-  --mount type=bind,src="$PWD/labs/workflow_comparison/n8n/recorded_gateway.js",dst=/tmp/recorded_gateway.js,readonly \
+  --mount type=bind,src=./labs/workflow_comparison/n8n/recorded_gateway.js,dst=/tmp/recorded_gateway.js,readonly \
   --entrypoint node "$IMAGE" /tmp/recorded_gateway.js
 docker run --rm --network container:synora-p5-recorded-gateway \
-  --mount type=bind,src="$PWD/labs/workflow_comparison/n8n/n8n-workflow.json",dst=/tmp/n8n-workflow.json,readonly \
+  --mount type=bind,src=./labs/workflow_comparison/n8n/n8n-workflow.json,dst=/tmp/n8n-workflow.json,readonly \
   --tmpfs /tmp/n8n-user:rw,noexec,nosuid,size=128m \
   --env N8N_USER_FOLDER=/tmp/n8n-user \
   --env N8N_ENCRYPTION_KEY=synora-p5-lab-only-key \
