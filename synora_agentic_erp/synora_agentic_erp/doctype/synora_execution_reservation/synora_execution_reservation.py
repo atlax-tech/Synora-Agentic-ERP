@@ -26,6 +26,7 @@ STATUSES = {
     "RECONCILED_FAILURE",
     "MANUAL_INTERVENTION",
 }
+TARGET_DOCTYPES = {"Material Request", "Purchase Order"}
 TRANSITIONS = {
     "STARTED": {"SUCCEEDED", "FAILED", "RECONCILIATION_REQUIRED"},
     "RECONCILIATION_REQUIRED": {
@@ -55,7 +56,7 @@ class SynoraExecutionReservation(Document):  # type: ignore[misc]
     def validate(self) -> None:
         if not self.flags.get(SERVICE_FLAG):
             frappe.throw("Execution reservations require the deterministic governance service")
-        if self.target_doctype != "Material Request":
+        if self.target_doctype not in TARGET_DOCTYPES:
             frappe.throw("Execution reservation target is invalid")
         if self.status not in STATUSES:
             frappe.throw("Execution reservation status is invalid")

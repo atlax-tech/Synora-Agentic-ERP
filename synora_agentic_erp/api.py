@@ -66,6 +66,18 @@ from synora_agentic_erp.governance.policy import (
 from synora_agentic_erp.governance.policy import (
     get_action as get_governed_action_impl,
 )
+from synora_agentic_erp.governance.purchase_order_execution import (
+    execute_purchase_order as execute_purchase_order_impl,
+)
+from synora_agentic_erp.governance.purchase_order_execution import (
+    reconcile_purchase_order as reconcile_purchase_order_impl,
+)
+from synora_agentic_erp.governance.service import (
+    serialize_action,
+    serialize_approval_decision,
+    serialize_policy_decision,
+    serialize_receipt,
+)
 
 # 未认证入口 (execute, allow_guest) 的安全事件日志预算: 每分钟最多记录条数,
 # 用于防日志放大; 超出预算的事件静默丢弃。
@@ -664,12 +676,128 @@ def get_run(run_id: str) -> dict[str, Any]:
                 "elapsed_ms": plans[0].elapsed_ms,
                 "fallback_reason": plans[0].fallback_reason,
             }
+    governed = []
+    action_rows = frappe.get_all(
+        "Synora Proposed Action",
+        filters={"run": safe_run_id},
+        fields=["name"],
+        order_by="creation desc",
+        limit=20,
+        ignore_permissions=True,
+    )
+    for action_row in action_rows:
+        action_doc = frappe.get_doc("Synora Proposed Action", action_row.name)
+        action = serialize_action(action_doc, allowed_actor=frappe.session.user)
+        policy = None
+        policy_rows = frappe.get_all(
+            "Synora Policy Decision",
+            filters={"action": action_doc.name},
+            fields=["name"],
+            order_by="decided_at desc, creation desc",
+            limit=1,
+            ignore_permissions=True,
+        )
+        if policy_rows:
+            policy = serialize_policy_decision(
+                frappe.get_doc("Synora Policy Decision", policy_rows[0].name)
+            )
+        approval = None
+        approval_rows = frappe.get_all(
+            "Synora Approval Decision",
+            filters={"action": action_doc.name},
+            fields=["name"],
+            order_by="decided_at desc, creation desc",
+            limit=1,
+            ignore_permissions=True,
+        )
+        if approval_rows:
+            approval = serialize_approval_decision(
+                frappe.get_doc("Synora Approval Decision", approval_rows[0].name)
+            )
+        receipt = None
+        receipt_rows = frappe.get_all(
+            "Synora Execution Receipt",
+            filters={"action": action_doc.name},
+            fields=["name"],
+            order_by="completed_at desc, creation desc",
+            limit=1,
+            ignore_permissions=True,
+        )
+        if receipt_rows:
+            receipt = serialize_receipt(
+                frappe.get_doc("Synora Execution Receipt", receipt_rows[0].name)
+            )
+        reservation_rows = frappe.get_all(
+            "Synora Execution Reservation",
+            filters={"action": action_doc.name},
+            fields=[
+                "reservation_id",
+                "action",
+                "run",
+                "idempotency_key",
+                "proposal_digest",
+                "target_doctype",
+                "executor",
+                "lease_expires_at",
+                "attempt",
+                "status",
+                "target_name",
+                "receipt",
+                "response_category",
+                "failure_category",
+                "started_at",
+                "completed_at",
+                "reconciliation_count",
+                "last_reconciled_at",
+                "correlation_id",
+            ],
+            order_by="creation desc",
+            limit=1,
+            ignore_permissions=True,
+        )
+        reservation = None
+        if reservation_rows:
+            row = reservation_rows[0]
+            reservation = {
+                field: getattr(row, field, None)
+                for field in (
+                    "reservation_id",
+                    "action",
+                    "run",
+                    "idempotency_key",
+                    "proposal_digest",
+                    "target_doctype",
+                    "executor",
+                    "lease_expires_at",
+                    "attempt",
+                    "status",
+                    "target_name",
+                    "receipt",
+                    "response_category",
+                    "failure_category",
+                    "started_at",
+                    "completed_at",
+                    "reconciliation_count",
+                    "last_reconciled_at",
+                    "correlation_id",
+                )
+            }
+        governed.append(
+            {
+                "action": action,
+                "policy": policy,
+                "approval": approval,
+                "reservation": reservation,
+                "receipt": receipt,
+            }
+        )
     return {
         "ok": True,
         "schema_version": SCHEMA_VERSION,
         "run": _run_summary(run),
         "analyses": analyses,
         "plan": plan,
+        "governance": governed,
     }
 
 
@@ -903,6 +1031,54 @@ def reconcile_material_request(
         reject_mixed_user_credentials()
         safe_correlation_id = validate_correlation_id(correlation_id)
         return reconcile_material_request_impl(
+            action_id,
+            expected_proposal_digest,
+            idempotency_key,
+            safe_correlation_id,
+        )
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def execute_purchase_order(
+    action_id: object,
+    expected_proposal_digest: object,
+    idempotency_key: object,
+    correlation_id: object,
+) -> dict[str, Any]:
+    """Create one approved Purchase Order Draft through the ERP controller."""
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        return execute_purchase_order_impl(
+            action_id,
+            expected_proposal_digest,
+            idempotency_key,
+            safe_correlation_id,
+        )
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def reconcile_purchase_order(
+    action_id: object,
+    expected_proposal_digest: object,
+    idempotency_key: object,
+    correlation_id: object,
+) -> dict[str, Any]:
+    """Read and classify an uncertain PO result without retrying the writer."""
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        return reconcile_purchase_order_impl(
             action_id,
             expected_proposal_digest,
             idempotency_key,

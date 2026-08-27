@@ -121,18 +121,58 @@ def material_request_values(action: ProposedAction) -> dict[str, Any]:
     return values
 
 
+def purchase_order_values(action: ProposedAction) -> dict[str, Any]:
+    """Build the only allowed PO input from an immutable typed action."""
+
+    if action.action_type != "CREATE_PO_DRAFT":
+        raise GatewayFault("INVALID_INPUT", "only CREATE_PO_DRAFT is supported", 400)
+    payload = action.payload
+    values: dict[str, Any] = {
+        "doctype": "Purchase Order",
+        "naming_series": "PUR-ORD-.YYYY.-",
+        "supplier": payload["supplier"],
+        "company": payload["company"],
+        "transaction_date": payload["transaction_date"],
+        "schedule_date": payload["schedule_date"],
+        "currency": payload["currency"],
+        "buying_price_list": payload["buying_price_list"],
+        "conversion_rate": 1,
+        "items": [],
+    }
+    items: list[dict[str, Any]] = []
+    for raw_item in payload["items"]:
+        item: dict[str, Any] = {
+            "item_code": raw_item["item_code"],
+            "qty": raw_item["qty"],
+            "uom": raw_item["uom"],
+            "conversion_factor": 1,
+            "rate": raw_item["rate"],
+            "warehouse": raw_item["warehouse"],
+            "schedule_date": raw_item["schedule_date"],
+        }
+        for optional in ("description", "material_request"):
+            if optional in raw_item:
+                item[optional] = raw_item[optional]
+        items.append(item)
+    values["items"] = items
+    return values
+
+
 def execution_key(action: ProposedAction) -> ExecutionKey:
     """Return the action/scope/digest tuple used by reservation uniqueness."""
 
-    if action.action_type != "CREATE_MR_DRAFT":
-        raise GatewayFault("INVALID_INPUT", "only CREATE_MR_DRAFT is supported", 400)
+    if action.action_type not in {"CREATE_MR_DRAFT", "CREATE_PO_DRAFT"}:
+        raise GatewayFault("INVALID_INPUT", "unsupported governed action", 400)
     items = action.payload["items"]
     warehouses = {str(item["warehouse"]) for item in items}
     if len(warehouses) != 1:
         raise GatewayFault("INVALID_INPUT", "MR execution requires one warehouse scope", 400)
     return ExecutionKey(
         action_type=action.action_type,
-        target_doctype="Material Request",
+        target_doctype={
+            "CREATE_MR_DRAFT": "Material Request",
+            "CREATE_PO_DRAFT": "Purchase Order",
+        }[action.action_type],
         company=str(action.payload["company"]),
         warehouse=next(iter(warehouses)),
         proposal_digest=action.proposal_digest,
@@ -212,6 +252,76 @@ def verify_material_request_read_back(action: ProposedAction, doc: object) -> di
     return verified
 
 
+def verify_purchase_order_read_back(action: ProposedAction, doc: object) -> dict[str, Any]:
+    """Verify critical PO Draft fields and return scalar receipt evidence."""
+
+    values = purchase_order_values(action)
+    if _value(doc, "docstatus") != 0:
+        raise ReadBackMismatch("Purchase Order is not a Draft")
+    for field in ("supplier", "company", "currency", "buying_price_list", "transaction_date"):
+        _same_text(_value(doc, field), values[field], field)
+    actual_conversion_rate = _decimal(_value(doc, "conversion_rate"), "conversion_rate")
+    expected_conversion_rate = _decimal(values["conversion_rate"], "conversion_rate")
+    if actual_conversion_rate != expected_conversion_rate:
+        raise ReadBackMismatch("conversion_rate does not match approved payload")
+    _same_text(_value(doc, "schedule_date"), values["schedule_date"], "schedule_date")
+    raw_actual_items = _value(doc, "items", [])
+    if not isinstance(raw_actual_items, (list, tuple)):
+        raise ReadBackMismatch("items are not a sequence")
+    actual_items = list(raw_actual_items)
+    expected_items = list(values["items"])
+    if len(actual_items) != len(expected_items):
+        raise ReadBackMismatch("item count does not match approved payload")
+
+    verified: dict[str, Any] = {
+        "docstatus": 0,
+        "supplier": str(_value(doc, "supplier")),
+        "company": str(_value(doc, "company")),
+        "currency": str(_value(doc, "currency")),
+        "buying_price_list": str(_value(doc, "buying_price_list")),
+        "transaction_date": str(_value(doc, "transaction_date")),
+        "conversion_rate": format(actual_conversion_rate.normalize(), "f"),
+        "schedule_date": str(_value(doc, "schedule_date")),
+        "items_count": len(actual_items),
+    }
+    for index, (actual, expected) in enumerate(zip(actual_items, expected_items, strict=True)):
+        prefix = f"item_{index}"
+        for field in ("item_code", "warehouse", "schedule_date", "uom"):
+            _same_text(_value(actual, field), expected[field], f"{prefix}.{field}")
+            verified[f"{prefix}.{field}"] = str(_value(actual, field))
+        actual_conversion = _decimal(
+            _value(actual, "conversion_factor"), f"{prefix}.conversion_factor"
+        )
+        expected_conversion = _decimal(
+            expected["conversion_factor"], f"{prefix}.conversion_factor"
+        )
+        if actual_conversion != expected_conversion:
+            raise ReadBackMismatch(f"{prefix}.conversion_factor does not match approved payload")
+        verified[f"{prefix}.conversion_factor"] = format(actual_conversion.normalize(), "f")
+        actual_qty = _decimal(_value(actual, "qty"), f"{prefix}.qty")
+        expected_qty = _decimal(expected["qty"], f"{prefix}.qty")
+        if actual_qty != expected_qty:
+            raise ReadBackMismatch(f"{prefix}.qty does not match approved payload")
+        verified[f"{prefix}.qty"] = format(actual_qty.normalize(), "f")
+        actual_rate = _decimal(_value(actual, "rate"), f"{prefix}.rate")
+        expected_rate = _decimal(expected["rate"], f"{prefix}.rate")
+        if actual_rate != expected_rate:
+            raise ReadBackMismatch(f"{prefix}.rate does not match approved payload")
+        verified[f"{prefix}.rate"] = format(actual_rate.normalize(), "f")
+        actual_amount = _decimal(_value(actual, "amount"), f"{prefix}.amount")
+        expected_amount = actual_qty * actual_rate
+        if actual_amount != expected_amount:
+            raise ReadBackMismatch(f"{prefix}.amount does not match qty multiplied by rate")
+        verified[f"{prefix}.amount"] = format(actual_amount.normalize(), "f")
+        if expected.get("description") is not None:
+            _same_text(
+                _value(actual, "description"),
+                expected["description"],
+                f"{prefix}.description",
+            )
+    return verified
+
+
 def map_execution_error(error: BaseException) -> tuple[str, str, int]:
     """Map a controller or governance failure to a stable public category."""
 
@@ -248,5 +358,7 @@ __all__ = [
     "execution_key",
     "map_execution_error",
     "material_request_values",
+    "purchase_order_values",
     "verify_material_request_read_back",
+    "verify_purchase_order_read_back",
 ]

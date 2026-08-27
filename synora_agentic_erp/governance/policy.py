@@ -450,8 +450,8 @@ def _deterministic(action: Any, actor: str) -> GateResult:
                 return GateResult("FAIL", "an open document already covers this item")
             if target == "Purchase Order":
                 rate = Decimal(str(item["rate"]))
-                if not rate.is_finite() or rate < 0:
-                    return GateResult("FAIL", "rate must be finite and non-negative")
+                if not rate.is_finite() or rate <= 0:
+                    return GateResult("FAIL", "rate must be finite and positive")
                 material_request = item.get("material_request")
                 if material_request:
                     prerequisite = frappe.get_list(
@@ -468,13 +468,20 @@ def _deterministic(action: Any, actor: str) -> GateResult:
                     if not prerequisite:
                         return GateResult("FAIL", "material request prerequisite is unavailable")
         if target == "Purchase Order":
+            if not frappe.db.exists("Currency", payload["currency"]):
+                return GateResult("FAIL", "currency is unavailable")
+            if not frappe.db.exists(
+                "Price List",
+                {"name": payload["buying_price_list"], "buying": 1, "enabled": 1},
+            ):
+                return GateResult("FAIL", "buying price list is unavailable")
             supplier = _visible_supplier(str(payload["supplier"]), actor)
             if supplier is None or bool(getattr(supplier, "disabled", 0)):
                 return GateResult("FAIL", "supplier is unavailable")
             schedule = datetime.strptime(payload["schedule_date"], "%Y-%m-%d").date()
             if schedule < transaction_date:
                 return GateResult("FAIL", "schedule date precedes transaction date")
-    except InvalidOperation, TypeError, ValueError, KeyError:
+    except (InvalidOperation, TypeError, ValueError, KeyError):
         return GateResult("FAIL", "deterministic payload checks failed")
     except Exception:
         return GateResult("UNKNOWN", "current ERP objects could not be verified")

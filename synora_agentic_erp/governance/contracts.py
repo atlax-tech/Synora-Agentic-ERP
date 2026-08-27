@@ -169,7 +169,7 @@ def _parse_item(value: object, action_type: str, index: int) -> dict[str, Any]:
             "description",
             "material_request",
         }
-        required = {"item_code", "qty", "rate", "schedule_date", "warehouse"}
+        required = {"item_code", "qty", "uom", "rate", "schedule_date", "warehouse"}
     raw = _object(value, fields, required, f"payload.items[{index}]")
     parsed: dict[str, Any] = {
         "item_code": _required_text(raw["item_code"], "item_code"),
@@ -182,7 +182,7 @@ def _parse_item(value: object, action_type: str, index: int) -> dict[str, Any]:
             maximum = 2_000 if optional == "description" else 140
             parsed[optional] = _required_text(raw[optional], optional, maximum)
     if action_type == "CREATE_PO_DRAFT":
-        parsed["rate"] = _decimal(raw["rate"], "rate", minimum=Decimal("0"))
+        parsed["rate"] = _decimal(raw["rate"], "rate", minimum=Decimal("1e-18"))
     return parsed
 
 

@@ -17,7 +17,7 @@
   {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "idempotency_key", "fieldtype": "Data", "label": "Idempotency Key", "read_only": 1, "reqd": 1, "set_only_once": 1, "unique": 1},
   {"fieldname": "proposal_digest", "fieldtype": "Data", "label": "Proposal Digest", "read_only": 1, "reqd": 1, "set_only_once": 1},
-  {"fieldname": "target_doctype", "fieldtype": "Select", "label": "Target DocType", "options": "Material Request", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "target_doctype", "fieldtype": "Select", "label": "Target DocType", "options": "Material Request\nPurchase Order", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "executor", "fieldtype": "Link", "label": "Executor", "options": "User", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "owner_token", "fieldtype": "Data", "label": "Owner Token", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "lease_expires_at", "fieldtype": "Data", "label": "Lease Expires At", "read_only": 1, "reqd": 1, "set_only_once": 1},
