@@ -48,7 +48,7 @@
         "url": "http://127.0.0.1:18081/recorded-gateway",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\"tool\": $json.tool, \"goal\": $json.goal, \"mode\": $json.mode}",
+        "jsonBody": "={{ JSON.stringify({ tool: $json.tool, goal: $json.goal, mode: $json.mode }) }}",
         "options": {
           "redirect": {
             "followRedirects": false
