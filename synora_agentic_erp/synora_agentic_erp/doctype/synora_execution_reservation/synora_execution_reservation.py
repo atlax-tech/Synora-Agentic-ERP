@@ -11,15 +11,43 @@ IDENTITY_FIELDS = {
     "proposal_digest",
     "target_doctype",
     "executor",
+    "owner_token",
+    "lease_expires_at",
+    "attempt",
     "started_at",
     "correlation_id",
 }
-STATUSES = {"STARTED", "SUCCEEDED", "FAILED", "RECONCILIATION_REQUIRED"}
+STATUSES = {
+    "STARTED",
+    "SUCCEEDED",
+    "FAILED",
+    "RECONCILIATION_REQUIRED",
+    "RECONCILED_SUCCESS",
+    "RECONCILED_FAILURE",
+    "MANUAL_INTERVENTION",
+}
 TRANSITIONS = {
     "STARTED": {"SUCCEEDED", "FAILED", "RECONCILIATION_REQUIRED"},
+    "RECONCILIATION_REQUIRED": {
+        "RECONCILED_SUCCESS",
+        "RECONCILED_FAILURE",
+        "MANUAL_INTERVENTION",
+    },
     "SUCCEEDED": set(),
     "FAILED": set(),
-    "RECONCILIATION_REQUIRED": set(),
+    "RECONCILED_SUCCESS": set(),
+    "RECONCILED_FAILURE": set(),
+    "MANUAL_INTERVENTION": set(),
+}
+MUTABLE_FIELDS = {
+    "status",
+    "target_name",
+    "receipt",
+    "response_category",
+    "failure_category",
+    "completed_at",
+    "reconciliation_count",
+    "last_reconciled_at",
 }
 
 
@@ -34,10 +62,15 @@ class SynoraExecutionReservation(Document):  # type: ignore[misc]
         if self.is_new():
             if self.status != "STARTED":
                 frappe.throw("Execution reservation must start in STARTED status")
+            if int(self.attempt or 0) != 1:
+                frappe.throw("Execution reservation attempt is invalid")
             return
         changed_identity = [field for field in IDENTITY_FIELDS if self.has_value_changed(field)]
         if changed_identity:
             frappe.throw("Execution reservation identity is immutable")
+        changed_mutable = [field for field in MUTABLE_FIELDS if self.has_value_changed(field)]
+        if changed_mutable and not self.flags.get(TRANSITION_FLAG):
+            frappe.throw("Execution reservation changes require the reconciliation service")
         if self.has_value_changed("status"):
             previous = str(self.get_db_value("status") or "")
             if not self.flags.get(TRANSITION_FLAG) or self.status not in TRANSITIONS.get(

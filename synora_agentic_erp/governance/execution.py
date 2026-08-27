@@ -8,7 +8,7 @@ stored action and reaches ERPNext through the normal Document controller.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -22,6 +22,9 @@ from synora_agentic_erp.gateway.security import RunContext, record_gateway_audit
 from synora_agentic_erp.governance.contracts import ExecutionReceipt, create_execution_receipt
 from synora_agentic_erp.governance.execution_contracts import (
     ExecutionKey,
+    ReadBackMismatch,
+    ReconciliationClassification,
+    classify_reconciliation,
     execution_key,
     map_execution_error,
     material_request_values,
@@ -41,12 +44,14 @@ from synora_agentic_erp.governance.service import (
     serialize_action,
     serialize_receipt,
     transition_action_state,
+    transition_execution_receipt,
 )
 
 RESERVATION_TRANSITION_FLAG = "synora_execution_reservation_transition"
 TARGET_DOCTYPE = "Material Request"
 WRITER_NAME = "governed.material_request.create"
 WRITER_VERSION = "1"
+LEASE_SECONDS = 300
 
 
 def _now_timestamp() -> str:
@@ -68,6 +73,8 @@ def _reservation_dict(doc: Any) -> dict[str, Any]:
         "proposal_digest": str(doc.proposal_digest),
         "target_doctype": str(doc.target_doctype),
         "executor": str(doc.executor),
+        "lease_expires_at": str(doc.lease_expires_at),
+        "attempt": int(doc.attempt or 0),
         "status": str(doc.status),
         "target_name": str(doc.target_name or "") or None,
         "receipt_id": str(doc.receipt or "") or None,
@@ -75,6 +82,8 @@ def _reservation_dict(doc: Any) -> dict[str, Any]:
         "failure_category": str(doc.failure_category or "") or None,
         "started_at": str(doc.started_at),
         "completed_at": str(doc.completed_at or "") or None,
+        "reconciliation_count": int(doc.reconciliation_count or 0),
+        "last_reconciled_at": str(doc.last_reconciled_at or "") or None,
         "correlation_id": str(doc.correlation_id),
     }
 
@@ -121,6 +130,12 @@ def _insert_reservation(action: Any, key: ExecutionKey, actor: str) -> tuple[Any
             "proposal_digest": key.proposal_digest,
             "target_doctype": TARGET_DOCTYPE,
             "executor": actor,
+            "owner_token": str(uuid4()),
+            "lease_expires_at": (datetime.now(UTC) + timedelta(seconds=LEASE_SECONDS))
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "attempt": 1,
             "status": "STARTED",
             "started_at": _now_timestamp(),
             "correlation_id": action.correlation_id,
@@ -153,13 +168,30 @@ def _update_reservation(
     response_category: str | None = None,
     failure_category: str | None = None,
 ) -> Any:
-    if status not in {"SUCCEEDED", "FAILED", "RECONCILIATION_REQUIRED"}:
+    if status not in {
+        "SUCCEEDED",
+        "FAILED",
+        "RECONCILIATION_REQUIRED",
+        "RECONCILED_SUCCESS",
+        "RECONCILED_FAILURE",
+        "MANUAL_INTERVENTION",
+    }:
         raise GatewayFault("INVALID_INPUT", "execution reservation status is invalid")
-    if str(doc.status) != "STARTED":
-        if str(doc.status) == status:
-            return doc
+    current_status = str(doc.status)
+    if current_status not in {"STARTED", "RECONCILIATION_REQUIRED"} and current_status != status:
         raise GatewayFault("CONFLICT", "execution reservation is already finalized", 409)
-    doc.status = status
+    if current_status == status and all(
+        value is None
+        for value in (
+            target_name,
+            receipt_id,
+            response_category,
+            failure_category,
+        )
+    ):
+        return doc
+    if current_status != status:
+        doc.status = status
     if target_name is not None:
         doc.target_name = target_name
     if receipt_id is not None:
@@ -168,6 +200,13 @@ def _update_reservation(
         doc.response_category = response_category
     if failure_category is not None:
         doc.failure_category = failure_category
+    if current_status != status and status in {
+        "RECONCILED_SUCCESS",
+        "RECONCILED_FAILURE",
+        "MANUAL_INTERVENTION",
+    }:
+        doc.reconciliation_count = int(doc.reconciliation_count or 0) + 1
+        doc.last_reconciled_at = _now_timestamp()
     doc.completed_at = _now_timestamp()
     doc.flags[SERVICE_FLAG] = True
     doc.flags[RESERVATION_TRANSITION_FLAG] = True
@@ -253,7 +292,10 @@ def _receipt_input(
 
 
 def _persist_receipt(receipt: ExecutionReceipt) -> dict[str, Any]:
-    return persist_execution_receipt(receipt, verified_execution=receipt.final_state == "SUCCEEDED")
+    return persist_execution_receipt(
+        receipt,
+        verified_execution=receipt.final_state in {"SUCCEEDED", "RECONCILED_SUCCESS"},
+    )
 
 
 def _audit(run: Any, correlation_id: str, outcome: str, error_code: str | None = None) -> None:
@@ -305,7 +347,10 @@ def _replay_success(
         execution_key(action),
         actor,
     )
-    if str(action_doc.state) != "EXECUTED" or str(reservation.status) != "SUCCEEDED":
+    if str(action_doc.state) != "EXECUTED" or str(reservation.status) not in {
+        "SUCCEEDED",
+        "RECONCILED_SUCCESS",
+    }:
         raise GatewayFault("CONFLICT", "execution reservation is not replayable", 409)
     if not frappe.db.get_value("User", actor, "enabled"):
         raise GatewayFault("PERMISSION_DENIED", "current user is disabled", 403)
@@ -323,7 +368,10 @@ def _replay_success(
         raise GatewayFault(
             "UNCERTAIN_RESULT", "verified ERP outcome is unavailable", 503
         ) from error
-    if receipt_doc.final_state != "SUCCEEDED" or receipt_doc.target_name != target_name:
+    if (
+        receipt_doc.final_state not in {"SUCCEEDED", "RECONCILED_SUCCESS"}
+        or receipt_doc.target_name != target_name
+    ):
         raise GatewayFault("UNCERTAIN_RESULT", "verified Receipt conflicts with target", 503)
     if json.loads(receipt_doc.verified_fields_json) != verified:
         raise GatewayFault("UNCERTAIN_RESULT", "ERP read-back no longer matches Receipt", 503)
@@ -427,6 +475,378 @@ def _load_action_from_doc(doc: Any) -> Any:
     )
 
 
+def _lease_expired(reservation: Any) -> bool:
+    raw = str(reservation.lease_expires_at or "")
+    if not raw:
+        return False
+    try:
+        expiry = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=UTC)
+    return expiry <= datetime.now(UTC)
+
+
+def _reconciliation_candidates(
+    action: Any,
+    reservation: Any,
+    actor: str,
+) -> tuple[list[str], list[tuple[str, dict[str, Any]]]]:
+    target_name = str(reservation.target_name or "")
+    if target_name:
+        names = [target_name]
+    else:
+        payload = action.payload
+        item_codes = sorted({str(item["item_code"]) for item in payload["items"]})
+        warehouses = sorted({str(item["warehouse"]) for item in payload["items"]})
+        child_rows = frappe.get_list(
+            "Material Request Item",
+            filters={
+                "item_code": ["in", item_codes],
+                "warehouse": ["in", warehouses],
+            },
+            fields=["parent"],
+            parent_doctype=TARGET_DOCTYPE,
+            order_by="parent asc",
+            limit=100,
+            user=actor,
+        )
+        parents = sorted({str(row.parent) for row in child_rows})
+        if not parents:
+            return [], []
+        rows = frappe.get_list(
+            TARGET_DOCTYPE,
+            filters={
+                "name": ["in", parents],
+                "company": payload["company"],
+                "material_request_type": payload["material_request_type"],
+                "transaction_date": payload["transaction_date"],
+                "docstatus": 0,
+            },
+            fields=["name"],
+            order_by="name asc",
+            limit=50,
+            user=actor,
+        )
+        names = [str(row.name) for row in rows]
+    matches: list[tuple[str, dict[str, Any]]] = []
+    for name in names:
+        try:
+            target = frappe.get_doc(TARGET_DOCTYPE, name)
+            matches.append((name, verify_material_request_read_back(action, target)))
+        except ReadBackMismatch, frappe.DoesNotExistError:
+            continue
+    return names, matches
+
+
+def _reconciliation_evidence(
+    classification: ReconciliationClassification,
+    candidate_names: list[str],
+    matches: list[tuple[str, dict[str, Any]]],
+    correlation_id: str,
+) -> dict[str, Any]:
+    return {
+        "result_status": classification.result_status,
+        "reason": classification.reason,
+        "candidate_count": len(candidate_names),
+        "matching_count": len(matches),
+        "candidate_names": ",".join(candidate_names[:20]),
+        "matching_names": ",".join(name for name, _verified in matches[:20]),
+        "reconciliation_correlation_id": correlation_id,
+    }
+
+
+def _reconciliation_response(
+    action_doc: Any,
+    run: Any,
+    reservation: Any,
+    receipt_doc: Any | None,
+    *,
+    result_status: str,
+    evidence: dict[str, Any],
+    correlation_id: str,
+) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "schema_version": "1",
+        "result_status": result_status,
+        "can_retry": False,
+        "correlation_id": correlation_id,
+        "run": {
+            "run_id": str(run.name),
+            "run_state": str(run.run_state),
+            "state_version": int(run.state_version),
+        },
+        "action": serialize_action(action_doc),
+        "reservation": _reservation_dict(reservation),
+        "receipt": serialize_receipt(receipt_doc) if receipt_doc is not None else None,
+        "target": (
+            {
+                "doctype": TARGET_DOCTYPE,
+                "name": str(receipt_doc.target_name),
+                "docstatus": 0,
+            }
+            if receipt_doc is not None and receipt_doc.target_name
+            else None
+        ),
+        "reconciliation": evidence,
+    }
+
+
+def _reconciliation_receipt(
+    action: Any,
+    run: Any,
+    reservation: Any,
+    existing: Any | None,
+    *,
+    final_state: str,
+    response_category: str,
+    failure_category: str | None,
+    target_name: str | None,
+    verified_fields: dict[str, Any],
+    evidence: dict[str, Any],
+) -> ExecutionReceipt:
+    approval = _latest_approval(action.action_id, action.proposal_digest, "ALLOW")
+    return create_execution_receipt(
+        {
+            "receipt_id": str(existing.receipt_id) if existing is not None else str(uuid4()),
+            "action_id": action.action_id,
+            "run_id": run.name,
+            "idempotency_key": action.idempotency_key,
+            "initiator": action.initiator,
+            "approver": (
+                str(existing.approver)
+                if existing is not None and existing.approver
+                else str(approval.actor)
+                if approval is not None
+                else None
+            ),
+            "executor": str(reservation.executor),
+            "proposal_digest": action.proposal_digest,
+            "target_doctype": TARGET_DOCTYPE if target_name else None,
+            "target_name": target_name,
+            "verified_fields": verified_fields,
+            "response_category": response_category,
+            "failure_category": failure_category,
+            "final_state": final_state,
+            "started_at": str(existing.started_at)
+            if existing is not None
+            else str(reservation.started_at),
+            "completed_at": _now_timestamp(),
+            "correlation_id": str(existing.correlation_id)
+            if existing is not None
+            else str(reservation.correlation_id),
+            "reconciliation_evidence": evidence,
+        }
+    )
+
+
+def reconcile_material_request(
+    action_id: object,
+    expected_digest: object,
+    idempotency_key: object,
+    correlation_id: object,
+) -> dict[str, Any]:
+    """Read ERP state and close one uncertain MR reservation without writing ERP."""
+
+    safe_action_id = canonical_uuid(action_id, "action_id")
+    safe_digest = _safe_digest(expected_digest)
+    safe_key = _safe_key(idempotency_key)
+    safe_correlation = canonical_uuid(correlation_id, "correlation_id")
+    actor = _actor()
+    run = _lock_run_for_action(safe_action_id)
+    action_doc, action, locked = _lock_action(safe_action_id)
+    if action.run_id != run.name or action.proposal_digest != safe_digest:
+        raise GatewayFault("CONFLICT", "reconciliation digest or Run conflicts", 409)
+    if action.idempotency_key != safe_key or action.action_type != "CREATE_MR_DRAFT":
+        raise GatewayFault("CONFLICT", "reconciliation idempotency tuple conflicts", 409)
+    key = execution_key(action)
+    reservation = _reservation_by_key(safe_key, lock=True)
+    if reservation is None:
+        raise GatewayFault("NOT_FOUND", "execution reservation is not available", 404)
+    _reservation_identity_matches(reservation, action, key, actor)
+    if not frappe.db.get_value("User", actor, "enabled"):
+        raise GatewayFault("PERMISSION_DENIED", "current user is disabled", 403)
+    if not frappe.has_permission(TARGET_DOCTYPE, "read", user=actor):
+        raise GatewayFault("PERMISSION_DENIED", "current ERP permission is insufficient", 403)
+
+    receipt_doc = None
+    if reservation.receipt:
+        try:
+            receipt_doc = frappe.get_doc("Synora Execution Receipt", reservation.receipt)
+        except frappe.DoesNotExistError as error:
+            raise GatewayFault(
+                "UNCERTAIN_RESULT", "reconciliation Receipt is unavailable", 503
+            ) from error
+
+    current_status = str(reservation.status)
+    if current_status in {"SUCCEEDED", "RECONCILED_SUCCESS"}:
+        return _reconciliation_response(
+            action_doc,
+            run,
+            reservation,
+            receipt_doc,
+            result_status="RECONCILED_SUCCESS"
+            if current_status == "RECONCILED_SUCCESS"
+            else "SUCCEEDED",
+            evidence={"reason": "verified execution already finalized", "candidate_count": 1},
+            correlation_id=safe_correlation,
+        )
+    if current_status in {"FAILED", "RECONCILED_FAILURE", "MANUAL_INTERVENTION"}:
+        return _reconciliation_response(
+            action_doc,
+            run,
+            reservation,
+            receipt_doc,
+            result_status=(
+                str(receipt_doc.final_state) if receipt_doc is not None else current_status
+            ),
+            evidence={"reason": "execution is already finalized", "candidate_count": 0},
+            correlation_id=safe_correlation,
+        )
+    if current_status not in {"STARTED", "RECONCILIATION_REQUIRED"}:
+        raise GatewayFault("CONFLICT", "execution reservation status is invalid", 409)
+
+    if not _lease_expired(reservation):
+        evidence = {
+            "result_status": "RECONCILIATION_REQUIRED",
+            "reason": "execution lease is still active",
+            "candidate_count": 0,
+            "matching_count": 0,
+            "next_reconcile_at": str(reservation.lease_expires_at),
+            "reconciliation_correlation_id": safe_correlation,
+        }
+        return _reconciliation_response(
+            action_doc,
+            run,
+            reservation,
+            receipt_doc,
+            result_status="RECONCILIATION_REQUIRED",
+            evidence=evidence,
+            correlation_id=safe_correlation,
+        )
+
+    candidate_names, matches = _reconciliation_candidates(action, reservation, actor)
+    classification = classify_reconciliation(
+        candidate_count=len(candidate_names),
+        matching_count=len(matches),
+        lease_expired=True,
+        failure_evidence_complete=bool(reservation.failure_category),
+    )
+    evidence = _reconciliation_evidence(
+        classification,
+        candidate_names,
+        matches,
+        safe_correlation,
+    )
+    if current_status == "STARTED":
+        _update_reservation(
+            reservation,
+            "RECONCILIATION_REQUIRED",
+            response_category="UNCERTAIN_RESULT",
+            failure_category=str(reservation.failure_category or "RECONCILIATION_PENDING"),
+        )
+        reservation = frappe.get_doc("Synora Execution Reservation", reservation.name)
+
+    if classification.result_status == "RECONCILED_SUCCESS" and str(action_doc.state) != "APPROVED":
+        classification = ReconciliationClassification(
+            "MANUAL_INTERVENTION",
+            "Action state is no longer APPROVED",
+        )
+        evidence = _reconciliation_evidence(
+            classification,
+            candidate_names,
+            matches,
+            safe_correlation,
+        )
+
+    target_name = matches[0][0] if classification.result_status == "RECONCILED_SUCCESS" else None
+    verified = matches[0][1] if target_name else {}
+    response_category = (
+        "ERP_SUCCESS"
+        if classification.result_status == "RECONCILED_SUCCESS"
+        else str(reservation.response_category or "UNCERTAIN_RESULT")
+    )
+    failure_category = (
+        None
+        if classification.result_status == "RECONCILED_SUCCESS"
+        else str(reservation.failure_category or classification.result_status)
+    )
+    final_state = classification.result_status
+    receipt = _reconciliation_receipt(
+        action,
+        run,
+        reservation,
+        receipt_doc,
+        final_state=final_state,
+        response_category=response_category,
+        failure_category=failure_category,
+        target_name=target_name,
+        verified_fields=verified,
+        evidence=evidence,
+    )
+    if receipt_doc is None:
+        stored_receipt = _persist_receipt(receipt)
+        receipt_doc = frappe.get_doc("Synora Execution Receipt", stored_receipt["receipt_id"])
+    else:
+        stored_receipt = transition_execution_receipt(receipt)
+        receipt_doc = frappe.get_doc("Synora Execution Receipt", stored_receipt["receipt_id"])
+
+    if classification.result_status == "RECONCILED_SUCCESS":
+        transition_action_state(
+            action.action_id,
+            "EXECUTED",
+            expected_version=int(locked["state_version"]),
+            reason="ERP Draft found by read-only reconciliation",
+            correlation_id=safe_correlation,
+            approval_digest=action.proposal_digest,
+        )
+        _update_reservation(
+            reservation,
+            "RECONCILED_SUCCESS",
+            target_name=target_name,
+            receipt_id=str(stored_receipt["receipt_id"]),
+            response_category="ERP_SUCCESS",
+        )
+        _close_run(run, "SUCCEEDED", safe_correlation)
+        _audit(run, safe_correlation, "CACHED", "RECONCILED_SUCCESS")
+    else:
+        if str(action_doc.state) == "APPROVED":
+            transition_action_state(
+                action.action_id,
+                "EXPIRED",
+                expected_version=int(locked["state_version"]),
+                reason=classification.reason[:2_000],
+                correlation_id=safe_correlation,
+            )
+        _update_reservation(
+            reservation,
+            classification.result_status,
+            receipt_id=str(stored_receipt["receipt_id"]),
+            response_category=response_category,
+            failure_category=failure_category,
+        )
+        if str(run.run_state) == "EXECUTING":
+            _set_run_state(run, "RECONCILIATION_REQUIRED")
+        if classification.result_status == "RECONCILED_FAILURE":
+            _close_run(run, "FAILED", safe_correlation)
+        else:
+            _close_run(run, "RECONCILIATION_REQUIRED", safe_correlation)
+        _audit(run, safe_correlation, "REJECTED", failure_category)
+    frappe.db.commit()
+    action_doc = frappe.get_doc("Synora Proposed Action", action.action_id)
+    return _reconciliation_response(
+        action_doc,
+        run,
+        reservation,
+        receipt_doc,
+        result_status=classification.result_status,
+        evidence=evidence,
+        correlation_id=safe_correlation,
+    )
+
+
 def execute_material_request(
     action_id: object,
     expected_digest: object,
@@ -456,10 +876,16 @@ def execute_material_request(
     existing = _reservation_by_key(safe_key, lock=True)
     if existing is not None:
         _reservation_identity_matches(existing, action, key, actor)
-        if str(existing.status) == "SUCCEEDED":
+        if str(existing.status) in {"SUCCEEDED", "RECONCILED_SUCCESS"}:
             return _replay_success(action_doc, action, run, existing, actor)
         if str(existing.status) == "RECONCILIATION_REQUIRED":
             raise GatewayFault("UNCERTAIN_RESULT", "execution result requires reconciliation", 503)
+        if str(existing.status) in {
+            "FAILED",
+            "RECONCILED_FAILURE",
+            "MANUAL_INTERVENTION",
+        }:
+            raise GatewayFault("CONFLICT", "execution is finalized and cannot be retried", 409)
         raise GatewayFault("CONFLICT", "execution is already reserved and cannot be retried", 409)
 
     # The first recheck is made before the reservation.  This prevents a
@@ -471,11 +897,17 @@ def execute_material_request(
         raise GatewayFault("CONFLICT", "governed action is not approved", 409)
     reservation, created = _insert_reservation(action, key, actor)
     if not created:
-        if str(reservation.status) == "SUCCEEDED":
+        if str(reservation.status) in {"SUCCEEDED", "RECONCILED_SUCCESS"}:
             frappe.db.rollback()
             run = _lock_run_for_action(safe_action_id)
             action_doc, action, _ = _lock_action(safe_action_id)
             return _replay_success(action_doc, action, run, reservation, actor)
+        if str(reservation.status) in {
+            "FAILED",
+            "RECONCILED_FAILURE",
+            "MANUAL_INTERVENTION",
+        }:
+            raise GatewayFault("CONFLICT", "execution is finalized and cannot be retried", 409)
         raise GatewayFault("CONFLICT", "execution is already reserved and cannot be retried", 409)
     reservation_id = str(reservation.reservation_id)
     try:
@@ -556,4 +988,4 @@ def execute_material_request(
         ) from error
 
 
-__all__ = ["execute_material_request"]
+__all__ = ["execute_material_request", "reconcile_material_request"]

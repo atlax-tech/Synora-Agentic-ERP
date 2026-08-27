@@ -37,6 +37,60 @@ class ExecutionKey:
         )
 
 
+@dataclass(frozen=True)
+class ReconciliationClassification:
+    """Read-only reconciliation outcome; none of the outcomes permits retry."""
+
+    result_status: str
+    reason: str
+    can_retry: bool = False
+
+    def __post_init__(self) -> None:
+        if self.result_status not in {
+            "RECONCILIATION_REQUIRED",
+            "RECONCILED_SUCCESS",
+            "RECONCILED_FAILURE",
+            "MANUAL_INTERVENTION",
+        }:
+            raise GatewayFault("INVALID_INPUT", "reconciliation status is invalid")
+        if not self.reason or len(self.reason) > 2_000 or self.can_retry:
+            raise GatewayFault("INVALID_INPUT", "reconciliation result is invalid")
+
+
+def classify_reconciliation(
+    *,
+    candidate_count: int,
+    matching_count: int,
+    lease_expired: bool,
+    failure_evidence_complete: bool,
+) -> ReconciliationClassification:
+    """Classify ERP candidates without ever authorizing another write."""
+
+    if candidate_count < 0 or matching_count < 0 or matching_count > candidate_count:
+        raise GatewayFault("INVALID_INPUT", "reconciliation candidate counts are invalid")
+    if candidate_count == 1 and matching_count == 1:
+        return ReconciliationClassification("RECONCILED_SUCCESS", "one complete ERP match")
+    if candidate_count > 0:
+        return ReconciliationClassification(
+            "MANUAL_INTERVENTION",
+            "candidate count or critical fields are ambiguous",
+        )
+    if not lease_expired:
+        return ReconciliationClassification(
+            "RECONCILIATION_REQUIRED",
+            "execution lease is still active",
+        )
+    if failure_evidence_complete:
+        return ReconciliationClassification(
+            "RECONCILED_FAILURE",
+            "lease ended with no matching ERP document and complete failure evidence",
+        )
+    return ReconciliationClassification(
+        "MANUAL_INTERVENTION",
+        "no ERP document but failure evidence is incomplete",
+    )
+
+
 def material_request_values(action: ProposedAction) -> dict[str, Any]:
     """Build the only allowed MR input from an immutable typed action."""
 
@@ -189,6 +243,8 @@ def map_execution_error(error: BaseException) -> tuple[str, str, int]:
 __all__ = [
     "ExecutionKey",
     "ReadBackMismatch",
+    "ReconciliationClassification",
+    "classify_reconciliation",
     "execution_key",
     "map_execution_error",
     "material_request_values",

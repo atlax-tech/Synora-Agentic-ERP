@@ -8,6 +8,7 @@ from synora_agentic_erp.gateway.contract import GatewayFault
 from synora_agentic_erp.governance.contracts import build_proposed_action
 from synora_agentic_erp.governance.execution_contracts import (
     ReadBackMismatch,
+    classify_reconciliation,
     execution_key,
     map_execution_error,
     material_request_values,
@@ -166,3 +167,26 @@ def test_execution_key_rejects_multiple_warehouse_scope() -> None:
     with pytest.raises(GatewayFault) as error:
         execution_key(action)
     assert error.value.code == "INVALID_INPUT"
+
+
+@pytest.mark.parametrize(
+    ("counts", "lease_expired", "evidence", "expected"),
+    [
+        ((1, 1), False, False, "RECONCILED_SUCCESS"),
+        ((2, 1), True, True, "MANUAL_INTERVENTION"),
+        ((0, 0), False, False, "RECONCILIATION_REQUIRED"),
+        ((0, 0), True, True, "RECONCILED_FAILURE"),
+        ((0, 0), True, False, "MANUAL_INTERVENTION"),
+    ],
+)
+def test_reconciliation_classification_never_allows_retry(
+    counts: tuple[int, int], lease_expired: bool, evidence: bool, expected: str
+) -> None:
+    result = classify_reconciliation(
+        candidate_count=counts[0],
+        matching_count=counts[1],
+        lease_expired=lease_expired,
+        failure_evidence_complete=evidence,
+    )
+    assert result.result_status == expected
+    assert result.can_retry is False

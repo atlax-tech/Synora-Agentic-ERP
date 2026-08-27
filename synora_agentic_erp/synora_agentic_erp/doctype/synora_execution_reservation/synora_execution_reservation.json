@@ -6,8 +6,9 @@
  "engine": "InnoDB",
  "field_order": [
   "reservation_id", "action", "run", "idempotency_key", "proposal_digest",
-  "target_doctype", "executor", "status", "target_name", "receipt",
-  "response_category", "failure_category", "started_at", "completed_at",
+  "target_doctype", "executor", "owner_token", "lease_expires_at", "attempt",
+  "status", "target_name", "receipt", "response_category", "failure_category",
+  "started_at", "completed_at", "reconciliation_count", "last_reconciled_at",
   "correlation_id"
  ],
  "fields": [
@@ -18,13 +19,18 @@
   {"fieldname": "proposal_digest", "fieldtype": "Data", "label": "Proposal Digest", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "target_doctype", "fieldtype": "Select", "label": "Target DocType", "options": "Material Request", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "executor", "fieldtype": "Link", "label": "Executor", "options": "User", "read_only": 1, "reqd": 1, "set_only_once": 1},
-  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "STARTED\nSUCCEEDED\nFAILED\nRECONCILIATION_REQUIRED", "read_only": 1, "reqd": 1},
+  {"fieldname": "owner_token", "fieldtype": "Data", "label": "Owner Token", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "lease_expires_at", "fieldtype": "Data", "label": "Lease Expires At", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "attempt", "fieldtype": "Int", "label": "Attempt", "default": 1, "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "STARTED\nSUCCEEDED\nFAILED\nRECONCILIATION_REQUIRED\nRECONCILED_SUCCESS\nRECONCILED_FAILURE\nMANUAL_INTERVENTION", "read_only": 1, "reqd": 1},
   {"fieldname": "target_name", "fieldtype": "Data", "label": "Target Name", "read_only": 1},
   {"fieldname": "receipt", "fieldtype": "Link", "label": "Receipt", "options": "Synora Execution Receipt", "read_only": 1},
   {"fieldname": "response_category", "fieldtype": "Select", "label": "Response Category", "options": "ERP_SUCCESS\nERP_VALIDATION_ERROR\nERP_PERMISSION_ERROR\nERP_NOT_FOUND\nTIMEOUT\nUNCERTAIN_RESULT\nCONFLICT", "read_only": 1},
   {"fieldname": "failure_category", "fieldtype": "Data", "label": "Failure Category", "read_only": 1},
   {"fieldname": "started_at", "fieldtype": "Data", "label": "Started At", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "completed_at", "fieldtype": "Data", "label": "Completed At", "read_only": 1},
+  {"fieldname": "reconciliation_count", "fieldtype": "Int", "label": "Reconciliation Count", "default": 0, "read_only": 1, "reqd": 1},
+  {"fieldname": "last_reconciled_at", "fieldtype": "Data", "label": "Last Reconciled At", "read_only": 1},
   {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1}
  ],
  "index_web_pages_for_search": 0,

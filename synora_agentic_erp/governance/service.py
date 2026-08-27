@@ -30,6 +30,7 @@ from synora_agentic_erp.governance.state import transition_state
 SERVICE_FLAG = "synora_governance_service"
 STATE_FLAG = "synora_action_state_change"
 VERIFIED_RECEIPT_FLAG = "synora_verified_execution"
+RECONCILIATION_RECEIPT_FLAG = "synora_execution_receipt_reconciliation"
 
 
 def _authenticated_actor() -> str:
@@ -224,6 +225,62 @@ def persist_execution_receipt(
         doc.insert(ignore_permissions=True)
     except (frappe.DuplicateEntryError, frappe.UniqueValidationError) as error:
         raise GatewayFault("CONFLICT", "execution receipt already exists", 409) from error
+    return serialize_receipt(doc)
+
+
+def transition_execution_receipt(
+    value: ExecutionReceipt | object,
+) -> dict[str, Any]:
+    """Apply one controlled reconciliation transition to an uncertain Receipt."""
+
+    receipt = value if isinstance(value, ExecutionReceipt) else create_execution_receipt(value)
+    actor = _authenticated_actor()
+    if actor != receipt.executor:
+        raise GatewayFault("PERMISSION_DENIED", "receipt executor does not match session", 403)
+    if receipt.final_state not in {
+        "RECONCILED_SUCCESS",
+        "RECONCILED_FAILURE",
+        "MANUAL_INTERVENTION",
+    }:
+        raise GatewayFault("CONFLICT", "receipt reconciliation state is invalid", 409)
+    try:
+        doc = frappe.get_doc("Synora Execution Receipt", receipt.receipt_id)
+    except frappe.DoesNotExistError as error:
+        raise GatewayFault("NOT_FOUND", "execution receipt is not available", 404) from error
+    if doc.final_state != "RECONCILIATION_REQUIRED":
+        raise GatewayFault("CONFLICT", "execution receipt is already finalized", 409)
+    identity_fields = {
+        "receipt_id": "receipt_id",
+        "action": "action_id",
+        "run": "run_id",
+        "idempotency_key": "idempotency_key",
+        "initiator": "initiator",
+        "approver": "approver",
+        "executor": "executor",
+        "proposal_digest": "proposal_digest",
+        "started_at": "started_at",
+        "correlation_id": "correlation_id",
+    }
+    if any(
+        str(getattr(doc, doc_field) or "") != str(getattr(receipt, receipt_field) or "")
+        for doc_field, receipt_field in identity_fields.items()
+    ):
+        raise GatewayFault("CONFLICT", "receipt reconciliation identity conflicts", 409)
+    doc.target_doctype = receipt.target_doctype
+    doc.target_name = receipt.target_name
+    doc.verified_fields_json = _canonical_json(receipt.verified_fields)
+    doc.response_category = receipt.response_category
+    doc.failure_category = receipt.failure_category
+    doc.final_state = receipt.final_state
+    doc.completed_at = receipt.completed_at
+    doc.reconciliation_evidence_json = _canonical_json(receipt.reconciliation_evidence or {})
+    doc.flags[SERVICE_FLAG] = True
+    doc.flags[RECONCILIATION_RECEIPT_FLAG] = True
+    doc.flags[VERIFIED_RECEIPT_FLAG] = receipt.final_state == "RECONCILED_SUCCESS"
+    try:
+        doc.save(ignore_permissions=True)
+    except frappe.TimestampMismatchError as error:
+        raise GatewayFault("CONFLICT", "execution receipt changed concurrently", 409) from error
     return serialize_receipt(doc)
 
 

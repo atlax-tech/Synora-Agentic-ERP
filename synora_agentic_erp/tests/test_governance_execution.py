@@ -3,6 +3,7 @@
 import json
 from inspect import signature
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -16,8 +17,13 @@ from synora_agentic_erp.api import (
     evaluate_proposal,
     execute_material_request,
     issue_run,
+    reconcile_material_request,
 )
-from synora_agentic_erp.governance.execution_contracts import ReadBackMismatch
+from synora_agentic_erp.governance.contracts import build_proposed_action
+from synora_agentic_erp.governance.execution_contracts import (
+    ReadBackMismatch,
+    material_request_values,
+)
 
 BUYER = "synora-p1-buyer@dev.localhost"
 VIEWER = "synora-p1-viewer@dev.localhost"
@@ -31,7 +37,7 @@ def _future() -> str:
     return "2030-01-01T00:00:00+00:00"
 
 
-class TestGovernedMaterialRequestExecution(FrappeTestCase):
+class TestGovernedMaterialRequestExecution(FrappeTestCase):  # type: ignore[misc]
     def tearDown(self) -> None:
         frappe.set_user("Administrator")
         super().tearDown()
@@ -53,7 +59,7 @@ class TestGovernedMaterialRequestExecution(FrappeTestCase):
         frappe.db.commit()
         return item_code
 
-    def _approved_action(self, item_code: str) -> tuple[dict[str, object], dict[str, object]]:
+    def _approved_action(self, item_code: str) -> tuple[dict[str, Any], dict[str, Any]]:
         frappe.set_user(BUYER)
         issued = issue_run(
             COMPANY,
@@ -65,7 +71,7 @@ class TestGovernedMaterialRequestExecution(FrappeTestCase):
         run = issued["run"]
         analyzed = analyze_run(str(run["run_id"]), str(issued["correlation_id"]))
         self.assertTrue(analyzed["ok"], analyzed)
-        proposal: dict[str, object] = {
+        proposal: dict[str, Any] = {
             "schema_version": "1",
             "action_type": "CREATE_MR_DRAFT",
             "run_id": str(run["run_id"]),
@@ -110,7 +116,7 @@ class TestGovernedMaterialRequestExecution(FrappeTestCase):
         self.assertEqual(approved["action"]["state"], "APPROVED")
         return proposal, approved["action"]
 
-    def _execute(self, proposal: dict[str, object], action: dict[str, object]) -> dict[str, object]:
+    def _execute(self, proposal: dict[str, Any], action: dict[str, Any]) -> dict[str, Any]:
         frappe.set_user(BUYER)
         response = execute_material_request(
             proposal["action_id"],
@@ -118,7 +124,31 @@ class TestGovernedMaterialRequestExecution(FrappeTestCase):
             proposal["idempotency_key"],
             str(uuid4()),
         )
-        return response
+        return cast(dict[str, Any], response)
+
+    def _uncertain_action(self, item_code: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        proposal, action = self._approved_action(item_code)
+        with patch(
+            "synora_agentic_erp.governance.execution.verify_material_request_read_back",
+            side_effect=RuntimeError("simulated lost ERP acknowledgement"),
+        ):
+            response = self._execute(proposal, action)
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "UNCERTAIN_RESULT")
+        frappe.set_user("Administrator")
+        reservation = frappe.get_last_doc(
+            "Synora Execution Reservation", filters={"action": proposal["action_id"]}
+        )
+        self.assertEqual(reservation.status, "RECONCILIATION_REQUIRED")
+        self.assertEqual(reservation.failure_category, "UNEXPECTED_EXECUTION_ERROR")
+        return proposal, action
+
+    def _create_fixture_draft(self, proposal: dict[str, Any]) -> str:
+        frappe.set_user("Administrator")
+        action = build_proposed_action(proposal)
+        target = frappe.get_doc(material_request_values(action)).insert(ignore_permissions=True)
+        frappe.db.commit()
+        return str(target.name)
 
     def test_success_uses_controller_reads_back_and_closes_all_governance_facts(self) -> None:
         item_code = self._new_item()
@@ -292,6 +322,171 @@ class TestGovernedMaterialRequestExecution(FrappeTestCase):
         self.assertEqual(reservation.status, "FAILED")
         self.assertEqual(receipt.final_state, "FAILED")
         self.assertEqual(receipt.failure_category, "ReadBackMismatch")
+
+    def test_uncertain_result_exposes_no_retry_and_active_lease_blocks_reconciliation(self) -> None:
+        item_code = self._new_item()
+        proposal, action = self._uncertain_action(item_code)
+
+        frappe.set_user(BUYER)
+        with patch(
+            "synora_agentic_erp.governance.execution._reconciliation_candidates",
+            side_effect=AssertionError("active lease must not inspect ERP candidates"),
+        ):
+            response = reconcile_material_request(
+                proposal["action_id"],
+                action["proposal_digest"],
+                proposal["idempotency_key"],
+                str(uuid4()),
+            )
+
+        self.assertTrue(response["ok"], response)
+        self.assertEqual(response["result_status"], "RECONCILIATION_REQUIRED")
+        self.assertFalse(response["can_retry"])
+        self.assertEqual(response["reservation"]["status"], "RECONCILIATION_REQUIRED")
+
+    def test_expired_lease_with_one_matching_draft_reconciles_without_writer_retry(self) -> None:
+        item_code = self._new_item()
+        proposal, action = self._uncertain_action(item_code)
+        target_name = self._create_fixture_draft(proposal)
+
+        original_insert = Document.insert
+
+        def reject_reconciliation_writer(
+            self: Document, *args: object, **kwargs: object
+        ) -> Document:
+            if self.doctype == "Material Request":
+                raise AssertionError("reconciliation must never call the ERP writer")
+            return original_insert(self, *args, **kwargs)
+
+        frappe.set_user(BUYER)
+        with patch.object(Document, "insert", new=reject_reconciliation_writer):
+            with patch(
+                "synora_agentic_erp.governance.execution._lease_expired",
+                return_value=True,
+            ):
+                response = reconcile_material_request(
+                    proposal["action_id"],
+                    action["proposal_digest"],
+                    proposal["idempotency_key"],
+                    str(uuid4()),
+                )
+
+        self.assertTrue(response["ok"], response)
+        self.assertEqual(response["result_status"], "RECONCILED_SUCCESS")
+        self.assertFalse(response["can_retry"])
+        self.assertEqual(response["receipt"]["final_state"], "RECONCILED_SUCCESS")
+        self.assertEqual(response["target"]["name"], target_name)
+        frappe.set_user("Administrator")
+        self.assertEqual(
+            frappe.db.get_value(
+                "Synora Execution Reservation",
+                response["reservation"]["reservation_id"],
+                "status",
+            ),
+            "RECONCILED_SUCCESS",
+        )
+        self.assertEqual(
+            frappe.db.get_value("Synora Proposed Action", proposal["action_id"], "state"),
+            "EXECUTED",
+        )
+        self.assertEqual(
+            frappe.db.get_value("Synora Agent Run", proposal["run_id"], "run_state"),
+            "SUCCEEDED",
+        )
+
+    def test_expired_lease_without_matching_draft_reconciles_failure_and_never_retries(
+        self,
+    ) -> None:
+        item_code = self._new_item()
+        proposal, action = self._uncertain_action(item_code)
+        before_mr = frappe.db.count("Material Request")
+
+        frappe.set_user(BUYER)
+        with patch(
+            "synora_agentic_erp.governance.execution._lease_expired",
+            return_value=True,
+        ):
+            response = reconcile_material_request(
+                proposal["action_id"],
+                action["proposal_digest"],
+                proposal["idempotency_key"],
+                str(uuid4()),
+            )
+
+        self.assertTrue(response["ok"], response)
+        self.assertEqual(response["result_status"], "RECONCILED_FAILURE")
+        self.assertFalse(response["can_retry"])
+        frappe.set_user("Administrator")
+        self.assertEqual(frappe.db.count("Material Request"), before_mr)
+        self.assertEqual(response["receipt"]["final_state"], "RECONCILED_FAILURE")
+        self.assertEqual(
+            frappe.db.get_value("Synora Proposed Action", proposal["action_id"], "state"),
+            "EXPIRED",
+        )
+        self.assertEqual(
+            frappe.db.get_value("Synora Agent Run", proposal["run_id"], "run_state"),
+            "FAILED",
+        )
+
+    def test_multiple_matching_drafts_become_manual_intervention_without_guessing(self) -> None:
+        item_code = self._new_item()
+        proposal, action = self._uncertain_action(item_code)
+        first = self._create_fixture_draft(proposal)
+        second = self._create_fixture_draft(proposal)
+        self.assertNotEqual(first, second)
+
+        frappe.set_user(BUYER)
+        with patch(
+            "synora_agentic_erp.governance.execution._lease_expired",
+            return_value=True,
+        ):
+            response = reconcile_material_request(
+                proposal["action_id"],
+                action["proposal_digest"],
+                proposal["idempotency_key"],
+                str(uuid4()),
+            )
+
+        self.assertTrue(response["ok"], response)
+        self.assertEqual(response["result_status"], "MANUAL_INTERVENTION")
+        self.assertFalse(response["can_retry"])
+        self.assertEqual(response["receipt"]["final_state"], "MANUAL_INTERVENTION")
+        self.assertEqual(response["reconciliation"]["candidate_count"], 2)
+
+    def test_response_loss_after_commit_is_replayed_without_second_controller_insert(self) -> None:
+        item_code = self._new_item()
+        proposal, action = self._approved_action(item_code)
+        with patch(
+            "synora_agentic_erp.governance.execution._success_response",
+            side_effect=RuntimeError("simulated response delivery loss"),
+        ):
+            first = self._execute(proposal, action)
+
+        self.assertFalse(first["ok"])
+        self.assertEqual(first["error"]["code"], "UNCERTAIN_RESULT")
+        frappe.set_user("Administrator")
+        reservation = frappe.get_last_doc(
+            "Synora Execution Reservation", filters={"action": proposal["action_id"]}
+        )
+        receipt = frappe.get_doc("Synora Execution Receipt", reservation.receipt)
+        self.assertEqual(reservation.status, "SUCCEEDED")
+        self.assertEqual(receipt.final_state, "SUCCEEDED")
+        self.assertEqual(
+            frappe.db.get_value("Synora Proposed Action", proposal["action_id"], "state"),
+            "EXECUTED",
+        )
+
+        original_insert = Document.insert
+
+        def reject_replay_writer(self: Document, *args: object, **kwargs: object) -> Document:
+            if self.doctype == "Material Request":
+                raise AssertionError("response replay must not call the ERP controller")
+            return original_insert(self, *args, **kwargs)
+
+        with patch.object(Document, "insert", new=reject_replay_writer):
+            second = self._execute(proposal, action)
+        self.assertTrue(second["ok"], second)
+        self.assertEqual(second["target"]["name"], reservation.target_name)
 
     def test_endpoint_accepts_only_server_bound_execution_identifiers(self) -> None:
         parameters = set(signature(execute_material_request).parameters)
