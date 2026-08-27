@@ -26,14 +26,14 @@ Phase 5 要把一次性只读 Agent 执行变成可暂停、可恢复、可取�
 ## 已确认的证据
 
 - `services/agent_runtime/src/agent_runtime/workflow/` 提供严格契约、手写引擎、SQLite checkpoint、Runtime start/resume/cancel/status 和可选 LangGraph 适配器。
-- P5-G01～G10 固定数据集、手写 Fixed/ReAct/Plan-and-Execute 同任务对照和 Runtime API 定向测试已运行；最近一次 Runtime workflow/contract/engine 定向结果为 `24 passed, 2 warnings`，Frappe integration 为 `82 tests OK`。
+- P5-G01～G10 固定数据集、手写 Fixed/ReAct/Plan-and-Execute 同任务对照和 Runtime API 定向测试已运行；最近一次 Runtime workflow/contract/engine 定向结果为 `24 passed, 2 warnings`，Frappe integration 为 `84 tests OK`。
 - Frappe invocation ledger 的完成缓存、`STARTED` 不重放、参数 digest 冲突、PLAN_EXECUTE deadline 和跨用户 workflow status 保护由 `synora_agentic_erp/tests/test_workflow_run.py` 覆盖。
 - LangGraph `1.2.11` 与 `langgraph-checkpoint-sqlite 3.1.1` 在临时 Python 3.14 环境通过 import/interrupt/resume/SQLite Spike；依赖仍锁在 `workflow-lab`，没有接入业务 Runtime。
+- 真实浏览器已完成 PLAN_EXECUTE 创建、clarification 中断、页面重载、恢复、取消、过期、Runtime unavailable 和不同用户隔离；真实 Runtime 停止后使用同一 SQLite checkpoint 恢复同一 Run，Revision 3 保留并完成到 Revision 6。
 
 ## 未决与出口阻塞
 
 - 当前环境没有 n8n 固定镜像；`docker pull` 受外部网络/代理阻塞，因此 import、execute、audit 没有通过证据。
-- In-app Browser 只有 Frappe Sign In 页面，没有可用登录会话；不能在不读取或输入用户秘密的前提下完成浏览器正常/中断/恢复/取消/过期验收。
 - 当前执行上下文没有可独立运行的对抗审查角色，不能把 Execute 自评当作独立 `PASS`。
 - Harness 已发现历史 managed/source fingerprint drift；未获得针对文件级 Harness proposal 的后续授权，不手工改写 `.harness/`。
 
