@@ -33,7 +33,7 @@
 - 仓库是 `MANAGED_HARNESS`；产品、架构、设计、开发、测试、验收、Roadmap 和 SPEC 已建立；
 - Phase 0–Phase 3 的出口证据已经形成；Phase 3 交付的是只读采购 Agent，出口复核已通过；
 - Phase 4 已完成并由最新开发日志和启动包记录 `COMPLETED / PASS`；其只读执行内核、Trace、评测和安全证据以 `docs/development-log/20260826-Phase-4-开发日志.md`、`docs/phase4-kickoff.md` 和提交历史为准；
-- Phase 5 已完成 P5.1–P5.5 的实现增量，当前阶段状态为 `BLOCKED / P5.5`：用户明确授权 Agent 全程接管代码编写，本阶段不创建 Assignment、不写学习笔记；阶段仍禁止 ERP 写工具，工作流 checkpoint 不得成为 Frappe/ERP 事实。真实 Frappe app-test、本地 Runtime 重启/恢复、对照证据和登录态浏览器全路径验收已形成；n8n 镜像/import/audit、独立对抗审查以及 managed Harness drift proposal 仍未关闭，详见 ADR-0006 与 Phase 5 开发日志；不得进入 Phase 6；
+- Phase 5 已完成 P5.1–P5.5 的实现增量，当前阶段状态为 `BLOCKED / P5.5`：用户明确授权 Agent 全程接管代码编写，本阶段不创建 Assignment、不写学习笔记；阶段仍禁止 ERP 写工具，工作流 checkpoint 不得成为 Frappe/ERP 事实。真实 Frappe app-test、本地 Runtime 重启/恢复、对照证据和登录态浏览器全路径验收已形成；最终独立对抗审查第二轮为 `PASS`（第一轮发现的终态陈旧 checkpoint P1 已修复并复验）；n8n 镜像/import/audit 和 managed Harness drift proposal 仍未关闭，详见 ADR-0006 与 Phase 5 开发日志；不得进入 Phase 6；
 - 项目定位为“Agent 开发岗位学习仓库 + 真实 ERP 实践载体”；业务应用层与教学实验层共存于同一仓库和开发主线，不是两个仓库或长期分支；
 - `approval-workflow-mapping` 仍是启用 ERP 写入前的强制门禁，当前不得把 Proposed Action、Approval、Draft、Receipt 或其他写工具当作已实现能力；
 - Frappe/ERPNext 是只读上游依赖，不能修改其核心，也不能绕过其权限、校验、Workflow、事务和审计；
@@ -297,7 +297,7 @@
 - **P5.4 竞态与内部边界**：处理并发恢复、取消/过期、Runtime 内部认证、短期 capability 和已完成工具不重放。
 - **P5.5 可视化与取舍**：Run 页面展示计划、步骤、观察摘要、中断与停止原因；Adoption Card 记录主线是否采用 LangGraph。
 
-实施状态（2026-08-27）：P5.1–P5.5 代码、真实 Frappe 只读集成、Runtime targeted tests、真实进程重启恢复、手写同任务 comparison、登录态浏览器全路径、ADR-0006 和 Adoption Card 已提交；阶段出口仍为 `BLOCKED`。缺失的 n8n 可运行审计、独立对抗审查和 Harness managed drift proposal 不能用 mock、导出文件或 Execute 自评替代。已形成的出口证据覆盖进程重启后从最近安全点恢复、取消/过期后不再调工具和已完成工具不重复执行；Plan-and-Execute 与 ReAct 的同任务质量、成本、恢复对比仍需连同剩余门禁统一收口。
+实施状态（2026-08-27）：P5.1–P5.5 代码、真实 Frappe 只读集成、Runtime targeted tests、真实进程重启恢复、手写同任务 comparison、登录态浏览器全路径、ADR-0006 和 Adoption Card 已提交；最终独立对抗审查第二轮为 `PASS`，阶段出口仍为 `BLOCKED`。缺失的 n8n 可运行审计和 Harness managed drift proposal 不能用 mock、导出文件或 Execute 自评替代。已形成的出口证据覆盖进程重启后从最近安全点恢复、取消/过期后不再调工具、终态陈旧 checkpoint 不再展示和已完成工具不重复执行；Plan-and-Execute 与 ReAct 的同任务质量、成本、恢复对比已由 recorded comparison 形成。
 
 ## 15. Phase 6 — 受治理的第一批 ERP 行动
 

@@ -26,15 +26,15 @@ Phase 5 要把一次性只读 Agent 执行变成可暂停、可恢复、可取�
 ## 已确认的证据
 
 - `services/agent_runtime/src/agent_runtime/workflow/` 提供严格契约、手写引擎、SQLite checkpoint、Runtime start/resume/cancel/status 和可选 LangGraph 适配器。
-- P5-G01～G10 固定数据集、手写 Fixed/ReAct/Plan-and-Execute 同任务对照和 Runtime API 定向测试已运行；最近一次 Runtime workflow/contract/engine 定向结果为 `24 passed, 2 warnings`，Frappe integration 为 `84 tests OK`。
+- P5-G01～G10 固定数据集、手写 Fixed/ReAct/Plan-and-Execute 同任务对照和 Runtime API 定向测试已运行；最近一次 Runtime workflow/contract/engine 定向结果为 `24 passed, 2 warnings`，Frappe integration 为 `86 tests OK`。
 - Frappe invocation ledger 的完成缓存、`STARTED` 不重放、参数 digest 冲突、PLAN_EXECUTE deadline 和跨用户 workflow status 保护由 `synora_agentic_erp/tests/test_workflow_run.py` 覆盖。
 - LangGraph `1.2.11` 与 `langgraph-checkpoint-sqlite 3.1.1` 在临时 Python 3.14 环境通过 import/interrupt/resume/SQLite Spike；依赖仍锁在 `workflow-lab`，没有接入业务 Runtime。
-- 真实浏览器已完成 PLAN_EXECUTE 创建、clarification 中断、页面重载、恢复、取消、过期、Runtime unavailable 和不同用户隔离；真实 Runtime 停止后使用同一 SQLite checkpoint 恢复同一 Run，Revision 3 保留并完成到 Revision 6。
+- 真实浏览器已完成 PLAN_EXECUTE 创建、clarification 中断、页面重载、恢复、取消、过期、Runtime unavailable 和不同用户隔离；真实 Runtime 停止后使用同一 SQLite checkpoint 恢复同一 Run，Revision 3 保留并完成到 Revision 6。取消/失败终态的陈旧 checkpoint 遮蔽回归随后由 86 个 Frappe 测试覆盖。
 
 ## 未决与出口阻塞
 
 - 当前环境没有 n8n 固定镜像；`docker pull` 受外部网络/代理阻塞，因此 import、execute、audit 没有通过证据。
-- 当前执行上下文没有可独立运行的对抗审查角色，不能把 Execute 自评当作独立 `PASS`。
+- 独立对抗审查已在最终 diff 和全量证据后完成两轮：第一轮 `CHANGES_REQUIRED`，修复终态陈旧 checkpoint 后第二轮 `PASS`；审查角色未修改代码。
 - Harness 已发现历史 managed/source fingerprint drift；未获得针对文件级 Harness proposal 的后续授权，不手工改写 `.harness/`。
 
 以上阻塞项未关闭前，Phase 5 不得写成 `PASS`，也不得进入 Phase 6。

@@ -135,7 +135,7 @@ The initial retrieval implementation uses curated, versioned sources with SQLite
 - Complete Frappe/ERPNext commit pair. — **RESOLVED 2026-08-24**：`docs/decisions/ADR-0002-frozen-baseline-pair.md` 固定 Frappe `6a329d0` (16.31.0) + ERPNext `11e0ba0` (16.32.3)。
 - Exact user-bound authorization mechanism between Frappe and the Agent Runtime. — **RESOLVED 2026-08-25**：ADR-0003 uses a server-bound Agent Run and opaque short-lived capability; Phase 2 verified the path over real HTTP.
 - Workflow engine adoption and LangGraph checkpoint adapter. — **CONDITIONAL 2026-08-27**：ADR-0006 保留手写引擎为业务基线，LangGraph 仍为 `LAB_ONLY`，待安全/恢复/运维证据和阶段出口阻塞关闭后复验。
-- Phase 5 external acceptance evidence for n8n import/execute/audit, independent adversarial review, and managed Harness drift. Browser full-path and Runtime restart evidence are recorded in the Phase 5 development log; the remaining items stay unresolved until their own evidence exists.
+- Phase 5 external acceptance evidence for n8n import/execute/audit and managed Harness drift remains unresolved. Independent adversarial review completed on the final diff and full evidence: round 1 `CHANGES_REQUIRED` (stale terminal checkpoint P1), round 2 `PASS` after fix. Browser full-path and Runtime restart evidence are recorded in the Phase 5 development log.
 - Local model and optional provider set selected by evaluation.
 - Production storage and scaling path beyond the first single-instance implementation.
 - Third-party license boundary for GPL and CC BY-NC materials.
