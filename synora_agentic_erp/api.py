@@ -480,18 +480,17 @@ def _visible_run_filter() -> dict[str, str]:
 
 
 def _run_summary(run: Any) -> dict[str, Any]:
-    """Run 摘要; 展示层归一化: capability TTL 已过的 ACTIVE Run 显示为 EXPIRED。"""
+    """Run 摘要; workflow deadline 与短期 capability TTL 严格分离。"""
     execution_mode = getattr(run, "execution_mode", "DETERMINISTIC") or "DETERMINISTIC"
     capability_expired = (
         run.status == "ACTIVE"
         and not run.revoked
+        and execution_mode != "PLAN_EXECUTE"
         and get_datetime(run.expires_at) <= now_datetime()
     )
     workflow_deadline = getattr(run, "workflow_expires_at", None)
-    workflow_expired = (
-        execution_mode == "PLAN_EXECUTE"
-        and bool(workflow_deadline)
-        and get_datetime(workflow_deadline) <= now_datetime()
+    workflow_expired = execution_mode == "PLAN_EXECUTE" and (
+        not workflow_deadline or get_datetime(workflow_deadline) <= now_datetime()
     )
     expired = capability_expired or workflow_expired or run.run_state == "EXPIRED"
     agent_trace = _latest_agent_trace(run.name) if execution_mode == "AGENT" else None

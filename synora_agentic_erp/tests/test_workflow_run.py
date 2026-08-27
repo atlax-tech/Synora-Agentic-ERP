@@ -16,6 +16,7 @@ from synora_agentic_erp.api import (
     execute,
     get_run_workflow,
     issue_run,
+    list_runs,
     resume_run,
 )
 from synora_agentic_erp.gateway.security import resolve_run
@@ -131,6 +132,21 @@ class TestWorkflowRun(FrappeTestCase):
         run = frappe.get_doc("Synora Agent Run", result["run_id"])
         self.assertEqual(run.execution_mode, "PLAN_EXECUTE")
         self.assertGreater(run.workflow_expires_at, run.expires_at)
+
+    def test_plan_execute_list_ignores_expired_segment_capability(self) -> None:
+        result = self._issue()
+        frappe.db.set_value(
+            "Synora Agent Run",
+            result["run_id"],
+            "expires_at",
+            now_datetime() - timedelta(seconds=1),
+        )
+        frappe.set_user(BUYER)
+        response = list_runs()
+        self.assertTrue(response["ok"])
+        entry = next(item for item in response["runs"] if item["run_id"] == result["run_id"])
+        self.assertFalse(entry["expired"])
+        self.assertEqual(entry["run_state"], "CREATED")
 
     def test_expired_plan_run_is_authoritatively_closed(self) -> None:
         result = self._issue()
