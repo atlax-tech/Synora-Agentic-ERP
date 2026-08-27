@@ -221,6 +221,27 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		return copies[code] || __("工作流状态读取失败，请稍后重试。 ");
 	}
 
+	function api_error_payload(source) {
+		const body = source && source.responseJSON ? source.responseJSON : source || {};
+		const wrapped = body && body.message && typeof body.message === "object" ? body.message : body;
+		const error = wrapped && wrapped.error && typeof wrapped.error === "object" ? wrapped.error : {};
+		return {
+			code: typeof error.code === "string" ? error.code : "",
+			correlation_id: typeof wrapped.correlation_id === "string" ? wrapped.correlation_id : "",
+		};
+	}
+
+	function api_failure_copy(prefix, source, fallback, correlation_id) {
+		const parsed = api_error_payload(source);
+		const code = parsed.code || "UNAVAILABLE";
+		const correlation = parsed.correlation_id || correlation_id || "";
+		let message = prefix + "（" + code + "）：" + (workflow_error_copy(code) || fallback);
+		if (correlation) {
+			message += " " + __("关联标识") + ": " + correlation;
+		}
+		return message;
+	}
+
 	function workflow_time(value) {
 		if (!value) {
 			return "—";
@@ -584,12 +605,13 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 
 	function start_analysis(run_id, button) {
 		const original = button.html();
+		const correlation_id = crypto.randomUUID();
 		button.attr("disabled", true).html('<span class="spinner-border spinner-border-sm"></span> ' + __("分析中…"));
 		frappe.call({
 			method: "synora_agentic_erp.api.analyze_run",
 			args: {
 				run_id: run_id,
-				correlation_id: crypto.randomUUID(),
+				correlation_id: correlation_id,
 			},
 			callback: function (r) {
 				if (r.message && r.message.ok) {
@@ -597,13 +619,12 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					show_detail(run_id);
 				} else {
 					button.attr("disabled", false).html(original);
-					frappe.msgprint(__("分析失败：") + (r.message && r.message.error ? r.message.error.message : ""));
+					frappe.msgprint(api_failure_copy(__("分析失败"), r.message, __("分析请求被拒绝。"), correlation_id));
 				}
 			},
 			error: function (xhr) {
 				button.attr("disabled", false).html(original);
-				const message = xhr && xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error.message : __("分析失败");
-				frappe.msgprint(message);
+				frappe.msgprint(api_failure_copy(__("分析失败"), xhr, __("分析请求被拒绝。"), correlation_id));
 			},
 		});
 	}
