@@ -22,9 +22,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from time import monotonic
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 import frappe
-from frappe.utils import get_datetime, now_datetime
+from frappe.utils import get_datetime, get_system_timezone, now_datetime
 
 from synora_agentic_erp.agent.analysis import (
     NEEDS_INPUT,
@@ -95,6 +96,18 @@ _AGENT_EVENT_TYPES = {
     "final.rejected",
     "run.stopped",
 }
+
+
+def _workflow_deadline_for_runtime(value: Any) -> str:
+    """Serialize Frappe's site-local deadline as an explicit-offset ISO value."""
+    deadline = get_datetime(value)
+    if deadline is None:
+        raise GatewayFault("CONFLICT", "workflow deadline is invalid", 409)
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=ZoneInfo(get_system_timezone()))
+    return deadline.isoformat(timespec="milliseconds")
+
+
 _AGENT_STOP_CODES = _AGENT_FALLBACK_CODES | {"FINAL_ANSWER", "CANCELLED", "TOOL_ERROR"}
 _SENSITIVE_TRACE_KEYS = {
     "secret",
@@ -1365,6 +1378,7 @@ def _analyze_plan_execute_run(run: Any, correlation_id: str) -> dict[str, Any]:
             "run_id": run.name,
             "correlation_id": correlation_id,
             "goal": run.goal,
+            "deadline": _workflow_deadline_for_runtime(run.workflow_expires_at),
         }
         try:
             response = _call_workflow_runtime("start", payload, capability=capability)

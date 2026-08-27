@@ -1,13 +1,13 @@
 """Phase 5 Frappe contract, expiry and Gateway invocation-ledger tests."""
 
 import hashlib
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest.mock import patch
 from uuid import uuid4
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 from synora_agentic_erp.agent.invocation import args_digest, invocation_id
 from synora_agentic_erp.api import (
@@ -193,6 +193,9 @@ class TestWorkflowRun(FrappeTestCase):
     def test_plan_workflow_interrupt_resume_and_status_are_revision_bound(self) -> None:
         run = self._issue()
         run_id = str(run["run_id"])
+        workflow_deadline = str(
+            frappe.db.get_value("Synora Agent Run", run_id, "workflow_expires_at")
+        )
         interrupt_id = str(uuid4())
         interrupted = self._workflow_response(
             run_id,
@@ -209,7 +212,7 @@ class TestWorkflowRun(FrappeTestCase):
         with patch(
             "synora_agentic_erp.agent.service._call_workflow_runtime",
             side_effect=[interrupted, interrupted, completed],
-        ):
+        ) as runtime_call:
             frappe.set_user(BUYER)
             started = analyze_run(run_id, str(uuid4()))
             self.assertTrue(started["ok"])
@@ -230,6 +233,17 @@ class TestWorkflowRun(FrappeTestCase):
                 interrupt_id=interrupt_id,
                 answer="Stores",
             )
+        start_payload = runtime_call.call_args_list[0].args[1]
+        self.assertEqual(runtime_call.call_args_list[0].args[0], "start")
+        wire_deadline = datetime.fromisoformat(str(start_payload["deadline"]))
+        self.assertIsNotNone(wire_deadline.tzinfo)
+        source_deadline = get_datetime(workflow_deadline)
+        self.assertIsNotNone(source_deadline)
+        assert source_deadline is not None
+        source_deadline = source_deadline.replace(
+            microsecond=(source_deadline.microsecond // 1_000) * 1_000
+        )
+        self.assertEqual(wire_deadline.replace(tzinfo=None), source_deadline)
         self.assertTrue(resumed["ok"])
         self.assertEqual(resumed["analysis"]["workflow_status"], "SUCCEEDED")
         self.assertEqual(
