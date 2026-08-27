@@ -1,5 +1,6 @@
 {
   "name": "Synora Phase 5 recorded read-only workflow",
+  "id": "p5-n8n-recorded-readonly-v1",
   "nodes": [
     {
       "parameters": {},
