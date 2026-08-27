@@ -16,6 +16,7 @@ from synora_agentic_erp.api import (
     decide_action,
     evaluate_proposal,
     execute_purchase_order,
+    get_run,
     issue_run,
     reconcile_purchase_order,
 )
@@ -432,6 +433,20 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
         self.assertTrue(reviewed["ok"], reviewed)
         self.assertEqual(reviewed["policy"]["outcome"], "REJECT")
         self.assertEqual(reviewed["action"]["state"], "POLICY_REJECTED")
+
+    def test_run_details_include_governance_proposal_policy_and_approval(self) -> None:
+        proposal, _action = self._approved_action(self._new_item())
+        frappe.set_user(BUYER)
+        response = get_run(proposal["run_id"])
+        self.assertTrue(response["ok"], response)
+        self.assertEqual(len(response["governance"]), 1)
+        entry = response["governance"][0]
+        self.assertEqual(entry["action"]["action_id"], proposal["action_id"])
+        self.assertEqual(entry["action"]["action_type"], "CREATE_PO_DRAFT")
+        self.assertEqual(entry["policy"]["outcome"], "ALLOW")
+        self.assertEqual(entry["approval"]["decision"], "ALLOW")
+        self.assertIsNone(entry["reservation"])
+        self.assertIsNone(entry["receipt"])
 
     def test_endpoint_is_identifier_only_and_writer_never_submits_or_uses_generic_payload(
         self,

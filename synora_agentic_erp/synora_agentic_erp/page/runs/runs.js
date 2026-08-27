@@ -20,6 +20,26 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		DECLINED: __("已拒绝"),
 		EXPIRED: __("已过期"),
 	};
+	const GOVERNANCE_ACTION_COPY = {
+		CREATE_MR_DRAFT: __("创建 Material Request 草稿"),
+		CREATE_PO_DRAFT: __("创建 Purchase Order 草稿"),
+	};
+	const GOVERNANCE_STATUS_COPY = {
+		DRAFT: __("待评估"),
+		AWAITING_APPROVAL: __("等待审批"),
+		APPROVED: __("已批准，待执行"),
+		DECLINED: __("审批拒绝"),
+		CHANGES_REQUESTED: __("已请求修改"),
+		EXECUTED: __("已执行并读回"),
+		POLICY_REJECTED: __("策略拒绝"),
+		EXPIRED: __("已过期"),
+		RECONCILIATION_REQUIRED: __("需要只读对账"),
+		RECONCILED_SUCCESS: __("对账成功"),
+		RECONCILED_FAILURE: __("对账失败"),
+		MANUAL_INTERVENTION: __("需要人工处理"),
+		SUCCEEDED: __("执行成功"),
+		FAILED: __("执行失败"),
+	};
 	const EXECUTION_MODE_COPY = {
 		DETERMINISTIC: __("确定性分析"),
 		AGENT: __("Agent 动态分析"),
@@ -443,6 +463,222 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		);
 	}
 
+	function governance_time(value) {
+		return value ? esc(String(value).replace("T", " ").slice(0, 19)) : esc("—");
+	}
+
+	function governance_action_copy(action) {
+		return GOVERNANCE_ACTION_COPY[action.action_type] || esc(action.action_type || __("未知动作"));
+	}
+
+	function governance_status_copy(value) {
+		return GOVERNANCE_STATUS_COPY[value] || esc(value || __("未知"));
+	}
+
+	function governance_items(payload) {
+		const items = payload && Array.isArray(payload.items) ? payload.items : [];
+		if (!items.length) {
+			return '<div class="text-muted small">' + __("没有可展示的物料行。") + "</div>";
+		}
+		return '<div class="table-responsive"><table class="table table-sm table-striped" aria-label="' + esc(__("批准物料行")) + '">' +
+			"<thead><tr><th scope=\"col\">" + __("物料") + "</th><th scope=\"col\">" + __("数量 / UOM") + "</th><th scope=\"col\">" + __("单价") + "</th><th scope=\"col\">" + __("仓库 / 交期") + "</th></tr></thead><tbody>" +
+			items.map(function (item) {
+				const rate = item.rate === undefined ? "—" : item.rate;
+				return "<tr>" +
+					"<td>" + esc(item.item_code) + "</td>" +
+					"<td>" + esc(item.qty) + " / " + esc(item.uom || "—") + "</td>" +
+					"<td>" + esc(rate) + "</td>" +
+					"<td>" + esc(item.warehouse) + " / " + governance_time(item.schedule_date) + "</td>" +
+					"</tr>";
+			}).join("") + "</tbody></table></div>";
+	}
+
+	function governance_policy_summary(policy) {
+		if (!policy) {
+			return '<span class="text-muted">' + __("尚无策略决定") + "</span>";
+		}
+		const checks = policy.checks || {};
+		const check_text = ["identity", "scope", "permission", "deterministic", "workflow_policy"]
+			.map(function (name) { return name + ": " + (checks[name] || "—"); })
+			.join(" · ");
+		return esc(policy.outcome || "—") + " · " + esc(check_text) +
+			(policy.reason ? "<br>" + esc(policy.reason) : "");
+	}
+
+	function governance_receipt_summary(receipt) {
+		if (!receipt) {
+			return '<span class="text-muted">' + __("尚无执行 Receipt") + "</span>";
+		}
+		const verified = receipt.verified_fields || {};
+		const amount = verified["item_0.amount"];
+		return esc(receipt.final_state || "—") + " · " + esc(receipt.response_category || "—") +
+			(receipt.target_name ? " · " + esc(receipt.target_doctype || "ERP") + ": " + esc(receipt.target_name) : "") +
+			(amount ? " · " + __("首行金额") + ": " + esc(amount) : "") +
+			(receipt.failure_category ? "<br><span class=\"text-danger\">" + esc(receipt.failure_category) + "</span>" : "");
+	}
+
+	function build_governance_panel(governance, run) {
+		const panel_id = "governance-panel-" + String(run.run_id).replace(/[^a-zA-Z0-9_-]/g, "");
+		if (!Array.isArray(governance) || !governance.length) {
+			return '<section class="governance-panel mt-3" aria-labelledby="' + panel_id + '-label">' +
+				'<h5 id="' + panel_id + '-label">' + __("治理动作") + "</h5>" +
+				'<div class="text-muted py-2" role="status">' + __("当前运行尚无已保存的治理动作。") + "</div></section>";
+		}
+		const cards = governance.map(function (entry, index) {
+			const action = entry && entry.action ? entry.action : {};
+			const payload = action.payload || {};
+			const policy = entry.policy;
+			const approval = entry.approval;
+			const reservation = entry.reservation;
+			const receipt = entry.receipt;
+			const card_id = panel_id + "-action-" + index;
+			const state = action.state || "DRAFT";
+			const action_id = String(action.action_id || "");
+			const digest = String(action.proposal_digest || "");
+			const approval_actor = approval && approval.actor ? String(approval.actor) : "";
+			const can_approve = state === "AWAITING_APPROVAL" &&
+				(action.approval_class === "INITIATOR_CONFIRMATION"
+					? action.initiator === current_user
+					: approval_actor === current_user);
+			const can_execute = state === "APPROVED" &&
+				(action.approval_class === "INITIATOR_CONFIRMATION"
+					? action.initiator === current_user
+					: approval_actor === current_user);
+			const can_reconcile = reservation &&
+				reservation.status === "RECONCILIATION_REQUIRED" &&
+				String(reservation.executor || "") === current_user;
+			const approval_summary = approval
+				? esc(approval.decision) + " · " + esc(approval.actor) + " · " + esc(approval.reason || "")
+				: '<span class="text-muted">' + __("尚未审批") + "</span>";
+			const reservation_summary = reservation
+				? esc(reservation.status) + " · " + __("尝试") + ": " + esc(reservation.attempt) + " · " + __("租约到期") + ": " + governance_time(reservation.lease_expires_at)
+				: '<span class="text-muted">' + __("尚未执行") + "</span>";
+			const approval_buttons = can_approve
+				? '<div class="btn-group btn-group-sm mr-2" role="group" aria-label="' + esc(__("审批操作")) + '">' +
+				  '<button type="button" class="btn btn-success governance-decide" data-action="' + esc(action_id) + '" data-decision="ALLOW" data-digest="' + esc(digest) + '" data-run="' + esc(run.run_id) + '" aria-describedby="' + card_id + '-consequence">' + __("确认执行") + "</button>" +
+				  '<button type="button" class="btn btn-outline-danger governance-decide" data-action="' + esc(action_id) + '" data-decision="DECLINE" data-digest="' + esc(digest) + '" data-run="' + esc(run.run_id) + '" aria-describedby="' + card_id + '-consequence">' + __("拒绝") + "</button>" +
+				  '<button type="button" class="btn btn-outline-secondary governance-decide" data-action="' + esc(action_id) + '" data-decision="CHANGES_REQUESTED" data-digest="' + esc(digest) + '" data-run="' + esc(run.run_id) + '" aria-describedby="' + card_id + '-consequence">' + __("请求修改") + "</button></div>"
+				: "";
+			const execute_button = can_execute
+				? '<button type="button" class="btn btn-primary btn-sm governance-execute" data-action="' + esc(action_id) + '" data-digest="' + esc(digest) + '" data-key="' + esc(action.idempotency_key || "") + '" data-type="' + esc(action.action_type || "") + '" data-run="' + esc(run.run_id) + '" aria-describedby="' + card_id + '-consequence">' + __("创建 ERP 草稿") + "</button>"
+				: "";
+			const reconcile_button = can_reconcile
+				? '<button type="button" class="btn btn-warning btn-sm governance-reconcile" data-action="' + esc(action_id) + '" data-digest="' + esc(digest) + '" data-key="' + esc(action.idempotency_key || "") + '" data-type="' + esc(action.action_type || "") + '" data-run="' + esc(run.run_id) + '" aria-describedby="' + card_id + '-consequence">' + __("只读对账") + "</button>"
+				: "";
+			const buttons = approval_buttons + execute_button + reconcile_button;
+			return '<article class="border rounded p-3 mb-3" aria-labelledby="' + card_id + '-label">' +
+				'<div class="d-flex justify-content-between align-items-start flex-wrap"><h6 id="' + card_id + '-label">' + governance_action_copy(action) + "</h6>" +
+				'<span class="badge badge-light">' + governance_status_copy(state) + "</span></div>" +
+				'<div class="small text-muted mb-2">' +
+					__("Action") + ": <code>" + esc(action_id.slice(0, 12)) + "…</code> · " +
+					__("风险") + ": " + esc(action.risk_class || "—") + " · " +
+					__("审批类型") + ": " + esc(action.approval_class || "—") + "</div>" +
+				'<div class="small mb-2"><b>' + __("批准提议") + "</b> · " +
+					(payload.supplier ? __("供应商") + ": " + esc(payload.supplier) + " · " : "") +
+					(payload.currency ? __("币种") + ": " + esc(payload.currency) + " · " : "") +
+					(payload.buying_price_list ? __("采购价目表") + ": " + esc(payload.buying_price_list) + " · " : "") +
+					(payload.company ? __("公司") + ": " + esc(payload.company) : "") +
+					"<br>" + __("交易日") + ": " + governance_time(payload.transaction_date) +
+					" · " + __("交期") + ": " + governance_time(payload.schedule_date) +
+					"<br>" + governance_items(payload) + "</div>" +
+				'<div class="small text-muted mb-2"><b>' + __("证据") + "</b> · digest: <code>" + esc(digest.slice(0, 16)) + "…</code> · snapshot: " + esc(action.snapshot_ref || "—") + " · expiry: " + governance_time(action.expires_at) + "</div>" +
+				'<div class="small mb-2"><b>' + __("策略") + "</b> · " + governance_policy_summary(policy) + "</div>" +
+				'<div class="small mb-2"><b>' + __("审批") + "</b> · " + approval_summary + "</div>" +
+				'<div class="small mb-2"><b>' + __("执行 Reservation") + "</b> · " + reservation_summary + "</div>" +
+				'<div class="small mb-2"><b>' + __("Receipt") + "</b> · " + governance_receipt_summary(receipt) + "</div>" +
+				'<div id="' + card_id + '-consequence" class="small text-muted mb-2" aria-live="polite">' +
+					(state === "AWAITING_APPROVAL" ? __("确认会消耗当前批准并允许创建一张 Draft；拒绝或请求修改不会创建 ERP 单据。") : "") +
+					(state === "APPROVED" ? __("执行只会创建 Draft，成功必须经过 ERP 读回；失败或不确定不会自动重试。") : "") +
+					(reservation && reservation.status === "RECONCILIATION_REQUIRED" ? __("对账只读取 ERP，不会再次创建或提交 Purchase Order。") : "") +
+				"</div>" +
+				'<div class="governance-actions">' + buttons + '</div></article>';
+		}).join("");
+		return '<section class="governance-panel mt-3" aria-labelledby="' + panel_id + '-label" data-governance-run="' + esc(run.run_id) + '">' +
+			'<h5 id="' + panel_id + '-label">' + __("治理动作与执行证据") + "</h5>" +
+			'<div class="small text-muted mb-2" role="status" aria-live="polite">' + __("以下状态来自服务器已保存的 Action、Policy、Approval、Reservation 和 Receipt；界面不会伪造成功。") + "</div>" +
+			cards + "</section>";
+	}
+
+	function governance_call(button, method, args, busy_copy, run_id, dialog) {
+		const original = button.html();
+		const status_area = button.closest("article").find("[aria-live]").last();
+		button.attr("disabled", true).html('<span class="spinner-border spinner-border-sm"></span> ' + esc(busy_copy));
+		status_area.removeClass("text-danger").text(busy_copy + "…");
+		frappe.call({
+			method: method,
+			args: args,
+			callback: function (r) {
+				if (r.message && r.message.ok) {
+					dialog.hide();
+					refresh();
+					show_detail(run_id);
+					return;
+				}
+				button.attr("disabled", false).html(original).trigger("focus");
+				status_area.addClass("text-danger").text(api_failure_copy(busy_copy, r.message, __("请求被拒绝。"), args.correlation_id));
+			},
+			error: function (xhr) {
+				button.attr("disabled", false).html(original).trigger("focus");
+				status_area.addClass("text-danger").text(api_failure_copy(busy_copy, xhr, __("请求失败，请刷新后重试。"), args.correlation_id));
+			},
+		});
+	}
+
+	function bind_governance_actions(wrapper, run_id, dialog) {
+		wrapper.find(".governance-decide").on("click", function () {
+			const button = $(this);
+			const decision = String(button.data("decision"));
+			governance_call(
+				button,
+				"synora_agentic_erp.api.decide_action",
+				{
+					action_id: button.data("action"),
+					decision: decision,
+					proposal_digest: button.data("digest"),
+					reason: decision === "ALLOW" ? __("通过 Runs 详情确认") : decision === "DECLINE" ? __("通过 Runs 详情拒绝") : __("通过 Runs 详情请求修改"),
+					correlation_id: crypto.randomUUID(),
+				},
+				decision === "ALLOW" ? __("确认中") : decision === "DECLINE" ? __("拒绝中") : __("提交修改请求中"),
+				run_id,
+				dialog
+			);
+		});
+		wrapper.find(".governance-execute").on("click", function () {
+			const button = $(this);
+			const type = String(button.data("type"));
+			governance_call(
+				button,
+				type === "CREATE_PO_DRAFT" ? "synora_agentic_erp.api.execute_purchase_order" : "synora_agentic_erp.api.execute_material_request",
+				{
+					action_id: button.data("action"),
+					expected_proposal_digest: button.data("digest"),
+					idempotency_key: button.data("key"),
+					correlation_id: crypto.randomUUID(),
+				},
+				__("执行中"),
+				run_id,
+				dialog
+			);
+		});
+		wrapper.find(".governance-reconcile").on("click", function () {
+			const button = $(this);
+			const type = String(button.data("type"));
+			governance_call(
+				button,
+				type === "CREATE_PO_DRAFT" ? "synora_agentic_erp.api.reconcile_purchase_order" : "synora_agentic_erp.api.reconcile_material_request",
+				{
+					action_id: button.data("action"),
+					expected_proposal_digest: button.data("digest"),
+					idempotency_key: button.data("key"),
+					correlation_id: crypto.randomUUID(),
+				},
+				__("对账中"),
+				run_id,
+				dialog
+			);
+		});
+	}
+
 	function refresh() {
 		container.html('<div class="text-muted text-center py-5"><span class="spinner-border spinner-border-sm"></span> ' + __("加载中…") + "</div>");
 		frappe.call({
@@ -669,6 +905,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				const run = data.run;
 				const analyses = data.analyses || [];
 				const plan = data.plan;
+				const governance_panel = build_governance_panel(data.governance || [], run);
 				let rows_html = "";
 				if (plan && plan.findings) {
 					// 可解释计划: 模型增强解释 (若通过校验) + 确定性摘要 + 逐项建议 + 来源 + 证据
@@ -754,6 +991,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					(run.workflow_expires_at ? " &nbsp; <b>" + __("工作流到期") + ":</b> " + esc(workflow_time(run.workflow_expires_at)) : "") +
 					"</div>" +
 					rows_html +
+					governance_panel +
 					trace_panel +
 					workflow_panel
 				);
@@ -771,6 +1009,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 						load_trace(run.run_id, trace_content, button);
 					}
 				});
+				bind_governance_actions(content_wrapper, run.run_id, dialog);
 				dialog.show();
 			},
 		});
