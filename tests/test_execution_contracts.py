@@ -12,6 +12,7 @@ from synora_agentic_erp.governance.execution_contracts import (
     execution_key,
     map_execution_error,
     material_request_values,
+    purchase_order_calculation,
     purchase_order_values,
     verify_material_request_read_back,
     verify_purchase_order_read_back,
@@ -187,6 +188,15 @@ def test_po_writer_reconstructs_supplier_price_and_amount_inputs() -> None:
         action.proposal_digest,
         "p6-po-20260827-0001",
     )
+
+
+def test_po_calculation_is_server_derived_for_approval_display() -> None:
+    assert purchase_order_calculation(_po_action()) == {
+        "currency": "CNY",
+        "line_amounts": ["200"],
+        "total_amount": "200",
+        "basis": "qty * rate; rate must match ERPNext Item Price",
+    }
 
 
 def test_po_read_back_verifies_amount_as_qty_times_rate() -> None:

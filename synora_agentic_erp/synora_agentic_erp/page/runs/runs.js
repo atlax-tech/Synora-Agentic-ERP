@@ -467,6 +467,14 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		return value ? esc(String(value).replace("T", " ").slice(0, 19)) : esc("—");
 	}
 
+	function governance_refs(refs) {
+		if (!Array.isArray(refs) || !refs.length) {
+			return esc("—");
+		}
+		const visible = refs.slice(0, 20).map(function (ref) { return esc(ref); }).join(" · ");
+		return visible + (refs.length > 20 ? " · …" : "");
+	}
+
 	function governance_action_copy(action) {
 		return GOVERNANCE_ACTION_COPY[action.action_type] || esc(action.action_type || __("未知动作"));
 	}
@@ -475,22 +483,27 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		return GOVERNANCE_STATUS_COPY[value] || esc(value || __("未知"));
 	}
 
-	function governance_items(payload) {
+	function governance_items(payload, calculation) {
 		const items = payload && Array.isArray(payload.items) ? payload.items : [];
 		if (!items.length) {
 			return '<div class="text-muted small">' + __("没有可展示的物料行。") + "</div>";
 		}
+		const amounts = calculation && Array.isArray(calculation.line_amounts) ? calculation.line_amounts : [];
+		const total = calculation && calculation.total_amount ? calculation.total_amount : "—";
+		const currency = calculation && calculation.currency ? calculation.currency : (payload.currency || "");
 		return '<div class="table-responsive"><table class="table table-sm table-striped" aria-label="' + esc(__("批准物料行")) + '">' +
-			"<thead><tr><th scope=\"col\">" + __("物料") + "</th><th scope=\"col\">" + __("数量 / UOM") + "</th><th scope=\"col\">" + __("单价") + "</th><th scope=\"col\">" + __("仓库 / 交期") + "</th></tr></thead><tbody>" +
-			items.map(function (item) {
+			"<thead><tr><th scope=\"col\">" + __("物料") + "</th><th scope=\"col\">" + __("数量 / UOM") + "</th><th scope=\"col\">" + __("单价") + "</th><th scope=\"col\">" + __("金额") + "</th><th scope=\"col\">" + __("仓库 / 交期") + "</th></tr></thead><tbody>" +
+			items.map(function (item, index) {
 				const rate = item.rate === undefined ? "—" : item.rate;
+				const amount = amounts[index] === undefined ? "—" : amounts[index];
 				return "<tr>" +
 					"<td>" + esc(item.item_code) + "</td>" +
 					"<td>" + esc(item.qty) + " / " + esc(item.uom || "—") + "</td>" +
 					"<td>" + esc(rate) + "</td>" +
+					"<td>" + esc(amount) + (currency ? " " + esc(currency) : "") + "</td>" +
 					"<td>" + esc(item.warehouse) + " / " + governance_time(item.schedule_date) + "</td>" +
 					"</tr>";
-			}).join("") + "</tbody></table></div>";
+			}).join("") + "</tbody><tfoot><tr><th colspan=\"3\" scope=\"row\">" + __("合计") + "</th><td>" + esc(total) + (currency ? " " + esc(currency) : "") + "</td><td></td></tr></tfoot></table></div>";
 	}
 
 	function governance_policy_summary(policy) {
@@ -531,6 +544,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			const approval = entry.approval;
 			const reservation = entry.reservation;
 			const receipt = entry.receipt;
+			const calculation = action.calculation || null;
 			const card_id = panel_id + "-action-" + index;
 			const state = action.state || "DRAFT";
 			const action_id = String(action.action_id || "");
@@ -580,8 +594,10 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					(payload.company ? __("公司") + ": " + esc(payload.company) : "") +
 					"<br>" + __("交易日") + ": " + governance_time(payload.transaction_date) +
 					" · " + __("交期") + ": " + governance_time(payload.schedule_date) +
-					"<br>" + governance_items(payload) + "</div>" +
-				'<div class="small text-muted mb-2"><b>' + __("证据") + "</b> · digest: <code>" + esc(digest.slice(0, 16)) + "…</code> · snapshot: " + esc(action.snapshot_ref || "—") + " · expiry: " + governance_time(action.expires_at) + "</div>" +
+					"<br>" + governance_items(payload, calculation) + "</div>" +
+				'<div class="small text-muted mb-2"><b>' + __("证据与计算") + "</b> · digest: <code>" + esc(digest.slice(0, 16)) + "…</code> · snapshot: " + esc(action.snapshot_ref || "—") + " · expiry: " + governance_time(action.expires_at) +
+					"<br>" + __("来源") + ": " + governance_refs(action.evidence_refs) + " · " + __("计算") + ": " + governance_refs(action.calculation_refs) +
+					(calculation && calculation.basis ? " · " + __("金额依据") + ": " + esc(calculation.basis) : "") + "</div>" +
 				'<div class="small mb-2"><b>' + __("策略") + "</b> · " + governance_policy_summary(policy) + "</div>" +
 				'<div class="small mb-2"><b>' + __("审批") + "</b> · " + approval_summary + "</div>" +
 				'<div class="small mb-2"><b>' + __("执行 Reservation") + "</b> · " + reservation_summary + "</div>" +

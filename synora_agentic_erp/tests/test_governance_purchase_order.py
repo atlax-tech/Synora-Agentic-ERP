@@ -473,7 +473,6 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
         self.assertEqual(reviewed["action"]["state"], "POLICY_REJECTED")
         self.assertEqual(reviewed["policy"]["checks"]["deterministic"], "FAIL")
         self.assertEqual(frappe.db.count("Purchase Order"), before)
-        self.assertEqual(reviewed["action"]["state"], "POLICY_REJECTED")
 
     def test_run_details_include_governance_proposal_policy_and_approval(self) -> None:
         proposal, _action = self._approved_action(self._new_item())
@@ -484,6 +483,10 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
         entry = response["governance"][0]
         self.assertEqual(entry["action"]["action_id"], proposal["action_id"])
         self.assertEqual(entry["action"]["action_type"], "CREATE_PO_DRAFT")
+        self.assertEqual(entry["action"]["calculation"]["line_amounts"], ["200"])
+        self.assertEqual(entry["action"]["calculation"]["total_amount"], "200")
+        self.assertEqual(entry["action"]["evidence_refs"], proposal["evidence_refs"])
+        self.assertEqual(entry["action"]["calculation_refs"], proposal["calculation_refs"])
         self.assertEqual(entry["policy"]["outcome"], "ALLOW")
         self.assertEqual(entry["approval"]["decision"], "ALLOW")
         self.assertIsNone(entry["reservation"])

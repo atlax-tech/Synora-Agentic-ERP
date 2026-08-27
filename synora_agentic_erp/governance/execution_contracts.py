@@ -158,6 +158,31 @@ def purchase_order_values(action: ProposedAction) -> dict[str, Any]:
     return values
 
 
+def purchase_order_calculation(action: ProposedAction) -> dict[str, Any]:
+    """Return server-derived amount evidence for the approval presentation.
+
+    ``rate`` is only accepted after the policy gate matches ERPNext's current
+    Item Price.  The amount shown before approval is therefore derived from the
+    typed quantity and approved rate, without trusting a client-supplied total
+    or mutating the signed payload.
+    """
+
+    if action.action_type != "CREATE_PO_DRAFT":
+        raise GatewayFault("INVALID_INPUT", "only CREATE_PO_DRAFT is supported", 400)
+    line_amounts: list[str] = []
+    total = Decimal("0")
+    for item in action.payload["items"]:
+        amount = _decimal(item["qty"], "qty") * _decimal(item["rate"], "rate")
+        line_amounts.append(format(amount.normalize(), "f"))
+        total += amount
+    return {
+        "currency": str(action.payload["currency"]),
+        "line_amounts": line_amounts,
+        "total_amount": format(total.normalize(), "f"),
+        "basis": "qty * rate; rate must match ERPNext Item Price",
+    }
+
+
 def execution_key(action: ProposedAction) -> ExecutionKey:
     """Return the action/scope/digest tuple used by reservation uniqueness."""
 

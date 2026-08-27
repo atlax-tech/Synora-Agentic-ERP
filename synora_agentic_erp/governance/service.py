@@ -25,6 +25,7 @@ from synora_agentic_erp.governance.contracts import (
     parse_approval_decision,
     parse_policy_decision,
 )
+from synora_agentic_erp.governance.execution_contracts import purchase_order_calculation
 from synora_agentic_erp.governance.state import transition_state
 
 SERVICE_FLAG = "synora_governance_service"
@@ -418,6 +419,8 @@ def serialize_action(doc: Any, *, allowed_actor: str | None = None) -> dict[str,
     _read_authorized(doc, allowed_actor=allowed_actor)
     action = build_proposed_action(_action_dict(doc))
     result = action.to_dict()
+    if action.action_type == "CREATE_PO_DRAFT":
+        result["calculation"] = purchase_order_calculation(action)
     result.update(
         {
             "state": doc.state,
