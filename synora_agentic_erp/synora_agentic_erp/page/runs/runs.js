@@ -554,7 +554,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				(action.approval_class === "INITIATOR_CONFIRMATION"
 					? action.initiator === current_user
 					: approval_actor === current_user);
-			const can_execute = state === "APPROVED" &&
+			const can_execute = state === "APPROVED" && !reservation &&
 				(action.approval_class === "INITIATOR_CONFIRMATION"
 					? action.initiator === current_user
 					: approval_actor === current_user);

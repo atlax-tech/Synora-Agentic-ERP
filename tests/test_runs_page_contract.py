@@ -38,3 +38,4 @@ def test_runs_page_surfaces_governance_evidence_and_identifier_only_actions() ->
     assert "ignore_permissions" not in source
     assert "payload: payload" not in source
     assert ".error.message" not in source
+    assert 'state === "APPROVED" && !reservation' in source
