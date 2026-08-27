@@ -105,7 +105,7 @@ def _workflow_deadline_for_runtime(value: Any) -> str:
         raise GatewayFault("CONFLICT", "workflow deadline is invalid", 409)
     if deadline.tzinfo is None:
         deadline = deadline.replace(tzinfo=ZoneInfo(get_system_timezone()))
-    return deadline.isoformat(timespec="milliseconds")
+    return str(deadline.isoformat(timespec="milliseconds"))
 
 
 _AGENT_STOP_CODES = _AGENT_FALLBACK_CODES | {"FINAL_ANSWER", "CANCELLED", "TOOL_ERROR"}
