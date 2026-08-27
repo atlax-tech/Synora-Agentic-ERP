@@ -1,0 +1,40 @@
+{
+  "captured_at": "2026-08-28T00:50:00+08:00",
+  "commit_under_test": "f371b55",
+  "url": "http://127.0.0.1:8000/desk/runs",
+  "browser_surface": "codex-in-app-browser",
+  "actor": "synora-p1-buyer@dev.localhost",
+  "read_only": true,
+  "write_interactions": [],
+  "cases": [
+    {
+      "name": "successful_purchase_order_readback",
+      "run_prefix": "83f706dd",
+      "status": "已成功",
+      "action_status": "已执行并读回",
+      "reservation": "SUCCEEDED",
+      "receipt": "SUCCEEDED / ERP_SUCCESS",
+      "target_doctype": "Purchase Order",
+      "docstatus": 0,
+      "quantity_uom": "2 / Unit",
+      "line_amount": "200 CNY",
+      "execute_button_count": 0,
+      "reconcile_button_count": 0,
+      "screenshot": "phase6-po-success.png"
+    },
+    {
+      "name": "uncertain_purchase_order_readback",
+      "run_prefix": "18baeafa",
+      "status": "需要对账",
+      "action_status": "已批准，待执行",
+      "reservation": "RECONCILIATION_REQUIRED",
+      "receipt": "RECONCILIATION_REQUIRED / UNCERTAIN_RESULT",
+      "target_doctype": "Purchase Order",
+      "execute_button_count": 0,
+      "reconcile_button_count": 1,
+      "retry_policy": "read-only reconciliation; no automatic write retry",
+      "screenshot": "phase6-po-reconciliation.png"
+    }
+  ],
+  "credential_handling": "No cookies, local storage, passwords, or tokens were read or recorded."
+}
