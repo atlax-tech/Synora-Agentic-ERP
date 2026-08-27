@@ -1,6 +1,6 @@
 # Architecture
 
-Status: `CONFIRMED` target architecture; Phase 0–3 components are implemented, while Phase 4–13 entries remain planned until their exit evidence exists.
+Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented conditionally but its exit is currently `BLOCKED` pending the evidence recorded in ADR-0006; Phase 6–13 entries remain planned until their exit evidence exists.
 
 ## Architectural Style
 
@@ -109,10 +109,10 @@ The entries below describe the approved target or a conditional candidate. They 
 | ERP extension | Root-installable Frappe Custom App using documented REST, whitelisted methods, hooks, and extension points | `CONFIRMED` approach; choose each hook/API from pinned-source and runtime evidence, never override upstream by convenience |
 | Agent Runtime | Python sidecar with FastAPI, Pydantic v2, and HTTPX | `CONFIRMED` target boundary; exact versions require a Frappe Python compatibility check and lockfile |
 | Structured contracts | Versioned Pydantic models and discriminated unions | `CONFIRMED` safety boundary; unknown actions and fields fail closed |
-| Stateful Agent workflow | Hand-written baseline first; LangGraph evaluated for multi-step interruption, approval, resume, and reconciliation | `PLANNED` Phase 5 comparison; production adoption requires checkpoint/resume evidence rather than framework preference |
+| Stateful Agent workflow | Hand-written baseline first; LangGraph evaluated for multi-step interruption, approval, resume, and reconciliation | `CONDITIONAL`; Phase 5 implements the hand-written Plan-and-Execute boundary and same-task lab comparison; LangGraph remains `LAB_ONLY` until ADR-0006 adoption gates and exit evidence pass |
 | Model access | Provider interface; local Ollama/OpenAI-compatible runtime by default, optional remote compatible providers | `CONDITIONAL`; concrete models are selected by the same evaluation set, while CI uses deterministic recorded or mock responses |
 | Retrieval | Curated versioned Markdown, metadata filtering, SQLite FTS5/BM25 baseline | `CONFIRMED` first stage; embeddings, vector search, hybrid retrieval, and reranking require measured evaluation benefit |
-| Agent checkpoint | SQLite for development or a verified single-instance workflow only | `CONDITIONAL`; never treat checkpoint state as an ERP fact or claim production scalability before a storage decision |
+| Agent checkpoint | SQLite for development or a verified single-instance workflow only | `CONDITIONAL`; Phase 5 verifies WAL/CAS/lease behavior for development and a single Runtime instance; never treat checkpoint state as an ERP fact or claim production scalability |
 | Frontend | Synora AI Operations inside ERPNext Desk using verified Frappe components | `CONFIRMED` product form; detailed component/token baseline remains a frontend design decision |
 | Python engineering | `uv` lock, Ruff, mypy, pytest | `CONFIRMED` target toolchain; commands become verified only after scaffolding and successful execution |
 | Observability | Structured logs plus run/action/tool/receipt correlation identifiers | `CONFIRMED` baseline; external observability SaaS is not required and must justify data, cost, and security impact |
@@ -134,7 +134,8 @@ The initial retrieval implementation uses curated, versioned sources with SQLite
 
 - Complete Frappe/ERPNext commit pair. — **RESOLVED 2026-08-24**：`docs/decisions/ADR-0002-frozen-baseline-pair.md` 固定 Frappe `6a329d0` (16.31.0) + ERPNext `11e0ba0` (16.32.3)。
 - Exact user-bound authorization mechanism between Frappe and the Agent Runtime. — **RESOLVED 2026-08-25**：ADR-0003 uses a server-bound Agent Run and opaque short-lived capability; Phase 2 verified the path over real HTTP.
-- Workflow engine spike results and LangGraph checkpoint adapter.
+- Workflow engine adoption and LangGraph checkpoint adapter. — **CONDITIONAL 2026-08-27**：ADR-0006 保留手写引擎为业务基线，LangGraph 仍为 `LAB_ONLY`，待安全/恢复/运维证据和阶段出口阻塞关闭后复验。
+- Phase 5 external acceptance evidence for browser, n8n import/execute/audit, independent adversarial review, and managed Harness drift.
 - Local model and optional provider set selected by evaluation.
 - Production storage and scaling path beyond the first single-instance implementation.
 - Third-party license boundary for GPL and CC BY-NC materials.

@@ -1,0 +1,44 @@
+# ADR-0006：Phase 5 持久工作流引擎与对照边界
+
+- 状态：`CONDITIONAL / Phase 5 出口 BLOCKED`
+- 日期：2026-08-27
+- 关联：`docs/PLAN.md` Phase 5、`docs/SPEC.md` §8.1/Phase 5、`docs/ARCHITECTURE.md` Agent Execution Modes、ADR-0004
+
+## 背景
+
+Phase 5 要把一次性只读 Agent 执行变成可暂停、可恢复、可取消、可过期和可调试的长任务。Runtime checkpoint 只能表达编排进度，不能替代 Frappe Run、权限、capability、Gateway 账本或 ERPNext 事实。恢复还必须避免把已完成工具重新送入 ERP Handler。
+
+## 决策
+
+1. 业务主线采用手写、逐步推进的 Plan-and-Execute 引擎。`WorkflowState`、`WorkflowResult`、DAG 校验、revision CAS、lease、SQLite WAL checkpoint 和 Frappe invocation ledger 是公共安全边界；固定 Workflow 与 ReAct 子图使用同一协议做对照。
+2. `PLAN_EXECUTE` 是显式、非默认、只读模式；`DETERMINISTIC` 仍是默认模式，既有 `AGENT` 不删除。Phase 5 不增加任何 ERP 写工具，也不创建 ProposedAction、Approval、Draft 或 Receipt。
+3. LangGraph 只保留为 `workflow-lab` 可选依赖和严格的实验适配器。Python 3.14 的临时 import/interrupt/resume/SQLite Spike 已通过，但当前没有足以证明业务主线支配优势的同任务安全、恢复、运维和真实集成证据，因此不进入 Runtime 生产依赖。
+4. n8n 只作为 `LAB_ONLY` 低代码对照，限定 Manual Trigger、Set、If 和 loopback recorded Gateway；不允许 capability、ERP 凭证、生产数据、任意外网、数据库、文件系统或 Execute Command。
+5. SQLite checkpoint 仅声明开发和已验证单实例 Runtime 边界。生产多实例存储、扩展和 retention 不在本 ADR 中臆测，留作后续有 owner 的架构门禁。
+
+## 后果
+
+- Frappe 继续是 Run 生命周期、用户权限、24 小时 workflow deadline、5 分钟 capability、取消/过期和授权的唯一权威；Runtime 只能保存非权威 checkpoint 并通过 typed Gateway 读 ERP。
+- invocation id 由 `run + plan_version + step + tool/version + canonical args digest` 确定性生成。completed 结果可在重新检查 capability、权限和 scope 后返回缓存；`STARTED` 无结果时只报告不确定窗口，不自动重放。
+- 运行时和页面能够展示步骤、revision、澄清、停止原因、crash-recovered 标记和 Trace 摘要，但不展示 Prompt、隐藏思维链、capability、Cookie 或原始敏感 ERP 响应。
+- 因此本 ADR 记录的是当前可采用的边界，不是 Phase 5 已通过的出口声明。
+
+## 已确认的证据
+
+- `services/agent_runtime/src/agent_runtime/workflow/` 提供严格契约、手写引擎、SQLite checkpoint、Runtime start/resume/cancel/status 和可选 LangGraph 适配器。
+- P5-G01～G10 固定数据集、手写 Fixed/ReAct/Plan-and-Execute 同任务对照和 Runtime API 定向测试已运行；最近一次 Runtime workflow/contract/engine 定向结果为 `24 passed, 2 warnings`，Frappe integration 为 `82 tests OK`。
+- Frappe invocation ledger 的完成缓存、`STARTED` 不重放、参数 digest 冲突、PLAN_EXECUTE deadline 和跨用户 workflow status 保护由 `synora_agentic_erp/tests/test_workflow_run.py` 覆盖。
+- LangGraph `1.2.11` 与 `langgraph-checkpoint-sqlite 3.1.1` 在临时 Python 3.14 环境通过 import/interrupt/resume/SQLite Spike；依赖仍锁在 `workflow-lab`，没有接入业务 Runtime。
+
+## 未决与出口阻塞
+
+- 当前环境没有 n8n 固定镜像；`docker pull` 受外部网络/代理阻塞，因此 import、execute、audit 没有通过证据。
+- In-app Browser 只有 Frappe Sign In 页面，没有可用登录会话；不能在不读取或输入用户秘密的前提下完成浏览器正常/中断/恢复/取消/过期验收。
+- 当前执行上下文没有可独立运行的对抗审查角色，不能把 Execute 自评当作独立 `PASS`。
+- Harness 已发现历史 managed/source fingerprint drift；未获得针对文件级 Harness proposal 的后续授权，不手工改写 `.harness/`。
+
+以上阻塞项未关闭前，Phase 5 不得写成 `PASS`，也不得进入 Phase 6。
+
+## 复验门禁
+
+关闭阻塞后，必须重新执行 n8n import/execute/audit、浏览器全路径验收、完整阶段命令、`ponytail-audit`/`ponytail-debt`/`harness-check` 和独立对抗审查；只有安全、恢复、权限、Trace、不重放矩阵全部通过且独立审查为 `PASS`，才可把本 ADR 状态改为 `ADOPTED` 或记录明确的后续决策。

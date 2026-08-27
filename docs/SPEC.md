@@ -220,6 +220,27 @@ only. Replanning can replace only steps that have not started, must increment
 `plan_version`, preserve completed step bytes, and pass deterministic acyclic
 DAG validation. Unknown schema/graph versions and malformed JSON fail closed.
 
+Phase 5 public and Runtime contracts are deliberately split. Frappe exposes
+`issue_run`, `analyze_run`, `resume_run`, `get_run_workflow`, and `cancel_run`;
+`PLAN_EXECUTE` issue responses never expose a workflow capability. Frappe owns
+the authenticated user, Run lifecycle, 24-hour workflow deadline, permission,
+cancel/expiry decision, and each newly issued five-minute capability. The
+Runtime exposes authenticated internal `POST /workflow/start`,
+`/workflow/resume`, `/workflow/cancel`, and `/workflow/status` routes; start and
+resume require the current short-lived capability, while status and cancel
+remain internal token-protected operations. Runtime unavailability is reported
+as unavailable and never synthesized as a successful workflow.
+
+Checkpoint v1 accepts only known fields and JSON-safe values, uses explicit
+schema/graph versions, and fails closed for missing, unknown, malformed, or
+future versions. SQLite WAL, foreign keys, busy timeout, revision CAS, and
+lease expiry provide a development/single-instance durable safe point; the
+checkpoint is never an ERP or authorization fact. The Frappe invocation ledger
+uses a deterministic key from `run_id + plan_version + step_id + tool/version +
+canonical args digest`; a completed key may return a cached typed result only
+after current capability, permission, and scope checks. A `STARTED` key without
+a durable result is an uncertain window and must not be automatically replayed.
+
 Run status copy (Chinese UI text) follows the approved glossary in `docs/DESIGN.md` §Content and Localization:
 
 | Status | UI copy |
