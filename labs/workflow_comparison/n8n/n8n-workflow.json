@@ -1,0 +1,160 @@
+{
+  "name": "Synora Phase 5 recorded read-only workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "p5-manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "goal",
+              "name": "goal",
+              "type": "string",
+              "value": "ensure stock for SYNORA-P1-Item-1001"
+            },
+            {
+              "id": "tool",
+              "name": "tool",
+              "type": "string",
+              "value": "material_request.open"
+            },
+            {
+              "id": "mode",
+              "name": "mode",
+              "type": "string",
+              "value": "PLAN_EXECUTE"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "p5-input",
+      "name": "Recorded Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18081/recorded-gateway",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"tool\": $json.tool, \"goal\": $json.goal, \"mode\": $json.mode}",
+        "options": {
+          "redirect": {
+            "followRedirects": false
+          }
+        }
+      },
+      "id": "p5-recorded-gateway",
+      "name": "Recorded Gateway",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "gateway-ok",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p5-gateway-ok",
+      "name": "Gateway Result Is Readable",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "safe-result",
+              "name": "safe_result",
+              "type": "string",
+              "value": "recorded read succeeded"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "p5-safe-result",
+      "name": "Safe Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1140, 220]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "safe-failure",
+              "name": "safe_result",
+              "type": "string",
+              "value": "recorded read rejected"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "p5-safe-failure",
+      "name": "Safe Failure",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1140, 380]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{"node": "Recorded Input", "type": "main", "index": 0}]]
+    },
+    "Recorded Input": {
+      "main": [[{"node": "Recorded Gateway", "type": "main", "index": 0}]]
+    },
+    "Recorded Gateway": {
+      "main": [[{"node": "Gateway Result Is Readable", "type": "main", "index": 0}]]
+    },
+    "Gateway Result Is Readable": {
+      "main": [
+        [{"node": "Safe Result", "type": "main", "index": 0}],
+        [{"node": "Safe Failure", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "p5-recorded-readonly-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
