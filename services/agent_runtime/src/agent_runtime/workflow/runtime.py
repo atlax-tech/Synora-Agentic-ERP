@@ -218,7 +218,10 @@ class WorkflowRuntime:
                 interrupt_id=uuid5(
                     NAMESPACE_URL, f"synora:workflow:{state.run_id}:crash:{state.revision}"
                 ),
-                question="Runtime 在只读工具调用期间重启，结果不确定。请选择 inspect；重试必须先创建新的计划版本。",
+                question=(
+                    "Runtime 在只读工具调用期间重启。结果不确定。请选择 inspect; "
+                    "重试必须先创建新的计划版本。"
+                ),
                 answer_type="CHOICE",
                 choices=("inspect",),
                 answer_max_length=20,
