@@ -506,8 +506,21 @@ def _deterministic(action: Any, actor: str) -> GateResult:
             item_row = _visible_item(item_code, actor)
             if item_row is None or bool(getattr(item_row, "disabled", 0)):
                 return GateResult("FAIL", "item is unavailable")
-            if item.get("uom") and not frappe.db.exists("UOM", item["uom"]):
-                return GateResult("FAIL", "item UOM is unavailable")
+            if item.get("uom"):
+                requested_uom = str(item["uom"])
+                stock_uom = str(getattr(item_row, "stock_uom", "") or "")
+                if requested_uom != stock_uom:
+                    if not frappe.has_permission("UOM", "read", user=actor):
+                        return GateResult("FAIL", "item UOM permission is insufficient")
+                    uom_rows = frappe.get_list(
+                        "UOM",
+                        pluck="name",
+                        filters={"name": requested_uom},
+                        user=actor,
+                        limit=1,
+                    )
+                    if not uom_rows:
+                        return GateResult("FAIL", "item UOM is unavailable")
             if target == "Purchase Order":
                 rate = Decimal(str(item["rate"]))
                 if not rate.is_finite() or rate <= 0:
