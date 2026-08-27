@@ -26,6 +26,9 @@ def test_runs_page_surfaces_governance_evidence_and_identifier_only_actions() ->
         "金额依据",
         "evidence_refs",
         "calculation_refs",
+        "api_failure_copy",
+        "生成计划请求被拒绝。",
+        "取消请求被拒绝。",
         'aria-live="polite"',
         'type="button"',
         "frappe.utils.escape_html",
@@ -34,3 +37,4 @@ def test_runs_page_surfaces_governance_evidence_and_identifier_only_actions() ->
     assert "target.submit(" not in source
     assert "ignore_permissions" not in source
     assert "payload: payload" not in source
+    assert ".error.message" not in source

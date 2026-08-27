@@ -883,12 +883,13 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 
 	function start_planning(run_id, button) {
 		const original = button.html();
+		const correlation_id = crypto.randomUUID();
 		button.attr("disabled", true).html('<span class="spinner-border spinner-border-sm"></span> ' + __("生成中…"));
 		frappe.call({
 			method: "synora_agentic_erp.api.plan_run",
 			args: {
 				run_id: run_id,
-				correlation_id: crypto.randomUUID(),
+				correlation_id: correlation_id,
 			},
 			callback: function (r) {
 				if (r.message && r.message.ok) {
@@ -896,13 +897,12 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					show_detail(run_id);
 				} else {
 					button.attr("disabled", false).html(original);
-					frappe.msgprint(__("生成计划失败：") + (r.message && r.message.error ? r.message.error.message : ""));
+					frappe.msgprint(api_failure_copy(__("生成计划失败"), r.message, __("生成计划请求被拒绝。"), correlation_id));
 				}
 			},
 			error: function (xhr) {
 				button.attr("disabled", false).html(original);
-				const message = xhr && xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error.message : __("生成计划失败");
-				frappe.msgprint(message);
+				frappe.msgprint(api_failure_copy(__("生成计划失败"), xhr, __("生成计划请求失败，请刷新后重试。"), correlation_id));
 			},
 		});
 	}
@@ -1033,25 +1033,25 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 
 	function cancel_run(run_id, button) {
 		const original = button.html();
+		const correlation_id = crypto.randomUUID();
 		button.attr("disabled", true).html('<span class="spinner-border spinner-border-sm"></span>');
 		frappe.call({
 			method: "synora_agentic_erp.api.cancel_run",
 			args: {
 				run_id: run_id,
-				correlation_id: crypto.randomUUID(),
+				correlation_id: correlation_id,
 			},
 			callback: function (r) {
 				if (r.message && r.message.ok) {
 					refresh();
 				} else {
 					button.attr("disabled", false).html(original);
-					frappe.msgprint(__("取消失败：") + (r.message && r.message.error ? r.message.error.message : ""));
+					frappe.msgprint(api_failure_copy(__("取消失败"), r.message, __("取消请求被拒绝。"), correlation_id));
 				}
 			},
 			error: function (xhr) {
 				button.attr("disabled", false).html(original);
-				const message = xhr && xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error.message : __("取消失败");
-				frappe.msgprint(message);
+				frappe.msgprint(api_failure_copy(__("取消失败"), xhr, __("取消请求失败，请刷新后重试。"), correlation_id));
 			},
 		});
 	}

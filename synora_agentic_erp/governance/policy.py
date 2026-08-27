@@ -392,8 +392,10 @@ def _purchase_price_rate(
     item: dict[str, Any],
     item_row: Any,
     *,
+    actor: str,
     supplier: str,
     buying_price_list: str,
+    currency: str,
     transaction_date: str,
 ) -> Decimal | None:
     """Resolve the current buying rate through ERPNext's read-only price source.
@@ -403,6 +405,67 @@ def _purchase_price_rate(
     its source of truth, so this calls the upstream resolver directly before any
     ERP document writer is reachable.  A missing source is a hard rejection.
     """
+
+    frappe = _frappe()
+    # ERPNext's Purchase User mapping permits PO creation but does not grant
+    # direct Item Price DocPerm.  The official resolver is therefore the
+    # server-owned source of truth; it must run under the same authenticated
+    # Frappe session as the policy actor and never expose source rows.
+    if str(getattr(frappe.session, "user", "")) != actor:
+        return None
+
+    # When the actor does have Item Price read permission, bind the resolver
+    # result to rows visible through that actor-scoped query.  This closes the
+    # cross-user source path without making the standard Purchase User depend
+    # on an unrelated read role.
+    visible_rates: set[Decimal] | None = None
+    if frappe.has_permission("Item Price", "read", user=actor):
+        stock_uom = str(getattr(item_row, "stock_uom", "") or "")
+        visible_rows = frappe.get_list(
+            "Item Price",
+            filters={
+                "item_code": str(item["item_code"]),
+                "price_list": buying_price_list,
+                "buying": 1,
+                "currency": currency,
+            },
+            fields=[
+                "price_list_rate",
+                "supplier",
+                "uom",
+                "valid_from",
+                "valid_upto",
+            ],
+            user=actor,
+            limit=100,
+        )
+        transaction_day = datetime.strptime(transaction_date, "%Y-%m-%d").date()
+        visible_rates = set()
+        for row in visible_rows:
+            row_supplier = str(getattr(row, "supplier", "") or "")
+            row_uom = str(getattr(row, "uom", "") or "")
+            valid_from = getattr(row, "valid_from", None)
+            valid_upto = getattr(row, "valid_upto", None)
+            if row_supplier not in {"", supplier} or row_uom not in {"", stock_uom}:
+                continue
+            if (
+                valid_from
+                and datetime.strptime(str(valid_from), "%Y-%m-%d").date() > transaction_day
+            ):
+                continue
+            if (
+                valid_upto
+                and datetime.strptime(str(valid_upto), "%Y-%m-%d").date() < transaction_day
+            ):
+                continue
+            try:
+                row_rate = Decimal(str(getattr(row, "price_list_rate", "")))
+            except InvalidOperation, TypeError, ValueError:
+                continue
+            if row_rate.is_finite() and row_rate > 0:
+                visible_rates.add(row_rate)
+        if not visible_rates:
+            return None
 
     from erpnext.stock.get_item_details import get_price_list_rate_for
 
@@ -423,7 +486,10 @@ def _purchase_price_rate(
     )
     if source_rate is None:
         return None
-    return Decimal(str(source_rate))
+    resolved_rate = Decimal(str(source_rate))
+    if visible_rates is not None and resolved_rate not in visible_rates:
+        return None
+    return resolved_rate
 
 
 def _open_duplicate(
@@ -510,17 +576,7 @@ def _deterministic(action: Any, actor: str) -> GateResult:
                 requested_uom = str(item["uom"])
                 stock_uom = str(getattr(item_row, "stock_uom", "") or "")
                 if requested_uom != stock_uom:
-                    if not frappe.has_permission("UOM", "read", user=actor):
-                        return GateResult("FAIL", "item UOM permission is insufficient")
-                    uom_rows = frappe.get_list(
-                        "UOM",
-                        pluck="name",
-                        filters={"name": requested_uom},
-                        user=actor,
-                        limit=1,
-                    )
-                    if not uom_rows:
-                        return GateResult("FAIL", "item UOM is unavailable")
+                    return GateResult("FAIL", "only item stock UOM is supported")
             if target == "Purchase Order":
                 rate = Decimal(str(item["rate"]))
                 if not rate.is_finite() or rate <= 0:
@@ -528,8 +584,10 @@ def _deterministic(action: Any, actor: str) -> GateResult:
                 source_rate = _purchase_price_rate(
                     item,
                     item_row,
+                    actor=actor,
                     supplier=str(payload["supplier"]),
                     buying_price_list=str(payload["buying_price_list"]),
+                    currency=str(payload["currency"]),
                     transaction_date=str(payload["transaction_date"]),
                 )
                 if source_rate is None:
@@ -667,6 +725,10 @@ def _policy_reason(checks: dict[str, GateResult], *, expired: bool = False) -> s
 
 def _action_response(action: Any, doc: Any) -> dict[str, Any]:
     result: dict[str, Any] = dict(action.to_dict())
+    if action.action_type == "CREATE_PO_DRAFT":
+        from synora_agentic_erp.governance.execution_contracts import purchase_order_calculation
+
+        result["calculation"] = purchase_order_calculation(action)
     result.update(
         {
             "state": str(doc.state),

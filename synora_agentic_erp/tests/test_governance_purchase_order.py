@@ -3,6 +3,7 @@
 import json
 from inspect import signature
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import patch
 from uuid import uuid4
@@ -16,6 +17,7 @@ from synora_agentic_erp.api import (
     decide_action,
     evaluate_proposal,
     execute_purchase_order,
+    get_governed_action,
     get_run,
     issue_run,
     reconcile_purchase_order,
@@ -448,6 +450,41 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
         self.assertTrue(reviewed["ok"], reviewed)
         self.assertEqual(reviewed["policy"]["outcome"], "REJECT")
 
+    def test_policy_uses_internal_price_source_without_exposing_item_price_rows(self) -> None:
+        item_code = self._new_item()
+        proposal = self._proposal(item_code)
+        original_has_permission = frappe.has_permission
+
+        def deny_item_price(*args: object, **kwargs: object) -> bool:
+            doctype = kwargs.get("doctype") or (args[0] if args else None)
+            ptype = kwargs.get("ptype") or (args[1] if len(args) > 1 else "read")
+            if doctype == "Item Price" and ptype == "read":
+                return False
+            return bool(original_has_permission(*args, **kwargs))
+
+        with patch("frappe.has_permission", side_effect=deny_item_price):
+            reviewed = evaluate_proposal(proposal)
+        self.assertTrue(reviewed["ok"], reviewed)
+        self.assertEqual(reviewed["action"]["state"], "AWAITING_APPROVAL")
+        self.assertEqual(reviewed["policy"]["checks"]["permission"], "PASS")
+        self.assertNotIn("price_list_rate", reviewed["action"])
+
+    def test_price_resolver_requires_current_session_actor(self) -> None:
+        from synora_agentic_erp.governance.policy import _purchase_price_rate
+
+        item_code = self._new_item()
+        frappe.set_user("synora-p1-approver@dev.localhost")
+        rate = _purchase_price_rate(
+            {"item_code": item_code, "qty": "2", "uom": STOCK_UOM},
+            SimpleNamespace(stock_uom=STOCK_UOM),
+            actor=BUYER,
+            supplier=SUPPLIER,
+            buying_price_list=PRICE_LIST,
+            currency="CNY",
+            transaction_date="2026-08-27",
+        )
+        self.assertIsNone(rate)
+
     def test_policy_rejects_rate_that_is_not_from_item_price(self) -> None:
         item_code = self._new_item()
         proposal = self._proposal(item_code)
@@ -491,6 +528,9 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
         self.assertEqual(entry["approval"]["decision"], "ALLOW")
         self.assertIsNone(entry["reservation"])
         self.assertIsNone(entry["receipt"])
+        direct = get_governed_action(proposal["action_id"])
+        self.assertTrue(direct["ok"], direct)
+        self.assertEqual(direct["action"]["calculation"]["total_amount"], "200")
 
     def test_endpoint_is_identifier_only_and_writer_never_submits_or_uses_generic_payload(
         self,

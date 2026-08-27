@@ -225,35 +225,23 @@ class TestGovernancePolicy(FrappeTestCase):
                 pre_execute_recheck(action_id, digest, reviewed["action"]["idempotency_key"])
         self.assertEqual(getattr(captured.exception, "code", None), "CONFLICT")
 
-    def test_uom_lookup_is_scoped_to_current_actor(self) -> None:
-        frappe.set_user("Administrator")
-        issued = issue_run(
-            COMPANY,
-            "verify alternate UOM visibility",
-            warehouse=WAREHOUSE,
-            correlation_id=str(uuid4()),
-        )
-        self.assertTrue(issued["ok"], issued)
-        run_id = str(issued["run"]["run_id"])
+    def test_non_stock_uom_is_rejected_before_approval(self) -> None:
+        run_id = self._run()
         proposal = _action(run_id)
-        proposal["initiator"] = "Administrator"
         payload = dict(proposal["payload"])
         items = [dict(item) for item in payload["items"]]
         items[0]["uom"] = "Unit"
         payload["items"] = items
         proposal["payload"] = payload
-        calls: list[object] = []
-        original_get_list = frappe.get_list
+        before_actions = frappe.db.count("Synora Proposed Action")
 
-        def track_uom_lookup(*args: object, **kwargs: object) -> object:
-            if args and args[0] == "UOM":
-                calls.append(kwargs.get("user"))
-            return original_get_list(*args, **kwargs)
+        rejected = evaluate_proposal(proposal)
 
-        with patch("frappe.get_list", side_effect=track_uom_lookup):
-            reviewed = evaluate_proposal(proposal)
-        self.assertTrue(reviewed["ok"], reviewed)
-        self.assertEqual(calls, ["Administrator"])
+        self.assertTrue(rejected["ok"], rejected)
+        self.assertEqual(rejected["action"]["state"], "POLICY_REJECTED")
+        self.assertEqual(rejected["policy"]["checks"]["deterministic"], "FAIL")
+        self.assertIn("stock UOM", rejected["policy"]["reason"])
+        self.assertEqual(frappe.db.count("Synora Proposed Action"), before_actions + 1)
 
     def test_approval_endpoint_has_no_client_actor_or_role_parameter(self) -> None:
         self.assertNotIn("actor", signature(decide_action).parameters)

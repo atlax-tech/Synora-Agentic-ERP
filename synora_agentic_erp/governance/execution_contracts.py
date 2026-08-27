@@ -122,7 +122,11 @@ def material_request_values(action: ProposedAction) -> dict[str, Any]:
 
 
 def purchase_order_values(action: ProposedAction) -> dict[str, Any]:
-    """Build the only allowed PO input from an immutable typed action."""
+    """Build the only allowed PO input from an immutable typed action.
+
+    Phase 6 accepts only each Item's stock UOM, so the fixed conversion factor
+    of one is an explicit policy invariant rather than an assumed conversion.
+    """
 
     if action.action_type != "CREATE_PO_DRAFT":
         raise GatewayFault("INVALID_INPUT", "only CREATE_PO_DRAFT is supported", 400)
