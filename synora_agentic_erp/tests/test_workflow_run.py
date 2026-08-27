@@ -178,6 +178,58 @@ class TestWorkflowRun(FrappeTestCase):
         self.assertIsNone(response["workflow"]["clarification"])
         self.assertEqual(response["workflow"]["steps"], [])
 
+    def test_cancelled_workflow_status_hides_stale_runtime_checkpoint(self) -> None:
+        run = self._issue()
+        run_id = str(run["run_id"])
+        interrupted = self._workflow_response(
+            run_id,
+            status="INTERRUPTED",
+            revision=3,
+            interrupt_id=str(uuid4()),
+        )
+        with patch(
+            "synora_agentic_erp.agent.service._call_workflow_runtime",
+            return_value=interrupted,
+        ):
+            started = analyze_run(run_id, str(uuid4()))
+        self.assertEqual(started["analysis"]["workflow_status"], "INTERRUPTED")
+
+        with patch(
+            "synora_agentic_erp.agent.service._call_workflow_runtime",
+            return_value=interrupted,
+        ):
+            cancelled = cancel_run(run_id, str(uuid4()))
+            self.assertEqual(cancelled["run"]["run_state"], "CANCELLED")
+
+        with patch("synora_agentic_erp.agent.service._call_workflow_runtime") as runtime_call:
+            response = get_run_workflow(run_id)
+
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["workflow"]["status"], "CANCELLED")
+        self.assertIsNone(response["workflow"]["clarification"])
+        self.assertEqual(response["workflow"]["steps"], [])
+        runtime_call.assert_not_called()
+
+    def test_failed_workflow_status_hides_stale_runtime_checkpoint(self) -> None:
+        run = self._issue()
+        run_id = str(run["run_id"])
+        failed = self._workflow_response(run_id, status="FAILED", revision=3)
+        with patch(
+            "synora_agentic_erp.agent.service._call_workflow_runtime",
+            return_value=failed,
+        ):
+            response = analyze_run(run_id, str(uuid4()))
+        self.assertEqual(response["error"]["code"], "ERP_ERROR")
+
+        with patch("synora_agentic_erp.agent.service._call_workflow_runtime") as runtime_call:
+            workflow = get_run_workflow(run_id)
+
+        self.assertTrue(workflow["ok"])
+        self.assertEqual(workflow["workflow"]["status"], "FAILED")
+        self.assertIsNone(workflow["workflow"]["clarification"])
+        self.assertEqual(workflow["workflow"]["steps"], [])
+        runtime_call.assert_not_called()
+
     def test_cancel_expired_plan_run_prefers_expiry(self) -> None:
         result = self._issue()
         frappe.db.set_value(

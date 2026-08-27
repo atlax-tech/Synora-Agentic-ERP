@@ -1570,11 +1570,20 @@ def resume_plan_execute_run(
 def get_workflow_status(run_id: str) -> dict[str, Any]:
     """Read Runtime orchestration state; unavailable is an explicit error."""
     run = _load_workflow_read_run(run_id)
-    if run.status == "EXPIRED" or run.run_state == "EXPIRED":
-        # Frappe owns the 24-hour workflow deadline.  Once it has committed
-        # EXPIRED, never let a stale Runtime checkpoint re-open clarification
-        # input or imply that the workflow is resumable.
-        return {"run_id": run.name, "workflow": _expired_workflow_summary(run)}
+    terminal_status = str(run.run_state or "")
+    if terminal_status in {"CANCELLED", "FAILED", "EXPIRED"}:
+        # Frappe owns terminal lifecycle facts.  Once cancellation, failure,
+        # or expiry is committed, never let a stale Runtime checkpoint reopen
+        # clarification input or imply that the workflow is resumable.
+        return {
+            "run_id": run.name,
+            "workflow": _terminal_workflow_summary(run, terminal_status),
+        }
+    if run.status == "EXPIRED":
+        return {
+            "run_id": run.name,
+            "workflow": _terminal_workflow_summary(run, "EXPIRED"),
+        }
     response = _call_workflow_runtime(
         "status",
         {"schema_version": "1", "run_id": run.name},
@@ -1584,15 +1593,20 @@ def get_workflow_status(run_id: str) -> dict[str, Any]:
     return {"run_id": run.name, "workflow": workflow}
 
 
-def _expired_workflow_summary(run: Any) -> dict[str, Any]:
-    """Build a bounded terminal summary from the Frappe deadline authority."""
+def _terminal_workflow_summary(run: Any, status: str) -> dict[str, Any]:
+    """Build a bounded terminal summary from Frappe lifecycle authority."""
+    stop_reason = {
+        "CANCELLED": "workflow cancelled",
+        "FAILED": "workflow execution failed",
+        "EXPIRED": "workflow deadline expired",
+    }.get(status, "workflow stopped")
     return {
         "schema_version": "1",
         "run_id": run.name,
         "revision": 0,
         "plan_version": 1,
         "graph_version": "workflow-v1",
-        "status": "EXPIRED",
+        "status": status,
         "current_step_id": None,
         "steps": [],
         "clarification": None,
@@ -1604,7 +1618,7 @@ def _expired_workflow_summary(run: Any) -> dict[str, Any]:
         },
         "deadline": str(run.workflow_expires_at),
         "trace_id": str(run.correlation_id),
-        "stop_reason": "workflow deadline expired",
+        "stop_reason": stop_reason,
         "crash_recovered": False,
         "observations": [],
         "resumed": False,
