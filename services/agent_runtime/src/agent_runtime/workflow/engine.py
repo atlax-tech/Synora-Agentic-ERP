@@ -131,8 +131,7 @@ class WorkflowEngine:
             (
                 item
                 for item in steps
-                if item.status in {"PENDING", "READY"}
-                and set(item.depends_on) <= done
+                if item.status in {"PENDING", "READY"} and set(item.depends_on) <= done
             ),
             None,
         )
