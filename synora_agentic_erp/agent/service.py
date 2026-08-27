@@ -1556,6 +1556,11 @@ def resume_plan_execute_run(
 def get_workflow_status(run_id: str) -> dict[str, Any]:
     """Read Runtime orchestration state; unavailable is an explicit error."""
     run = _load_workflow_read_run(run_id)
+    if run.status == "EXPIRED" or run.run_state == "EXPIRED":
+        # Frappe owns the 24-hour workflow deadline.  Once it has committed
+        # EXPIRED, never let a stale Runtime checkpoint re-open clarification
+        # input or imply that the workflow is resumable.
+        return {"run_id": run.name, "workflow": _expired_workflow_summary(run)}
     response = _call_workflow_runtime(
         "status",
         {"schema_version": "1", "run_id": run.name},
@@ -1563,6 +1568,33 @@ def get_workflow_status(run_id: str) -> dict[str, Any]:
     workflow = _workflow_public_summary(response)
     _persist_workflow_trace(run.name, workflow, str(run.correlation_id))
     return {"run_id": run.name, "workflow": workflow}
+
+
+def _expired_workflow_summary(run: Any) -> dict[str, Any]:
+    """Build a bounded terminal summary from the Frappe deadline authority."""
+    return {
+        "schema_version": "1",
+        "run_id": run.name,
+        "revision": 0,
+        "plan_version": 1,
+        "graph_version": "workflow-v1",
+        "status": "EXPIRED",
+        "current_step_id": None,
+        "steps": [],
+        "clarification": None,
+        "replan_reason": None,
+        "budget": {
+            "max_steps": 64,
+            "max_elapsed_ms": 300_000,
+            "max_observation_bytes": 4_000,
+        },
+        "deadline": str(run.workflow_expires_at),
+        "trace_id": str(run.correlation_id),
+        "stop_reason": "workflow deadline expired",
+        "crash_recovered": False,
+        "observations": [],
+        "resumed": False,
+    }
 
 
 def cancel_workflow_runtime(run_id: str, workflow_revision: int) -> None:

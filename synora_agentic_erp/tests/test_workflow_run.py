@@ -163,6 +163,21 @@ class TestWorkflowRun(FrappeTestCase):
         self.assertEqual(run.status, "EXPIRED")
         self.assertEqual(run.revoked, 1)
 
+    def test_expired_workflow_status_hides_stale_runtime_checkpoint(self) -> None:
+        result = self._issue()
+        frappe.db.set_value(
+            "Synora Agent Run",
+            result["run_id"],
+            "workflow_expires_at",
+            now_datetime() - timedelta(seconds=1),
+        )
+        frappe.set_user(BUYER)
+        response = get_run_workflow(str(result["run_id"]))
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["workflow"]["status"], "EXPIRED")
+        self.assertIsNone(response["workflow"]["clarification"])
+        self.assertEqual(response["workflow"]["steps"], [])
+
     def test_cancel_expired_plan_run_prefers_expiry(self) -> None:
         result = self._issue()
         frappe.db.set_value(
