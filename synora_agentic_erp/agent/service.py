@@ -18,10 +18,10 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from time import monotonic
-from typing import Any
+from typing import Any, cast
 
 import frappe
 from frappe.utils import get_datetime, now_datetime
@@ -43,7 +43,12 @@ from synora_agentic_erp.gateway.contract import (
     ToolCall,
 )
 from synora_agentic_erp.gateway.registry import dispatch
-from synora_agentic_erp.gateway.security import RunContext
+from synora_agentic_erp.gateway.security import (
+    RunContext,
+    expire_run,
+    rotate_run_capability,
+    workflow_expired,
+)
 
 # 单个 Run 分析的最大 item 数 (超出返回 RESULT_LIMIT, 防止一次分析过慢)。
 # ponytail: 固定上限; 若真实场景超出再引入分批/后台任务。
@@ -263,6 +268,539 @@ def _runtime_enhance_url() -> str:
 
 def _runtime_agent_url() -> str:
     return _runtime_url("agent/execute")
+
+
+def _runtime_workflow_url(path: str) -> str:
+    return _runtime_url(f"workflow/{path}")
+
+
+_WORKFLOW_STATES = {
+    "READY",
+    "RUNNING",
+    "INTERRUPTED",
+    "SUCCEEDED",
+    "FAILED",
+    "CANCELLED",
+    "EXPIRED",
+}
+_WORKFLOW_STEP_STATUSES = {
+    "PENDING",
+    "READY",
+    "RUNNING",
+    "WAITING",
+    "SUCCEEDED",
+    "FAILED",
+    "SKIPPED",
+    "CANCELLED",
+}
+_WORKFLOW_STEP_TYPES = {"TOOL", "CLARIFICATION", "FINALIZE"}
+_WORKFLOW_TOOL_NAMES = {
+    "item.lookup",
+    "supplier.lookup",
+    "stock.projected",
+    "demand.open",
+    "material_request.open",
+    "purchase_order.open",
+}
+_WORKFLOW_REPLAN_REASONS = {
+    "INPUT_CLARIFIED",
+    "TOOL_ERROR",
+    "OBSERVATION_CONFLICT",
+    "STATE_DRIFT",
+    "NO_PROGRESS",
+}
+_WORKFLOW_STEP_ID = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+_WORKFLOW_DIGEST = re.compile(r"^[0-9a-f]{64}$")
+_WORKFLOW_UUID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
+
+
+def _validate_workflow_runtime_response(body: object, run_id: str) -> dict[str, Any]:
+    """Validate and redact the Runtime workflow response at the Frappe boundary."""
+    if not isinstance(body, dict) or set(body) != {"schema_version", "result"}:
+        raise ValueError("workflow response shape is invalid")
+    if body.get("schema_version") != "1" or not isinstance(body.get("result"), dict):
+        raise ValueError("workflow response version is invalid")
+    result = body["result"]
+    if set(result) != {"schema_version", "state", "observations", "resumed"}:
+        raise ValueError("workflow result shape is invalid")
+    if result.get("schema_version") != "1" or not isinstance(result.get("state"), dict):
+        raise ValueError("workflow result is invalid")
+    state = result["state"]
+    expected_state_fields = {
+        "schema_version",
+        "run_id",
+        "revision",
+        "plan_version",
+        "graph_version",
+        "status",
+        "current_step_id",
+        "steps",
+        "clarification",
+        "replan_reason",
+        "budget",
+        "deadline",
+        "trace_id",
+        "stop_reason",
+        "crash_recovered",
+    }
+    if set(state) != expected_state_fields:
+        raise ValueError("workflow state shape is invalid")
+    if (
+        state.get("schema_version") != "1"
+        or state.get("run_id") != run_id
+        or not isinstance(state.get("status"), str)
+        or state.get("status") not in _WORKFLOW_STATES
+        or not isinstance(state.get("revision"), int)
+        or isinstance(state.get("revision"), bool)
+        or state["revision"] < 0
+        or not isinstance(state.get("plan_version"), int)
+        or isinstance(state.get("plan_version"), bool)
+        or state["plan_version"] < 1
+        or not isinstance(state.get("steps"), list)
+        or len(state["steps"]) > 256
+        or not isinstance(state.get("budget"), dict)
+        or not isinstance(state.get("deadline"), str)
+        or not isinstance(state.get("trace_id"), str)
+        or not isinstance(state.get("crash_recovered"), bool)
+        or not isinstance(result.get("observations"), list)
+        or len(result["observations"]) > 256
+        or not isinstance(result.get("resumed"), bool)
+    ):
+        raise ValueError("workflow state values are invalid")
+    budget = state["budget"]
+    if set(budget) != {"max_steps", "max_elapsed_ms", "max_observation_bytes"} or any(
+        not isinstance(budget.get(field), int)
+        or isinstance(budget.get(field), bool)
+        or budget[field] <= 0
+        for field in ("max_steps", "max_elapsed_ms", "max_observation_bytes")
+    ):
+        raise ValueError("workflow budget is invalid")
+    try:
+        deadline = datetime.fromisoformat(str(state["deadline"]).replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError("workflow deadline is invalid") from error
+    if deadline.tzinfo is None or not _WORKFLOW_UUID.fullmatch(state["trace_id"]):
+        raise ValueError("workflow trace identity is invalid")
+    if state.get("replan_reason") is not None and (
+        not isinstance(state["replan_reason"], str)
+        or state["replan_reason"] not in _WORKFLOW_REPLAN_REASONS
+    ):
+        raise ValueError("workflow replan reason is invalid")
+    current_step_id = state.get("current_step_id")
+    if current_step_id is not None and (
+        not isinstance(current_step_id, str) or not _WORKFLOW_STEP_ID.fullmatch(current_step_id)
+    ):
+        raise ValueError("workflow current step is invalid")
+    seen_ids: set[str] = set()
+    seen_orders: set[int] = set()
+    dependencies: dict[str, list[str]] = {}
+    for step in state["steps"]:
+        if not isinstance(step, dict):
+            raise ValueError("workflow step is invalid")
+        expected_step_fields = {
+            "schema_version",
+            "step_id",
+            "order",
+            "type",
+            "depends_on",
+            "allowed_tools",
+            "tool_name",
+            "clarification",
+            "parameters",
+            "status",
+            "observation_digest",
+            "error",
+            "completed_at",
+        }
+        if set(step) != expected_step_fields or step.get("schema_version") != "1":
+            raise ValueError("workflow step shape is invalid")
+        step_id = step.get("step_id")
+        order = step.get("order")
+        step_type = step.get("type")
+        step_status = step.get("status")
+        if (
+            not isinstance(step_id, str)
+            or not _WORKFLOW_STEP_ID.fullmatch(step_id)
+            or step_id in seen_ids
+            or not isinstance(order, int)
+            or isinstance(order, bool)
+            or order < 1
+            or order > 256
+            or order in seen_orders
+            or not isinstance(step_type, str)
+            or step_type not in _WORKFLOW_STEP_TYPES
+            or not isinstance(step_status, str)
+            or step_status not in _WORKFLOW_STEP_STATUSES
+        ):
+            raise ValueError("workflow step identity or status is invalid")
+        seen_ids.add(step_id)
+        seen_orders.add(order)
+        raw_dependencies = step.get("depends_on")
+        raw_tools = step.get("allowed_tools")
+        if not isinstance(raw_dependencies, list) or not isinstance(raw_tools, list):
+            raise ValueError("workflow step dependencies or tools are invalid")
+        if (
+            len(raw_dependencies) > 32
+            or any(not isinstance(item, str) for item in raw_dependencies)
+            or len({item for item in raw_dependencies if isinstance(item, str)})
+            != len(raw_dependencies)
+            or any(not _WORKFLOW_STEP_ID.fullmatch(item) for item in raw_dependencies)
+            or len(raw_tools) > 6
+            or any(not isinstance(item, str) for item in raw_tools)
+            or len({item for item in raw_tools if isinstance(item, str)}) != len(raw_tools)
+            or any(item not in _WORKFLOW_TOOL_NAMES for item in raw_tools)
+        ):
+            raise ValueError("workflow step dependencies or tools are invalid")
+        dependencies[step_id] = raw_dependencies
+        tool_name = step.get("tool_name")
+        clarification = step.get("clarification")
+        if step_type == "TOOL":
+            if tool_name not in raw_tools or clarification is not None:
+                raise ValueError("workflow tool step is invalid")
+        elif step_type == "CLARIFICATION":
+            if tool_name is not None or raw_tools or not isinstance(clarification, dict):
+                raise ValueError("workflow clarification step is invalid")
+        elif tool_name is not None or raw_tools or clarification is not None:
+            raise ValueError("workflow finalize step is invalid")
+        parameters = step.get("parameters")
+        if not isinstance(parameters, dict):
+            raise ValueError("workflow step parameters are invalid")
+        try:
+            json.dumps(parameters, ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError) as error:
+            raise ValueError("workflow step parameters are invalid") from error
+        digest = step.get("observation_digest")
+        if digest is not None and (
+            not isinstance(digest, str) or not _WORKFLOW_DIGEST.fullmatch(digest)
+        ):
+            raise ValueError("workflow observation digest is invalid")
+        error = step.get("error")
+        completed_at = step.get("completed_at")
+        if error is not None and (not isinstance(error, str) or len(error) > 500):
+            raise ValueError("workflow step error is invalid")
+        if completed_at is not None and (
+            not isinstance(completed_at, str) or len(completed_at) > 64
+        ):
+            raise ValueError("workflow completion time is invalid")
+        if step_status == "SUCCEEDED" and (digest is None or completed_at is None):
+            raise ValueError("succeeded workflow step is incomplete")
+        if step_status in {"FAILED", "CANCELLED"} and not error:
+            raise ValueError("terminal workflow step error is missing")
+    if seen_orders != set(range(1, len(state["steps"]) + 1)):
+        raise ValueError("workflow step order is not deterministic")
+    if any(dependency not in seen_ids for values in dependencies.values() for dependency in values):
+        raise ValueError("workflow dependency is unknown")
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(step_id: str) -> None:
+        if step_id in visiting:
+            raise ValueError("workflow dependency graph contains a cycle")
+        if step_id in visited:
+            return
+        visiting.add(step_id)
+        for dependency in dependencies[step_id]:
+            visit(dependency)
+        visiting.remove(step_id)
+        visited.add(step_id)
+
+    for step_id in dependencies:
+        visit(step_id)
+    if current_step_id is not None and current_step_id not in seen_ids:
+        raise ValueError("workflow current step is unknown")
+    clarification = state.get("clarification")
+    if clarification is not None:
+        if not isinstance(clarification, dict) or set(clarification) != {
+            "schema_version",
+            "interrupt_id",
+            "question",
+            "answer_type",
+            "answer_max_length",
+            "choices",
+        }:
+            raise ValueError("workflow clarification is invalid")
+        if (
+            clarification.get("schema_version") != "1"
+            or not isinstance(clarification.get("interrupt_id"), str)
+            or not _WORKFLOW_UUID.fullmatch(clarification["interrupt_id"])
+            or not isinstance(clarification.get("question"), str)
+            or not 0 < len(clarification["question"]) <= 1_000
+            or not isinstance(clarification.get("answer_type"), str)
+            or clarification.get("answer_type") not in {"TEXT", "CHOICE", "BOOLEAN", "NUMBER"}
+            or not isinstance(clarification.get("answer_max_length"), int)
+            or isinstance(clarification.get("answer_max_length"), bool)
+            or not 1 <= clarification["answer_max_length"] <= 4_000
+            or not isinstance(clarification.get("choices"), list)
+            or len(clarification["choices"]) > 32
+            or any(
+                not isinstance(choice, str) or not choice.strip() or len(choice) > 200
+                for choice in clarification["choices"]
+            )
+        ):
+            raise ValueError("workflow clarification values are invalid")
+    if any(not isinstance(item, str) or len(item) > 64 for item in result["observations"]):
+        raise ValueError("workflow observations are invalid")
+    # Do not let a Runtime response smuggle a capability, cookie, prompt or
+    # arbitrary ERP payload through the public Run API.
+    safe = _safe_trace_value(body)
+    if not isinstance(safe, dict):
+        raise ValueError("workflow response is unsafe")
+    return safe
+
+
+def _call_workflow_runtime(
+    path: str,
+    payload: dict[str, object],
+    *,
+    capability: str | None = None,
+) -> dict[str, Any]:
+    runtime_token = os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
+    if not runtime_token:
+        raise GatewayFault("UNAVAILABLE", "workflow runtime authentication is unavailable", 503)
+    if capability is not None:
+        payload["capability"] = capability
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-Synora-Runtime-Token": runtime_token,
+    }
+    request: urllib.request.Request | None = None
+    raw = b""
+    try:
+        request = urllib.request.Request(
+            _runtime_workflow_url(path),
+            data=json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        opener = urllib.request.build_opener(_NoRedirectHandler())
+        with opener.open(request, timeout=_RUNTIME_TIMEOUT_SECONDS) as response:
+            raw = response.read(_RUNTIME_RESPONSE_BYTES + 1)
+        if len(raw) > _RUNTIME_RESPONSE_BYTES or (capability and capability.encode() in raw):
+            raise ValueError("workflow response is unsafe")
+        body = json.loads(
+            raw,
+            parse_constant=_reject_json_constant,
+            object_pairs_hook=_unique_json_pairs,
+        )
+        return _validate_workflow_runtime_response(body, str(payload["run_id"]))
+    except GatewayFault:
+        raise
+    except urllib.error.HTTPError as error:
+        # Runtime uses 409 for stale revisions/interrupts and 503 for storage
+        # or service outages. Preserve that distinction at the Frappe API so
+        # the UI can offer a refresh instead of reporting a false outage.
+        if error.code == 409:
+            raise GatewayFault("CONFLICT", "workflow state changed concurrently", 409) from error
+        raise GatewayFault("UNAVAILABLE", "workflow runtime is unavailable", 503) from error
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        OSError,
+        ValueError,
+    ) as error:
+        raise GatewayFault("UNAVAILABLE", "workflow runtime is unavailable", 503) from error
+    finally:
+        payload.pop("capability", None)
+        headers.clear()
+        raw = b""
+        request = None
+        runtime_token = ""
+
+
+def _workflow_result_state(response: dict[str, Any]) -> dict[str, Any]:
+    result = response.get("result")
+    if not isinstance(result, dict) or not isinstance(result.get("state"), dict):
+        raise GatewayFault("ERP_ERROR", "workflow runtime returned invalid state", 502)
+    return cast(dict[str, Any], result["state"])
+
+
+def _workflow_public_summary(response: dict[str, Any]) -> dict[str, Any]:
+    """Return the bounded orchestration summary exposed to Frappe/UI callers."""
+    result = response.get("result")
+    if not isinstance(result, dict):
+        raise GatewayFault("ERP_ERROR", "workflow runtime returned invalid result", 502)
+    state = _workflow_result_state(response)
+    steps = state.get("steps")
+    if not isinstance(steps, list):
+        raise GatewayFault("ERP_ERROR", "workflow runtime returned invalid steps", 502)
+    safe_steps: list[dict[str, Any]] = []
+    for step in steps:
+        if not isinstance(step, dict):
+            raise GatewayFault("ERP_ERROR", "workflow runtime returned invalid step", 502)
+        safe_steps.append(
+            {
+                "step_id": step.get("step_id"),
+                "order": step.get("order"),
+                "type": step.get("type"),
+                "depends_on": step.get("depends_on", []),
+                "allowed_tools": step.get("allowed_tools", []),
+                "tool_name": step.get("tool_name"),
+                "status": step.get("status"),
+                "observation_digest": step.get("observation_digest"),
+                "error": step.get("error"),
+                "completed_at": step.get("completed_at"),
+            }
+        )
+    clarification = state.get("clarification")
+    safe_clarification = None
+    if isinstance(clarification, dict):
+        safe_clarification = {
+            "interrupt_id": clarification.get("interrupt_id"),
+            "question": clarification.get("question"),
+            "answer_type": clarification.get("answer_type"),
+            "answer_max_length": clarification.get("answer_max_length"),
+            "choices": clarification.get("choices", []),
+        }
+    return {
+        "schema_version": "1",
+        "run_id": state.get("run_id"),
+        "revision": state.get("revision"),
+        "plan_version": state.get("plan_version"),
+        "graph_version": state.get("graph_version"),
+        "status": state.get("status"),
+        "current_step_id": state.get("current_step_id"),
+        "steps": safe_steps,
+        "clarification": safe_clarification,
+        "replan_reason": state.get("replan_reason"),
+        "budget": state.get("budget"),
+        "deadline": state.get("deadline"),
+        "trace_id": state.get("trace_id"),
+        "stop_reason": state.get("stop_reason"),
+        "crash_recovered": state.get("crash_recovered"),
+        "observations": result.get("observations", []),
+        "resumed": result.get("resumed", False),
+    }
+
+
+def _persist_workflow_trace(
+    run_id: str,
+    workflow: dict[str, Any],
+    correlation_id: str,
+) -> None:
+    """Persist a safe workflow event; absence of the new table never fakes state."""
+    try:
+        previous_rows = frappe.get_all(
+            "Synora Workflow Trace",
+            filters={"run": run_id},
+            fields=["sequence", "event_type", "workflow_revision", "safe_summary"],
+            order_by="sequence desc",
+            limit=1,
+            ignore_permissions=True,
+        )
+        existing = int(previous_rows[0].sequence or 0) if previous_rows else 0
+        previous_revision = int(previous_rows[0].workflow_revision or 0) if previous_rows else -1
+        current_revision = int(workflow.get("revision") or 0)
+        if previous_rows and previous_revision == current_revision:
+            # Repeated status polling must not manufacture duplicate Trace
+            # evidence for an unchanged checkpoint.
+            return
+        status = workflow.get("status")
+        steps = workflow.get("steps")
+        current_step_id = workflow.get("current_step_id")
+        summary = {
+            "status": status,
+            "current_step_id": current_step_id,
+            "replan_reason": workflow.get("replan_reason"),
+            "stop_reason": workflow.get("stop_reason"),
+            "crash_recovered": workflow.get("crash_recovered", False),
+            "step_statuses": [
+                {"step_id": step.get("step_id"), "status": step.get("status")}
+                for step in steps
+                if isinstance(step, dict)
+            ]
+            if isinstance(steps, list)
+            else [],
+        }
+        previous_summary: dict[str, Any] = {}
+        if previous_rows:
+            try:
+                parsed = frappe.parse_json(previous_rows[0].safe_summary or "{}")
+                if isinstance(parsed, dict):
+                    previous_summary = parsed
+            except Exception:
+                previous_summary = {}
+        previous_steps = {
+            str(item.get("step_id")): item.get("status")
+            for item in previous_summary.get("step_statuses", [])
+            if isinstance(item, dict) and item.get("step_id")
+        }
+        current_steps = (
+            {
+                str(item.get("step_id")): item.get("status")
+                for item in steps
+                if isinstance(item, dict) and item.get("step_id")
+            }
+            if isinstance(steps, list)
+            else {}
+        )
+        event_types: list[tuple[str, str | None]] = []
+        if not previous_rows:
+            event_types.append(("PLAN_CREATED", current_step_id))
+        if workflow.get("replan_reason") and int(workflow.get("plan_version") or 1) > 1:
+            event_types.append(("REPLANNED", current_step_id))
+        for step_id, step_status in current_steps.items():
+            old_status = previous_steps.get(step_id)
+            if old_status == step_status:
+                continue
+            if step_status in {"RUNNING", "WAITING"}:
+                event_types.append(("STEP_STARTED", step_id))
+            elif step_status == "SUCCEEDED":
+                event_types.append(("STEP_COMPLETED", step_id))
+        if workflow.get("crash_recovered"):
+            event_types.append(("CRASH_RECOVERED", current_step_id))
+        elif workflow.get("resumed"):
+            event_types.append(("RESUMED", current_step_id))
+        elif status == "INTERRUPTED":
+            event_types.append(("INTERRUPTED", current_step_id))
+        elif status == "SUCCEEDED":
+            event_types.append(("SUCCEEDED", current_step_id))
+        elif status == "CANCELLED":
+            event_types.append(("CANCELLED", current_step_id))
+        elif status == "EXPIRED":
+            event_types.append(("EXPIRED", current_step_id))
+        elif status == "FAILED":
+            event_types.append(("FAILED", current_step_id))
+        if not event_types:
+            event_types.append(("CHECKPOINT_SAVED", current_step_id))
+        safe_summary = frappe.as_json(_safe_trace_value(summary))
+        for offset, (event_type, step_id) in enumerate(event_types, 1):
+            step = (
+                next(
+                    (
+                        item
+                        for item in steps
+                        if isinstance(item, dict) and item.get("step_id") == step_id
+                    ),
+                    None,
+                )
+                if isinstance(steps, list)
+                else None
+            )
+            frappe.get_doc(
+                {
+                    "doctype": "Synora Workflow Trace",
+                    "run": run_id,
+                    "sequence": existing + offset,
+                    "event_type": event_type,
+                    "plan_version": workflow.get("plan_version"),
+                    "workflow_revision": workflow.get("revision"),
+                    "step_id": step_id,
+                    "observation_digest": step.get("observation_digest")
+                    if isinstance(step, dict)
+                    else None,
+                    "safe_summary": safe_summary,
+                    "correlation_id": correlation_id,
+                    "occurred_at": now_datetime(),
+                }
+            ).insert(ignore_permissions=True)
+    except Exception:
+        # Runtime status remains the source for the orchestration view.  A
+        # missing/migrating trace table must produce an explicit unavailable
+        # trace, never a fabricated completion.
+        return
 
 
 def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -713,6 +1251,14 @@ def _load_active_run(run_id: str, expected_states: frozenset[str]) -> Any:
         raise GatewayFault("PERMISSION_DENIED", "run is not available", 403)
     if run.status != "ACTIVE" or run.revoked:
         raise GatewayFault("CONFLICT", "run is not active", 409)
+    if getattr(run, "execution_mode", "DETERMINISTIC") == "PLAN_EXECUTE" and workflow_expired(run):
+        try:
+            expire_run(run_id, str(run.correlation_id))
+        except GatewayFault:
+            # A concurrent cancel/expiry may already have won.  The public
+            # error remains a conflict and never reactivates the Run.
+            pass
+        raise GatewayFault("CONFLICT", "workflow has expired", 409)
     if get_datetime(run.expires_at) <= now_datetime():
         raise GatewayFault("CONFLICT", "run capability has expired", 409)
     if run.run_state not in expected_states:
@@ -780,6 +1326,250 @@ def _recover_failed_analysis(run_id: str, correlation_id: str) -> None:
     except frappe.TimestampMismatchError:
         # 并发取消/推进已生效: 回退让位, 不覆盖。
         pass
+
+
+def _mark_workflow_terminal(run: Any, target: str, correlation_id: str) -> None:
+    """Close a PLAN_EXECUTE Run only after Runtime reports a terminal result."""
+    if target not in {"FAILED", "CANCELLED", "EXPIRED"}:
+        raise GatewayFault("INVALID_TRANSITION", "workflow terminal state is invalid", 409)
+    if run.run_state == target:
+        return
+    _set_run_state(run, target)
+    run.flags.synora_revocation = True
+    run.revoked = 1
+    run.status = "EXPIRED" if target == "EXPIRED" else "REVOKED"
+    run.revoked_at = now_datetime()
+    run.revoked_by = frappe.session.user
+    run.revocation_correlation_id = correlation_id
+    run.save(ignore_permissions=True)
+
+
+def _analyze_plan_execute_run(run: Any, correlation_id: str) -> dict[str, Any]:
+    """Start one durable workflow segment and keep Frappe state authoritative."""
+    analysis_started = False
+    capability = ""
+    try:
+        _set_run_state(run, "ANALYZING")
+        analysis_started = True
+        capability = rotate_run_capability(run)
+        # Publish the ANALYZING row and fresh capability digest before the
+        # internal Runtime request crosses the process boundary.
+        frappe.db.commit()
+        payload: dict[str, object] = {
+            "schema_version": "1",
+            "run_id": run.name,
+            "correlation_id": correlation_id,
+            "goal": run.goal,
+        }
+        try:
+            response = _call_workflow_runtime("start", payload, capability=capability)
+        finally:
+            capability = ""
+        workflow = _workflow_public_summary(response)
+        _persist_workflow_trace(run.name, workflow, correlation_id)
+        frappe.db.commit()
+        status = workflow["status"]
+        if status == "INTERRUPTED":
+            return {
+                "run_id": run.name,
+                "run_state": run.run_state,
+                "state_version": run.state_version,
+                "workflow_status": status,
+                "workflow": workflow,
+            }
+        if status == "SUCCEEDED":
+            current = _load_active_run(run.name, frozenset({"ANALYZING"}))
+            result = _analyze_deterministic_run(
+                current,
+                correlation_id,
+                already_analyzing=True,
+            )
+            result["workflow_status"] = status
+            result["workflow"] = workflow
+            return result
+        if status == "FAILED":
+            _mark_workflow_terminal(run, "FAILED", correlation_id)
+            raise GatewayFault("ERP_ERROR", "workflow execution failed", 502)
+        if status == "CANCELLED":
+            _mark_workflow_terminal(run, "CANCELLED", correlation_id)
+            raise GatewayFault("CONFLICT", "workflow was cancelled", 409)
+        if status == "EXPIRED":
+            _mark_workflow_terminal(run, "EXPIRED", correlation_id)
+            raise GatewayFault("CONFLICT", "workflow has expired", 409)
+        raise GatewayFault("ERP_ERROR", "workflow runtime returned an invalid state", 502)
+    except GatewayFault as error:
+        # Runtime unavailability leaves ANALYZING as the Frappe truth so the
+        # status endpoint can explain the outage; terminal workflow errors are
+        # already closed above and must not be rolled back to CREATED.
+        if analysis_started and error.code not in {"UNAVAILABLE", "CONFLICT"}:
+            try:
+                current = frappe.get_doc("Synora Agent Run", run.name)
+                if current.run_state == "ANALYZING" and error.code != "ERP_ERROR":
+                    _recover_failed_analysis(run.name, correlation_id)
+            except Exception:
+                pass
+        raise
+    except Exception as error:
+        if analysis_started:
+            try:
+                current = frappe.get_doc("Synora Agent Run", run.name)
+                if current.run_state == "ANALYZING":
+                    _mark_workflow_terminal(current, "FAILED", correlation_id)
+            except Exception:
+                pass
+        raise GatewayFault("ERP_ERROR", "workflow execution failed", 502) from error
+    finally:
+        capability = ""
+
+
+def _load_workflow_run(run_id: str, expected_states: frozenset[str]) -> Any:
+    """Authorize a PLAN_EXECUTE Run without requiring the previous 5m token."""
+    if not frappe.db.exists("Synora Agent Run", run_id):
+        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
+    run = frappe.get_doc("Synora Agent Run", run_id)
+    actor = frappe.session.user
+    if actor != run.initiator and "System Manager" not in frappe.get_roles(actor):
+        raise GatewayFault("PERMISSION_DENIED", "run is not available", 403)
+    if run.execution_mode != "PLAN_EXECUTE":
+        raise GatewayFault("CONFLICT", "run is not a durable workflow", 409)
+    if run.status != "ACTIVE" or run.revoked:
+        raise GatewayFault("CONFLICT", "run is not active", 409)
+    if workflow_expired(run):
+        try:
+            expire_run(run_id, str(run.correlation_id))
+        except GatewayFault:
+            pass
+        raise GatewayFault("CONFLICT", "workflow has expired", 409)
+    if run.run_state not in expected_states:
+        raise GatewayFault("CONFLICT", "run is not in required state", 409)
+    return run
+
+
+def _load_workflow_read_run(run_id: str) -> Any:
+    """Authorize a workflow status read without requiring an active Run.
+
+    A terminal Frappe Run remains readable to its owner/System Manager so the
+    Runs page can explain cancellation, expiry, or a failed Runtime segment.
+    This helper never changes a terminal row and never treats a Runtime
+    checkpoint as a replacement for the Frappe lifecycle fact.
+    """
+    if not frappe.db.exists("Synora Agent Run", run_id):
+        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
+    run = frappe.get_doc("Synora Agent Run", run_id)
+    actor = frappe.session.user
+    if actor != run.initiator and "System Manager" not in frappe.get_roles(actor):
+        # Status is a read-only discovery surface; hide another user's Run
+        # existence just like get_run/get_run_trace do.
+        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
+    if run.execution_mode != "PLAN_EXECUTE":
+        raise GatewayFault("CONFLICT", "run is not a durable workflow", 409)
+    if (
+        run.status == "ACTIVE"
+        and run.run_state in {"CREATED", "ANALYZING"}
+        and workflow_expired(run)
+    ):
+        try:
+            expire_run(run_id, str(run.correlation_id))
+        except GatewayFault:
+            pass
+        run = frappe.get_doc("Synora Agent Run", run_id)
+    return run
+
+
+def _workflow_terminal_from_response(
+    run: Any,
+    workflow: dict[str, Any],
+    correlation_id: str,
+) -> dict[str, Any] | None:
+    status = workflow.get("status")
+    if status == "SUCCEEDED":
+        current = _load_workflow_run(run.name, frozenset({"ANALYZING"}))
+        result = _analyze_deterministic_run(
+            current,
+            correlation_id,
+            already_analyzing=True,
+        )
+        result["workflow_status"] = status
+        result["workflow"] = workflow
+        return result
+    if status == "FAILED":
+        _mark_workflow_terminal(run, "FAILED", correlation_id)
+        raise GatewayFault("ERP_ERROR", "workflow execution failed", 502)
+    if status == "CANCELLED":
+        _mark_workflow_terminal(run, "CANCELLED", correlation_id)
+        raise GatewayFault("CONFLICT", "workflow was cancelled", 409)
+    if status == "EXPIRED":
+        _mark_workflow_terminal(run, "EXPIRED", correlation_id)
+        raise GatewayFault("CONFLICT", "workflow has expired", 409)
+    if status == "INTERRUPTED":
+        return {
+            "run_id": run.name,
+            "run_state": run.run_state,
+            "state_version": run.state_version,
+            "workflow_status": status,
+            "workflow": workflow,
+        }
+    raise GatewayFault("ERP_ERROR", "workflow runtime returned an invalid state", 502)
+
+
+def resume_plan_execute_run(
+    run_id: str,
+    correlation_id: str,
+    workflow_revision: int,
+    interrupt_id: str,
+    answer: str,
+) -> dict[str, Any]:
+    """Validate one clarification revision, rotate capability, then resume Runtime."""
+    run = _load_workflow_run(run_id, frozenset({"ANALYZING"}))
+    capability = ""
+    try:
+        capability = rotate_run_capability(run)
+        frappe.db.commit()
+        payload: dict[str, object] = {
+            "schema_version": "1",
+            "run_id": run.name,
+            "correlation_id": correlation_id,
+            "workflow_revision": workflow_revision,
+            "interrupt_id": interrupt_id,
+            "answer": answer,
+        }
+        try:
+            response = _call_workflow_runtime("resume", payload, capability=capability)
+        finally:
+            capability = ""
+        workflow = _workflow_public_summary(response)
+        _persist_workflow_trace(run.name, workflow, correlation_id)
+        frappe.db.commit()
+        result = _workflow_terminal_from_response(run, workflow, correlation_id)
+        if result is not None:
+            return result
+        raise GatewayFault("ERP_ERROR", "workflow runtime returned no result", 502)
+    finally:
+        capability = ""
+
+
+def get_workflow_status(run_id: str) -> dict[str, Any]:
+    """Read Runtime orchestration state; unavailable is an explicit error."""
+    run = _load_workflow_read_run(run_id)
+    response = _call_workflow_runtime(
+        "status",
+        {"schema_version": "1", "run_id": run.name},
+    )
+    workflow = _workflow_public_summary(response)
+    _persist_workflow_trace(run.name, workflow, str(run.correlation_id))
+    return {"run_id": run.name, "workflow": workflow}
+
+
+def cancel_workflow_runtime(run_id: str, workflow_revision: int) -> None:
+    """Best-effort Runtime cleanup after Frappe has already revoked the Run."""
+    _call_workflow_runtime(
+        "cancel",
+        {
+            "schema_version": "1",
+            "run_id": run_id,
+            "workflow_revision": workflow_revision,
+        },
+    )
 
 
 def _lock_proposed_run(run_id: str) -> Any:
@@ -993,6 +1783,8 @@ def analyze_run(run_id: str, correlation_id: str) -> dict[str, Any]:
     run = _load_active_run(run_id, frozenset({"CREATED"}))
     if getattr(run, "execution_mode", "DETERMINISTIC") == "AGENT":
         return _analyze_agent_run(run, correlation_id)
+    if getattr(run, "execution_mode", "DETERMINISTIC") == "PLAN_EXECUTE":
+        return _analyze_plan_execute_run(run, correlation_id)
     return _analyze_deterministic_run(run, correlation_id)
 
 

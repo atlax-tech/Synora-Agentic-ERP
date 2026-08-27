@@ -12,6 +12,7 @@ IMMUTABLE_FIELDS = {
     "capability_audience",
     "issued_at",
     "expires_at",
+    "workflow_expires_at",
     "correlation_id",
 }
 CAPABILITY_FIELDS = {"capability_digest", "issued_at", "expires_at"}

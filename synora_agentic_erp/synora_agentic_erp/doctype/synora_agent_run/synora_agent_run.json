@@ -15,6 +15,7 @@
   "capability_audience",
   "issued_at",
   "expires_at",
+  "workflow_expires_at",
   "revoked",
   "status",
   "run_state",
@@ -47,7 +48,7 @@
    "fieldname": "execution_mode",
    "fieldtype": "Select",
    "label": "Execution Mode",
-   "options": "DETERMINISTIC\nAGENT",
+   "options": "DETERMINISTIC\nAGENT\nPLAN_EXECUTE",
    "read_only": 1,
    "reqd": 1,
    "set_only_once": 1
@@ -110,6 +111,13 @@
    "read_only": 1,
    "reqd": 1,
    "set_only_once": 0
+  },
+  {
+   "fieldname": "workflow_expires_at",
+   "fieldtype": "Datetime",
+   "label": "Workflow Expires At",
+   "read_only": 1,
+   "set_only_once": 1
   },
   {
    "default": "0",

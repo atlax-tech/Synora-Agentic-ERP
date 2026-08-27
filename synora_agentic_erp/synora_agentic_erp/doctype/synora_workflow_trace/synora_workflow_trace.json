@@ -1,0 +1,45 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-08-27 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "run",
+  "sequence",
+  "event_type",
+  "plan_version",
+  "workflow_revision",
+  "step_id",
+  "observation_digest",
+  "safe_summary",
+  "correlation_id",
+  "occurred_at"
+ ],
+ "fields": [
+  {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "sequence", "fieldtype": "Int", "label": "Sequence", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "event_type", "fieldtype": "Select", "label": "Event Type", "options": "PLAN_CREATED\nREPLANNED\nSTEP_STARTED\nSTEP_COMPLETED\nCHECKPOINT_SAVED\nINTERRUPTED\nRESUMED\nCRASH_RECOVERED\nCANCELLED\nEXPIRED\nFAILED\nSUCCEEDED", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "plan_version", "fieldtype": "Int", "label": "Plan Version", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "workflow_revision", "fieldtype": "Int", "label": "Workflow Revision", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "step_id", "fieldtype": "Data", "label": "Step ID", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "observation_digest", "fieldtype": "Data", "label": "Observation Digest", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "safe_summary", "fieldtype": "Small Text", "label": "Safe Summary", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "occurred_at", "fieldtype": "Datetime", "label": "Occurred At", "read_only": 1, "reqd": 1, "set_only_once": 1}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Synora Agentic ERP",
+ "name": "Synora Workflow Trace",
+ "owner": "Administrator",
+ "permissions": [
+  {"read": 1, "role": "System Manager"}
+ ],
+ "sort_field": "occurred_at",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}

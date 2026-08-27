@@ -16,7 +16,7 @@
   {"fieldname": "tool_name", "fieldtype": "Data", "label": "Tool Name", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "tool_version", "fieldtype": "Data", "label": "Tool Version", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1},
-  {"fieldname": "outcome", "fieldtype": "Select", "label": "Outcome", "options": "SUCCEEDED\nREJECTED", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "outcome", "fieldtype": "Select", "label": "Outcome", "options": "SUCCEEDED\nCACHED\nREJECTED", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "error_code", "fieldtype": "Data", "label": "Error Code", "read_only": 1, "set_only_once": 1},
   {"fieldname": "occurred_at", "fieldtype": "Datetime", "label": "Occurred At", "read_only": 1, "reqd": 1, "set_only_once": 1}
  ],

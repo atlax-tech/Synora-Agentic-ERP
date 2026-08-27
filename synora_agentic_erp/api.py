@@ -6,10 +6,14 @@ import frappe
 from frappe.recorder import do_not_record
 from frappe.utils import cint, get_datetime, now_datetime
 
+from synora_agentic_erp.agent.invocation import complete_invocation, reserve_invocation
 from synora_agentic_erp.agent.service import (
     _AGENT_EVENT_TYPES,
     _safe_trace_value,
     _validate_trace_semantics,
+    cancel_workflow_runtime,
+    get_workflow_status,
+    resume_plan_execute_run,
 )
 from synora_agentic_erp.agent.service import (
     analyze_run as analyze_server_run,
@@ -295,6 +299,11 @@ def issue_run(
             safe_correlation_id,
             safe_execution_mode,
         )
+        if safe_execution_mode == "PLAN_EXECUTE":
+            # A durable workflow receives a fresh capability only when a
+            # Runtime segment starts/resumes; never expose the issue-time
+            # capability in the public response.
+            run = {key: value for key, value in run.items() if key != "capability"}
         return {
             "ok": True,
             "schema_version": SCHEMA_VERSION,
@@ -315,7 +324,27 @@ def cancel_run(run_id: str, correlation_id: str) -> dict[str, Any]:
         reject_mixed_user_credentials()
         safe_correlation_id = validate_correlation_id(correlation_id)
         safe_run_id = canonical_uuid(run_id, "run_id")
+        workflow_revision: int | None = None
+        is_workflow = False
+        if frappe.db.exists("Synora Agent Run", safe_run_id):
+            candidate = frappe.get_doc("Synora Agent Run", safe_run_id)
+            is_workflow = candidate.execution_mode == "PLAN_EXECUTE"
+            if is_workflow and candidate.run_state == "ANALYZING":
+                try:
+                    status = get_workflow_status(safe_run_id)
+                    workflow = status.get("workflow", {})
+                    if isinstance(workflow, dict) and isinstance(workflow.get("revision"), int):
+                        workflow_revision = workflow["revision"]
+                except GatewayFault:
+                    # Frappe cancellation remains authoritative when Runtime
+                    # status is unavailable; cleanup below is best effort.
+                    workflow_revision = None
         run = cancel_server_run(safe_run_id, safe_correlation_id)
+        if is_workflow and workflow_revision is not None:
+            try:
+                cancel_workflow_runtime(safe_run_id, workflow_revision)
+            except GatewayFault:
+                pass
         return {
             "ok": True,
             "schema_version": SCHEMA_VERSION,
@@ -349,6 +378,55 @@ def analyze_run(run_id: str, correlation_id: str) -> dict[str, Any]:
     except GatewayFault as fault:
         _set_status(fault.status_code)
         return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def resume_run(
+    run_id: str,
+    correlation_id: str,
+    workflow_revision: int,
+    interrupt_id: str,
+    answer: str,
+) -> dict[str, Any]:
+    """Consume one current clarification and resume a PLAN_EXECUTE workflow."""
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        safe_revision = positive_int(workflow_revision, "workflow_revision", 1_000_000)
+        safe_interrupt_id = canonical_uuid(interrupt_id, "interrupt_id")
+        safe_answer = bounded_text(answer, "answer", 4_000)
+        result = resume_plan_execute_run(
+            safe_run_id,
+            safe_correlation_id,
+            safe_revision,
+            safe_interrupt_id,
+            safe_answer,
+        )
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": safe_correlation_id,
+            "analysis": result,
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def get_run_workflow(run_id: str) -> dict[str, Any]:
+    """Load only the redacted Runtime workflow state for an authorized Run."""
+    try:
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        result = get_workflow_status(safe_run_id)
+        return {"ok": True, "schema_version": SCHEMA_VERSION, **result}
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, None)
 
 
 @frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
@@ -403,12 +481,19 @@ def _visible_run_filter() -> dict[str, str]:
 
 def _run_summary(run: Any) -> dict[str, Any]:
     """Run 摘要; 展示层归一化: capability TTL 已过的 ACTIVE Run 显示为 EXPIRED。"""
+    execution_mode = getattr(run, "execution_mode", "DETERMINISTIC") or "DETERMINISTIC"
     capability_expired = (
         run.status == "ACTIVE"
         and not run.revoked
         and get_datetime(run.expires_at) <= now_datetime()
     )
-    execution_mode = getattr(run, "execution_mode", "DETERMINISTIC") or "DETERMINISTIC"
+    workflow_deadline = getattr(run, "workflow_expires_at", None)
+    workflow_expired = (
+        execution_mode == "PLAN_EXECUTE"
+        and bool(workflow_deadline)
+        and get_datetime(workflow_deadline) <= now_datetime()
+    )
+    expired = capability_expired or workflow_expired or run.run_state == "EXPIRED"
     agent_trace = _latest_agent_trace(run.name) if execution_mode == "AGENT" else None
     return {
         "run_id": run.name,
@@ -418,14 +503,17 @@ def _run_summary(run: Any) -> dict[str, Any]:
         if execution_mode == "AGENT"
         else None,
         "agent_trace": agent_trace,
-        "run_state": "EXPIRED" if capability_expired else run.run_state,
+        "run_state": "EXPIRED" if expired else run.run_state,
         "status": run.status,
         "initiator": run.initiator,
         "company_scope": run.company_scope,
         "warehouse_scope": run.warehouse_scope or None,
         "time_window_days": run.time_window_days,
+        "expires_at": str(run.expires_at),
+        "workflow_expires_at": str(workflow_deadline) if workflow_deadline else None,
+        "workflow_status": None,
         "created_at": str(run.creation),
-        "expired": capability_expired,
+        "expired": expired,
     }
 
 
@@ -469,6 +557,7 @@ def list_runs(limit: int | None = None, offset: int | None = None) -> dict[str, 
             "status",
             "revoked",
             "expires_at",
+            "workflow_expires_at",
             "initiator",
             "company_scope",
             "warehouse_scope",
@@ -698,6 +787,7 @@ def execute(**payload: Any) -> dict[str, Any]:
     safe_correlation_id: str | None = None
     request = None
     run = None
+    reservation = None
     try:
         require_capability_only_request()
         # Frappe RPC 路由会把请求路径注入 form_dict.cmd (frappe/api/v1.py),
@@ -706,7 +796,25 @@ def execute(**payload: Any) -> dict[str, Any]:
         request = parse_request(payload)
         safe_correlation_id = request.correlation_id
         run = resolve_run(request.run_id, request.capability)
+        reservation = reserve_invocation(request, run)
+        if reservation is not None and reservation.cached_response is not None:
+            record_gateway_audit(
+                run,
+                request.tool.name,
+                request.tool.version,
+                request.correlation_id,
+                "CACHED",
+            )
+            return reservation.cached_response
+        if reservation is not None:
+            # The STARTED row is the durable boundary before a read-only ERP
+            # handler dispatch.  If the process dies after this commit, the
+            # next request must see an uncertain invocation and not replay it.
+            frappe.db.commit()
         result = dispatch(request, run)
+        if reservation is not None:
+            result = complete_invocation(reservation, result)
+            frappe.db.commit()
         record_gateway_audit(
             run,
             request.tool.name,
@@ -733,6 +841,13 @@ def execute(**payload: Any) -> dict[str, Any]:
                 )
             except Exception:
                 fault = GatewayFault("ERP_ERROR", "gateway audit failed", 502)
+        if reservation is not None and reservation.cached_response is None:
+            # Preserve STARTED on every dispatch failure; it represents an
+            # unresolved window and is intentionally not auto-replayed.
+            try:
+                frappe.db.commit()
+            except Exception:
+                pass
         _set_status(fault.status_code)
         return error_response(fault, safe_correlation_id)
     except Exception:
@@ -759,5 +874,10 @@ def execute(**payload: Any) -> dict[str, Any]:
                 )
             except Exception:
                 erp_fault = GatewayFault("ERP_ERROR", "gateway audit failed", 502)
+        if reservation is not None and reservation.cached_response is None:
+            try:
+                frappe.db.commit()
+            except Exception:
+                pass
         _set_status(erp_fault.status_code)
         return error_response(erp_fault, safe_correlation_id)

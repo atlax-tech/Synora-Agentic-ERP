@@ -18,7 +18,8 @@ from synora_agentic_erp.gateway.contract import GatewayFault
 
 CAPABILITY_AUDIENCE = "synora-agent-runtime"
 CAPABILITY_TTL = timedelta(minutes=5)
-EXECUTION_MODES = frozenset({"DETERMINISTIC", "AGENT"})
+WORKFLOW_TTL = timedelta(hours=24)
+EXECUTION_MODES = frozenset({"DETERMINISTIC", "AGENT", "PLAN_EXECUTE"})
 
 
 @dataclass(frozen=True)
@@ -61,7 +62,7 @@ def issue_run(
     time_window_days: int,
     correlation_id: str,
     execution_mode: str = "DETERMINISTIC",
-) -> dict[str, str | int]:
+) -> dict[str, str | int | None]:
     initiator = frappe.session.user
     if not initiator or initiator == "Guest":
         raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
@@ -83,6 +84,7 @@ def issue_run(
     capability = secrets.token_urlsafe(32)
     issued_at = now_datetime()
     expires_at = issued_at + CAPABILITY_TTL
+    workflow_expires_at = issued_at + WORKFLOW_TTL if execution_mode == "PLAN_EXECUTE" else None
     # This is a Synora-owned internal audit record. End users intentionally have no
     # generic create permission; only this validated server path can insert it.
     frappe.get_doc(
@@ -99,6 +101,7 @@ def issue_run(
             "capability_audience": CAPABILITY_AUDIENCE,
             "issued_at": issued_at,
             "expires_at": expires_at,
+            "workflow_expires_at": workflow_expires_at,
             "revoked": 0,
             "status": "ACTIVE",
             "run_state": "CREATED",
@@ -111,6 +114,7 @@ def issue_run(
         "capability": capability,
         "audience": CAPABILITY_AUDIENCE,
         "expires_at": str(expires_at),
+        "workflow_expires_at": str(workflow_expires_at) if workflow_expires_at else None,
         "state_version": 1,
         "run_state": "CREATED",
         "execution_mode": execution_mode,
@@ -145,6 +149,8 @@ def rotate_run_capability(run: Any) -> str:
         or getattr(run, "run_state", None) != "ANALYZING"
     ):
         raise GatewayFault("CONFLICT", "run is not active", 409)
+    if workflow_expired(run):
+        raise GatewayFault("CONFLICT", "workflow has expired", 409)
     capability = secrets.token_urlsafe(32)
     issued_at = now_datetime()
     expires_at = issued_at + CAPABILITY_TTL
@@ -168,6 +174,8 @@ def cancel_run(run_id: str, correlation_id: str) -> dict[str, str | int]:
     actor = frappe.session.user
     if actor != run.initiator and "System Manager" not in frappe.get_roles(actor):
         raise GatewayFault("PERMISSION_DENIED", "run is not available", 403)
+    if run.execution_mode == "PLAN_EXECUTE" and workflow_expired(run):
+        return _expire_loaded_run(run, correlation_id, actor)
     if run.run_state not in CANCELLABLE_STATES or run.status != "ACTIVE" or run.revoked:
         raise GatewayFault("CONFLICT", "run cannot be cancelled", 409)
     validate_transition(run.run_state, "CANCELLED")
@@ -189,6 +197,57 @@ def cancel_run(run_id: str, correlation_id: str) -> dict[str, str | int]:
     }
 
 
+def workflow_expired(run: Any, *, at: Any | None = None) -> bool:
+    """Return true only for a PLAN_EXECUTE row past its 24-hour deadline."""
+    if getattr(run, "execution_mode", None) != "PLAN_EXECUTE":
+        return False
+    deadline = getattr(run, "workflow_expires_at", None)
+    if not deadline:
+        return True
+    current = at or now_datetime()
+    try:
+        return bool(get_datetime(deadline) <= current)
+    except TypeError, ValueError:
+        return True
+
+
+def _expire_loaded_run(run: Any, correlation_id: str, actor: str) -> dict[str, str | int]:
+    if run.status != "ACTIVE" or run.revoked:
+        raise GatewayFault("CONFLICT", "run is not active", 409)
+    if run.run_state not in {"CREATED", "ANALYZING"}:
+        raise GatewayFault("CONFLICT", "run cannot expire", 409)
+    validate_transition(run.run_state, "EXPIRED")
+    run.flags.synora_state_change = True
+    run.flags.synora_revocation = True
+    run.run_state = "EXPIRED"
+    run.revoked = 1
+    run.status = "EXPIRED"
+    run.revoked_at = now_datetime()
+    run.revoked_by = actor
+    run.revocation_correlation_id = correlation_id
+    run.state_version += 1
+    run.save(ignore_permissions=True)
+    return {
+        "run_id": run.name,
+        "run_state": run.run_state,
+        "status": run.status,
+        "state_version": run.state_version,
+    }
+
+
+def expire_run(run_id: str, correlation_id: str) -> dict[str, str | int]:
+    """Authoritatively expire an overdue PLAN_EXECUTE Run."""
+    if not frappe.db.exists("Synora Agent Run", run_id):
+        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
+    run = frappe.get_doc("Synora Agent Run", run_id)
+    actor = frappe.session.user
+    if actor != run.initiator and "System Manager" not in frappe.get_roles(actor):
+        raise GatewayFault("PERMISSION_DENIED", "run is not available", 403)
+    if run.execution_mode != "PLAN_EXECUTE" or not workflow_expired(run):
+        raise GatewayFault("CONFLICT", "workflow has not expired", 409)
+    return _expire_loaded_run(run, correlation_id, actor)
+
+
 def resolve_run(run_id: str, capability: str) -> RunContext:
     if not frappe.db.exists("Synora Agent Run", run_id):
         raise GatewayFault("RUN_REJECTED", "run capability is invalid", 401)
@@ -198,6 +257,7 @@ def resolve_run(run_id: str, capability: str) -> RunContext:
         and not run.revoked
         and run.capability_audience == CAPABILITY_AUDIENCE
         and get_datetime(run.expires_at) > now_datetime()
+        and not workflow_expired(run)
         and hmac.compare_digest(run.capability_digest, _digest(run_id, capability))
     )
     if not valid:
