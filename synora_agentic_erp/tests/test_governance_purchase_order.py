@@ -42,7 +42,7 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
         frappe.set_user("Administrator")
         super().tearDown()
 
-    def _new_item(self) -> str:
+    def _new_item(self, *, with_price: bool = True, price_rate: str = "100") -> str:
         item_code = f"SYNORA-P6-PO-{uuid4().hex[:12]}"
         frappe.set_user("Administrator")
         frappe.get_doc(
@@ -55,6 +55,21 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
                 "is_stock_item": 1,
             }
         ).insert(ignore_permissions=True)
+        if with_price:
+            frappe.get_doc(
+                {
+                    "doctype": "Item Price",
+                    "item_code": item_code,
+                    "price_list": PRICE_LIST,
+                    "price_list_rate": price_rate,
+                    "currency": "CNY",
+                    "uom": STOCK_UOM,
+                    "supplier": SUPPLIER,
+                    "buying": 1,
+                    "selling": 0,
+                    "valid_from": "2026-01-01",
+                }
+            ).insert(ignore_permissions=True)
         frappe.db.commit()
         return item_code
 
@@ -432,6 +447,32 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
             reviewed = evaluate_proposal(proposal)
         self.assertTrue(reviewed["ok"], reviewed)
         self.assertEqual(reviewed["policy"]["outcome"], "REJECT")
+
+    def test_policy_rejects_rate_that_is_not_from_item_price(self) -> None:
+        item_code = self._new_item()
+        proposal = self._proposal(item_code)
+        proposal["payload"]["items"][0]["rate"] = "0.01"
+        before = frappe.db.count("Purchase Order")
+
+        reviewed = evaluate_proposal(proposal)
+
+        self.assertTrue(reviewed["ok"], reviewed)
+        self.assertEqual(reviewed["action"]["state"], "POLICY_REJECTED")
+        self.assertEqual(reviewed["policy"]["checks"]["deterministic"], "FAIL")
+        self.assertIn("authoritative buying price", reviewed["policy"]["reason"])
+        self.assertEqual(frappe.db.count("Purchase Order"), before)
+
+    def test_policy_rejects_missing_item_price_before_approval(self) -> None:
+        item_code = self._new_item(with_price=False)
+        proposal = self._proposal(item_code)
+        before = frappe.db.count("Purchase Order")
+
+        reviewed = evaluate_proposal(proposal)
+
+        self.assertTrue(reviewed["ok"], reviewed)
+        self.assertEqual(reviewed["action"]["state"], "POLICY_REJECTED")
+        self.assertEqual(reviewed["policy"]["checks"]["deterministic"], "FAIL")
+        self.assertEqual(frappe.db.count("Purchase Order"), before)
         self.assertEqual(reviewed["action"]["state"], "POLICY_REJECTED")
 
     def test_run_details_include_governance_proposal_policy_and_approval(self) -> None:

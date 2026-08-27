@@ -350,7 +350,11 @@ def _permission(action: Any, actor: str) -> GateResult:
             ("Item", "read"),
         )
         if target == "Purchase Order":
-            required += (("Supplier", "read"),)
+            required += (
+                ("Supplier", "read"),
+                ("Currency", "read"),
+                ("Price List", "read"),
+            )
         if any(
             not frappe.has_permission(doctype, ptype, user=actor) for doctype, ptype in required
         ):
@@ -382,6 +386,44 @@ def _visible_supplier(name: str, actor: str) -> Any | None:
         limit=1,
     )
     return rows[0] if rows else None
+
+
+def _purchase_price_rate(
+    item: dict[str, Any],
+    item_row: Any,
+    *,
+    supplier: str,
+    buying_price_list: str,
+    transaction_date: str,
+) -> Decimal | None:
+    """Resolve the current buying rate through ERPNext's read-only price source.
+
+    The controller's ``set_missing_values`` can create an Item Price when a
+    caller supplies a rate.  Policy evaluation must not use that side effect as
+    its source of truth, so this calls the upstream resolver directly before any
+    ERP document writer is reachable.  A missing source is a hard rejection.
+    """
+
+    from erpnext.stock.get_item_details import get_price_list_rate_for
+
+    source_rate = get_price_list_rate_for(
+        {
+            "item_code": str(item["item_code"]),
+            "price_list": buying_price_list,
+            "buying_price_list": buying_price_list,
+            "supplier": supplier,
+            "uom": str(item.get("uom") or getattr(item_row, "stock_uom", "")),
+            "stock_uom": str(getattr(item_row, "stock_uom", "")),
+            "qty": item["qty"],
+            "transaction_date": transaction_date,
+            "transaction_type": "buying",
+            "conversion_factor": 1,
+        },
+        str(item["item_code"]),
+    )
+    if source_rate is None:
+        return None
+    return Decimal(str(source_rate))
 
 
 def _open_duplicate(
@@ -420,6 +462,33 @@ def _deterministic(action: Any, actor: str) -> GateResult:
     target = _safe_target(action)
     try:
         transaction_date = datetime.strptime(payload["transaction_date"], "%Y-%m-%d").date()
+        price_list_currency: str | None = None
+        if target == "Purchase Order":
+            currency_rows = frappe.get_list(
+                "Currency",
+                pluck="name",
+                filters={"name": payload["currency"]},
+                user=actor,
+                limit=1,
+            )
+            if not currency_rows:
+                return GateResult("FAIL", "currency is unavailable")
+            price_list_rows = frappe.get_list(
+                "Price List",
+                fields=["name", "currency"],
+                filters={
+                    "name": payload["buying_price_list"],
+                    "buying": 1,
+                    "enabled": 1,
+                },
+                user=actor,
+                limit=1,
+            )
+            if not price_list_rows:
+                return GateResult("FAIL", "buying price list is unavailable")
+            price_list_currency = str(getattr(price_list_rows[0], "currency", "") or "")
+            if price_list_currency != payload["currency"]:
+                return GateResult("FAIL", "price list currency does not match payload currency")
         seen: set[tuple[str, str]] = set()
         for item in payload["items"]:
             item_code = str(item["item_code"])
@@ -439,6 +508,21 @@ def _deterministic(action: Any, actor: str) -> GateResult:
                 return GateResult("FAIL", "item is unavailable")
             if item.get("uom") and not frappe.db.exists("UOM", item["uom"]):
                 return GateResult("FAIL", "item UOM is unavailable")
+            if target == "Purchase Order":
+                rate = Decimal(str(item["rate"]))
+                if not rate.is_finite() or rate <= 0:
+                    return GateResult("FAIL", "rate must be finite and positive")
+                source_rate = _purchase_price_rate(
+                    item,
+                    item_row,
+                    supplier=str(payload["supplier"]),
+                    buying_price_list=str(payload["buying_price_list"]),
+                    transaction_date=str(payload["transaction_date"]),
+                )
+                if source_rate is None:
+                    return GateResult("FAIL", "authoritative buying price is unavailable")
+                if source_rate != rate:
+                    return GateResult("FAIL", "rate differs from authoritative buying price")
             if _open_duplicate(
                 target,
                 "Material Request Item" if target == "Material Request" else "Purchase Order Item",
@@ -449,9 +533,6 @@ def _deterministic(action: Any, actor: str) -> GateResult:
             ):
                 return GateResult("FAIL", "an open document already covers this item")
             if target == "Purchase Order":
-                rate = Decimal(str(item["rate"]))
-                if not rate.is_finite() or rate <= 0:
-                    return GateResult("FAIL", "rate must be finite and positive")
                 material_request = item.get("material_request")
                 if material_request:
                     prerequisite = frappe.get_list(
@@ -468,13 +549,6 @@ def _deterministic(action: Any, actor: str) -> GateResult:
                     if not prerequisite:
                         return GateResult("FAIL", "material request prerequisite is unavailable")
         if target == "Purchase Order":
-            if not frappe.db.exists("Currency", payload["currency"]):
-                return GateResult("FAIL", "currency is unavailable")
-            if not frappe.db.exists(
-                "Price List",
-                {"name": payload["buying_price_list"], "buying": 1, "enabled": 1},
-            ):
-                return GateResult("FAIL", "buying price list is unavailable")
             supplier = _visible_supplier(str(payload["supplier"]), actor)
             if supplier is None or bool(getattr(supplier, "disabled", 0)):
                 return GateResult("FAIL", "supplier is unavailable")
