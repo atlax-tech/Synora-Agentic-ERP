@@ -267,12 +267,13 @@ def transition_action_state(
     expected_version: int,
     reason: str,
     correlation_id: str,
+    approval_digest: str | None = None,
 ) -> dict[str, Any]:
     """CAS a single action row under a database lock; no ERP write is performed."""
     _authenticated_actor()
     rows = frappe.db.sql(
         """
-        SELECT name, state, state_version, initiator
+        SELECT name, state, state_version, initiator, proposal_digest
         FROM `tabSynora Proposed Action`
         WHERE name = %s
         FOR UPDATE
@@ -284,7 +285,43 @@ def transition_action_state(
         raise GatewayFault("NOT_FOUND", "governed action is not available", 404)
     row = rows[0]
     actor = str(frappe.session.user)
-    if actor != row.initiator and "System Manager" not in frappe.get_roles(actor):
+    if target in {"APPROVED", "DECLINED"}:
+        # No user, including System Manager, may turn an awaiting action into
+        # a terminal approval state without a same-session, same-digest proof.
+        # This keeps the low-level CAS primitive from becoming an approval
+        # bypass when called outside the HTTP API.
+        if not approval_digest or approval_digest != row.proposal_digest:
+            raise GatewayFault("PERMISSION_DENIED", "approval proof is required", 403)
+        policy = frappe.db.exists(
+            "Synora Policy Decision",
+            {
+                "action": action_id,
+                "proposal_digest": approval_digest,
+                "outcome": "ALLOW",
+            },
+        )
+        approval = frappe.db.exists(
+            "Synora Approval Decision",
+            {
+                "action": action_id,
+                "proposal_digest": approval_digest,
+                "actor": actor,
+                "decision": "ALLOW" if target == "APPROVED" else "DECLINE",
+            },
+        )
+        if not policy or not approval:
+            raise GatewayFault("PERMISSION_DENIED", "approval proof is not available", 403)
+        if actor != row.initiator and "System Manager" not in frappe.get_roles(actor):
+            action = _load_action(action_id)
+            if action.approval_class == "INITIATOR_CONFIRMATION" and actor != action.initiator:
+                raise GatewayFault("PERMISSION_DENIED", "initiator confirmation is required", 403)
+            if action.approval_class == "INDEPENDENT_APPROVER" and actor == action.initiator:
+                raise GatewayFault(
+                    "PERMISSION_DENIED",
+                    "independent approval requires a different user",
+                    403,
+                )
+    elif actor != row.initiator and "System Manager" not in frappe.get_roles(actor):
         raise GatewayFault("PERMISSION_DENIED", "governed action is not available", 403)
     new_state, new_version = transition_state(
         str(row.state),
@@ -306,18 +343,22 @@ def transition_action_state(
         doc.save(ignore_permissions=True)
     except frappe.TimestampMismatchError as error:
         raise GatewayFault("CONFLICT", "governed action changed concurrently", 409) from error
-    return serialize_action(doc)
+    return serialize_action(doc, allowed_actor=actor)
 
 
-def _read_authorized(doc: Any) -> None:
+def _read_authorized(doc: Any, *, allowed_actor: str | None = None) -> None:
     actor = _authenticated_actor()
-    if actor == doc.initiator or "System Manager" in frappe.get_roles(actor):
+    if (
+        actor == doc.initiator
+        or actor == allowed_actor
+        or "System Manager" in frappe.get_roles(actor)
+    ):
         return
     raise GatewayFault("PERMISSION_DENIED", "governed action is not available", 403)
 
 
-def serialize_action(doc: Any) -> dict[str, Any]:
-    _read_authorized(doc)
+def serialize_action(doc: Any, *, allowed_actor: str | None = None) -> dict[str, Any]:
+    _read_authorized(doc, allowed_actor=allowed_actor)
     action = build_proposed_action(_action_dict(doc))
     result = action.to_dict()
     result.update(
@@ -358,7 +399,10 @@ def serialize_policy_decision(doc: Any) -> dict[str, Any]:
 
 
 def serialize_approval_decision(doc: Any) -> dict[str, Any]:
-    _read_action_owner(doc.action)
+    # The approval actor may be distinct from the action initiator.  It is
+    # still safe to expose the newly-created fact because the persistence
+    # service has already bound ``doc.actor`` to the current session.
+    _read_action_owner(doc.action, allowed_actor=str(doc.actor))
     return {
         "decision_id": doc.decision_id,
         "action_id": doc.action,
@@ -398,9 +442,9 @@ def serialize_receipt(doc: Any) -> dict[str, Any]:
     }
 
 
-def _read_action_owner(action_id: str) -> None:
+def _read_action_owner(action_id: str, *, allowed_actor: str | None = None) -> None:
     doc = frappe.get_doc("Synora Proposed Action", action_id)
-    _read_authorized(doc)
+    _read_authorized(doc, allowed_actor=allowed_actor)
 
 
 def new_decision_id() -> str:

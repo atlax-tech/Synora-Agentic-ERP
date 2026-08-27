@@ -1,6 +1,7 @@
 """Pure contract tests for the Phase 6 governed-action record boundary."""
 
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -18,7 +19,7 @@ CORRELATION_ID = "33333333-3333-4333-8333-333333333333"
 EXPIRY = datetime(2030, 1, 1, tzinfo=UTC).isoformat()
 
 
-def _action(*, summary: str = "Create a purchase request") -> dict[str, object]:
+def _action(*, summary: str = "Create a purchase request") -> dict[str, Any]:
     return {
         "schema_version": "1",
         "action_type": "CREATE_MR_DRAFT",
@@ -75,6 +76,11 @@ def test_contract_rejects_unknown_fields_and_invalid_action_shape() -> None:
     bad_payload["payload"] = {**bad_payload["payload"], "items": []}
     with pytest.raises(GatewayFault):
         build_proposed_action(bad_payload)
+
+    bad_enum_type = _action()
+    bad_enum_type["risk_class"] = ["MEDIUM"]
+    with pytest.raises(GatewayFault):
+        build_proposed_action(bad_enum_type)
 
 
 def test_json_parser_rejects_duplicate_keys_and_non_finite_numbers() -> None:

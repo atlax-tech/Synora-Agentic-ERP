@@ -51,6 +51,15 @@ from synora_agentic_erp.gateway.security import (
 from synora_agentic_erp.gateway.security import (
     revoke_run as revoke_server_run,
 )
+from synora_agentic_erp.governance.policy import (
+    decide_action as decide_governed_action_impl,
+)
+from synora_agentic_erp.governance.policy import (
+    evaluate_proposal as evaluate_governed_proposal_impl,
+)
+from synora_agentic_erp.governance.policy import (
+    get_action as get_governed_action_impl,
+)
 
 # 未认证入口 (execute, allow_guest) 的安全事件日志预算: 每分钟最多记录条数,
 # 用于防日志放大; 超出预算的事件静默丢弃。
@@ -778,6 +787,76 @@ def available_scope() -> dict[str, Any]:
         for company in companies
     ]
     return {"ok": True, "schema_version": SCHEMA_VERSION, "scope": scope}
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def evaluate_proposal(proposal: object) -> dict[str, Any]:
+    """Evaluate and persist one strict ProposedAction, without ERP writes."""
+    try:
+        reject_mixed_user_credentials()
+        result = evaluate_governed_proposal_impl(proposal)
+        action = result["action"]
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": action.get("correlation_id"),
+            "action": action,
+            "policy": result["policy"],
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def decide_action(
+    action_id: object,
+    decision: object,
+    proposal_digest: object,
+    reason: object,
+    correlation_id: object,
+) -> dict[str, Any]:
+    """Record an approval using only the authenticated Frappe session actor."""
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        result = decide_governed_action_impl(
+            action_id,
+            decision,
+            proposal_digest,
+            reason,
+            safe_correlation_id,
+        )
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": safe_correlation_id,
+            **result,
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def get_governed_action(action_id: object) -> dict[str, Any]:
+    """Read one proposal through owner/effective-approver visibility checks."""
+    try:
+        reject_mixed_user_credentials()
+        action = get_governed_action_impl(action_id)
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": action.get("correlation_id"),
+            "action": action,
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault)
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])  # type: ignore[untyped-decorator]

@@ -379,8 +379,12 @@ def build_proposed_action(value: object) -> ProposedAction:
         payload=_parse_payload(action_type, raw["payload"]),
         evidence_refs=_ref_list(raw["evidence_refs"], "evidence_refs"),
         calculation_refs=_ref_list(raw["calculation_refs"], "calculation_refs"),
-        risk_class=raw["risk_class"] if raw["risk_class"] in RISK_CLASSES else "",
-        approval_class=raw["approval_class"] if raw["approval_class"] in APPROVAL_CLASSES else "",
+        risk_class=raw["risk_class"]
+        if isinstance(raw["risk_class"], str) and raw["risk_class"] in RISK_CLASSES
+        else "",
+        approval_class=raw["approval_class"]
+        if isinstance(raw["approval_class"], str) and raw["approval_class"] in APPROVAL_CLASSES
+        else "",
         snapshot_ref=_required_text(raw["snapshot_ref"], "snapshot_ref", 256),
         idempotency_key=idempotency_key,
         expires_at=_timestamp(raw["expires_at"], "expires_at"),
