@@ -19,6 +19,7 @@ from synora_agentic_erp.api import (
     list_runs,
     resume_run,
 )
+from synora_agentic_erp.gateway.contract import GatewayFault
 from synora_agentic_erp.gateway.security import resolve_run
 
 BUYER = "synora-p1-buyer@dev.localhost"
@@ -196,7 +197,10 @@ class TestWorkflowRun(FrappeTestCase):
 
         with patch(
             "synora_agentic_erp.agent.service._call_workflow_runtime",
-            return_value=interrupted,
+            side_effect=[
+                interrupted,
+                GatewayFault("UNAVAILABLE", "workflow runtime is unavailable", 503),
+            ],
         ):
             cancelled = cancel_run(run_id, str(uuid4()))
             self.assertEqual(cancelled["run"]["run_state"], "CANCELLED")
