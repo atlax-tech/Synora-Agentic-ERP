@@ -29,7 +29,7 @@
 - P5-G01～G10 固定场景覆盖依赖顺序、澄清、崩溃、工具失败、并发 resume、取消、过期、未知 checkpoint 版本、completed 不重放和恶意输入。
 - Runtime workflow/contract/engine 定向测试最近为 `24 passed, 2 warnings`；Frappe app-test/integration 最近为 `86 tests OK`。
 - 临时 Python 3.14 LangGraph Spike：`langgraph==1.2.11`、`langgraph-checkpoint-sqlite==3.1.1` 的 import/interrupt/resume/SQLite 通过；项目依赖仍是可选 `workflow-lab`。
-- 离线同任务对照已运行 Fixed Workflow、ReAct 子图和 Plan-and-Execute，三者都使用相同 recorded Observation，结果为 `SUCCEEDED`、2 次工具调用、同一摘要 digest；未把不可用的 LangGraph/n8n 填成成功行。
+- 离线同任务对照已运行 Fixed Workflow、ReAct 子图和 Plan-and-Execute，三者都使用相同 recorded Observation，结果为 `SUCCEEDED`、2 次工具调用、同一摘要 digest；LangGraph/n8n 未纳入该三模式 comparison，也未被填成成功行。
 - 真实 Frappe 只读工具、调用账本、权限隔离、取消/过期顺序和 Trace 保护已由 integration 覆盖；浏览器已形成创建、中断、恢复、取消、过期、Runtime unavailable 和跨用户隔离证据，真实 Runtime 重启恢复也已形成；独立对抗审查第一轮 `CHANGES_REQUIRED` 的终态陈旧 checkpoint 问题已修复，第二轮 `PASS`；n8n 固定 digest 的 import/execute/audit 已形成 LAB_ONLY 证据，audit 的 HTTP Request 通用风险提示原样保留并未进入主线。
 
 ## Adoption decision
