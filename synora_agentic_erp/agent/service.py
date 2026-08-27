@@ -469,16 +469,16 @@ def _validate_workflow_runtime_response(body: object, run_id: str) -> dict[str, 
             raise ValueError("workflow step parameters are invalid")
         try:
             json.dumps(parameters, ensure_ascii=False, allow_nan=False)
-        except (TypeError, ValueError) as error:
-            raise ValueError("workflow step parameters are invalid") from error
+        except (TypeError, ValueError) as serialization_error:
+            raise ValueError("workflow step parameters are invalid") from serialization_error
         digest = step.get("observation_digest")
         if digest is not None and (
             not isinstance(digest, str) or not _WORKFLOW_DIGEST.fullmatch(digest)
         ):
             raise ValueError("workflow observation digest is invalid")
-        error = step.get("error")
+        step_error = step.get("error")
         completed_at = step.get("completed_at")
-        if error is not None and (not isinstance(error, str) or len(error) > 500):
+        if step_error is not None and (not isinstance(step_error, str) or len(step_error) > 500):
             raise ValueError("workflow step error is invalid")
         if completed_at is not None and (
             not isinstance(completed_at, str) or len(completed_at) > 64
@@ -486,7 +486,7 @@ def _validate_workflow_runtime_response(body: object, run_id: str) -> dict[str, 
             raise ValueError("workflow completion time is invalid")
         if step_status == "SUCCEEDED" and (digest is None or completed_at is None):
             raise ValueError("succeeded workflow step is incomplete")
-        if step_status in {"FAILED", "CANCELLED"} and not error:
+        if step_status in {"FAILED", "CANCELLED"} and not step_error:
             raise ValueError("terminal workflow step error is missing")
     if seen_orders != set(range(1, len(state["steps"]) + 1)):
         raise ValueError("workflow step order is not deterministic")
@@ -766,13 +766,13 @@ def _persist_workflow_trace(
         if not event_types:
             event_types.append(("CHECKPOINT_SAVED", current_step_id))
         safe_summary = frappe.as_json(_safe_trace_value(summary))
-        for offset, (event_type, step_id) in enumerate(event_types, 1):
+        for offset, (event_type, event_step_id) in enumerate(event_types, 1):
             step = (
                 next(
                     (
                         item
                         for item in steps
-                        if isinstance(item, dict) and item.get("step_id") == step_id
+                        if isinstance(item, dict) and item.get("step_id") == event_step_id
                     ),
                     None,
                 )
@@ -787,7 +787,7 @@ def _persist_workflow_trace(
                     "event_type": event_type,
                     "plan_version": workflow.get("plan_version"),
                     "workflow_revision": workflow.get("revision"),
-                    "step_id": step_id,
+                    "step_id": event_step_id,
                     "observation_digest": step.get("observation_digest")
                     if isinstance(step, dict)
                     else None,
