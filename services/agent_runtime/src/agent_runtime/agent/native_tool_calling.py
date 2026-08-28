@@ -12,7 +12,7 @@ import asyncio
 import inspect
 import json
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from time import monotonic
 from typing import Literal, cast
 from uuid import UUID
@@ -20,6 +20,12 @@ from uuid import UUID
 from pydantic import BaseModel, Field, ValidationError
 
 from agent_runtime.agent.budget import BudgetAccount, BudgetLimits, Pricing
+from agent_runtime.agent.context import (
+    ContextBuilder,
+    ContextBuildError,
+    ContextBuildResult,
+    record_provider_prompt_tokens,
+)
 from agent_runtime.agent.contracts import (
     Action,
     BudgetSnapshot,
@@ -41,7 +47,6 @@ from agent_runtime.agent.kernel import ToolAdapter, ToolExecutionFailure
 from agent_runtime.agent.prompting import (
     NATIVE_AGENT_PROFILE_ID,
     PromptVariant,
-    build_prompt_messages,
 )
 from agent_runtime.gateway import (
     ItemLookupInput,
@@ -69,6 +74,7 @@ READ_TOOL_NAMES: tuple[ToolName, ...] = (
     "material_request.open",
     "purchase_order.open",
 )
+NATIVE_TASK_PROFILE = "REPLENISHMENT_ANALYSIS"
 
 
 class NativeToolCallingLimits(BudgetLimits):
@@ -237,6 +243,32 @@ def _stop(
     )
 
 
+def _context_trace_payload(
+    result: ContextBuildResult,
+    *,
+    step: int,
+    actual_prompt_tokens: int | None = None,
+) -> dict[str, JsonValue]:
+    payload: dict[str, JsonValue] = {
+        "step": step,
+        "context_builder_version": result.provenance.builder_version,
+        "instruction_schema_version": result.provenance.prompt_schema_version,
+        "instruction_profile_id": result.provenance.prompt_profile_id,
+        "instruction_profile_hash": result.provenance.prompt_profile_hash,
+        "skill_refs": list(result.provenance.skill_refs),
+        "selected_fragment_ids": list(result.selected_fragment_ids),
+        "dropped_fragment_ids": list(result.dropped_fragment_ids),
+        "estimated_input_units_before": result.estimated_input_units_before,
+        "estimated_input_units_after": result.estimated_input_units_after,
+        "input_budget": result.input_budget,
+        "compression_reasons": list(result.compression_reasons),
+        "effective_tool_names": [tool.name for tool in result.effective_tools],
+    }
+    if actual_prompt_tokens is not None:
+        payload["actual_prompt_tokens"] = actual_prompt_tokens
+    return payload
+
+
 async def _run_native_tool_calling(
     *,
     run_id: UUID,
@@ -251,6 +283,7 @@ async def _run_native_tool_calling(
     require_pricing: bool = False,
     clock: Callable[[], float] = monotonic,
     prompt_variant: PromptVariant = "A",
+    context_environ: Mapping[str, str] | None = None,
 ) -> RunResult:
     """Execute one-at-a-time native tool calls with the P4.4 budget policy."""
     effective_limits = limits or NativeToolCallingLimits()
@@ -272,11 +305,8 @@ async def _run_native_tool_calling(
         },
     )
     tools = provider_tool_specs(allowed_tools)
-    messages, _ = build_prompt_messages(
-        NATIVE_AGENT_PROFILE_ID,
-        variant=prompt_variant,
-        user_content=goal,
-    )
+    context_builder = ContextBuilder()
+    messages: tuple[ProviderMessage, ...] = ()
     observations: list[Observation] = []
     repeat_guard = RepeatedCallGuard()
     frequency_guard = ToolFrequencyGuard(max_calls_per_tool=effective_limits.max_calls_per_tool)
@@ -293,6 +323,40 @@ async def _run_native_tool_calling(
                 started=started,
                 usage=account.usage,
                 elapsed_ms=account.elapsed_ms(),
+            )
+        try:
+            context_result = context_builder.build(
+                profile_id=NATIVE_AGENT_PROFILE_ID,
+                prompt_variant=prompt_variant,
+                goal=goal,
+                task_profile=NATIVE_TASK_PROFILE,
+                tools=tools,
+                allowed_tools=frozenset(allowed_tools),
+                observations=observations,
+                environ=context_environ,
+            )
+        except ContextBuildError as error:
+            recorder.add(
+                "guard.checked",
+                {"step": step, "guard": error.code, "allowed": False},
+            )
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code=error.code,
+                step=step,
+                detail="context build failed before provider call",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
+        messages = context_result.messages
+        tools = context_result.effective_tools
+        recorder.add("context.assembled", _context_trace_payload(context_result, step=step))
+        if context_result.compression_applied:
+            recorder.add(
+                "context.compressed",
+                _context_trace_payload(context_result, step=step),
             )
         budget_code = account.preflight(messages=messages, tools=tools)
         if budget_code is not None:
@@ -329,7 +393,7 @@ async def _run_native_tool_calling(
         try:
             response = await asyncio.wait_for(
                 provider.complete(
-                    messages,
+                    list(messages),
                     tools=list(tools),
                     max_tokens=effective_limits.max_output_tokens,
                 ),
@@ -347,7 +411,31 @@ async def _run_native_tool_calling(
                     reasoning_tokens=error.reasoning_tokens,
                 )
             )
-            provider_code = error.budget_code or usage_code
+            provider_code: StopCode | None = None
+            try:
+                context_result = record_provider_prompt_tokens(
+                    context_result, error.prompt_tokens
+                )
+            except ContextBuildError as context_error:
+                recorder.add(
+                    "context.assembled",
+                    _context_trace_payload(
+                        context_result,
+                        step=step,
+                        actual_prompt_tokens=error.prompt_tokens,
+                    ),
+                )
+                provider_code = context_error.code
+            else:
+                recorder.add(
+                    "context.assembled",
+                    _context_trace_payload(
+                        context_result,
+                        step=step,
+                        actual_prompt_tokens=error.prompt_tokens,
+                    ),
+                )
+                provider_code = error.budget_code or usage_code
             if provider_code is not None:
                 recorder.add(
                     "guard.checked",
@@ -407,6 +495,41 @@ async def _run_native_tool_calling(
                 elapsed_ms=account.elapsed_ms(),
             )
 
+        try:
+            context_result = record_provider_prompt_tokens(
+                context_result, response.prompt_tokens
+            )
+        except ContextBuildError as error:
+            recorder.add(
+                "context.assembled",
+                _context_trace_payload(
+                    context_result,
+                    step=step,
+                    actual_prompt_tokens=response.prompt_tokens,
+                ),
+            )
+            recorder.add(
+                "guard.checked",
+                {"step": step, "guard": error.code, "allowed": False},
+            )
+            return _stop(
+                recorder=recorder,
+                run_id=run_id,
+                code=error.code,
+                step=step,
+                detail="provider prompt usage exceeded the configured context budget",
+                started=started,
+                usage=account.usage,
+                elapsed_ms=account.elapsed_ms(),
+            )
+        recorder.add(
+            "context.assembled",
+            _context_trace_payload(
+                context_result,
+                step=step,
+                actual_prompt_tokens=response.prompt_tokens,
+            ),
+        )
         if budget_code is not None:
             recorder.add(
                 "guard.checked",
@@ -769,21 +892,6 @@ async def _run_native_tool_calling(
                 usage=account.usage,
                 elapsed_ms=account.elapsed_ms(),
             )
-        messages.append(
-            ProviderMessage(
-                role="assistant",
-                content="",
-                tool_calls=(provider_call,),
-            )
-        )
-        messages.append(
-            build_tool_result_message(
-                provider_tool_call_id=provider_call.id,
-                tool_name=action.tool_name,
-                observation=observation,
-            )
-        )
-
     return _stop(
         recorder=recorder,
         run_id=run_id,
@@ -825,6 +933,7 @@ async def run_native_tool_calling(
     require_pricing: bool = False,
     clock: Callable[[], float] = monotonic,
     prompt_variant: PromptVariant = "A",
+    context_environ: Mapping[str, str] | None = None,
 ) -> RunResult:
     """Run native calling and always close provider/tool clients afterwards."""
     try:
@@ -841,6 +950,7 @@ async def run_native_tool_calling(
             require_pricing=require_pricing,
             clock=clock,
             prompt_variant=prompt_variant,
+            context_environ=context_environ,
         )
     finally:
         await _close_resource(provider)

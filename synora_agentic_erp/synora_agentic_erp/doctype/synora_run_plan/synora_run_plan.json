@@ -5,7 +5,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "run", "goal", "summary", "enhanced_text", "plan_json", "provider", "prompt_tokens", "completion_tokens", "reasoning_tokens", "elapsed_ms", "fallback_reason", "correlation_id"
+  "run", "goal", "summary", "enhanced_text", "plan_json", "provider", "prompt_tokens", "completion_tokens", "reasoning_tokens", "elapsed_ms", "fallback_reason", "context_evidence_json", "correlation_id"
  ],
  "fields": [
   {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1, "unique": 1},
@@ -19,6 +19,7 @@
   {"fieldname": "reasoning_tokens", "fieldtype": "Int", "label": "Reasoning Tokens", "read_only": 1, "set_only_once": 1, "description": "模型推理 token; 纳入成本预算证据"},
   {"fieldname": "elapsed_ms", "fieldtype": "Int", "label": "Elapsed Ms", "read_only": 1, "set_only_once": 1},
   {"fieldname": "fallback_reason", "fieldtype": "Small Text", "label": "Fallback Reason", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "context_evidence_json", "fieldtype": "Long Text", "label": "Context Evidence JSON", "read_only": 1, "set_only_once": 1, "description": "Prompt/Context 元数据; 不保存原始 Prompt、Skill 正文或完整 Context"},
   {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1}
  ],
  "index_web_pages_for_search": 0,

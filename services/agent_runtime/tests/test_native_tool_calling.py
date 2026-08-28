@@ -9,6 +9,7 @@ from uuid import UUID
 
 import pytest
 from agent_runtime.agent.budget import Pricing
+from agent_runtime.agent.context import CONTEXT_INPUT_TOKEN_BUDGET_ENV
 from agent_runtime.agent.contracts import (
     Action,
     Observation,
@@ -59,7 +60,13 @@ def _run(
     pricing: Pricing | None = None,
     require_pricing: bool = False,
     clock: Callable[[], float] = monotonic,
+    context_environ: dict[str, str] | None = None,
 ) -> RunResult:
+    effective_context_environ = (
+        {CONTEXT_INPUT_TOKEN_BUDGET_ENV: "100000"}
+        if context_environ is None
+        else context_environ
+    )
     return asyncio.run(
         run_native_tool_calling(
             run_id=RUN_ID,
@@ -73,6 +80,7 @@ def _run(
             pricing=pricing,
             require_pricing=require_pricing,
             clock=clock,
+            context_environ=effective_context_environ,
         )
     )
 

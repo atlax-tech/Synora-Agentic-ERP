@@ -1,5 +1,7 @@
 """P3.5 plan_run: 可解释只读计划生成、状态流转与权限测试。"""
 
+from unittest.mock import patch
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -11,6 +13,9 @@ COMPANY = "SYNORA-P1 Test Company"
 WAREHOUSE = "SYNORA-P1 Stores - SP1"
 GOAL = "ensure stock for SYNORA-P1-Item-1001 for the next quarter"
 CORRELATION_ID = "3f4a5b6c-7d8e-4f90-a1b2-c3d4e5f6a7b8"
+PLAN_PROFILE_HASH = (
+    "0e7cb90710391876819feb3b1fb92e0d72748406dec237a38c587c77c10a47f0"
+)
 
 
 class TestPlanRun(FrappeTestCase):
@@ -106,3 +111,51 @@ class TestPlanRun(FrappeTestCase):
         detail = get_run(str(run["run_id"]))
         self.assertIn("evidence", detail["plan"])
         self.assertTrue(detail["plan"]["evidence"]["fallback_reason"])
+        self.assertEqual(frappe.parse_json(plan_doc.context_evidence_json), {})
+        self.assertEqual(detail["plan"]["evidence"]["context_evidence"], {})
+
+    def test_plan_persists_metadata_only_context_evidence(self) -> None:
+        run = self._analyzed_run()
+        context_evidence = {
+            "prompt_schema_version": "2",
+            "context_builder_version": "1",
+            "prompt_profile_id": "deterministic-plan-enhancement",
+            "prompt_profile_hash": PLAN_PROFILE_HASH,
+            "estimated_input_units_before": 1000,
+            "estimated_input_units_after": 800,
+            "input_budget": 1200,
+            "actual_prompt_tokens": 750,
+            "compression_reasons": ["bounded summary applied"],
+            "dropped_fragment_ids": ["reference:unused"],
+            "skill_refs": [],
+        }
+        with patch(
+            "synora_agentic_erp.agent.service._enhance_plan_via_runtime",
+            return_value=(
+                "模型解释文本",
+                {
+                    "provider": "recorded",
+                    "status": "ok",
+                    "prompt_tokens": 750,
+                    "completion_tokens": 40,
+                    "reasoning_tokens": 0,
+                    "elapsed_ms": 12,
+                    "fallback_reason": "",
+                    "context_evidence": context_evidence,
+                },
+            ),
+        ):
+            frappe.set_user(BUYER)
+            response = plan_run(str(run["run_id"]), CORRELATION_ID)
+
+        self.assertTrue(response["ok"])
+        plan_docs = frappe.get_all("Synora Run Plan", filters={"run": run["run_id"]})
+        self.assertEqual(len(plan_docs), 1)
+        plan_doc = frappe.get_doc("Synora Run Plan", plan_docs[0].name)
+        self.assertEqual(frappe.parse_json(plan_doc.context_evidence_json), context_evidence)
+        self.assertNotIn("content", plan_doc.context_evidence_json)
+        detail = get_run(str(run["run_id"]))
+        self.assertEqual(
+            detail["plan"]["evidence"]["context_evidence"],
+            context_evidence,
+        )

@@ -83,6 +83,8 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		NO_PROGRESS: __("观察结果无进展"),
 		TOKEN_BUDGET: __("Token 预算已到"),
 		COST_BUDGET: __("成本预算已到"),
+		CONTEXT_INVALID: __("上下文无效，已安全回退"),
+		CONTEXT_BUDGET: __("上下文预算已到"),
 		WALL_TIME_BUDGET: __("时间预算已到"),
 		MAX_STEPS: __("步骤预算已到"),
 		TOOL_NOT_ALLOWED: __("工具不在允许范围"),
@@ -96,6 +98,9 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 	const TRACE_EVENT_COPY = {
 		"run.started": __("运行开始"),
 		"model.requested": __("请求模型"),
+		"skill.loaded": __("加载版本化 Skill"),
+		"context.assembled": __("组装上下文"),
+		"context.compressed": __("压缩上下文"),
 		"action.proposed": __("模型提出动作"),
 		"action.validated": __("动作通过校验"),
 		"action.rejected": __("动作被拒绝"),
@@ -192,6 +197,44 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		const stop_reason = trace.stop_reason || {};
 		const stop_code = stop_reason.code || "TRACE_INVALID";
 		const usage = trace.usage || {};
+		const context = trace.context || {};
+		const context_bits = [];
+		if (context.prompt_profile_id) {
+			context_bits.push(__("Prompt Profile") + ": " + esc(context.prompt_profile_id));
+		}
+		if (context.prompt_profile_hash) {
+			context_bits.push(__("Profile Hash") + ": " + esc(context.prompt_profile_hash));
+		}
+		if (context.context_builder_version) {
+			context_bits.push(__("ContextBuilder") + ": " + esc(context.context_builder_version));
+		}
+		if (typeof context.actual_prompt_tokens === "number") {
+			context_bits.push(__("实际输入 Token") + ": " + esc(context.actual_prompt_tokens));
+		}
+		if (typeof context.estimated_input_units_before === "number") {
+			context_bits.push(
+				__("估算输入") +
+				": " +
+				esc(context.estimated_input_units_before) +
+				" → " +
+				esc(context.estimated_input_units_after) +
+				" / " +
+				esc(context.input_budget)
+			);
+		}
+		if (context.compression_reasons && context.compression_reasons.length) {
+			context_bits.push(
+				__("压缩原因") + ": " + context.compression_reasons.map(esc).join(", ")
+			);
+		}
+		if (context.dropped_fragment_ids && context.dropped_fragment_ids.length) {
+			context_bits.push(
+				__("丢弃片段") + ": " + context.dropped_fragment_ids.map(esc).join(", ")
+			);
+		}
+		if (context.skill_refs && context.skill_refs.length) {
+			context_bits.push(__("Skills") + ": " + context.skill_refs.map(esc).join(", "));
+		}
 		const summary =
 			'<div class="small mb-2" role="status">' +
 			"<b>" +
@@ -226,7 +269,10 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			esc(usage.cost_microusd || 0) +
 			" micro-USD · " +
 			esc(trace.elapsed_ms || 0) +
-			"ms</div>";
+			"ms</div>" +
+			(context_bits.length
+				? '<div class="small text-muted mb-2">' + context_bits.join(" · ") + "</div>"
+				: "");
 		wrapper.html(summary + render_trace_events(trace.events || []));
 	}
 
@@ -952,6 +998,30 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					if (typeof ev.prompt_tokens === "number") { ev_bits.push("in:" + ev.prompt_tokens + " out:" + ev.completion_tokens + " reasoning:" + (ev.reasoning_tokens || 0)); }
 					if (typeof ev.elapsed_ms === "number") { ev_bits.push(ev.elapsed_ms + "ms"); }
 					if (ev.fallback_reason) { ev_bits.push('<span class="text-danger">' + __("已回退") + ": " + esc(ev.fallback_reason) + "</span>"); }
+					const context_evidence = ev.context_evidence || {};
+					if (context_evidence.prompt_profile_id) {
+						ev_bits.push(__("Prompt Profile") + ": " + esc(context_evidence.prompt_profile_id));
+					}
+					if (context_evidence.context_builder_version) {
+						ev_bits.push(__("ContextBuilder") + ": " + esc(context_evidence.context_builder_version));
+					}
+					if (typeof context_evidence.actual_prompt_tokens === "number") {
+						ev_bits.push(__("实际输入 Token") + ": " + esc(context_evidence.actual_prompt_tokens));
+					}
+					if (typeof context_evidence.estimated_input_units_before === "number") {
+						ev_bits.push(
+							__("估算输入") +
+							": " +
+							esc(context_evidence.estimated_input_units_before) +
+							" → " +
+							esc(context_evidence.estimated_input_units_after) +
+							" / " +
+							esc(context_evidence.input_budget)
+						);
+					}
+					if (context_evidence.compression_reasons && context_evidence.compression_reasons.length) {
+						ev_bits.push(__("压缩原因") + ": " + context_evidence.compression_reasons.map(esc).join(", "));
+					}
 					if (ev_bits.length) {
 						rows_html += '<div class="small text-muted mt-1">' + ev_bits.join(" · ") + "</div>";
 					}

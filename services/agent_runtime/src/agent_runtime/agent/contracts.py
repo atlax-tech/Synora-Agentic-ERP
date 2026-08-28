@@ -81,6 +81,9 @@ AgentErrorCode = Literal[
 TraceEventType = Literal[
     "run.started",
     "model.requested",
+    "skill.loaded",
+    "context.assembled",
+    "context.compressed",
     "action.proposed",
     "action.validated",
     "action.rejected",
@@ -244,6 +247,9 @@ _SENSITIVE_KEY = re.compile(
     r"(?:secret|password|passwd|token|capability|api[_-]?key|authorization|cookie|prompt)",
     re.IGNORECASE,
 )
+_SAFE_TRACE_USAGE_KEYS = frozenset(
+    {"prompt_tokens", "completion_tokens", "reasoning_tokens", "actual_prompt_tokens"}
+)
 _SENSITIVE_TEXT = re.compile(
     r"(?i)\b(?:api[_-]?key|bearer|token|secret|password|passwd|capability|authorization|cookie)\b"
     r"\s*[:=]\s*\S+"
@@ -296,12 +302,20 @@ def _redact(value: JsonValue, secret_values: frozenset[str], *, depth: int = 0) 
             _redact(child, secret_values, depth=depth + 1) for child in value[:_MAX_TRACE_ITEMS]
         ]
     if isinstance(value, dict):
-        return {
-            key: "[REDACTED]"
-            if _SENSITIVE_KEY.search(key)
-            else _redact(child, secret_values, depth=depth + 1)
-            for key, child in list(value.items())[:_MAX_TRACE_ITEMS]
-        }
+        safe: dict[str, JsonValue] = {}
+        for key, child in list(value.items())[:_MAX_TRACE_ITEMS]:
+            if (
+                key in _SAFE_TRACE_USAGE_KEYS
+                and isinstance(child, int)
+                and not isinstance(child, bool)
+                and child >= 0
+            ):
+                safe[key] = child
+            elif _SENSITIVE_KEY.search(key):
+                safe[key] = "[REDACTED]"
+            else:
+                safe[key] = _redact(child, secret_values, depth=depth + 1)
+        return safe
     return value
 
 

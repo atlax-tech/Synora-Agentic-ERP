@@ -9,6 +9,7 @@ from frappe.utils import cint, get_datetime, now_datetime
 from synora_agentic_erp.agent.invocation import complete_invocation, reserve_invocation
 from synora_agentic_erp.agent.service import (
     _AGENT_EVENT_TYPES,
+    _safe_context_evidence,
     _safe_trace_value,
     _validate_trace_semantics,
     cancel_workflow_runtime,
@@ -131,6 +132,8 @@ def _safe_trace_stop_reason(raw: object) -> dict[str, object]:
         "NO_PROGRESS",
         "TOKEN_BUDGET",
         "COST_BUDGET",
+        "CONTEXT_INVALID",
+        "CONTEXT_BUDGET",
         "WALL_TIME_BUDGET",
         "CANCELLED",
         "TOOL_NOT_ALLOWED",
@@ -145,7 +148,11 @@ def _safe_trace_stop_reason(raw: object) -> dict[str, object]:
 
 
 def _safe_trace_events(
-    raw: object, run_id: str, *, expected_stop_code: str | None = None
+    raw: object,
+    run_id: str,
+    *,
+    expected_stop_code: str | None = None,
+    prompt_schema_version: str = "1",
 ) -> list[dict[str, object]]:
     events = _parse_trace_json(raw, list)
     if len(events) > 512:
@@ -180,8 +187,60 @@ def _safe_trace_events(
     stop_code = expected_stop_code or actual_stop_code
     if not isinstance(stop_code, str):
         raise ValueError("trace stop reason is invalid")
-    _validate_trace_semantics(events, stop_code=stop_code)
+    _validate_trace_semantics(
+        events,
+        stop_code=stop_code,
+        require_context=prompt_schema_version == "2",
+    )
     return safe_events
+
+
+def _context_trace_summary(events: list[dict[str, object]]) -> dict[str, object]:
+    """Extract only bounded Prompt/Context metadata for the Runs summary."""
+    context_events = [
+        event
+        for event in events
+        if event.get("event_type") in {"context.assembled", "context.compressed"}
+        and isinstance(event.get("payload"), dict)
+    ]
+    if not context_events:
+        return {}
+    first_payload = context_events[0]["payload"]
+    assert isinstance(first_payload, dict)
+    actual_values = [
+        payload["actual_prompt_tokens"]
+        for event in context_events
+        if isinstance((payload := event.get("payload")), dict)
+        and isinstance(payload.get("actual_prompt_tokens"), int)
+    ]
+    compression_reasons: list[str] = []
+    dropped_fragment_ids: list[str] = []
+    skill_refs: list[str] = []
+    for event in context_events:
+        payload = event["payload"]
+        assert isinstance(payload, dict)
+        for value in payload.get("compression_reasons", []):
+            if isinstance(value, str) and value not in compression_reasons:
+                compression_reasons.append(value)
+        for value in payload.get("dropped_fragment_ids", []):
+            if isinstance(value, str) and value not in dropped_fragment_ids:
+                dropped_fragment_ids.append(value)
+        for value in payload.get("skill_refs", []):
+            if isinstance(value, str) and value not in skill_refs:
+                skill_refs.append(value)
+    return {
+        "context_builder_version": first_payload.get("context_builder_version"),
+        "prompt_schema_version": first_payload.get("instruction_schema_version"),
+        "prompt_profile_id": first_payload.get("instruction_profile_id"),
+        "prompt_profile_hash": first_payload.get("instruction_profile_hash"),
+        "estimated_input_units_before": first_payload.get("estimated_input_units_before"),
+        "estimated_input_units_after": first_payload.get("estimated_input_units_after"),
+        "input_budget": first_payload.get("input_budget"),
+        "actual_prompt_tokens": actual_values[-1] if actual_values else None,
+        "compression_reasons": compression_reasons,
+        "dropped_fragment_ids": dropped_fragment_ids,
+        "skill_refs": skill_refs,
+    }
 
 
 def _latest_agent_trace(run_id: str) -> dict[str, Any] | None:
@@ -199,6 +258,7 @@ def _latest_agent_trace(run_id: str) -> dict[str, Any] | None:
                 "tool_schema_version",
                 "events_count",
                 "stop_reason",
+                "events_json",
                 "prompt_tokens",
                 "completion_tokens",
                 "reasoning_tokens",
@@ -223,6 +283,17 @@ def _latest_agent_trace(run_id: str) -> dict[str, Any] | None:
         stop_reason = _safe_trace_stop_reason(doc.stop_reason)
     except Exception:
         stop_reason = {"code": "TRACE_INVALID", "detail": "trace payload unavailable"}
+    context = {}
+    try:
+        context_events = _safe_trace_events(
+            doc.events_json,
+            run_id,
+            expected_stop_code=str(stop_reason["code"]),
+            prompt_schema_version=str(doc.prompt_schema_version or "1"),
+        )
+        context = _context_trace_summary(context_events)
+    except Exception:
+        context = {}
     return {
         "attempt": int(doc.attempt or 0),
         "mode": str(doc.mode or "AGENT"),
@@ -232,6 +303,7 @@ def _latest_agent_trace(run_id: str) -> dict[str, Any] | None:
         "tool_schema_version": str(doc.tool_schema_version or "1"),
         "events_count": int(doc.events_count or 0),
         "stop_reason": stop_reason,
+        "context": context,
         "usage": {
             "prompt_tokens": int(doc.prompt_tokens or 0),
             "completion_tokens": int(doc.completion_tokens or 0),
@@ -657,6 +729,7 @@ def get_run(run_id: str) -> dict[str, Any]:
             "reasoning_tokens",
             "elapsed_ms",
             "fallback_reason",
+            "context_evidence_json",
             "creation",
         ],
         order_by="creation desc",
@@ -671,6 +744,12 @@ def get_run(run_id: str) -> dict[str, Any]:
             plan = None
         if isinstance(plan, dict):
             plan["enhanced_text"] = plans[0].enhanced_text
+            try:
+                context_evidence = _safe_context_evidence(
+                    frappe.parse_json(plans[0].context_evidence_json or "{}")
+                )
+            except (TypeError, ValueError):
+                context_evidence = {}
             plan["evidence"] = {
                 "provider": plans[0].provider,
                 "prompt_tokens": plans[0].prompt_tokens,
@@ -678,6 +757,7 @@ def get_run(run_id: str) -> dict[str, Any]:
                 "reasoning_tokens": plans[0].reasoning_tokens,
                 "elapsed_ms": plans[0].elapsed_ms,
                 "fallback_reason": plans[0].fallback_reason,
+                "context_evidence": context_evidence,
             }
     governed = []
     action_rows = frappe.get_all(
@@ -892,7 +972,10 @@ def get_run_trace(
         doc = attempts[0]
         stop_reason = _safe_trace_stop_reason(doc.stop_reason)
         events = _safe_trace_events(
-            doc.events_json, safe_run_id, expected_stop_code=str(stop_reason["code"])
+            doc.events_json,
+            safe_run_id,
+            expected_stop_code=str(stop_reason["code"]),
+            prompt_schema_version=str(doc.prompt_schema_version or "1"),
         )
         summary = _latest_agent_trace(safe_run_id)
         if summary is None:

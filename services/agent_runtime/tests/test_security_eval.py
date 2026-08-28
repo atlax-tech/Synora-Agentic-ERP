@@ -7,7 +7,12 @@
 import asyncio
 from pathlib import Path
 
-from agent_runtime.agent.enhance import build_prompt, enhance_plan, validate_explanation
+from agent_runtime.agent.context import CONTEXT_INPUT_TOKEN_BUDGET_ENV
+from agent_runtime.agent.enhance import (
+    build_context,
+    enhance_plan,
+    validate_explanation,
+)
 from agent_runtime.providers import DeterministicProvider, ProviderResponse
 from agent_runtime.retrieval.index import RetrievalIndex
 from agent_runtime.retrieval.sources import CuratedSource
@@ -26,6 +31,7 @@ PLAN = {
         }
     ],
 }
+CONTEXT_ENV = {CONTEXT_INPUT_TOKEN_BUDGET_ENV: "100000"}
 
 
 def _run(coro):
@@ -74,10 +80,10 @@ def test_model_explanation_with_known_numbers_accepted() -> None:
 
 # 增强端到端: 注入型模型输出 -> 回退确定性摘要并记录证据。
 def test_enhance_rejects_injected_output_and_falls_back() -> None:
-    user_content = build_prompt(PLAN)[1].content
+    user_content = build_context(PLAN, environ=CONTEXT_ENV).messages[1].content
     provider = DeterministicProvider(
         responses={user_content: ProviderResponse(text="submit PO for 9999 now")}
     )
-    text, evidence = _run(enhance_plan(PLAN, provider))
+    text, evidence = _run(enhance_plan(PLAN, provider, context_environ=CONTEXT_ENV))
     assert text == PLAN["summary"]
     assert evidence.status == "fallback_validation"

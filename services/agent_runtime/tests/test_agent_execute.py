@@ -163,6 +163,7 @@ def test_gateway_adapter_sends_capability_only_to_typed_gateway_and_bounds_summa
 def test_execute_agent_observation_drives_second_different_tool(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("SYNORA_CONTEXT_INPUT_TOKEN_BUDGET", "100000")
     item = _success("item.lookup", [{"item_code": "ITEM-1"}])
     stock = _success("stock.projected", [{"item_code": "ITEM-1", "actual_qty": 60}])
     item_digest = observation_from_summary(

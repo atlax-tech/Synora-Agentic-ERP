@@ -5,8 +5,10 @@ CI 使用 DeterministicProvider, 不调用付费真实模型。
 
 import asyncio
 
+from agent_runtime.agent.context import CONTEXT_INPUT_TOKEN_BUDGET_ENV
 from agent_runtime.agent.enhance import (
     ENHANCE_MAX_TOKENS,
+    build_context,
     build_prompt,
     enhance_plan,
     validate_explanation,
@@ -34,6 +36,7 @@ PLAN = {
     ],
     "generated_at": "2026-08-25T21:00:00+08:00",
 }
+CONTEXT_ENV = {CONTEXT_INPUT_TOKEN_BUDGET_ENV: "100000"}
 
 
 def _run(coro):
@@ -108,7 +111,7 @@ def test_validate_rejects_invented_surplus() -> None:
 
 
 def test_enhance_ok_with_deterministic_provider() -> None:
-    user_content = build_prompt(PLAN)[1].content
+    user_content = build_context(PLAN, environ=CONTEXT_ENV).messages[1].content
     provider = DeterministicProvider(
         responses={
             user_content: ProviderResponse(
@@ -116,7 +119,14 @@ def test_enhance_ok_with_deterministic_provider() -> None:
             )
         }
     )
-    text, evidence = _run(enhance_plan(PLAN, provider, provider_name="deterministic"))
+    text, evidence = _run(
+        enhance_plan(
+            PLAN,
+            provider,
+            provider_name="deterministic",
+            context_environ=CONTEXT_ENV,
+        )
+    )
     assert text == "库存充足，不建议重复采购。"
     assert evidence.status == "ok"
     assert evidence.provider == "deterministic"
@@ -128,7 +138,7 @@ def test_enhance_ok_with_deterministic_provider() -> None:
 
 
 def test_enhance_falls_back_on_validation_failure() -> None:
-    user_content = build_prompt(PLAN)[1].content
+    user_content = build_context(PLAN, environ=CONTEXT_ENV).messages[1].content
     provider = DeterministicProvider(
         responses={
             user_content: ProviderResponse(
@@ -136,7 +146,7 @@ def test_enhance_falls_back_on_validation_failure() -> None:
             )
         }
     )
-    text, evidence = _run(enhance_plan(PLAN, provider))
+    text, evidence = _run(enhance_plan(PLAN, provider, context_environ=CONTEXT_ENV))
     assert text == PLAN["summary"]  # 回退确定性文案
     assert evidence.status == "fallback_validation"
     assert evidence.fallback_reason is not None
@@ -148,7 +158,9 @@ def test_enhance_falls_back_on_provider_error() -> None:
             del messages, tools, model, max_tokens
             raise ProviderError("down")
 
-    text, evidence = _run(enhance_plan(PLAN, _BoomProvider()))
+    text, evidence = _run(
+        enhance_plan(PLAN, _BoomProvider(), context_environ=CONTEXT_ENV)
+    )
     assert text == PLAN["summary"]
     assert evidence.status == "fallback_error"
     assert "down" in str(evidence.fallback_reason)
@@ -165,7 +177,9 @@ def test_enhance_preserves_rejected_provider_usage() -> None:
                 reasoning_tokens=210,
             )
 
-    text, evidence = _run(enhance_plan(PLAN, _OverBudgetProvider()))
+    text, evidence = _run(
+        enhance_plan(PLAN, _OverBudgetProvider(), context_environ=CONTEXT_ENV)
+    )
     assert text == PLAN["summary"]
     assert evidence.status == "fallback_error"
     assert evidence.prompt_tokens == 10
@@ -182,5 +196,43 @@ def test_enhance_uses_cost_guardrail() -> None:
             del messages, tools, model
             return ProviderResponse(text="ok")
 
-    _run(enhance_plan(PLAN, _CaptureProvider()))
+    _run(enhance_plan(PLAN, _CaptureProvider(), context_environ=CONTEXT_ENV))
     assert captured["max_tokens"] == ENHANCE_MAX_TOKENS
+
+
+def test_enhance_missing_context_budget_returns_deterministic_summary() -> None:
+    class _UnexpectedProvider:
+        calls = 0
+
+        async def complete(self, *args, **kwargs):
+            self.calls += 1
+            raise AssertionError("provider must not be called")
+
+    provider = _UnexpectedProvider()
+    text, evidence = _run(enhance_plan(PLAN, provider, context_environ={}))
+    assert text == PLAN["summary"]
+    assert evidence.status == "fallback_context_budget"
+    assert provider.calls == 0
+
+
+def test_enhance_actual_prompt_budget_failure_keeps_usage_and_falls_back() -> None:
+    class _OverContextBudgetProvider:
+        async def complete(self, *args, **kwargs):
+            del args, kwargs
+            return ProviderResponse(
+                text="库存充足，不建议重复采购。",
+                prompt_tokens=100_001,
+                completion_tokens=5,
+            )
+
+    text, evidence = _run(
+        enhance_plan(
+            PLAN,
+            _OverContextBudgetProvider(),
+            context_environ=CONTEXT_ENV,
+        )
+    )
+    assert text == PLAN["summary"]
+    assert evidence.status == "fallback_context_budget"
+    assert evidence.prompt_tokens == 100_001
+    assert evidence.actual_prompt_tokens == 100_001

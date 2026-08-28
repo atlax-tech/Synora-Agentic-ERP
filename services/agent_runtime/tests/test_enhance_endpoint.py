@@ -69,3 +69,27 @@ def test_enhance_accepts_configured_runtime_token(monkeypatch) -> None:
     )
     assert response.status_code == 200
     assert response.json()["evidence"]["provider"] == "ci-test"
+
+
+def test_enhance_context_budget_failure_is_a_deterministic_200_fallback(monkeypatch) -> None:
+    class _UnexpectedProvider:
+        calls = 0
+
+        async def complete(self, *args, **kwargs):
+            self.calls += 1
+            raise AssertionError("provider must not be called")
+
+        async def aclose(self) -> None:
+            return None
+
+    provider = _UnexpectedProvider()
+    monkeypatch.setenv("SYNORA_PROVIDER_MODEL", "recorded")
+    monkeypatch.delenv("SYNORA_CONTEXT_INPUT_TOKEN_BUDGET", raising=False)
+    monkeypatch.setattr("agent_runtime.app.provider_from_environment", lambda: provider)
+
+    response = asyncio.run(_post_enhance({"plan": PLAN, "provider_name": "ci-test"}))
+
+    assert response.status_code == 200
+    assert response.json()["explanation"] == PLAN["summary"]
+    assert response.json()["evidence"]["status"] == "fallback_context_budget"
+    assert provider.calls == 0

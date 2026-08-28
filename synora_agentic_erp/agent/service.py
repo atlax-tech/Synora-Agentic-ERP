@@ -76,6 +76,8 @@ _AGENT_FALLBACK_CODES = {
     "NO_PROGRESS",
     "TOKEN_BUDGET",
     "COST_BUDGET",
+    "CONTEXT_INVALID",
+    "CONTEXT_BUDGET",
     "WALL_TIME_BUDGET",
     "MAX_STEPS",
     "TOOL_FREQUENCY",
@@ -86,6 +88,9 @@ _AGENT_FALLBACK_CODES = {
 _AGENT_EVENT_TYPES = {
     "run.started",
     "model.requested",
+    "skill.loaded",
+    "context.assembled",
+    "context.compressed",
     "action.proposed",
     "action.validated",
     "action.rejected",
@@ -120,15 +125,250 @@ _SENSITIVE_TRACE_KEYS = {
     "cookie",
     "prompt",
 }
+_SAFE_TRACE_USAGE_KEYS = frozenset(
+    {"prompt_tokens", "completion_tokens", "reasoning_tokens", "actual_prompt_tokens"}
+)
 _TRACE_SECRET_TEXT = re.compile(
     r"(?i)\b(?:api[_-]?key|bearer|token|secret|password|passwd|capability|authorization|cookie)\b"
     r"\s*[:=]\s*\S+"
 )
 _NUMBER_TOKEN = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
+_AGENT_READ_TOOL_NAMES = frozenset(
+    {
+        "item.lookup",
+        "supplier.lookup",
+        "stock.projected",
+        "demand.open",
+        "material_request.open",
+        "purchase_order.open",
+    }
+)
+_CONTEXT_FRAGMENT_ID = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,119}$")
+_CONTEXT_HASH = re.compile(r"^[0-9a-f]{64}$")
+_CONTEXT_PROFILE_IDS = frozenset({"native-agent", "deterministic-plan-enhancement"})
+_CONTEXT_PROFILE_HASHES = {
+    "native-agent": (
+        "1a676172e121c37910512c73b4a77cf3955cad7bca2c659f342d5b2c6e9dbda4"
+    ),
+    "deterministic-plan-enhancement": (
+        "0e7cb90710391876819feb3b1fb92e0d72748406dec237a38c587c77c10a47f0"
+    ),
+}
+_CONTEXT_EVENT_FIELDS = frozenset(
+    {
+        "step",
+        "context_builder_version",
+        "instruction_schema_version",
+        "instruction_profile_id",
+        "instruction_profile_hash",
+        "skill_refs",
+        "selected_fragment_ids",
+        "dropped_fragment_ids",
+        "estimated_input_units_before",
+        "estimated_input_units_after",
+        "input_budget",
+        "compression_reasons",
+        "effective_tool_names",
+        "actual_prompt_tokens",
+    }
+)
+_CONTEXT_EVIDENCE_FIELDS = frozenset(
+    {
+        "prompt_schema_version",
+        "context_builder_version",
+        "prompt_profile_id",
+        "prompt_profile_hash",
+        "estimated_input_units_before",
+        "estimated_input_units_after",
+        "input_budget",
+        "actual_prompt_tokens",
+        "compression_reasons",
+        "dropped_fragment_ids",
+        "skill_refs",
+    }
+)
+
+
+def _validate_context_event_payload(
+    payload: dict[str, Any],
+    *,
+    stop_code: str,
+    compressed: bool,
+) -> int:
+    """Validate only reproducibility metadata; reject raw context at the boundary."""
+    if set(payload) - _CONTEXT_EVENT_FIELDS:
+        raise ValueError("context event contains unsupported fields")
+    required = _CONTEXT_EVENT_FIELDS - {"actual_prompt_tokens"}
+    if not required.issubset(payload):
+        raise ValueError("context event metadata is incomplete")
+    step = payload.get("step")
+    if (
+        not isinstance(step, int)
+        or isinstance(step, bool)
+        or step < 1
+        or step > 64
+        or payload.get("context_builder_version") != "1"
+        or payload.get("instruction_schema_version") != "2"
+        or payload.get("instruction_profile_id") not in _CONTEXT_PROFILE_IDS
+        or not isinstance(payload.get("instruction_profile_hash"), str)
+        or not _CONTEXT_HASH.fullmatch(payload["instruction_profile_hash"])
+        or payload["instruction_profile_hash"]
+        != _CONTEXT_PROFILE_HASHES[payload["instruction_profile_id"]]
+    ):
+        raise ValueError("context event identity is invalid")
+    for field in ("skill_refs", "selected_fragment_ids", "dropped_fragment_ids"):
+        values = payload.get(field)
+        if (
+            not isinstance(values, list)
+            or len(values) > 256
+            or any(
+                not isinstance(value, str) or not _CONTEXT_FRAGMENT_ID.fullmatch(value)
+                for value in values
+            )
+            or len(set(values)) != len(values)
+        ):
+            raise ValueError("context fragment metadata is invalid")
+    selected = set(payload["selected_fragment_ids"])
+    dropped = set(payload["dropped_fragment_ids"])
+    if selected & dropped:
+        raise ValueError("context selection metadata overlaps")
+    tool_names = payload.get("effective_tool_names")
+    if (
+        not isinstance(tool_names, list)
+        or len(tool_names) > len(_AGENT_READ_TOOL_NAMES)
+        or any(
+            not isinstance(name, str) or name not in _AGENT_READ_TOOL_NAMES
+            for name in tool_names
+        )
+        or len(set(tool_names)) != len(tool_names)
+    ):
+        raise ValueError("context effective tools are invalid")
+    before = payload.get("estimated_input_units_before")
+    after = payload.get("estimated_input_units_after")
+    budget = payload.get("input_budget")
+    if (
+        not isinstance(before, int)
+        or isinstance(before, bool)
+        or before < 0
+        or not isinstance(after, int)
+        or isinstance(after, bool)
+        or after < 0
+        or not isinstance(budget, int)
+        or isinstance(budget, bool)
+        or budget <= 0
+    ):
+        raise ValueError("context budget metadata is invalid")
+    if after > before or after > budget:
+        raise ValueError("context estimate exceeds its budget")
+    actual = payload.get("actual_prompt_tokens")
+    if actual is not None and (
+        not isinstance(actual, int) or isinstance(actual, bool) or actual < 0
+    ):
+        raise ValueError("actual prompt usage is invalid")
+    if actual is not None and actual > budget and stop_code != "CONTEXT_BUDGET":
+        raise ValueError("actual prompt usage exceeds budget without a context stop")
+    reasons = payload.get("compression_reasons")
+    if (
+        not isinstance(reasons, list)
+        or len(reasons) > 32
+        or any(not isinstance(reason, str) or not reason or len(reason) > 240 for reason in reasons)
+    ):
+        raise ValueError("context compression metadata is invalid")
+    if compressed and not (
+        payload["dropped_fragment_ids"] or payload["compression_reasons"]
+    ):
+        raise ValueError("compressed context has no recorded loss")
+    return step
+
+
+def _safe_context_evidence(raw: object, *, status: str | None = None) -> dict[str, Any]:
+    """Validate the metadata-only enhancement evidence persisted in Run Plan."""
+    if raw in (None, {}):
+        return {}
+    if not isinstance(raw, dict) or set(raw) - _CONTEXT_EVIDENCE_FIELDS:
+        raise ValueError("context evidence contains unsupported fields")
+    required = {
+        "prompt_schema_version",
+        "context_builder_version",
+        "prompt_profile_id",
+        "prompt_profile_hash",
+        "estimated_input_units_before",
+        "estimated_input_units_after",
+        "input_budget",
+        "actual_prompt_tokens",
+        "compression_reasons",
+        "dropped_fragment_ids",
+        "skill_refs",
+    }
+    if set(raw) != required:
+        raise ValueError("context evidence is incomplete")
+    if (
+        raw.get("prompt_schema_version") != "2"
+        or raw.get("context_builder_version") != "1"
+        or raw.get("prompt_profile_id") not in _CONTEXT_PROFILE_IDS
+        or not isinstance(raw.get("prompt_profile_hash"), str)
+        or not _CONTEXT_HASH.fullmatch(raw["prompt_profile_hash"])
+        or raw["prompt_profile_hash"] != _CONTEXT_PROFILE_HASHES[raw["prompt_profile_id"]]
+    ):
+        raise ValueError("context evidence identity is invalid")
+    for field in ("estimated_input_units_before", "estimated_input_units_after"):
+        value = raw.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise ValueError("context evidence estimates are invalid")
+    budget = raw.get("input_budget")
+    if budget is not None and (
+        not isinstance(budget, int) or isinstance(budget, bool) or budget <= 0
+    ):
+        raise ValueError("context evidence budget is invalid")
+    if budget is None:
+        if raw["estimated_input_units_before"] or raw["estimated_input_units_after"]:
+            raise ValueError("context evidence estimates require a budget")
+    elif (
+        raw["estimated_input_units_after"] > raw["estimated_input_units_before"]
+        or raw["estimated_input_units_after"] > budget
+    ):
+        raise ValueError("context evidence exceeds its budget")
+    actual = raw.get("actual_prompt_tokens")
+    if actual is not None and (
+        not isinstance(actual, int) or isinstance(actual, bool) or actual < 0
+    ):
+        raise ValueError("context evidence usage is invalid")
+    if (
+        actual is not None
+        and budget is not None
+        and actual > budget
+        and status != "fallback_context_budget"
+    ):
+        raise ValueError("context evidence usage exceeds its budget")
+    for field in ("compression_reasons", "dropped_fragment_ids", "skill_refs"):
+        values = raw.get(field)
+        if (
+            not isinstance(values, list)
+            or len(values) > 256
+            or any(not isinstance(value, str) or not value for value in values)
+            or len(set(values)) != len(values)
+        ):
+            raise ValueError("context evidence list is invalid")
+    if any(
+        not _CONTEXT_FRAGMENT_ID.fullmatch(value)
+        for field in ("dropped_fragment_ids", "skill_refs")
+        for value in raw[field]
+    ):
+        raise ValueError("context evidence fragment id is invalid")
+    if any(len(value) > 240 for value in raw["compression_reasons"]):
+        raise ValueError("context evidence reason is too long")
+    return {
+        field: list(raw[field]) if isinstance(raw[field], list) else raw[field]
+        for field in _CONTEXT_EVIDENCE_FIELDS
+    }
 
 
 def _validate_trace_semantics(
-    events: list[dict[str, Any]], *, stop_code: str, final_answer: dict[str, Any] | None = None
+    events: list[dict[str, Any]],
+    *,
+    stop_code: str,
+    final_answer: dict[str, Any] | None = None,
+    require_context: bool = False,
 ) -> dict[str, str]:
     """Validate ownership of evidence and the small terminal trace state machine."""
     if (
@@ -139,12 +379,101 @@ def _validate_trace_semantics(
         raise ValueError("trace terminal events are invalid")
     observed: dict[str, str] = {}
     pending: tuple[str, str, int] | None = None
+    context_steps: set[int] = set()
+    model_steps: set[int] = set()
+    last_context_step: int | None = None
+    last_context_kind: str | None = None
     for event in events[1:-1]:
         kind = event.get("event_type")
         payload = event.get("payload")
         if not isinstance(payload, dict):
             raise ValueError("trace payload is invalid")
-        if kind == "action.proposed":
+        if kind == "skill.loaded":
+            if not require_context:
+                raise ValueError("skill event requires prompt schema v2")
+            skill_id = payload.get("skill_id")
+            skill_version = payload.get("skill_version")
+            manifest_hash = payload.get("skill_manifest_hash")
+            disclosure_level = payload.get("disclosure_level")
+            effective_tool_names = payload.get("effective_tool_names")
+            load_reason = payload.get("load_reason")
+            step = payload.get("step")
+            if (
+                set(payload)
+                != {
+                    "step",
+                    "skill_id",
+                    "skill_version",
+                    "skill_manifest_hash",
+                    "disclosure_level",
+                    "effective_tool_names",
+                    "load_reason",
+                }
+                or not isinstance(step, int)
+                or isinstance(step, bool)
+                or step < 1
+                or step > 64
+                or not isinstance(skill_id, str)
+                or not _CONTEXT_FRAGMENT_ID.fullmatch(skill_id)
+                or not isinstance(skill_version, str)
+                or not skill_version
+                or len(skill_version) > 40
+                or not isinstance(manifest_hash, str)
+                or not _CONTEXT_HASH.fullmatch(manifest_hash)
+                or not isinstance(disclosure_level, int)
+                or isinstance(disclosure_level, bool)
+                or disclosure_level not in {1, 2, 3}
+                or not isinstance(effective_tool_names, list)
+                or len(effective_tool_names) > len(_AGENT_READ_TOOL_NAMES)
+                or any(
+                    not isinstance(name, str) or name not in _AGENT_READ_TOOL_NAMES
+                    for name in effective_tool_names
+                )
+                or len(set(effective_tool_names)) != len(effective_tool_names)
+                or not isinstance(load_reason, str)
+                or not load_reason
+                or len(load_reason) > 240
+            ):
+                raise ValueError("skill event metadata is invalid")
+        elif kind in {"context.assembled", "context.compressed"}:
+            if not require_context:
+                raise ValueError("context event requires prompt schema v2")
+            context_step = _validate_context_event_payload(
+                payload,
+                stop_code=stop_code,
+                compressed=kind == "context.compressed",
+            )
+            if kind == "context.compressed" and (
+                last_context_step != context_step or last_context_kind != "context.assembled"
+            ):
+                raise ValueError("context compression ordering is invalid")
+            if kind == "context.assembled" and context_step in context_steps and not (
+                context_step in model_steps
+                and payload.get("actual_prompt_tokens") is not None
+            ):
+                raise ValueError("context assembly is duplicated")
+            context_steps.add(context_step)
+            last_context_step = context_step
+            last_context_kind = kind
+        elif kind == "model.requested":
+            raw_step, tool_count = payload.get("step"), payload.get("tool_count")
+            if (
+                not isinstance(raw_step, int)
+                or isinstance(raw_step, bool)
+                or raw_step < 1
+                or raw_step > 64
+                or not isinstance(tool_count, int)
+                or isinstance(tool_count, bool)
+                or tool_count < 0
+                or tool_count > len(_AGENT_READ_TOOL_NAMES)
+            ):
+                raise ValueError("model request metadata is invalid")
+            if require_context and raw_step not in context_steps:
+                raise ValueError("model request has no assembled context")
+            model_steps.add(raw_step)
+            last_context_step = None
+            last_context_kind = None
+        elif kind == "action.proposed":
             if pending is not None:
                 raise ValueError("trace action overlaps")
             raw_tool_name, raw_step = payload.get("tool_name"), payload.get("step")
@@ -208,6 +537,17 @@ def _validate_trace_semantics(
             pending = None
         elif kind == "run.stopped":
             raise ValueError("trace has events after terminal")
+        elif kind in {"guard.checked"}:
+            continue
+        elif kind in {
+            "action.rejected",
+            "final.rejected",
+        }:
+            continue
+        elif kind in {"run.started"}:
+            raise ValueError("trace has an unexpected run start")
+        else:
+            raise ValueError("trace event semantics are unknown")
     stopped = events[-1].get("payload")
     if not isinstance(stopped, dict) or stopped.get("code") != stop_code or pending is not None:
         raise ValueError("trace stop reason is inconsistent")
@@ -840,6 +1180,7 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
             "reasoning_tokens": 0,
             "elapsed_ms": elapsed,
             "fallback_reason": reason[:200],
+            "context_evidence": {},
         }
 
     try:
@@ -875,6 +1216,19 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
     if not isinstance(evidence, dict):
         # evidence 缺失或非对象 (list/str/数字): 回退确定性, 不抛 500。
         return fallback("runtime returned invalid evidence")
+    try:
+        context_evidence = _safe_context_evidence(
+            {
+                field: evidence[field]
+                for field in _CONTEXT_EVIDENCE_FIELDS
+                if field in evidence
+            }
+            if any(field in evidence for field in _CONTEXT_EVIDENCE_FIELDS)
+            else {},
+            status=str(evidence.get("status", "ok")),
+        )
+    except ValueError:
+        return fallback("runtime returned malformed context evidence")
     explanation = body.get("explanation")
     if not isinstance(explanation, str) or not explanation.strip():
         return fallback(
@@ -896,6 +1250,7 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
         "reasoning_tokens": reasoning_tokens,
         "elapsed_ms": elapsed_ms,
         "fallback_reason": str(evidence.get("fallback_reason") or "")[:200],
+        "context_evidence": context_evidence,
     }
 
 
@@ -932,7 +1287,14 @@ def _safe_trace_value(value: object, *, depth: int = 0, max_depth: int = 4) -> o
             if not isinstance(key, str):
                 continue
             normalized_key = key.lower().replace("-", "_")
-            if any(marker in normalized_key for marker in _SENSITIVE_TRACE_KEYS):
+            if (
+                normalized_key in _SAFE_TRACE_USAGE_KEYS
+                and isinstance(child, int)
+                and not isinstance(child, bool)
+                and child >= 0
+            ):
+                safe[key] = child
+            elif any(marker in normalized_key for marker in _SENSITIVE_TRACE_KEYS):
                 safe[key] = "[REDACTED]"
             else:
                 safe[key] = _safe_trace_value(child, depth=depth + 1, max_depth=max_depth)
@@ -1142,7 +1504,12 @@ def _validate_agent_runtime_response(body: object, run_id: str) -> dict[str, Any
             "evidence_refs": list(refs),
             "unknowns": [_safe_trace_text(value, 4_000) for value in unknowns],
         }
-    _validate_trace_semantics(events, stop_code=code, final_answer=safe_final_answer)
+    _validate_trace_semantics(
+        events,
+        stop_code=code,
+        final_answer=safe_final_answer,
+        require_context=prompt_schema_version == _CURRENT_PROMPT_SCHEMA_VERSION,
+    )
     return {
         "schema_version": "1",
         "provider": _safe_trace_text(body["provider"], 120),
@@ -1971,6 +2338,13 @@ def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
                 "reasoning_tokens": evidence.get("reasoning_tokens", 0),
                 "elapsed_ms": evidence.get("elapsed_ms", 0),
                 "fallback_reason": evidence.get("fallback_reason"),
+                "context_evidence_json": json.dumps(
+                    evidence.get("context_evidence", {}),
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
                 "correlation_id": correlation_id,
             }
         ).insert(ignore_permissions=True)

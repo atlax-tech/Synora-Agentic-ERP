@@ -27,6 +27,9 @@ COMPANY = "SYNORA-P1 Test Company"
 WAREHOUSE = "SYNORA-P1 Stores - SP1"
 GOAL = "ensure stock for SYNORA-P1-Item-1001 for the next quarter"
 CORRELATION_ID = "9c3f1a2b-4d5e-4f60-a7b8-9c0d1e2f3a4b"
+NATIVE_PROFILE_HASH = (
+    "1a676172e121c37910512c73b4a77cf3955cad7bca2c659f342d5b2c6e9dbda4"
+)
 
 
 class TestAnalyzeRun(FrappeTestCase):
@@ -276,6 +279,167 @@ class TestAnalyzeRun(FrappeTestCase):
         validated = _validate_agent_runtime_response(body, run_id)
 
         self.assertEqual(validated["prompt_schema_version"], "1")
+
+    def test_prompt_v2_model_request_requires_context_metadata(self) -> None:
+        run_id = "37e1d8a5-1730-4ad0-bffd-217774ed9fab"
+        body = _runtime_failure_response(run_id)
+        timestamp = body["result"]["events"][0]["timestamp"]
+        context_payload = {
+            "step": 1,
+            "context_builder_version": "1",
+            "instruction_schema_version": "2",
+            "instruction_profile_id": "native-agent",
+            "instruction_profile_hash": NATIVE_PROFILE_HASH,
+            "skill_refs": [],
+            "selected_fragment_ids": ["prompt:native-agent:a", "goal:caller"],
+            "dropped_fragment_ids": [],
+            "estimated_input_units_before": 900,
+            "estimated_input_units_after": 900,
+            "input_budget": 1_000,
+            "compression_reasons": [],
+            "effective_tool_names": ["item.lookup"],
+        }
+        result = body["result"]
+        result["events"] = [
+            result["events"][0],
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 2,
+                "event_type": "model.requested",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"step": 1, "tool_count": 1},
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 3,
+                "event_type": "run.stopped",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"code": "MODEL_ERROR", "step": 1, "detail": "failed"},
+            },
+        ]
+        result["stop_reason"]["code"] = "MODEL_ERROR"
+        with self.assertRaises(ValueError):
+            _validate_agent_runtime_response(body, run_id)
+
+        result["events"] = [
+            result["events"][0],
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 2,
+                "event_type": "context.assembled",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": context_payload,
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 3,
+                "event_type": "model.requested",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"step": 1, "tool_count": 1},
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 4,
+                "event_type": "context.assembled",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {**context_payload, "actual_prompt_tokens": 900},
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 5,
+                "event_type": "run.stopped",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"code": "MODEL_ERROR", "step": 1, "detail": "failed"},
+            },
+        ]
+        validated = _validate_agent_runtime_response(body, run_id)
+        self.assertEqual(
+            validated["result"]["events"][1]["event_type"],
+            "context.assembled",
+        )
+
+    def test_prompt_v2_context_metadata_rejects_raw_content_and_tool_expansion(self) -> None:
+        run_id = "37e1d8a5-1730-4ad0-bffd-217774ed9fab"
+        body = _runtime_failure_response(run_id, code="CONTEXT_BUDGET")
+        timestamp = body["result"]["events"][0]["timestamp"]
+        payload = {
+            "step": 1,
+            "context_builder_version": "1",
+            "instruction_schema_version": "2",
+            "instruction_profile_id": "native-agent",
+            "instruction_profile_hash": NATIVE_PROFILE_HASH,
+            "skill_refs": [],
+            "selected_fragment_ids": ["goal:caller"],
+            "dropped_fragment_ids": [],
+            "estimated_input_units_before": 1_000,
+            "estimated_input_units_after": 900,
+            "input_budget": 900,
+            "compression_reasons": ["bounded summary applied"],
+            "effective_tool_names": ["purchase.submit"],
+            "content": "must not cross the trace boundary",
+        }
+        body["result"]["events"] = [
+            body["result"]["events"][0],
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 2,
+                "event_type": "context.assembled",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": payload,
+            },
+            body["result"]["events"][1],
+        ]
+        with self.assertRaises(ValueError):
+            _validate_agent_runtime_response(body, run_id)
+
+    def test_prompt_v2_context_metadata_rejects_forged_profile_hash(self) -> None:
+        run_id = "37e1d8a5-1730-4ad0-bffd-217774ed9fab"
+        body = _runtime_failure_response(run_id, code="CONTEXT_BUDGET")
+        timestamp = body["result"]["events"][0]["timestamp"]
+        payload = {
+            "step": 1,
+            "context_builder_version": "1",
+            "instruction_schema_version": "2",
+            "instruction_profile_id": "native-agent",
+            "instruction_profile_hash": "f" * 64,
+            "skill_refs": [],
+            "selected_fragment_ids": ["goal:caller"],
+            "dropped_fragment_ids": [],
+            "estimated_input_units_before": 900,
+            "estimated_input_units_after": 900,
+            "input_budget": 1_000,
+            "compression_reasons": [],
+            "effective_tool_names": ["item.lookup"],
+        }
+        body["result"]["events"] = [
+            body["result"]["events"][0],
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 2,
+                "event_type": "context.assembled",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": payload,
+            },
+            body["result"]["events"][1],
+        ]
+        with self.assertRaises(ValueError):
+            _validate_agent_runtime_response(body, run_id)
 
     def test_runtime_final_answer_rejects_unowned_or_tampered_evidence(self) -> None:
         run_id = "37e1d8a5-1730-4ad0-bffd-217774ed9fab"

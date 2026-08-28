@@ -7,6 +7,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from agent_runtime.agent.budget import Pricing
+from agent_runtime.agent.context import CONTEXT_INPUT_TOKEN_BUDGET_ENV
 from agent_runtime.agent.contracts import Action, Observation, observation_from_summary
 from agent_runtime.agent.kernel import ToolAdapter
 from agent_runtime.agent.native_tool_calling import run_native_tool_calling
@@ -65,6 +66,7 @@ def _run(
     require_pricing: bool = False,
     cancelled: Callable[[], bool] | None = None,
 ):
+    context_environ = {CONTEXT_INPUT_TOKEN_BUDGET_ENV: "100000"}
     return asyncio.run(
         run_native_tool_calling(
             run_id=RUN_ID,
@@ -76,6 +78,7 @@ def _run(
             pricing=pricing,
             require_pricing=require_pricing,
             cancelled=cancelled,
+            context_environ=context_environ,
         )
     )
 
