@@ -187,7 +187,7 @@ class PromptRegistry:
         variants = self._profiles.get(profile_id)
         if variants is None or variant not in variants:
             raise KeyError(f"prompt profile or variant is not registered: {profile_id}/{variant}")
-        return variants[variant]  # type: ignore[index]
+        return variants[variant]
 
     def profiles(self) -> tuple[PromptProfile, ...]:
         """Return registered profiles in deterministic profile/variant order."""

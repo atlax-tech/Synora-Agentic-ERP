@@ -435,9 +435,7 @@ async def _run_native_tool_calling(
             )
             provider_code: StopCode | None = None
             try:
-                context_result = record_provider_prompt_tokens(
-                    context_result, error.prompt_tokens
-                )
+                context_result = record_provider_prompt_tokens(context_result, error.prompt_tokens)
             except ContextBuildError as context_error:
                 recorder.add(
                     "context.assembled",
@@ -518,9 +516,7 @@ async def _run_native_tool_calling(
             )
 
         try:
-            context_result = record_provider_prompt_tokens(
-                context_result, response.prompt_tokens
-            )
+            context_result = record_provider_prompt_tokens(context_result, response.prompt_tokens)
         except ContextBuildError as error:
             recorder.add(
                 "context.assembled",

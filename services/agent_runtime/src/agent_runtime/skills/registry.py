@@ -441,6 +441,5 @@ class SkillRegistry:
         allowed_tools: frozenset[str],
     ) -> bool:
         return (
-            (not reference.task_profiles or task_profile in reference.task_profiles)
-            and frozenset(reference.required_tools).issubset(allowed_tools)
-        )
+            not reference.task_profiles or task_profile in reference.task_profiles
+        ) and frozenset(reference.required_tools).issubset(allowed_tools)

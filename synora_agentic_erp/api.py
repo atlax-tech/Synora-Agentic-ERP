@@ -748,7 +748,7 @@ def get_run(run_id: str) -> dict[str, Any]:
                 context_evidence = _safe_context_evidence(
                     frappe.parse_json(plans[0].context_evidence_json or "{}")
                 )
-            except (TypeError, ValueError):
+            except (TypeError, ValueError):  # fmt: skip
                 context_evidence = {}
             plan["evidence"] = {
                 "provider": plans[0].provider,

@@ -137,14 +137,17 @@ def test_non_current_skills_are_registered_without_being_selected_for_replenishm
         allowed_tools=frozenset({"material_request.open", "purchase_order.open"}),
     )
 
-    assert [record.skill_id for record in material_request.records] == [
-        "material-request-draft"
-    ]
+    assert [record.skill_id for record in material_request.records] == ["material-request-draft"]
     assert [record.skill_id for record in reconciliation.records] == ["reconciliation"]
-    assert registry.load_for_task(
-        "REPLENISHMENT_ANALYSIS",
-        allowed_tools=ALL_READ_TOOLS,
-    ).records[0].skill_id == "duplicate-purchase-check"
+    assert (
+        registry.load_for_task(
+            "REPLENISHMENT_ANALYSIS",
+            allowed_tools=ALL_READ_TOOLS,
+        )
+        .records[0]
+        .skill_id
+        == "duplicate-purchase-check"
+    )
 
 
 @pytest.mark.parametrize(
@@ -444,6 +447,4 @@ def test_malicious_skill_text_cannot_create_provider_tool_schema(tmp_path: Path)
 
     assert "purchase.submit" in context.messages[1].content
     assert {tool.name for tool in context.effective_tools} == {"item.lookup"}
-    assert "purchase.submit" not in {
-        tool.name for tool in context.effective_tools
-    }
+    assert "purchase.submit" not in {tool.name for tool in context.effective_tools}

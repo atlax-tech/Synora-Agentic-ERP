@@ -27,9 +27,7 @@ COMPANY = "SYNORA-P1 Test Company"
 WAREHOUSE = "SYNORA-P1 Stores - SP1"
 GOAL = "ensure stock for SYNORA-P1-Item-1001 for the next quarter"
 CORRELATION_ID = "9c3f1a2b-4d5e-4f60-a7b8-9c0d1e2f3a4b"
-NATIVE_PROFILE_HASH = (
-    "1a676172e121c37910512c73b4a77cf3955cad7bca2c659f342d5b2c6e9dbda4"
-)
+NATIVE_PROFILE_HASH = "1a676172e121c37910512c73b4a77cf3955cad7bca2c659f342d5b2c6e9dbda4"
 
 
 class TestAnalyzeRun(FrappeTestCase):

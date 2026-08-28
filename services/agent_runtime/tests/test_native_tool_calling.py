@@ -63,9 +63,7 @@ def _run(
     context_environ: dict[str, str] | None = None,
 ) -> RunResult:
     effective_context_environ = (
-        {CONTEXT_INPUT_TOKEN_BUDGET_ENV: "100000"}
-        if context_environ is None
-        else context_environ
+        {CONTEXT_INPUT_TOKEN_BUDGET_ENV: "100000"} if context_environ is None else context_environ
     )
     return asyncio.run(
         run_native_tool_calling(

@@ -147,9 +147,7 @@ _CONTEXT_FRAGMENT_ID = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,119}$")
 _CONTEXT_HASH = re.compile(r"^[0-9a-f]{64}$")
 _CONTEXT_PROFILE_IDS = frozenset({"native-agent", "deterministic-plan-enhancement"})
 _CONTEXT_PROFILE_HASHES = {
-    "native-agent": (
-        "1a676172e121c37910512c73b4a77cf3955cad7bca2c659f342d5b2c6e9dbda4"
-    ),
+    "native-agent": ("1a676172e121c37910512c73b4a77cf3955cad7bca2c659f342d5b2c6e9dbda4"),
     "deterministic-plan-enhancement": (
         "0e7cb90710391876819feb3b1fb92e0d72748406dec237a38c587c77c10a47f0"
     ),
@@ -249,8 +247,7 @@ def _validate_context_event_payload(
         not isinstance(tool_names, list)
         or len(tool_names) > len(_AGENT_READ_TOOL_NAMES)
         or any(
-            not isinstance(name, str) or name not in _AGENT_READ_TOOL_NAMES
-            for name in tool_names
+            not isinstance(name, str) or name not in _AGENT_READ_TOOL_NAMES for name in tool_names
         )
         or len(set(tool_names)) != len(tool_names)
     ):
@@ -286,9 +283,7 @@ def _validate_context_event_payload(
         or any(not isinstance(reason, str) or not reason or len(reason) > 240 for reason in reasons)
     ):
         raise ValueError("context compression metadata is invalid")
-    if compressed and not (
-        payload["dropped_fragment_ids"] or payload["compression_reasons"]
-    ):
+    if compressed and not (payload["dropped_fragment_ids"] or payload["compression_reasons"]):
         raise ValueError("compressed context has no recorded loss")
     return step
 
@@ -461,9 +456,12 @@ def _validate_trace_semantics(
                 last_context_step != context_step or last_context_kind != "context.assembled"
             ):
                 raise ValueError("context compression ordering is invalid")
-            if kind == "context.assembled" and context_step in context_steps and not (
-                context_step in model_steps
-                and payload.get("actual_prompt_tokens") is not None
+            if (
+                kind == "context.assembled"
+                and context_step in context_steps
+                and not (
+                    context_step in model_steps and payload.get("actual_prompt_tokens") is not None
+                )
             ):
                 raise ValueError("context assembly is duplicated")
             context_steps.add(context_step)
@@ -1232,11 +1230,7 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
         return fallback("runtime returned invalid evidence")
     try:
         context_evidence = _safe_context_evidence(
-            {
-                field: evidence[field]
-                for field in _CONTEXT_EVIDENCE_FIELDS
-                if field in evidence
-            }
+            {field: evidence[field] for field in _CONTEXT_EVIDENCE_FIELDS if field in evidence}
             if any(field in evidence for field in _CONTEXT_EVIDENCE_FIELDS)
             else {},
             status=str(evidence.get("status", "ok")),

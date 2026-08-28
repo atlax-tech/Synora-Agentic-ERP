@@ -13,9 +13,7 @@ COMPANY = "SYNORA-P1 Test Company"
 WAREHOUSE = "SYNORA-P1 Stores - SP1"
 GOAL = "ensure stock for SYNORA-P1-Item-1001 for the next quarter"
 CORRELATION_ID = "3f4a5b6c-7d8e-4f90-a1b2-c3d4e5f6a7b8"
-PLAN_PROFILE_HASH = (
-    "0e7cb90710391876819feb3b1fb92e0d72748406dec237a38c587c77c10a47f0"
-)
+PLAN_PROFILE_HASH = "0e7cb90710391876819feb3b1fb92e0d72748406dec237a38c587c77c10a47f0"
 
 
 class TestPlanRun(FrappeTestCase):

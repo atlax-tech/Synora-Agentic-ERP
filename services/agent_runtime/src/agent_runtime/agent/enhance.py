@@ -204,6 +204,7 @@ def _make_evidence(
         context_result,
         actual_prompt_tokens=actual_prompt_tokens,
     )
+
     def metadata_int(key: str, default: int = 0) -> int:
         value = metadata.get(key, default)
         return value if isinstance(value, int) and not isinstance(value, bool) else default
@@ -214,9 +215,7 @@ def _make_evidence(
 
     def metadata_strings(key: str) -> tuple[str, ...]:
         value = metadata.get(key, ())
-        if not isinstance(value, (list, tuple)) or not all(
-            isinstance(item, str) for item in value
-        ):
+        if not isinstance(value, (list, tuple)) or not all(isinstance(item, str) for item in value):
             return ()
         return tuple(value)
 
@@ -287,9 +286,7 @@ async def enhance_plan(
     except ProviderError as error:
         elapsed_ms = int((monotonic() - started) * 1000)
         try:
-            context_result = record_provider_prompt_tokens(
-                context_result, error.prompt_tokens
-            )
+            context_result = record_provider_prompt_tokens(context_result, error.prompt_tokens)
         except ContextBuildError as context_error:
             context_result = context_error.result or context_result
             status = (
@@ -315,9 +312,7 @@ async def enhance_plan(
         )
     elapsed_ms = int((monotonic() - started) * 1000)
     try:
-        context_result = record_provider_prompt_tokens(
-            context_result, response.prompt_tokens
-        )
+        context_result = record_provider_prompt_tokens(context_result, response.prompt_tokens)
     except ContextBuildError as error:
         status = (
             "fallback_context_budget"

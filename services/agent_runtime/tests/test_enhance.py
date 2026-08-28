@@ -158,9 +158,7 @@ def test_enhance_falls_back_on_provider_error() -> None:
             del messages, tools, model, max_tokens
             raise ProviderError("down")
 
-    text, evidence = _run(
-        enhance_plan(PLAN, _BoomProvider(), context_environ=CONTEXT_ENV)
-    )
+    text, evidence = _run(enhance_plan(PLAN, _BoomProvider(), context_environ=CONTEXT_ENV))
     assert text == PLAN["summary"]
     assert evidence.status == "fallback_error"
     assert "down" in str(evidence.fallback_reason)
@@ -177,9 +175,7 @@ def test_enhance_preserves_rejected_provider_usage() -> None:
                 reasoning_tokens=210,
             )
 
-    text, evidence = _run(
-        enhance_plan(PLAN, _OverBudgetProvider(), context_environ=CONTEXT_ENV)
-    )
+    text, evidence = _run(enhance_plan(PLAN, _OverBudgetProvider(), context_environ=CONTEXT_ENV))
     assert text == PLAN["summary"]
     assert evidence.status == "fallback_error"
     assert evidence.prompt_tokens == 10
