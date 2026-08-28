@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from agent_runtime.agent.contracts import StopCode, ToolName
 
@@ -68,6 +68,49 @@ class AgentEvaluationSet:
         )
 
 
+Phase7Variant = Literal[
+    "PROMPT_A",
+    "PROMPT_B",
+    "SKILLS_ON",
+    "SKILLS_OFF",
+    "CONTEXT_COMPRESSION",
+    "BUDGET_FAILURE",
+    "MALICIOUS_SKILL",
+]
+
+
+class Phase7EvaluationCase(_Strict):
+    schema_version: Literal["1"] = "1"
+    case_id: str
+    base_case_id: str
+    caller_allowlist: tuple[ToolName, ...]
+    variants: tuple[Phase7Variant, ...]
+    tags: tuple[str, ...] = ()
+
+    @staticmethod
+    def _validate_unique(values: tuple[str, ...], label: str) -> None:
+        if len(set(values)) != len(values):
+            raise ValueError(f"{label} must be unique")
+
+    @model_validator(mode="after")
+    def validate_phase7_case(self) -> Phase7EvaluationCase:
+        self._validate_unique(self.caller_allowlist, "caller_allowlist")
+        self._validate_unique(self.variants, "variants")
+        if not {"PROMPT_A", "PROMPT_B", "SKILLS_ON", "SKILLS_OFF"}.issubset(set(self.variants)):
+            raise ValueError("phase7 case is missing a required comparison variant")
+        return self
+
+
+@dataclass(frozen=True)
+class Phase7EvaluationSet:
+    cases: tuple[Phase7EvaluationCase, ...]
+
+    def filter_tags(self, tags: set[str]) -> Phase7EvaluationSet:
+        return Phase7EvaluationSet(
+            cases=tuple(case for case in self.cases if tags.issubset(set(case.tags)))
+        )
+
+
 def _load_case(path: Path) -> EvaluationCase:
     return EvaluationCase.model_validate_json(path.read_text(encoding="utf-8"))
 
@@ -84,6 +127,16 @@ def _load_agent_case(path: Path) -> AgentEvaluationCase:
 def load_agent_cases(directory: Path = CASES_DIR) -> AgentEvaluationSet:
     paths = sorted(directory.glob("p4-*.json"))
     return AgentEvaluationSet(cases=tuple(_load_agent_case(path) for path in paths))
+
+
+def load_phase7_cases(directory: Path = CASES_DIR) -> Phase7EvaluationSet:
+    paths = sorted(directory.glob("p7-*.json"))
+    return Phase7EvaluationSet(
+        cases=tuple(
+            Phase7EvaluationCase.model_validate_json(path.read_text(encoding="utf-8"))
+            for path in paths
+        )
+    )
 
 
 class WorkflowObservation(_Strict):

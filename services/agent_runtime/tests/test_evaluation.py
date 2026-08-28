@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from agent_runtime.evaluation.loader import load_agent_cases, load_cases
+from agent_runtime.evaluation.loader import load_agent_cases, load_cases, load_phase7_cases
 
 CASES_DIR = Path(__file__).parent.parent / "src" / "agent_runtime" / "evaluation" / "cases"
 
@@ -57,6 +57,18 @@ def test_phase4_filter_tags_is_deterministic() -> None:
     filtered = evaluation.filter_tags({"security"})
     assert filtered.cases
     assert all("security" in case.tags for case in filtered.cases)
+
+
+def test_loads_phase7_comparison_cases_with_fixed_phase4_bases() -> None:
+    evaluation = load_phase7_cases(CASES_DIR)
+
+    assert {case.base_case_id for case in evaluation.cases} == {
+        "P4-G01-observation-driven-second-tool",
+        "P4-G08-malicious-observation",
+    }
+    assert all(case.schema_version == "1" for case in evaluation.cases)
+    assert all("PROMPT_A" in case.variants for case in evaluation.cases)
+    assert all("SKILLS_ON" in case.variants for case in evaluation.cases)
 
 
 # G02 的规则是：Agent 调用 stock.projected，第二次又用完全相同的参数调用它时，

@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "case_id": "P7-G01-prompt-context-skills",
+  "base_case_id": "P4-G01-observation-driven-second-tool",
+  "caller_allowlist": [
+    "item.lookup",
+    "supplier.lookup",
+    "stock.projected",
+    "demand.open",
+    "material_request.open",
+    "purchase_order.open"
+  ],
+  "variants": [
+    "PROMPT_A",
+    "PROMPT_B",
+    "SKILLS_ON",
+    "SKILLS_OFF",
+    "CONTEXT_COMPRESSION",
+    "BUDGET_FAILURE",
+    "MALICIOUS_SKILL"
+  ],
+  "tags": ["phase7", "normal", "same-task"]
+}
