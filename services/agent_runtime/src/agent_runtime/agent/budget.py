@@ -101,11 +101,15 @@ def pricing_from_environment(
     )
 
 
-def estimate_input_tokens(
+def estimate_input_units(
     messages: Sequence[ProviderMessage],
     tools: Sequence[ProviderToolSpec],
 ) -> int:
-    """Use UTF-8 bytes as a conservative upper bound before a paid call."""
+    """Use UTF-8 bytes as a conservative estimate before a provider call.
+
+    This is intentionally named ``units``: it is not the provider's real
+    tokenizer and must never be presented as actual prompt-token usage.
+    """
     message_bytes = sum(
         len(canonical_json(message.model_dump(mode="json")).encode("utf-8")) for message in messages
     )
@@ -113,6 +117,14 @@ def estimate_input_tokens(
         len(canonical_json(tool.model_dump(mode="json")).encode("utf-8")) for tool in tools
     )
     return message_bytes + tool_bytes
+
+
+def estimate_input_tokens(
+    messages: Sequence[ProviderMessage],
+    tools: Sequence[ProviderToolSpec],
+) -> int:
+    """Backward-compatible alias for the preflight estimate."""
+    return estimate_input_units(messages, tools)
 
 
 @dataclass
@@ -159,9 +171,9 @@ class BudgetAccount:
             return "COST_BUDGET"
         if self.pricing is None:
             return None
-        input_tokens = estimate_input_tokens(messages, tools)
+        estimated_input_units = estimate_input_units(messages, tools)
         reservation = self.pricing.cost_microusd(
-            prompt_tokens=input_tokens,
+            prompt_tokens=estimated_input_units,
             completion_tokens=0,
             reasoning_tokens=0,
         ) + self.pricing.maximum_output_cost_microusd(self.limits.max_output_tokens)

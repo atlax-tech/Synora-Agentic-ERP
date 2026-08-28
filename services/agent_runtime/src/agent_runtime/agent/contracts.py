@@ -43,6 +43,8 @@ StopCode = Literal[
     "NO_PROGRESS",
     "TOKEN_BUDGET",
     "COST_BUDGET",
+    "CONTEXT_INVALID",
+    "CONTEXT_BUDGET",
     "WALL_TIME_BUDGET",
     "CANCELLED",
     "TOOL_NOT_ALLOWED",
