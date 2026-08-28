@@ -268,6 +268,15 @@ class TestAnalyzeRun(FrappeTestCase):
             result["final_answer"],
         )
 
+    def test_historical_prompt_v1_runtime_trace_remains_readable(self) -> None:
+        run_id = "37e1d8a5-1730-4ad0-bffd-217774ed9fab"
+        body = _runtime_failure_response(run_id)
+        body["prompt_schema_version"] = "1"
+
+        validated = _validate_agent_runtime_response(body, run_id)
+
+        self.assertEqual(validated["prompt_schema_version"], "1")
+
     def test_runtime_final_answer_rejects_unowned_or_tampered_evidence(self) -> None:
         run_id = "37e1d8a5-1730-4ad0-bffd-217774ed9fab"
         summary = "observed stock is 10"

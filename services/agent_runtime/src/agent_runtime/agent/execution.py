@@ -24,6 +24,7 @@ from agent_runtime.agent.contracts import (
 )
 from agent_runtime.agent.kernel import ToolAdapter, ToolExecutionFailure
 from agent_runtime.agent.native_tool_calling import READ_TOOL_NAMES, run_native_tool_calling
+from agent_runtime.agent.prompting import PROMPT_SCHEMA_VERSION as REGISTERED_PROMPT_SCHEMA_VERSION
 from agent_runtime.gateway import (
     GatewayClient,
     GatewayClientError,
@@ -40,7 +41,7 @@ from agent_runtime.providers import (
 )
 
 SCHEMA_VERSION: Literal["1"] = "1"
-PROMPT_SCHEMA_VERSION: Literal["1"] = "1"
+PROMPT_SCHEMA_VERSION: Literal["2"] = REGISTERED_PROMPT_SCHEMA_VERSION
 TOOL_SCHEMA_VERSION: Literal["1"] = "1"
 _TOOL_CALL_ADAPTER: TypeAdapter[ToolCall] = TypeAdapter(ToolCall)
 _SENSITIVE_KEYS = {"password", "secret", "token", "capability", "authorization", "cookie"}
@@ -82,7 +83,7 @@ class AgentExecuteResponse(StrictModel):
     schema_version: Literal["1"] = SCHEMA_VERSION
     provider: str = Field(min_length=1, max_length=120)
     model: str = Field(default="", max_length=200)
-    prompt_schema_version: Literal["1"] = PROMPT_SCHEMA_VERSION
+    prompt_schema_version: Literal["2"] = PROMPT_SCHEMA_VERSION
     tool_schema_version: Literal["1"] = TOOL_SCHEMA_VERSION
     result: RunResult
 

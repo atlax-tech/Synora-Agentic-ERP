@@ -17,6 +17,10 @@ from dataclasses import dataclass
 from time import monotonic
 from typing import Any
 
+from agent_runtime.agent.prompting import (
+    PLAN_ENHANCEMENT_PROFILE_ID,
+    build_prompt_messages,
+)
 from agent_runtime.providers import Provider, ProviderError, ProviderMessage
 
 # 模型输出上限 (成本护栏; 解释文本 256 token 足够)。
@@ -45,20 +49,14 @@ _INVENTED_SHORTAGE_TERMS = ("已缺货", "目前缺货", "严重缺货", "发生
 # 计划全部为缺货结论时, 文本声称供应过剩 -> 编造风险。
 _INVENTED_SURPLUS_TERMS = ("供应过剩", "完全不需要采购", "过剩")
 
-_SYSTEM_PROMPT = (
-    "你是采购助手。系统会给你一份由确定性软件生成的采购风险分析计划。"
-    "你的唯一任务是把它转成一段通俗、简洁的中文解释给用户看。"
-    "硬性规则: 不得生成、修改或推断任何数量、金额、日期、阈值或风险分类; "
-    "所有数字与结论必须原样来自输入计划; 只输出解释文本, 不要输出 JSON 或代码。"
-)
-
 
 def build_prompt(plan: dict[str, Any]) -> list[ProviderMessage]:
     """构造增强 prompt: 系统规则 + 确定性计划数据 (只读上下文)。"""
-    return [
-        ProviderMessage(role="system", content=_SYSTEM_PROMPT),
-        ProviderMessage(role="user", content=f"确定性计划数据:\n{plan!r}\n\n请给出解释:"),
-    ]
+    messages, _ = build_prompt_messages(
+        PLAN_ENHANCEMENT_PROFILE_ID,
+        user_content=f"确定性计划数据:\n{plan!r}\n\n请给出解释:",
+    )
+    return messages
 
 
 def _plan_numbers(plan: dict[str, Any]) -> set[str]:

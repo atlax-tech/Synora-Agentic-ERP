@@ -68,6 +68,8 @@ _RUNTIME_DEFAULT_URL = "http://127.0.0.1:8001"
 # 超时后回退确定性摘要。该上限不是成本上限, 成本仍由 max_tokens/usage 校验控制。
 _RUNTIME_TIMEOUT_SECONDS = 20.0
 _RUNTIME_RESPONSE_BYTES = 1_000_000
+_CURRENT_PROMPT_SCHEMA_VERSION = "2"
+_SUPPORTED_PROMPT_SCHEMA_VERSIONS = frozenset({"1", _CURRENT_PROMPT_SCHEMA_VERSION})
 _AGENT_FALLBACK_CODES = {
     "MODEL_ERROR",
     "REPEATED_CALL",
@@ -972,7 +974,7 @@ def _runtime_failure_response(
         "schema_version": "1",
         "provider": "runtime",
         "model": "",
-        "prompt_schema_version": "1",
+        "prompt_schema_version": _CURRENT_PROMPT_SCHEMA_VERSION,
         "tool_schema_version": "1",
         "result": {
             "schema_version": "1",
@@ -1014,11 +1016,13 @@ def _validate_agent_runtime_response(body: object, run_id: str) -> dict[str, Any
         "result",
     }:
         raise ValueError("runtime response shape is invalid")
-    if any(
-        body.get(name) != "1"
-        for name in ("schema_version", "prompt_schema_version", "tool_schema_version")
+    if (
+        body.get("schema_version") != "1"
+        or body.get("tool_schema_version") != "1"
+        or body.get("prompt_schema_version") not in _SUPPORTED_PROMPT_SCHEMA_VERSIONS
     ):
         raise ValueError("runtime response version is invalid")
+    prompt_schema_version = str(body["prompt_schema_version"])
     if not isinstance(body.get("provider"), str) or not isinstance(body.get("model"), str):
         raise ValueError("runtime provider metadata is invalid")
     result = body.get("result")
@@ -1143,7 +1147,7 @@ def _validate_agent_runtime_response(body: object, run_id: str) -> dict[str, Any
         "schema_version": "1",
         "provider": _safe_trace_text(body["provider"], 120),
         "model": _safe_trace_text(body["model"], 200),
-        "prompt_schema_version": "1",
+        "prompt_schema_version": prompt_schema_version,
         "tool_schema_version": "1",
         "result": {
             "stop_reason": {

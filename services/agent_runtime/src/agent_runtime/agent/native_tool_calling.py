@@ -38,6 +38,11 @@ from agent_runtime.agent.contracts import (
 )
 from agent_runtime.agent.guards import NoProgressGuard, RepeatedCallGuard, ToolFrequencyGuard
 from agent_runtime.agent.kernel import ToolAdapter, ToolExecutionFailure
+from agent_runtime.agent.prompting import (
+    NATIVE_AGENT_PROFILE_ID,
+    PromptVariant,
+    build_prompt_messages,
+)
 from agent_runtime.gateway import (
     ItemLookupInput,
     OpenDemandInput,
@@ -245,6 +250,7 @@ async def _run_native_tool_calling(
     pricing: Pricing | None = None,
     require_pricing: bool = False,
     clock: Callable[[], float] = monotonic,
+    prompt_variant: PromptVariant = "A",
 ) -> RunResult:
     """Execute one-at-a-time native tool calls with the P4.4 budget policy."""
     effective_limits = limits or NativeToolCallingLimits()
@@ -266,13 +272,11 @@ async def _run_native_tool_calling(
         },
     )
     tools = provider_tool_specs(allowed_tools)
-    messages: list[ProviderMessage] = [
-        ProviderMessage(
-            role="system",
-            content="Use one read-only function call or return typed final JSON.",
-        ),
-        ProviderMessage(role="user", content=goal),
-    ]
+    messages, _ = build_prompt_messages(
+        NATIVE_AGENT_PROFILE_ID,
+        variant=prompt_variant,
+        user_content=goal,
+    )
     observations: list[Observation] = []
     repeat_guard = RepeatedCallGuard()
     frequency_guard = ToolFrequencyGuard(max_calls_per_tool=effective_limits.max_calls_per_tool)
@@ -820,6 +824,7 @@ async def run_native_tool_calling(
     pricing: Pricing | None = None,
     require_pricing: bool = False,
     clock: Callable[[], float] = monotonic,
+    prompt_variant: PromptVariant = "A",
 ) -> RunResult:
     """Run native calling and always close provider/tool clients afterwards."""
     try:
@@ -835,6 +840,7 @@ async def run_native_tool_calling(
             pricing=pricing,
             require_pricing=require_pricing,
             clock=clock,
+            prompt_variant=prompt_variant,
         )
     finally:
         await _close_resource(provider)

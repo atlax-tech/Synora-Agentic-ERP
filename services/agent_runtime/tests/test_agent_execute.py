@@ -231,6 +231,7 @@ def test_execute_agent_observation_drives_second_different_tool(
     response = asyncio.run(execute_agent(AgentExecuteRequest.model_validate(_request_payload())))
 
     assert response.result.stop_reason.code == "FINAL_ANSWER"
+    assert response.prompt_schema_version == "2"
     assert [request.tool.name for request in gateway.requests] == [
         "item.lookup",
         "stock.projected",

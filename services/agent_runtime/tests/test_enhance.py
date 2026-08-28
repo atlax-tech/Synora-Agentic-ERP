@@ -45,6 +45,7 @@ def test_build_prompt_includes_deterministic_plan() -> None:
     assert messages[0].role == "system"
     assert "不得生成" in messages[0].content
     assert "SYNORA-P1-Item-1001" in messages[1].content
+    assert "output_contract" in messages[0].content
 
 
 def test_validate_accepts_explanation_with_known_numbers() -> None:
