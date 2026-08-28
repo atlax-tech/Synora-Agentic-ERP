@@ -120,7 +120,7 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "f9b5415ea892e6d6669b60d668642272e050709efb1e28313d31cb5b5a15250e"
+      "sha256": "65b32279818daa41d5280a6e54bfcd975d81800d33deb64867f1867ae5a5452d"
     },
     {
       "path": ".harness/unresolved.json",
@@ -216,7 +216,7 @@
       "path": "docs/development-log/20260827-Phase-6-开发日志.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "9bd6d237368bc3b5aad01ea4e3e5544fe48c2fe06ac53bde6291c8d19d6442fb"
+      "sha256": "97cfbb4d5d559bc22a0fac0fec0e15e186da69c87bba603f017b3ffe96c91f3a"
     },
     {
       "path": "docs/prompts/phase6-governed-first-writes/PROMPT_INDEX.md",
