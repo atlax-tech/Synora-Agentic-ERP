@@ -1,25 +1,25 @@
 {
   "captured_at": "2026-08-28T00:50:00+08:00",
-  "commit_under_test": "fa39582",
-  "business_code_revision": "f371b55",
-  "revalidated_at": "2026-08-28T13:28:05+08:00",
+  "commit_under_test": "2bbc442",
+  "business_code_revision": "2bbc442",
+  "revalidated_at": "2026-08-28T15:14:12+08:00",
   "revalidated_read_only": true,
   "revalidated_runs": {
     "successful_purchase_order_readback": {
-      "run_prefix": "7e61fc69",
+      "run_prefix": "ccacda63",
       "status": "已成功",
       "dialog_opened": true,
       "execute_button_count": 0,
       "reconcile_button_count": 0
     },
     "uncertain_purchase_order_readback": {
-      "run_prefix": "9dcd159f",
+      "run_prefix": "5e1a8a67",
       "status": "需要对账",
       "dialog_opened": true,
       "execute_button_count": 0,
       "reconcile_button_count": 1,
-      "reservation": "RECONCILIATION_REQUIRED",
-      "receipt": "RECONCILIATION_REQUIRED / UNCERTAIN_RESULT"
+      "reservation": "MANUAL_INTERVENTION",
+      "receipt": "MANUAL_INTERVENTION / UNCERTAIN_RESULT"
     }
   },
   "url": "http://127.0.0.1:8000/desk/runs",
@@ -30,7 +30,7 @@
   "cases": [
     {
       "name": "successful_purchase_order_readback",
-      "run_prefix": "83f706dd",
+      "run_prefix": "ccacda63",
       "status": "已成功",
       "action_status": "已执行并读回",
       "reservation": "SUCCEEDED",
@@ -41,23 +41,29 @@
       "line_amount": "200 CNY",
       "execute_button_count": 0,
       "reconcile_button_count": 0,
-      "screenshot": "phase6-po-success.png"
+      "screenshot": "phase6-po-fault-success.png",
+      "fault_scenario": "response_loss",
+      "fault_item": "SYNORA-P6-FAULT-a51c9fcc9e83",
+      "receipt_target": "PUR-ORD-2026-00235"
     },
     {
       "name": "uncertain_purchase_order_readback",
-      "run_prefix": "18baeafa",
+      "run_prefix": "5e1a8a67",
       "status": "需要对账",
-      "action_status": "已批准，待执行",
-      "reservation": "RECONCILIATION_REQUIRED",
-      "receipt": "RECONCILIATION_REQUIRED / UNCERTAIN_RESULT",
+      "action_status": "已过期",
+      "reservation": "MANUAL_INTERVENTION",
+      "receipt": "MANUAL_INTERVENTION / UNCERTAIN_RESULT",
       "target_doctype": "Purchase Order",
       "docstatus": null,
       "target_name": null,
       "erp_target_exists": false,
       "execute_button_count": 0,
       "reconcile_button_count": 1,
-      "retry_policy": "read-only reconciliation; no automatic write retry",
-      "screenshot": "phase6-po-reconciliation.png"
+      "retry_policy": "manual intervention; no automatic write retry",
+      "screenshot": "phase6-po-process-failure.png",
+      "fault_scenario": "process_failure",
+      "fault_item": "SYNORA-P6-FAULT-0ff693fe58ec",
+      "receipt_target": null
     }
   ],
   "credential_handling": "No cookies, local storage, passwords, or tokens were read or recorded."
