@@ -124,6 +124,17 @@ def _po_document(*, rate: object = "100", amount: object = "200") -> dict[str, o
     }
 
 
+def _po_document_with_material_request(
+    *, material_request: object = "MAT-MR-0001"
+) -> dict[str, object]:
+    document = _po_document()
+    items = list(document["items"])
+    item = dict(items[0])
+    item["material_request"] = material_request
+    document["items"] = [item]
+    return document
+
+
 def test_writer_reconstructs_only_the_approved_material_request_payload() -> None:
     action = _action()
     values = material_request_values(action)
@@ -208,6 +219,24 @@ def test_po_read_back_verifies_amount_as_qty_times_rate() -> None:
     assert verified["item_0.qty"] == "2"
     assert verified["item_0.rate"] == "100"
     assert verified["item_0.amount"] == "200"
+
+
+def test_po_read_back_verifies_optional_material_request_link() -> None:
+    raw = _po_action().to_dict()
+    payload = dict(raw["payload"])
+    item = dict(payload["items"][0])
+    item["material_request"] = "MAT-MR-0001"
+    payload["items"] = [item]
+    raw["payload"] = payload
+    raw.pop("proposal_digest", None)
+    action = build_proposed_action(raw)
+
+    verified = verify_purchase_order_read_back(action, _po_document_with_material_request())
+
+    assert verified["item_0.material_request"] == "MAT-MR-0001"
+    missing_link = _po_document()
+    with pytest.raises(ReadBackMismatch):
+        verify_purchase_order_read_back(action, missing_link)
 
 
 @pytest.mark.parametrize(

@@ -228,6 +228,103 @@ def _run_context(run: Any) -> RunContext:
     )
 
 
+def _load_readable_target(action: Any, target_name: str, actor: str) -> Any:
+    """Load one ERP target only after rechecking the actor's row-level scope.
+
+    ``frappe.get_doc`` is intentionally called only after an actor-scoped
+    ``get_list`` proves that the named parent is visible.  The parent query is
+    not enough for a governed action: company, warehouse, supplier and an
+    optional Material Request prerequisite are all rechecked through the
+    current session's permission query conditions before a cached result or a
+    reconciliation match can be returned.
+    """
+
+    target_doctype = ACTION_TARGET_DOCTYPES.get(str(action.action_type))
+    if target_doctype is None:
+        raise GatewayFault("INVALID_INPUT", "unsupported governed target", 400)
+    payload = action.payload
+    if not frappe.has_permission(target_doctype, "read", user=actor):
+        raise GatewayFault("PERMISSION_DENIED", "current ERP permission is insufficient", 403)
+
+    parent_rows = frappe.get_list(
+        target_doctype,
+        filters={"name": target_name, "company": payload["company"], "docstatus": 0},
+        fields=["name"],
+        user=actor,
+        limit=1,
+    )
+    if not parent_rows:
+        raise GatewayFault("PERMISSION_DENIED", "target is outside current ERP scope", 403)
+
+    company_rows = frappe.get_list(
+        "Company",
+        pluck="name",
+        filters={"name": payload["company"]},
+        user=actor,
+        limit=1,
+    )
+    if not company_rows:
+        raise GatewayFault("PERMISSION_DENIED", "target company is outside current ERP scope", 403)
+
+    warehouses = sorted({str(item["warehouse"]) for item in payload["items"]})
+    for warehouse in warehouses:
+        warehouse_rows = frappe.get_list(
+            "Warehouse",
+            pluck="name",
+            filters={
+                "name": warehouse,
+                "company": payload["company"],
+                "disabled": 0,
+            },
+            user=actor,
+            limit=1,
+        )
+        if not warehouse_rows:
+            raise GatewayFault(
+                "PERMISSION_DENIED", "target warehouse is outside current ERP scope", 403
+            )
+
+    if target_doctype == "Purchase Order":
+        supplier_rows = frappe.get_list(
+            "Supplier",
+            pluck="name",
+            filters={"name": payload["supplier"], "disabled": 0},
+            user=actor,
+            limit=1,
+        )
+        if not supplier_rows:
+            raise GatewayFault(
+                "PERMISSION_DENIED", "target supplier is outside current ERP scope", 403
+            )
+        for item in payload["items"]:
+            material_request = item.get("material_request")
+            if material_request:
+                prerequisite_rows = frappe.get_list(
+                    "Material Request",
+                    pluck="name",
+                    filters={
+                        "name": material_request,
+                        "company": payload["company"],
+                        "docstatus": ["<", 2],
+                    },
+                    user=actor,
+                    limit=1,
+                )
+                if not prerequisite_rows:
+                    raise GatewayFault(
+                        "PERMISSION_DENIED",
+                        "material request prerequisite is outside current ERP scope",
+                        403,
+                    )
+
+    try:
+        return frappe.get_doc(target_doctype, target_name)
+    except frappe.DoesNotExistError as error:
+        raise GatewayFault(
+            "UNCERTAIN_RESULT", "verified ERP outcome is unavailable", 503
+        ) from error
+
+
 def _move_run_to_executing(run: Any) -> Any:
     current = str(run.run_state)
     if current == "PROPOSED":
@@ -365,7 +462,7 @@ def _replay_success(
     if not receipt_name or not target_name:
         raise GatewayFault("UNCERTAIN_RESULT", "verified replay evidence is incomplete", 503)
     try:
-        target = frappe.get_doc(TARGET_DOCTYPE, target_name)
+        target = _load_readable_target(action, target_name, actor)
         verified = verify_material_request_read_back(action, target)
         receipt_doc = frappe.get_doc("Synora Execution Receipt", receipt_name)
     except frappe.DoesNotExistError as error:
@@ -537,7 +634,7 @@ def _reconciliation_candidates(
     matches: list[tuple[str, dict[str, Any]]] = []
     for name in names:
         try:
-            target = frappe.get_doc(TARGET_DOCTYPE, name)
+            target = _load_readable_target(action, name, actor)
             matches.append((name, verify_material_request_read_back(action, target)))
         except ReadBackMismatch, frappe.DoesNotExistError:
             continue

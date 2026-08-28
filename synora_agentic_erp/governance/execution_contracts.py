@@ -340,6 +340,19 @@ def verify_purchase_order_read_back(action: ProposedAction, doc: object) -> dict
         if actual_amount != expected_amount:
             raise ReadBackMismatch(f"{prefix}.amount does not match qty multiplied by rate")
         verified[f"{prefix}.amount"] = format(actual_amount.normalize(), "f")
+        expected_material_request = expected.get("material_request")
+        actual_material_request = str(_value(actual, "material_request") or "")
+        if expected_material_request is not None:
+            _same_text(
+                actual_material_request,
+                expected_material_request,
+                f"{prefix}.material_request",
+            )
+        elif actual_material_request:
+            raise ReadBackMismatch(
+                f"{prefix}.material_request was added outside the approved payload"
+            )
+        verified[f"{prefix}.material_request"] = actual_material_request
         if expected.get("description") is not None:
             _same_text(
                 _value(actual, "description"),

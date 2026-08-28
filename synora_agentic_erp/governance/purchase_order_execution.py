@@ -23,6 +23,7 @@ from synora_agentic_erp.governance.execution import (
     _insert_reservation,
     _lease_expired,
     _load_action_from_doc,
+    _load_readable_target,
     _move_run_to_executing,
     _now_timestamp,
     _persist_receipt,
@@ -123,7 +124,7 @@ def _replay_success(
     if not receipt_name or not target_name:
         raise GatewayFault("UNCERTAIN_RESULT", "verified replay evidence is incomplete", 503)
     try:
-        target = frappe.get_doc(TARGET_DOCTYPE, target_name)
+        target = _load_readable_target(action, target_name, actor)
         verified = verify_purchase_order_read_back(action, target)
         receipt_doc = frappe.get_doc("Synora Execution Receipt", receipt_name)
     except frappe.DoesNotExistError as error:
@@ -254,7 +255,7 @@ def _reconciliation_candidates(
     matches: list[tuple[str, dict[str, Any]]] = []
     for name in names:
         try:
-            target = frappe.get_doc(TARGET_DOCTYPE, name)
+            target = _load_readable_target(action, name, actor)
             matches.append((name, verify_purchase_order_read_back(action, target)))
         except ReadBackMismatch, frappe.DoesNotExistError:
             continue

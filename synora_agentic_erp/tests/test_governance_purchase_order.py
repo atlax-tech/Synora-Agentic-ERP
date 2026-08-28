@@ -260,6 +260,30 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
         self.assertEqual(second["target"]["name"], first["target"]["name"])
         self.assertEqual(second["receipt"]["receipt_id"], first["receipt"]["receipt_id"])
 
+    def test_same_key_replay_rechecks_current_row_scope_before_reading_target(self) -> None:
+        proposal, action = self._approved_action(self._new_item())
+        first = self._execute(proposal, action)
+        self.assertTrue(first["ok"], first)
+        target_name = str(first["target"]["name"])
+        original_get_list = frappe.get_list
+
+        def hide_target(doctype: str, *args: object, **kwargs: object) -> object:
+            filters = kwargs.get("filters")
+            if doctype == "Purchase Order" and isinstance(filters, dict):
+                if filters.get("name") == target_name:
+                    return []
+            return original_get_list(doctype, *args, **kwargs)
+
+        with patch("frappe.get_list", side_effect=hide_target):
+            response = self._execute(proposal, action)
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "PERMISSION_DENIED")
+        frappe.set_user("Administrator")
+        self.assertEqual(
+            frappe.db.count("Purchase Order", {"name": target_name}),
+            1,
+        )
+
     def test_viewer_cannot_execute_an_approved_buyer_action(self) -> None:
         proposal, action = self._approved_action(self._new_item())
         before = frappe.db.count("Purchase Order")
@@ -392,6 +416,54 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
         self.assertEqual(
             frappe.db.get_value("Synora Proposed Action", proposal["action_id"], "state"),
             "EXPIRED",
+        )
+
+    def test_material_request_prerequisite_is_critical_read_back_evidence(self) -> None:
+        item_code = self._new_item()
+        frappe.set_user("Administrator")
+        material_request = frappe.get_doc(
+            {
+                "doctype": "Material Request",
+                "naming_series": "MAT-MR-.YYYY.-",
+                "material_request_type": "Purchase",
+                "company": COMPANY,
+                "transaction_date": "2026-08-27",
+                "items": [
+                    {
+                        "item_code": item_code,
+                        "qty": 2,
+                        "warehouse": WAREHOUSE,
+                        "schedule_date": "2026-09-01",
+                    }
+                ],
+            }
+        ).insert(ignore_permissions=True)
+        frappe.db.commit()
+
+        proposal = self._proposal(item_code)
+        proposal["payload"]["items"][0]["material_request"] = str(material_request.name)
+        reviewed = evaluate_proposal(proposal)
+        self.assertTrue(reviewed["ok"], reviewed)
+        approved = decide_action(
+            str(proposal["action_id"]),
+            "ALLOW",
+            str(reviewed["action"]["proposal_digest"]),
+            "confirm the reviewed purchase order draft with prerequisite",
+            str(uuid4()),
+        )
+        self.assertTrue(approved["ok"], approved)
+        response = self._execute(proposal, approved["action"])
+
+        self.assertTrue(response["ok"], response)
+        target = frappe.get_doc("Purchase Order", response["target"]["name"])
+        self.assertEqual(target.items[0].material_request, material_request.name)
+        self.assertEqual(
+            json.loads(
+                frappe.get_doc(
+                    "Synora Execution Receipt", response["receipt"]["receipt_id"]
+                ).verified_fields_json
+            )["item_0.material_request"],
+            material_request.name,
         )
 
     def test_multiple_matching_drafts_become_manual_intervention(self) -> None:
