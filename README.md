@@ -242,9 +242,9 @@ Before a release or version update, an independent adversarial sub-agent must re
 - [x] Phase 1: unmodified Frappe/ERPNext v16 baseline and P2P business archaeology
 - [x] Phase 2: typed read-only ERP gateway
 - [x] Phase 3: read-only procurement Agent and FTS5 evaluation baseline
-- [ ] Phase 4: Agent execution kernel, native Tool Calling, stop governance, and first trajectory eval
-- [ ] Phase 5: durable workflow, Plan-and-Execute, checkpoint, HITL, and recovery
-- [ ] Phase 6: governed MR/PO Draft actions, approval, idempotency, receipt, and reconciliation
+- [x] Phase 4: Agent execution kernel, native Tool Calling, stop governance, and first trajectory eval
+- [x] Phase 5: durable workflow, Plan-and-Execute, checkpoint, HITL, and recovery
+- [x] Phase 6: governed MR/PO Draft actions, approval, idempotency, receipt, and reconciliation
 - [ ] Phase 7: Prompt, Context Engineering, and Skills
 - [ ] Phase 8: Memory, RAG, and Contextual ERP Coach
 - [ ] Phase 9: Multi-Agent, MCP, and A2A experiments with evidence-gated adoption
