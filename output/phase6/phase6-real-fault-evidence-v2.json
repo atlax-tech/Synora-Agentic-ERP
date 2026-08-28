@@ -1,10 +1,10 @@
 {
   "schema_version": "1",
   "artifact": "phase6-real-fault-evidence-v2",
-  "captured_at": "2026-08-28T07:40:53+00:00",
-  "business_code_revision": "99fafb7",
-  "harness_revision": "99fafb7",
-  "commit_under_test": "99fafb7",
+  "captured_at": "2026-08-28T07:50:11+00:00",
+  "business_code_revision": "a36197c",
+  "harness_revision": "a36197c",
+  "commit_under_test": "a36197c",
   "base_url": "http://127.0.0.1:8000",
   "site": "dev.localhost",
   "actor": "synora-p1-buyer@dev.localhost",
@@ -12,24 +12,24 @@
   "cases": [
     {
       "case": "post_commit_http_response_loss",
-      "observed_at": "2026-08-28T07:40:55+00:00",
-      "item_code": "SYNORA-P6-FAULT-fbc994c1abc0",
-      "action_id": "6b3c1dc3-6ab8-47fe-b356-c2482f91e9fb",
-      "idempotency_key": "p6-fault-81fa7c7d18344f5d8497e9a05bc0bf86",
+      "observed_at": "2026-08-28T07:50:14+00:00",
+      "item_code": "SYNORA-P6-FAULT-39d384ab661e",
+      "action_id": "ee8dc8db-b9a6-4a72-aa9f-b3691226eccc",
+      "idempotency_key": "p6-fault-2e2a85d6ed7945409ae0bcac3f009eca",
       "proxy_upstream_response_bytes": 4243,
       "client_transport_error": "ConnectionError",
       "after_loss": {
-        "action_id": "6b3c1dc3-6ab8-47fe-b356-c2482f91e9fb",
+        "action_id": "ee8dc8db-b9a6-4a72-aa9f-b3691226eccc",
         "action_state": "EXECUTED",
-        "item_code": "SYNORA-P6-FAULT-fbc994c1abc0",
+        "item_code": "SYNORA-P6-FAULT-39d384ab661e",
         "po_count": 1,
         "po_docs": [
           {
             "amount": "200.0",
             "company": "SYNORA-P1 Test Company",
             "docstatus": 0,
-            "item_code": "SYNORA-P6-FAULT-fbc994c1abc0",
-            "name": "PUR-ORD-2026-00248",
+            "item_code": "SYNORA-P6-FAULT-39d384ab661e",
+            "name": "PUR-ORD-2026-00273",
             "qty": "2.0",
             "rate": "100.0",
             "supplier": "SYNORA-P1-Supplier-1"
@@ -38,36 +38,36 @@
         "receipt": {
           "failure_category": null,
           "final_state": "SUCCEEDED",
-          "receipt_id": "e7fb92f0-e4ac-48d6-bcfc-ae42f6e91e43",
+          "receipt_id": "aaa5a0d3-a5e7-4f05-8d0d-660923317a86",
           "response_category": "ERP_SUCCESS",
-          "target_name": "PUR-ORD-2026-00248"
+          "target_name": "PUR-ORD-2026-00273"
         },
         "reservation": {
           "attempt": 1,
           "failure_category": null,
-          "lease_expires_at": "2026-08-28T07:45:53Z",
-          "receipt": "e7fb92f0-e4ac-48d6-bcfc-ae42f6e91e43",
-          "reservation_id": "cffdef13-0f2a-4059-85e5-7d969ba371b5",
+          "lease_expires_at": "2026-08-28T07:55:12Z",
+          "receipt": "aaa5a0d3-a5e7-4f05-8d0d-660923317a86",
+          "reservation_id": "f2df68be-0eca-4d4c-8fc1-8c06838cc347",
           "response_category": "ERP_SUCCESS",
           "status": "SUCCEEDED",
-          "target_name": "PUR-ORD-2026-00248"
+          "target_name": "PUR-ORD-2026-00273"
         },
         "run_state": "SUCCEEDED"
       },
       "replay_http_status": 200,
-      "replay_target_name": "PUR-ORD-2026-00248",
+      "replay_target_name": "PUR-ORD-2026-00273",
       "after_replay": {
-        "action_id": "6b3c1dc3-6ab8-47fe-b356-c2482f91e9fb",
+        "action_id": "ee8dc8db-b9a6-4a72-aa9f-b3691226eccc",
         "action_state": "EXECUTED",
-        "item_code": "SYNORA-P6-FAULT-fbc994c1abc0",
+        "item_code": "SYNORA-P6-FAULT-39d384ab661e",
         "po_count": 1,
         "po_docs": [
           {
             "amount": "200.0",
             "company": "SYNORA-P1 Test Company",
             "docstatus": 0,
-            "item_code": "SYNORA-P6-FAULT-fbc994c1abc0",
-            "name": "PUR-ORD-2026-00248",
+            "item_code": "SYNORA-P6-FAULT-39d384ab661e",
+            "name": "PUR-ORD-2026-00273",
             "qty": "2.0",
             "rate": "100.0",
             "supplier": "SYNORA-P1-Supplier-1"
@@ -76,19 +76,19 @@
         "receipt": {
           "failure_category": null,
           "final_state": "SUCCEEDED",
-          "receipt_id": "e7fb92f0-e4ac-48d6-bcfc-ae42f6e91e43",
+          "receipt_id": "aaa5a0d3-a5e7-4f05-8d0d-660923317a86",
           "response_category": "ERP_SUCCESS",
-          "target_name": "PUR-ORD-2026-00248"
+          "target_name": "PUR-ORD-2026-00273"
         },
         "reservation": {
           "attempt": 1,
           "failure_category": null,
-          "lease_expires_at": "2026-08-28T07:45:53Z",
-          "receipt": "e7fb92f0-e4ac-48d6-bcfc-ae42f6e91e43",
-          "reservation_id": "cffdef13-0f2a-4059-85e5-7d969ba371b5",
+          "lease_expires_at": "2026-08-28T07:55:12Z",
+          "receipt": "aaa5a0d3-a5e7-4f05-8d0d-660923317a86",
+          "reservation_id": "f2df68be-0eca-4d4c-8fc1-8c06838cc347",
           "response_category": "ERP_SUCCESS",
           "status": "SUCCEEDED",
-          "target_name": "PUR-ORD-2026-00248"
+          "target_name": "PUR-ORD-2026-00273"
         },
         "run_state": "SUCCEEDED"
       },
@@ -97,27 +97,27 @@
     },
     {
       "case": "t1_worker_process_failure",
-      "observed_at": "2026-08-28T07:40:58+00:00",
-      "item_code": "SYNORA-P6-FAULT-6f789e3bf419",
-      "action_id": "fcff14d3-327d-4be0-b53a-73698fee088e",
-      "idempotency_key": "p6-fault-51907692372044bf9d52ec6f39b1e111",
+      "observed_at": "2026-08-28T07:50:17+00:00",
+      "item_code": "SYNORA-P6-FAULT-90ecbe507b26",
+      "action_id": "52dac035-249c-4709-9435-174ac25c862a",
+      "idempotency_key": "p6-fault-c608220c576a44dcb701e8d877b0c59c",
       "worker_exit_code": 137,
       "worker_marker": true,
-      "worker_exit_marker": "In [1]: P6_T1_COMMITTED_WORKER_EXIT pid=6083",
+      "worker_exit_marker": "In [1]: P6_T1_COMMITTED_WORKER_EXIT pid=6291",
       "post_crash_process_restart_observed": true,
       "after_crash": {
-        "action_id": "fcff14d3-327d-4be0-b53a-73698fee088e",
+        "action_id": "52dac035-249c-4709-9435-174ac25c862a",
         "action_state": "APPROVED",
-        "item_code": "SYNORA-P6-FAULT-6f789e3bf419",
+        "item_code": "SYNORA-P6-FAULT-90ecbe507b26",
         "po_count": 0,
         "po_docs": [],
         "receipt": null,
         "reservation": {
           "attempt": 1,
           "failure_category": null,
-          "lease_expires_at": "2026-08-28T07:40:56Z",
+          "lease_expires_at": "2026-08-28T07:50:15Z",
           "receipt": null,
-          "reservation_id": "d8487ae1-a37d-4753-897c-4f3eabbe2371",
+          "reservation_id": "38532852-f876-462b-9b36-dfc6d3996cde",
           "response_category": "ERP_SUCCESS",
           "status": "STARTED",
           "target_name": null
@@ -129,24 +129,24 @@
       "reconcile_result_status": "MANUAL_INTERVENTION",
       "reconcile_can_retry": false,
       "after_reconcile": {
-        "action_id": "fcff14d3-327d-4be0-b53a-73698fee088e",
+        "action_id": "52dac035-249c-4709-9435-174ac25c862a",
         "action_state": "EXPIRED",
-        "item_code": "SYNORA-P6-FAULT-6f789e3bf419",
+        "item_code": "SYNORA-P6-FAULT-90ecbe507b26",
         "po_count": 0,
         "po_docs": [],
         "receipt": {
           "failure_category": "RECONCILIATION_PENDING",
           "final_state": "MANUAL_INTERVENTION",
-          "receipt_id": "c5dcfc6b-f6ec-4bc1-9a3a-5f60dc090c04",
+          "receipt_id": "a713aeca-f6c4-4e3a-af3f-c2bacbd3badc",
           "response_category": "UNCERTAIN_RESULT",
           "target_name": null
         },
         "reservation": {
           "attempt": 1,
           "failure_category": "RECONCILIATION_PENDING",
-          "lease_expires_at": "2026-08-28T07:40:56Z",
-          "receipt": "c5dcfc6b-f6ec-4bc1-9a3a-5f60dc090c04",
-          "reservation_id": "d8487ae1-a37d-4753-897c-4f3eabbe2371",
+          "lease_expires_at": "2026-08-28T07:50:15Z",
+          "receipt": "a713aeca-f6c4-4e3a-af3f-c2bacbd3badc",
+          "reservation_id": "38532852-f876-462b-9b36-dfc6d3996cde",
           "response_category": "UNCERTAIN_RESULT",
           "status": "MANUAL_INTERVENTION",
           "target_name": null
@@ -156,24 +156,24 @@
       "same_action_retry_http_status": 409,
       "same_action_retry_code": "CONFLICT",
       "after_retry": {
-        "action_id": "fcff14d3-327d-4be0-b53a-73698fee088e",
+        "action_id": "52dac035-249c-4709-9435-174ac25c862a",
         "action_state": "EXPIRED",
-        "item_code": "SYNORA-P6-FAULT-6f789e3bf419",
+        "item_code": "SYNORA-P6-FAULT-90ecbe507b26",
         "po_count": 0,
         "po_docs": [],
         "receipt": {
           "failure_category": "RECONCILIATION_PENDING",
           "final_state": "MANUAL_INTERVENTION",
-          "receipt_id": "c5dcfc6b-f6ec-4bc1-9a3a-5f60dc090c04",
+          "receipt_id": "a713aeca-f6c4-4e3a-af3f-c2bacbd3badc",
           "response_category": "UNCERTAIN_RESULT",
           "target_name": null
         },
         "reservation": {
           "attempt": 1,
           "failure_category": "RECONCILIATION_PENDING",
-          "lease_expires_at": "2026-08-28T07:40:56Z",
-          "receipt": "c5dcfc6b-f6ec-4bc1-9a3a-5f60dc090c04",
-          "reservation_id": "d8487ae1-a37d-4753-897c-4f3eabbe2371",
+          "lease_expires_at": "2026-08-28T07:50:15Z",
+          "receipt": "a713aeca-f6c4-4e3a-af3f-c2bacbd3badc",
+          "reservation_id": "38532852-f876-462b-9b36-dfc6d3996cde",
           "response_category": "UNCERTAIN_RESULT",
           "status": "MANUAL_INTERVENTION",
           "target_name": null
