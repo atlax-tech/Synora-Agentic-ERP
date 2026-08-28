@@ -1,10 +1,10 @@
 # Phase 6 执行任务包 — 受治理的第一批 ERP 行动
 
-状态：`PLANNED / NOT_STARTED`。本任务包只定义执行、独立测试和独立审查契约；生成本文件不代表 Phase 6 已实现、测试或通过。
+状态：`IMPLEMENTED / EXIT_PENDING`。本任务包定义的 001–006 实现增量已经提交；本文件仍不单独代表阶段出口通过，最终 `COMPLETED / PASS` 必须以后续真实 ERP、故障、浏览器、Harness 和独立审查证据为准。
 
 主计划：`docs/PLAN.md#15-phase-6--受治理的第一批-erp-行动`
 
-主计划 SHA-256：`7028f35fef2b15b9da74540b47999c317f5c20d14ac87794225ef8e5476d3e50`
+主计划 SHA-256：`7e8688c65ada7968e920a1973cfa64c54edac6937b83be547a025ab4aa1728ba`
 
 ## 1. 本轮授权与不变边界
 
@@ -19,13 +19,15 @@
 
 ## 2. 已核验起点
 
-- `CONFIRMED`：Git 当前为 `main`，与 `origin/main` 对齐，生成任务包前工作区干净；HEAD 为 `51fcc15 docs(phase5): close harness exit gate`。
+- `HISTORICAL BASELINE`：生成任务包时 Git 为 `main`，与 `origin/main` 对齐且工作区干净；当时 HEAD 为 `51fcc15 docs(phase5): close harness exit gate`。
+- `CONFIRMED`（2026-08-28 收尾基线）：当前 `HEAD`、`main` 与 `origin/main` 均为 `9d104ab docs(phase6): record final regression evidence`，工作区干净；Phase 6 001–006 及其安全修复、浏览器 artifact 均已提交。
 - `CONFIRMED`：Phase 5 为 `COMPLETED / PASS`，最终独立对抗审查和 Harness 收尾已完成。
 - `CONFIRMED`：固定基线为 Frappe `6a329d068416768ec47ccd3326b9cc95a8d7bf99`、ERPNext `11e0ba0a1c45f217e2e73e885f699102d06da325`。
 - `CONFIRMED`：固定测试 site 当前没有 MR/PO Workflow；标准 DocPerm 允许 `Purchase User` 创建 MR/PO Draft，但这不等于审批策略已闭环。
 - `CONFIRMED`：产品基线规定 MR Draft 与 PO Draft 由发起人显式确认即可执行；更严格的 ERP Workflow 始终优先。
 - `UNRESOLVED`：具体企业 Workflow、角色映射、多级审批和金额阈值仍未由用户批准；见 `.harness/unresolved.json#approval-workflow-mapping`。
-- `CONFIRMED`：现有代码只提供只读 Gateway、Run 状态机、持久只读 workflow、Trace 和 UI；没有 Phase 6 ProposedAction/Approval/Receipt 写入能力。
+- `HISTORICAL BASELINE`：生成任务包时现有代码只提供只读 Gateway、Run 状态机、持久只读 workflow、Trace 和 UI；当时没有 Phase 6 ProposedAction/Approval/Receipt 写入能力。
+- `CONFIRMED`（当前收尾基线）：Phase 6 已实现 ProposedAction、Policy/Approval、MR/PO Draft writer、Reservation/Receipt、reconciliation 和 Runs 页面治理动作；PO Submit、后续 P2P 写操作与 generic writer 仍不可达。
 
 ## 3. 步骤顺序与提交边界
 
@@ -115,23 +117,23 @@
 
 ## 8. 来源指纹
 
-以下来源已由 `fingerprint_sources.py` 只读计算；任一关键来源变化时，不覆盖本任务包，先报告 drift 并提议新版本目录。
+以下来源已由 `fingerprint_sources.py` 只读计算并在 2026-08-28 收尾基线刷新；这些 hash 只证明来源版本，不替代真实测试或独立审查。任一关键来源再次变化时，不覆盖本任务包，先报告 drift 并提议新版本目录。
 
 | Source | SHA-256 |
 | --- | --- |
-| `.harness/unresolved.json` | `e30fbe606e44a0ddd63bdbb60e78e17a0c878ac1950d7781e660a85b1d45fc69` |
+| `.harness/unresolved.json` | `1bf48d8e3b2006d3d0c457272b3c119daa5bf1c24614e67c5433f37c5fcea2aa` |
 | `docs/ACCEPTANCE.md` | `b15181d21456722735bbca248ffb539c92ced35a12cfee529c3c40a24d2341a0` |
-| `docs/ARCHITECTURE.md` | `e975f1a1b69a16f758aafa12735ee528f50a1cabc308c471553da7960ea9234f` |
+| `docs/ARCHITECTURE.md` | `d491c3798463e6c9137ddc71f2fd730eae87f6dd2fce8785f0dc606da2e061b4` |
 | `docs/DESIGN.md` | `911a70a2afd3a5946f09967ea08f43e7721be6357a31551fa23a3f3271e1bf22` |
 | `docs/DEVELOPMENT.md` | `3f0f60442248e2add68a6013047457635675b3d0e5f3abe13183ae1a29830159` |
-| `docs/PLAN.md` | `7028f35fef2b15b9da74540b47999c317f5c20d14ac87794225ef8e5476d3e50` |
-| `docs/PRD.md` | `dfd14188d65aa30fbe72dcad454e5cf2bb88978d3d5d69da76343f6a30dc62d3` |
-| `docs/SPEC.md` | `ca79367ba00c69d06732796f1d90fab11e6774957efd76e8167e9d64cc22b213` |
+| `docs/PLAN.md` | `7e8688c65ada7968e920a1973cfa64c54edac6937b83be547a025ab4aa1728ba` |
+| `docs/PRD.md` | `8dde597d329a04ca5370b361b9759c83ffc33199faabc1bb961e04dee7ebc286` |
+| `docs/SPEC.md` | `3194accd8a843b23918e516823d8c3985a441f20708f52a977637d3f0a7e03e3` |
 | `docs/TESTING.md` | `de686677a52c297bfd63dce3e55de6ebe2a827c7df96e0ac2f9b1428b45e594f` |
 | `docs/decisions/ADR-0006-phase5-workflow-engine.md` | `e4cbf63d8802c5a97ba90276f008df5c1ced810de078d3a2508c4a791e7442ec` |
 | `docs/development-log/20260827-Phase-5-开发日志.md` | `6c805f96aad62135a868152c11737b655e303b12d49c9de19497d17e066e924d` |
-| `docs/erp-baselines/phase1-permission-workflow-baseline.md` | `40bc28f5b0278640cfa9886a52a63bdbaa30e8d66f857151ea46d5bc5ffe9e0c` |
-| `docs/source-maps/phase1-p2p-source-map.md` | `1cb6c13333f5a8e3fd438fb00094fb4ba3da1401e699c32126d170ad9bfaf99c` |
+| `docs/erp-baselines/phase1-permission-workflow-baseline.md` | `63e9bb56ba5a6ccb6ecf80f184b17fc8bb2fd3ddd31cf0917c322ad3eedf6f98` |
+| `docs/source-maps/phase1-p2p-source-map.md` | `c2331e58ce8979d431c5b64c4635b9f67df6041c9320291befb966809b9fc844` |
 | `docs/项目方向纠偏.md` | `c5b565bb3aeb042c58ac15de7ac8ac55265b82e0500ef6310305969f27cc3bb0` |
 
 ## 9. 手工接受本任务包

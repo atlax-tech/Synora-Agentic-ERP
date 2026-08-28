@@ -1,6 +1,6 @@
 # Architecture
 
-Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization; Phase 6–13 entries remain planned until their exit evidence exists.
+Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is present and in `IMPLEMENTED / EXIT_PENDING`; Phase 7–13 remain planned until their respective exit evidence exists.
 
 ## Architectural Style
 
@@ -82,7 +82,7 @@ The target Runtime supports three bounded modes selected by an evaluated router:
 | Bounded ReAct | Short tasks whose next read depends on an observation | Typed allowlist plus step, repetition, no-progress, token, cost, and time guards |
 | Plan-and-Execute with inner ReAct | Dependent tasks that may clarify, pause, recover, or replan | Versioned plan state, checkpoint, explicit approval boundary, deterministic writes |
 
-Phase 4 establishes the execution-kernel baseline. Phase 5 establishes durable workflow. ERP writes remain disabled until the Phase 6 governance gates pass.
+Phase 4 establishes the execution-kernel baseline. Phase 5 establishes durable workflow. Phase 6 implements the first governed MR/PO Draft writes behind identity, permission, policy, approval, snapshot, digest, idempotency, read-back, Receipt, and reconciliation gates; PO Submit and later P2P writes remain disabled.
 
 ## Upstream and Runtime Strategy
 

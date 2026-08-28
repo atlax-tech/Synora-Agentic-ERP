@@ -303,6 +303,8 @@
 
 必读：PRD F-004–F-008、SPEC 7–11、DESIGN 高风险交互、第一受控写入验收、固定 Workflow/权限证据。`approval-workflow-mapping` 未闭环时禁止开放写工具。
 
+实施状态（2026-08-28，出口验证中）：P6.1–P6.5 的治理记录、审批门禁、MR/PO Draft、幂等/对账和 Runs 页面增量已提交；当前处于 `IMPLEMENTED / EXIT_PENDING`。只有真实 ERP、故障恢复、浏览器验收、Harness drift 清零和最终独立对抗审查 `PASS` 后，才可标记 `COMPLETED / PASS` 并进入 Phase 7。
+
 - **P6.1 治理记录与映射**：完成 Workflow/Role/Permission 取证，实现版本化 ProposedAction、PolicyDecision、ApprovalDecision、ExecutionReceipt、digest 和合法状态转换。
 - **P6.2 决策与执行门禁**：按 schema → identity → permission → deterministic checks → Workflow/policy → snapshot/expiry/digest 执行，写入前全部重检。
 - **P6.3 MR Draft**：交付提议、人工确认/审批、幂等预留、ERP controller 创建、read-back 和 Receipt。
