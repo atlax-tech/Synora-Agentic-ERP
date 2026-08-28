@@ -1,0 +1,94 @@
+{
+  "schema_version": "1",
+  "verdict": "PASS",
+  "independent_role": "Phase 6 independent Test",
+  "reviewed_head": "0b8fd14",
+  "business_code_revision": "2bbc442",
+  "evidence_revision": "1f5521b",
+  "browser_evidence_revision": "223ae04",
+  "scope": "Phase 6 governed MR/PO Draft writes, reconciliation, recovery, visibility, and exit gates",
+  "commands": [
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/synora-uv-cache make format-check",
+      "exit_code": 0,
+      "evidence": "197 formatted"
+    },
+    {
+      "command": "make lint",
+      "exit_code": 0
+    },
+    {
+      "command": "make type",
+      "exit_code": 0,
+      "evidence": "75 files"
+    },
+    {
+      "command": "make unit",
+      "exit_code": 0,
+      "evidence": "272 passed; 2 existing FastAPI deprecation warnings"
+    },
+    {
+      "command": "make integration",
+      "exit_code": 0,
+      "evidence": "141/141; MR 16/16; PO 23/23"
+    },
+    {
+      "command": "uv run ... pytest -q env/dev/p6/test_approval_mapping_probe.py",
+      "exit_code": 0,
+      "evidence": "4 passed"
+    },
+    {
+      "command": "bench approval mapping probe",
+      "exit_code": 0,
+      "evidence": "fixed upstream pair; workflows/server_scripts/hooks empty; permission matrix and company scope verified"
+    },
+    {
+      "command": "fixed upstream SHA and clean worktree check",
+      "exit_code": 0
+    },
+    {
+      "command": "fault v2 schema assertions",
+      "exit_code": 0,
+      "evidence": "response-loss and process-failure assertions passed"
+    },
+    {
+      "command": "final Harness manifest/drift/reference/structure/health checks",
+      "exit_code": 0,
+      "evidence": "reference 453 checked / 0 broken; health 87/B; fail-below 80 passed"
+    },
+    {
+      "command": "git diff --check and worktree check",
+      "exit_code": 0,
+      "evidence": "clean"
+    }
+  ],
+  "security_evidence": {
+    "get_run_visibility": "PO/MR SUCCEEDED and RECONCILED_SUCCESS hidden exact targets return typed PERMISSION_DENIED with no governance, target_name, receipt, or verified_fields; visible targets return exact Receipt target",
+    "replay_drift": "PO/MR ReadBackMismatch maps to typed UNCERTAIN_RESULT; PO 222->222 and MR 233->233",
+    "different_digest": "PO/MR return CONFLICT with zero business-document growth",
+    "response_loss": "ConnectionError after upstream response capture; same-key replay returns same target and no second PO",
+    "process_failure": "worker exit 137 after durable STARTED; reconciliation becomes MANUAL_INTERVENTION, can_retry=false; same retry CONFLICT and no PO",
+    "approval_mapping": "Frappe 6a329d068416768ec47ccd3326b9cc95a8d7bf99 and ERPNext 11e0ba0a1c45f217e2e73e885f699102d06da325; no active workflows/server scripts/hooks",
+    "browser": "Buyer-only legal session; sidecar 223ae04 binds success ccacda63 and process-failure 5e1a8a67 with write_interactions=[]"
+  },
+  "risks": {
+    "p0": [],
+    "p1": [],
+    "p2": [
+      {
+        "risk": "No legal Viewer/cross-user browser session",
+        "owner": "Execute",
+        "trigger": "A legal Viewer session becomes available",
+        "retest": "Browser DOM plus hidden get_run/reconcile probes",
+        "mitigation": "Backend row-scope PERMISSION_DENIED and no-leak probes are complete; no credentials were guessed or read"
+      }
+    ],
+    "p3": []
+  },
+  "limitations": [
+    "The independent Test task could not access the in-app browser directly and relied on the current legal Buyer DOM facts and sidecar 223ae04.",
+    "The final independent adversarial Review remains a separate required gate."
+  ],
+  "erp_writes_by_test": false,
+  "secrets_read": false
+}
