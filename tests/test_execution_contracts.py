@@ -1,6 +1,6 @@
 """Pure contracts for the Phase 6 governed Draft executors."""
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -128,7 +128,7 @@ def _po_document_with_material_request(
     *, material_request: object = "MAT-MR-0001"
 ) -> dict[str, object]:
     document = _po_document()
-    items = list(document["items"])
+    items = cast(list[dict[str, object]], document["items"])
     item = dict(items[0])
     item["material_request"] = material_request
     document["items"] = [item]
