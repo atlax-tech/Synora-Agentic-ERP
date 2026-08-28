@@ -460,7 +460,11 @@ def _purchase_price_rate(
                 continue
             try:
                 row_rate = Decimal(str(getattr(row, "price_list_rate", "")))
-            except InvalidOperation, TypeError, ValueError:
+            except InvalidOperation:
+                continue
+            except TypeError:
+                continue
+            except ValueError:
                 continue
             if row_rate.is_finite() and row_rate > 0:
                 visible_rates.add(row_rate)
@@ -626,7 +630,13 @@ def _deterministic(action: Any, actor: str) -> GateResult:
             schedule = datetime.strptime(payload["schedule_date"], "%Y-%m-%d").date()
             if schedule < transaction_date:
                 return GateResult("FAIL", "schedule date precedes transaction date")
-    except InvalidOperation, TypeError, ValueError, KeyError:
+    except InvalidOperation:
+        return GateResult("FAIL", "deterministic payload checks failed")
+    except TypeError:
+        return GateResult("FAIL", "deterministic payload checks failed")
+    except ValueError:
+        return GateResult("FAIL", "deterministic payload checks failed")
+    except KeyError:
         return GateResult("FAIL", "deterministic payload checks failed")
     except Exception:
         return GateResult("UNKNOWN", "current ERP objects could not be verified")
