@@ -368,12 +368,16 @@ def _process_failure_case(session: requests.Session) -> dict[str, Any]:
     if not crashed:
         raise RuntimeError("fault worker did not prove T1 commit before process exit")
     after_crash = _snapshot(item_code, proposal["action_id"])
-    expire_output = _worker_call("expire_reservation", [proposal["action_id"]])
-    lease_forced_expired = "P6_LEASE_EXPIRED_FOR_READ_ONLY_RECONCILIATION" in expire_output
-    if not lease_forced_expired:
-        raise RuntimeError("test clock did not advance the STARTED reservation lease")
     reconcile = _reconcile(session, proposal, action)
     reconcile_body = _message(reconcile)
+    lease_expired_for_read_only_reconciliation = (
+        reconcile_body["result_status"] == "MANUAL_INTERVENTION"
+    )
+    if not lease_expired_for_read_only_reconciliation:
+        raise RuntimeError(
+            "zero-lease T1 failure did not become eligible for read-only reconciliation: "
+            + str(reconcile_body.get("result_status"))
+        )
     if reconcile_body["result_status"] != "MANUAL_INTERVENTION":
         raise RuntimeError(
             "expired worker failure did not converge to MANUAL_INTERVENTION: "
@@ -396,7 +400,7 @@ def _process_failure_case(session: requests.Session) -> dict[str, Any]:
         "worker_exit_code": 137,
         "worker_marker": crashed,
         "worker_exit_marker": worker_exit_marker,
-        "lease_forced_expired_for_read_only_reconciliation": lease_forced_expired,
+        "lease_expired_for_read_only_reconciliation": lease_expired_for_read_only_reconciliation,
         "after_crash": after_crash,
         "reconcile_http_status": reconcile.status_code,
         "reconcile_result_status": reconcile_body["result_status"],

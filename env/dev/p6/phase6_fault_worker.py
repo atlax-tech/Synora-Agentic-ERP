@@ -56,12 +56,13 @@ def crash_after_t1_commit(
 ) -> None:
     """Exit the worker immediately after its durable STARTED reservation commit."""
 
+    import synora_agentic_erp.governance.execution as governance_execution
     import synora_agentic_erp.governance.purchase_order_execution as execution
 
     # The zero-length lease makes the post-crash read-only reconciliation
     # immediately eligible.  This constant is changed only in this isolated
     # process; no production setting or HTTP argument controls it.
-    execution.LEASE_SECONDS = 0
+    governance_execution.LEASE_SECONDS = 0
     original_commit = frappe.db.commit
 
     def commit_then_crash(*args: Any, **kwargs: Any) -> Any:
@@ -82,27 +83,6 @@ def crash_after_t1_commit(
         idempotency_key,
         correlation_id,
     )
-
-
-def expire_reservation(action_id: str) -> None:
-    """Advance only test governance metadata so read-only reconciliation can run."""
-
-    reservation = frappe.get_last_doc("Synora Execution Reservation", filters={"action": action_id})
-    if str(reservation.status) != "STARTED":
-        raise RuntimeError("test reservation is not STARTED")
-    # This is an isolated test-clock operation after the worker has exited.
-    # ``lease_expires_at`` is immutable through the business DocType API; a
-    # direct metadata update is therefore the only way to model elapsed time
-    # without changing a production transition or touching ERP business data.
-    frappe.db.set_value(
-        "Synora Execution Reservation",
-        reservation.name,
-        "lease_expires_at",
-        "2000-01-01T00:00:00Z",
-        update_modified=False,
-    )
-    frappe.db.commit()
-    print("P6_LEASE_EXPIRED_FOR_READ_ONLY_RECONCILIATION", flush=True)
 
 
 def snapshot(item_code: str, action_id: str) -> None:
