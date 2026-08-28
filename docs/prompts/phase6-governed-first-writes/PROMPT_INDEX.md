@@ -1,10 +1,10 @@
 # Phase 6 执行任务包 — 受治理的第一批 ERP 行动
 
-状态：`IMPLEMENTED / EXIT_PENDING`。本任务包定义的 001–006 实现增量已经提交；本文件仍不单独代表阶段出口通过，最终 `COMPLETED / PASS` 必须以后续真实 ERP、故障、浏览器、Harness 和独立审查证据为准。
+状态：`COMPLETED / PASS`。本任务包定义的 001–006 实现增量、真实 ERP/故障/浏览器证据、Harness 五项、独立 Test 和最终独立对抗 Review 均已通过；Phase 7 状态为 `READY_NOT_STARTED`，本文件不授权任何 Phase 7 功能。
 
 主计划：`docs/PLAN.md#15-phase-6--受治理的第一批-erp-行动`
 
-主计划 SHA-256：`7e8688c65ada7968e920a1973cfa64c54edac6937b83be547a025ab4aa1728ba`
+主计划 SHA-256：`e495b898cf17e502730b2929b4048299013570474c3b25be728c6c97d58b5ea0`
 
 ## 1. 本轮授权与不变边界
 
@@ -14,18 +14,19 @@
 - 不修改上游 Frappe/ERPNext，不直写 ERP 数据库，不绕过 controller、permission、Workflow、validation 或审计。
 - Agent Runtime 继续不持有 ERP 任意写凭证；模型、检索、ERP 字段和用户文本都不能授权写入。
 - Phase 6 只开放 `create MR Draft` 与 `create PO Draft`。PO Submit、Receipt、Invoice、Payment 和 generic DocType write 继续不可达。
-- `approval-workflow-mapping` 在用户批准并形成可复验映射前，任何写工具、写 endpoint 和 UI 执行按钮都必须保持不可达。
+- `approval-workflow-mapping` 已由 ADR-0007 和固定 `dev.localhost` bench 只读证据确认；任何更严格或无法验证的企业 Workflow 仍优先并 fail closed，写工具、写 endpoint 和 UI 执行按钮不得据此扩权。
 - 不推送、不发布、不改写历史；每个步骤只提交一个可解释、可验证、可回滚的主业务结果，审查修复确有独立安全含义时才单独提交。
 
 ## 2. 已核验起点
 
 - `HISTORICAL BASELINE`：生成任务包时 Git 为 `main`，与 `origin/main` 对齐且工作区干净；当时 HEAD 为 `51fcc15 docs(phase5): close harness exit gate`。
-- `CONFIRMED`（2026-08-28 收尾基线）：当前 `HEAD`、`main` 与 `origin/main` 均为 `9d104ab docs(phase6): record final regression evidence`，工作区干净；Phase 6 001–006 及其安全修复、浏览器 artifact 均已提交。
+- `HISTORICAL BASELINE`：任务包生成时的收尾记录曾以 `9d104ab docs(phase6): record final regression evidence` 作为对齐起点；该描述只保留为历史生成基线，不代表当前 HEAD。
+- `CONFIRMED`（2026-08-28 最终业务基线）：业务代码冻结于 `a36197c`；独立 Test 以 clean `5125f01` 为复核基线，之后仅有文档、Harness 和 artifact 变更，最终工作区保持 clean。
 - `CONFIRMED`：Phase 5 为 `COMPLETED / PASS`，最终独立对抗审查和 Harness 收尾已完成。
 - `CONFIRMED`：固定基线为 Frappe `6a329d068416768ec47ccd3326b9cc95a8d7bf99`、ERPNext `11e0ba0a1c45f217e2e73e885f699102d06da325`。
 - `CONFIRMED`：固定测试 site 当前没有 MR/PO Workflow；标准 DocPerm 允许 `Purchase User` 创建 MR/PO Draft，但这不等于审批策略已闭环。
 - `CONFIRMED`：产品基线规定 MR Draft 与 PO Draft 由发起人显式确认即可执行；更严格的 ERP Workflow 始终优先。
-- `UNRESOLVED`：具体企业 Workflow、角色映射、多级审批和金额阈值仍未由用户批准；见 `.harness/unresolved.json#approval-workflow-mapping`。
+- `CONFIRMED`：固定 `dev.localhost` 的 Workflow/Role/Permission 映射由 ADR-0007 和 bench probe 复验；具体企业覆盖、多级审批和金额阈值超出固定站点范围时仍必须取得新映射并 fail closed，`.harness/unresolved.json` 保持已批准状态不变。
 - `HISTORICAL BASELINE`：生成任务包时现有代码只提供只读 Gateway、Run 状态机、持久只读 workflow、Trace 和 UI；当时没有 Phase 6 ProposedAction/Approval/Receipt 写入能力。
 - `CONFIRMED`（当前收尾基线）：Phase 6 已实现 ProposedAction、Policy/Approval、MR/PO Draft writer、Reservation/Receipt、reconciliation 和 Runs 页面治理动作；PO Submit、后续 P2P 写操作与 generic writer 仍不可达。
 

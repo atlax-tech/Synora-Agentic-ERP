@@ -33,9 +33,9 @@
 - 仓库是 `MANAGED_HARNESS`；产品、架构、设计、开发、测试、验收、Roadmap 和 SPEC 已建立；
 - Phase 0–Phase 3 的出口证据已经形成；Phase 3 交付的是只读采购 Agent，出口复核已通过；
 - Phase 4 已完成并由最新开发日志和启动包记录 `COMPLETED / PASS`；其只读执行内核、Trace、评测和安全证据以 `docs/development-log/20260826-Phase-4-开发日志.md`、`docs/phase4-kickoff.md` 和提交历史为准；
-- Phase 5 已完成 P5.1–P5.5 的实现增量，当前阶段状态为 `COMPLETED / PASS`：用户明确授权 Agent 全程接管代码编写，本阶段不创建 Assignment、不写学习笔记；阶段仍禁止 ERP 写工具，工作流 checkpoint 不得成为 Frappe/ERP 事实。真实 Frappe app-test、本地 Runtime 重启/恢复、对照证据、登录态浏览器全路径和 n8n LAB_ONLY import/execute/audit 验收已形成；n8n 官方 audit 对允许的 loopback HTTP Request 报告通用风险提示，已保留为取舍证据且不进入业务 Runtime；最终独立对抗审查第二轮为 `PASS`（第一轮发现的终态陈旧 checkpoint P1 已修复并复验）；Harness managed/source fingerprint drift 已按 `P5-HARNESS-CLOSE-20260827-v1` 同步并通过校验；不得进入 Phase 6；
+- Phase 5 已完成 P5.1–P5.5 的实现增量，当前阶段状态为 `COMPLETED / PASS`：用户明确授权 Agent 全程接管代码编写，本阶段不创建 Assignment、不写学习笔记；阶段仍禁止 ERP 写工具，工作流 checkpoint 不得成为 Frappe/ERP 事实。真实 Frappe app-test、本地 Runtime 重启/恢复、对照证据、登录态浏览器全路径和 n8n LAB_ONLY import/execute/audit 验收已形成；n8n 官方 audit 对允许的 loopback HTTP Request 报告通用风险提示，已保留为取舍证据且不进入业务 Runtime；最终独立对抗审查第二轮为 `PASS`（第一轮发现的终态陈旧 checkpoint P1 已修复并复验）；Harness managed/source fingerprint drift 已按 `P5-HARNESS-CLOSE-20260827-v1` 同步并通过校验；该阶段边界已闭合，Phase 6 另按本计划的受治理写入门禁执行；
 - 项目定位为“Agent 开发岗位学习仓库 + 真实 ERP 实践载体”；业务应用层与教学实验层共存于同一仓库和开发主线，不是两个仓库或长期分支；
-- `approval-workflow-mapping` 仍是启用 ERP 写入前的强制门禁，当前不得把 Proposed Action、Approval、Draft、Receipt 或其他写工具当作已实现能力；
+- `approval-workflow-mapping` 已按 ADR-0007 和固定 `dev.localhost` bench 的只读证据闭环：当前无 active Workflow、Server Script 或 hooks；Buyer/Approver/Receiver 与 Company-A scope 的 MR/PO 读写矩阵符合预期，Viewer/Accountant 不具备写权限。更严格或无法验证的企业 Workflow 仍优先并 fail closed；Phase 6 仅在该固定映射下开放受治理 MR/PO Draft。
 - Frappe/ERPNext 是只读上游依赖，不能修改其核心，也不能绕过其权限、校验、Workflow、事务和审计；
 - 当前工作应由最近开发日志、提交历史、测试输出、运行证据和阶段出口条件共同判定。
 
@@ -303,7 +303,7 @@
 
 必读：PRD F-004–F-008、SPEC 7–11、DESIGN 高风险交互、第一受控写入验收、固定 Workflow/权限证据。`approval-workflow-mapping` 未闭环时禁止开放写工具。
 
-实施状态（2026-08-28，出口验证中）：P6.1–P6.5 的治理记录、审批门禁、MR/PO Draft、幂等/对账和 Runs 页面增量已提交；当前处于 `IMPLEMENTED / EXIT_PENDING`。只有真实 ERP、故障恢复、浏览器验收、Harness drift 清零和最终独立对抗审查 `PASS` 后，才可标记 `COMPLETED / PASS` 并进入 Phase 7。
+实施状态（2026-08-28）：P6.1–P6.5 的治理记录、审批门禁、MR/PO Draft、幂等/对账和 Runs 页面增量已完成；固定真实 ERP、故障恢复、浏览器验收、Harness 五项和独立 Test 均通过，最终独立对抗 Review 明确返回 `PASS`。阶段状态为 `COMPLETED / PASS`；业务代码冻结于 `a36197c`，PO Submit、Receipt、Invoice、Payment、后续 P2P 写操作和 generic writer 仍不可达。Phase 7 仅标记 `READY_NOT_STARTED`，本阶段未实现任何 Phase 7 功能。
 
 - **P6.1 治理记录与映射**：完成 Workflow/Role/Permission 取证，实现版本化 ProposedAction、PolicyDecision、ApprovalDecision、ExecutionReceipt、digest 和合法状态转换。
 - **P6.2 决策与执行门禁**：按 schema → identity → permission → deterministic checks → Workflow/policy → snapshot/expiry/digest 执行，写入前全部重检。
@@ -316,6 +316,8 @@
 ## 16. Phase 7 — Prompt、Context Engineering 与 Skills
 
 必读：纠偏方案 Phase 7、PRD F-016、Phase 4–6 Trace/预算/安全证据。
+
+状态：`READY_NOT_STARTED`。Phase 6 已完成并停止在本阶段出口；除后续用户明确启动外，不实现、不验收或预先创建 Phase 7 功能与 Assignment。
 
 - **P7.1 Prompt 分层与版本**：区分边界、决策、恢复与输出契约，记录 version/hash 和单变量 A/B。
 - **P7.2 ContextBuilder**：实现 Gather/Select/Structure/Compress、JIT context、structured notes、summary 和 token budget，Trace 记录选择与丢失。

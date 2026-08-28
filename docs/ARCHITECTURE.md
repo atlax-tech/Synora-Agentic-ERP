@@ -1,6 +1,6 @@
 # Architecture
 
-Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is present and in `IMPLEMENTED / EXIT_PENDING`; Phase 7–13 remain planned until their respective exit evidence exists.
+Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is complete and its exit is `COMPLETED / PASS` after real ERP, fault, browser, Harness, independent Test, and adversarial Review evidence; Phase 7–13 remain planned, with Phase 7 `READY_NOT_STARTED` until its own user-triggered scope and exit evidence exist.
 
 ## Architectural Style
 
@@ -82,7 +82,7 @@ The target Runtime supports three bounded modes selected by an evaluated router:
 | Bounded ReAct | Short tasks whose next read depends on an observation | Typed allowlist plus step, repetition, no-progress, token, cost, and time guards |
 | Plan-and-Execute with inner ReAct | Dependent tasks that may clarify, pause, recover, or replan | Versioned plan state, checkpoint, explicit approval boundary, deterministic writes |
 
-Phase 4 establishes the execution-kernel baseline. Phase 5 establishes durable workflow. Phase 6 implements the first governed MR/PO Draft writes behind identity, permission, policy, approval, snapshot, digest, idempotency, read-back, Receipt, and reconciliation gates; PO Submit and later P2P writes remain disabled.
+Phase 4 establishes the execution-kernel baseline. Phase 5 establishes durable workflow. Phase 6 implements the first governed MR/PO Draft writes behind identity, permission, policy, approval, snapshot, digest, idempotency, read-back, Receipt, and reconciliation gates; real ERP and process-fault evidence, Buyer browser evidence, Harness checks, independent Test, and adversarial Review all passed. PO Submit and later P2P writes remain disabled, and stricter or unverifiable enterprise Workflow mappings remain fail-closed.
 
 ## Upstream and Runtime Strategy
 
