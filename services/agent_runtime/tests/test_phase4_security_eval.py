@@ -79,6 +79,7 @@ def _run(
             require_pricing=require_pricing,
             cancelled=cancelled,
             context_environ=context_environ,
+            skills_enabled=False,
         )
     )
 

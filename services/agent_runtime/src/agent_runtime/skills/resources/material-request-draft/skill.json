@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "id": "material-request-draft",
+  "version": "1.0.0",
+  "summary": "Strict read-only evidence outline for material-request preparation.",
+  "source": "repo:synora-agentic-erp/procurement",
+  "freedom": "STRICT",
+  "allowed_tools": ["material_request.open"],
+  "body_path": "SKILL.md",
+  "body_hash": "27b2f7d2d20b21e31c060a3199dc758617950346e11bfa288bb1341834f79d41",
+  "references": [
+    {
+      "path": "references/draft-fields.md",
+      "version": "1.0.0",
+      "task_profiles": ["MATERIAL_REQUEST_DRAFT"],
+      "required_tools": ["material_request.open"]
+    }
+  ],
+  "reference_hashes": {
+    "references/draft-fields.md": "07df50cbfd7e8d7fd24ddf79d7e6ada9498357db8b061dc47feef11bc3756b8a"
+  }
+}

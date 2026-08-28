@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "id": "duplicate-purchase-check",
+  "version": "1.0.0",
+  "summary": "Strict read-only open-document duplicate signal guidance.",
+  "source": "repo:synora-agentic-erp/procurement",
+  "freedom": "STRICT",
+  "allowed_tools": ["material_request.open", "purchase_order.open"],
+  "body_path": "SKILL.md",
+  "body_hash": "273614d59e99141c7a6847f154d63d1dc448e7c874c6878e5e1b6c455e9afc93",
+  "references": [
+    {
+      "path": "references/open-documents.md",
+      "version": "1.0.0",
+      "task_profiles": ["REPLENISHMENT_ANALYSIS"],
+      "required_tools": ["material_request.open", "purchase_order.open"]
+    }
+  ],
+  "reference_hashes": {
+    "references/open-documents.md": "63a984c2a364d2a15388c733d5e789561bbe41a91bf2afd868d6346c63b3f95e"
+  }
+}

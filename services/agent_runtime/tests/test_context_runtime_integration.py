@@ -58,6 +58,7 @@ def _run(
             allowed_tools=allowed_tools,
             context_environ=context_environ,
             limits=limits,
+            skills_enabled=False,
         )
     )
 

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1",
+  "id": "replenishment-analysis",
+  "version": "1.0.0",
+  "summary": "Bounded read-only projected-stock and demand investigation guidance.",
+  "source": "repo:synora-agentic-erp/procurement",
+  "freedom": "BOUNDED",
+  "allowed_tools": ["demand.open", "stock.projected"],
+  "body_path": "SKILL.md",
+  "body_hash": "287476d12e990b9092e8c6cf3928437ed403b10b281052c0df00ed709442aeb6",
+  "references": [
+    {
+      "path": "references/stock-policy.md",
+      "version": "1.0.0",
+      "task_profiles": ["REPLENISHMENT_ANALYSIS"],
+      "required_tools": ["stock.projected"]
+    },
+    {
+      "path": "references/lead-time.md",
+      "version": "1.0.0",
+      "task_profiles": ["REPLENISHMENT_FORECAST"],
+      "required_tools": []
+    }
+  ],
+  "reference_hashes": {
+    "references/stock-policy.md": "be2ea65f3a58744575cdde86e5bab409a461db0f7eea42e893ea21b35ced3e67",
+    "references/lead-time.md": "8365e100a6c027a599d7d52ff4de0b5dd3e492c299d4dfb3ffe6eaced0d2e67d"
+  }
+}

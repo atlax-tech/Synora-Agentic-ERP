@@ -441,6 +441,91 @@ class TestAnalyzeRun(FrappeTestCase):
         with self.assertRaises(ValueError):
             _validate_agent_runtime_response(body, run_id)
 
+    def test_prompt_v2_skill_event_requires_known_manifest_and_tool_subset(self) -> None:
+        run_id = "37e1d8a5-1730-4ad0-bffd-217774ed9fab"
+        body = _runtime_failure_response(run_id)
+        timestamp = body["result"]["events"][0]["timestamp"]
+        context_payload = {
+            "step": 1,
+            "context_builder_version": "1",
+            "instruction_schema_version": "2",
+            "instruction_profile_id": "native-agent",
+            "instruction_profile_hash": NATIVE_PROFILE_HASH,
+            "skill_refs": ["skill:duplicate-purchase-check:body"],
+            "selected_fragment_ids": ["goal:caller", "skill:duplicate-purchase-check:body"],
+            "dropped_fragment_ids": [],
+            "estimated_input_units_before": 900,
+            "estimated_input_units_after": 900,
+            "input_budget": 1_000,
+            "compression_reasons": [],
+            "effective_tool_names": ["material_request.open", "purchase_order.open"],
+        }
+        skill_payload = {
+            "step": 1,
+            "skill_id": "duplicate-purchase-check",
+            "skill_version": "1.0.0",
+            "skill_manifest_hash": (
+                "7dafd44000576e93f72a3f9c9e16b5cf0a1764b1aa04087dee45c959b53f7d69"
+            ),
+            "disclosure_level": 2,
+            "effective_tool_names": ["material_request.open", "purchase_order.open"],
+            "load_reason": "server task profile REPLENISHMENT_ANALYSIS; 0 triggered reference(s)",
+        }
+        events = body["result"]["events"]
+        body["result"]["events"] = [
+            events[0],
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 2,
+                "event_type": "skill.loaded",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": skill_payload,
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 3,
+                "event_type": "context.assembled",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": context_payload,
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 4,
+                "event_type": "model.requested",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"step": 1, "tool_count": 2},
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 5,
+                "event_type": "context.assembled",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {**context_payload, "actual_prompt_tokens": 900},
+            },
+            {
+                "schema_version": "1",
+                "run_id": run_id,
+                "sequence": 6,
+                "event_type": "run.stopped",
+                "timestamp": timestamp,
+                "payload_version": "1",
+                "payload": {"code": "MODEL_ERROR", "step": 1, "detail": "failed"},
+            },
+        ]
+        _validate_agent_runtime_response(body, run_id)
+
+        skill_payload["skill_manifest_hash"] = "f" * 64
+        with self.assertRaises(ValueError):
+            _validate_agent_runtime_response(body, run_id)
+
     def test_runtime_final_answer_rejects_unowned_or_tampered_evidence(self) -> None:
         run_id = "37e1d8a5-1730-4ad0-bffd-217774ed9fab"
         summary = "observed stock is 10"

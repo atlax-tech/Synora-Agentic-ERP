@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "id": "reconciliation",
+  "version": "1.0.0",
+  "summary": "Strict read-only procurement evidence reconciliation guidance.",
+  "source": "repo:synora-agentic-erp/procurement",
+  "freedom": "STRICT",
+  "allowed_tools": ["material_request.open", "purchase_order.open"],
+  "body_path": "SKILL.md",
+  "body_hash": "1e7629d1fe4496c5c0824a2cc274d11fa96619bd5ef98c64f83814644d8b0bcf",
+  "references": [
+    {
+      "path": "references/reconciliation-reads.md",
+      "version": "1.0.0",
+      "task_profiles": ["RECONCILIATION"],
+      "required_tools": ["material_request.open", "purchase_order.open"]
+    }
+  ],
+  "reference_hashes": {
+    "references/reconciliation-reads.md": "1a8db8497ed2b2fd079ad77b8e32150fe55dc9feeac11d946f7eeffb997d2b9b"
+  }
+}

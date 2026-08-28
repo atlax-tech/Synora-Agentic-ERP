@@ -81,6 +81,7 @@ def _run(
             require_pricing=require_pricing,
             clock=clock,
             context_environ=effective_context_environ,
+            skills_enabled=False,
         )
     )
 

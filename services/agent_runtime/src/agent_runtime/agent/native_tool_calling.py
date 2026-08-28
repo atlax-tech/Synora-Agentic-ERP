@@ -63,6 +63,7 @@ from agent_runtime.providers import (
     ProviderResponse,
     ProviderToolSpec,
 )
+from agent_runtime.skills.registry import SkillRegistry, SkillRegistryError, SkillSelection
 
 _NATIVE_PARSE_ERRORS = (ValueError, TypeError, ValidationError)
 
@@ -284,6 +285,7 @@ async def _run_native_tool_calling(
     clock: Callable[[], float] = monotonic,
     prompt_variant: PromptVariant = "A",
     context_environ: Mapping[str, str] | None = None,
+    skills_enabled: bool = True,
 ) -> RunResult:
     """Execute one-at-a-time native tool calls with the P4.4 budget policy."""
     effective_limits = limits or NativeToolCallingLimits()
@@ -306,6 +308,7 @@ async def _run_native_tool_calling(
     )
     tools = provider_tool_specs(allowed_tools)
     context_builder = ContextBuilder()
+    skill_registry: SkillRegistry | None = None
     messages: tuple[ProviderMessage, ...] = ()
     observations: list[Observation] = []
     repeat_guard = RepeatedCallGuard()
@@ -325,6 +328,23 @@ async def _run_native_tool_calling(
                 elapsed_ms=account.elapsed_ms(),
             )
         try:
+            if not skills_enabled:
+                skill_selection = SkillSelection((), (), ())
+            else:
+                if skill_registry is None:
+                    skill_registry = SkillRegistry()
+                skill_selection = skill_registry.load_for_task(
+                    NATIVE_TASK_PROFILE,
+                    allowed_tools=frozenset(allowed_tools),
+                )
+            for record in skill_selection.records:
+                recorder.add(
+                    "skill.loaded",
+                    {
+                        "step": step,
+                        **cast(dict[str, JsonValue], record.model_dump(mode="json")),
+                    },
+                )
             context_result = context_builder.build(
                 profile_id=NATIVE_AGENT_PROFILE_ID,
                 prompt_variant=prompt_variant,
@@ -333,9 +353,11 @@ async def _run_native_tool_calling(
                 tools=tools,
                 allowed_tools=frozenset(allowed_tools),
                 observations=observations,
+                selected_skill_fragments=skill_selection.skill_fragments,
+                reference_fragments=skill_selection.reference_fragments,
                 environ=context_environ,
             )
-        except ContextBuildError as error:
+        except (ContextBuildError, SkillRegistryError) as error:
             recorder.add(
                 "guard.checked",
                 {"step": step, "guard": error.code, "allowed": False},
@@ -934,6 +956,7 @@ async def run_native_tool_calling(
     clock: Callable[[], float] = monotonic,
     prompt_variant: PromptVariant = "A",
     context_environ: Mapping[str, str] | None = None,
+    skills_enabled: bool = True,
 ) -> RunResult:
     """Run native calling and always close provider/tool clients afterwards."""
     try:
@@ -951,6 +974,7 @@ async def run_native_tool_calling(
             clock=clock,
             prompt_variant=prompt_variant,
             context_environ=context_environ,
+            skills_enabled=skills_enabled,
         )
     finally:
         await _close_resource(provider)

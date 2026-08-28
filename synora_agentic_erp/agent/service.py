@@ -154,6 +154,18 @@ _CONTEXT_PROFILE_HASHES = {
         "0e7cb90710391876819feb3b1fb92e0d72748406dec237a38c587c77c10a47f0"
     ),
 }
+_CONTEXT_SKILL_HASHES = {
+    "duplicate-purchase-check": "7dafd44000576e93f72a3f9c9e16b5cf0a1764b1aa04087dee45c959b53f7d69",
+    "material-request-draft": "95d12ba3f1b5ec2c1d7fb666fd5836a6fdb9c832ff39c1e21a7d84313905bed9",
+    "reconciliation": "8951d6205d26ac1afeb57d9e43b12f7d2a9e750bbb1894a5a3bfc923db9b5d4f",
+    "replenishment-analysis": "14e9dd82a26ae1ebc114c422c0cd4c1dedc971fd9bddc54643e1aac2cedad3eb",
+}
+_CONTEXT_SKILL_TOOLS = {
+    "duplicate-purchase-check": frozenset({"material_request.open", "purchase_order.open"}),
+    "material-request-draft": frozenset({"material_request.open"}),
+    "reconciliation": frozenset({"material_request.open", "purchase_order.open"}),
+    "replenishment-analysis": frozenset({"demand.open", "stock.projected"}),
+}
 _CONTEXT_EVENT_FIELDS = frozenset(
     {
         "step",
@@ -415,11 +427,12 @@ def _validate_trace_semantics(
                 or step > 64
                 or not isinstance(skill_id, str)
                 or not _CONTEXT_FRAGMENT_ID.fullmatch(skill_id)
+                or skill_id not in _CONTEXT_SKILL_HASHES
                 or not isinstance(skill_version, str)
-                or not skill_version
-                or len(skill_version) > 40
+                or skill_version != "1.0.0"
                 or not isinstance(manifest_hash, str)
                 or not _CONTEXT_HASH.fullmatch(manifest_hash)
+                or manifest_hash != _CONTEXT_SKILL_HASHES[skill_id]
                 or not isinstance(disclosure_level, int)
                 or isinstance(disclosure_level, bool)
                 or disclosure_level not in {1, 2, 3}
@@ -430,6 +443,7 @@ def _validate_trace_semantics(
                     for name in effective_tool_names
                 )
                 or len(set(effective_tool_names)) != len(effective_tool_names)
+                or not set(effective_tool_names).issubset(_CONTEXT_SKILL_TOOLS[skill_id])
                 or not isinstance(load_reason, str)
                 or not load_reason
                 or len(load_reason) > 240
