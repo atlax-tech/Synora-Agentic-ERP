@@ -8,6 +8,7 @@ stored action and reaches ERPNext through the normal Document controller.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
@@ -29,6 +30,7 @@ from synora_agentic_erp.governance.execution_contracts import (
     map_execution_error,
     material_request_values,
     verify_material_request_read_back,
+    verify_purchase_order_read_back,
 )
 from synora_agentic_erp.governance.policy import (
     _actor,
@@ -325,6 +327,73 @@ def _load_readable_target(action: Any, target_name: str, actor: str) -> Any:
         ) from error
 
 
+def _serialize_receipt_for_actor(
+    action: Any,
+    reservation: Any | None,
+    receipt_doc: Any,
+    actor: str,
+    verifier: Callable[[Any, Any], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Serialize a Receipt only after rechecking its target for this actor.
+
+    Governance records are intentionally loaded with ignore_permissions by
+    their owner-scoped API paths. A Receipt that contains an ERP target is
+    different: its target name and verified fields are cached business facts,
+    so returning it requires a fresh actor-scoped ERP row query and read-back.
+    The reservation target is checked as well, preventing a stale reservation
+    field from bypassing the same gate.
+    """
+
+    reservation_target_name = str(getattr(reservation, "target_name", "") or "")
+    receipt_target_name = str(getattr(receipt_doc, "target_name", "") or "")
+    receipt_target_doctype = str(getattr(receipt_doc, "target_doctype", "") or "")
+    # Every reservation has a target_doctype before a writer runs; do not treat
+    # that non-sensitive discriminator as proof that a target exists.
+    has_cached_target = bool(
+        reservation_target_name or receipt_target_name or receipt_target_doctype
+    )
+    if has_cached_target:
+        expected_doctype = ACTION_TARGET_DOCTYPES.get(str(action.action_type))
+        if expected_doctype is None:
+            raise GatewayFault("UNCERTAIN_RESULT", "verified Receipt target is invalid", 503)
+        if not receipt_target_name or receipt_target_doctype != expected_doctype:
+            raise GatewayFault("UNCERTAIN_RESULT", "verified Receipt target is incomplete", 503)
+        if reservation_target_name and reservation_target_name != receipt_target_name:
+            raise GatewayFault(
+                "UNCERTAIN_RESULT",
+                "verified Receipt conflicts with reservation",
+                503,
+            )
+        if verifier is None:
+            if expected_doctype == TARGET_DOCTYPE:
+                verifier = verify_material_request_read_back
+            elif expected_doctype == "Purchase Order":
+                verifier = verify_purchase_order_read_back
+            else:  # pragma: no cover - ACTION_TARGET_DOCTYPES is closed above.
+                raise GatewayFault("UNCERTAIN_RESULT", "verified Receipt target is invalid", 503)
+        try:
+            target = _load_readable_target(action, receipt_target_name, actor)
+            verified = verifier(action, target)
+        except ReadBackMismatch as error:
+            raise GatewayFault(
+                "UNCERTAIN_RESULT", "ERP read-back no longer matches Receipt", 503
+            ) from error
+        try:
+            recorded = json.loads(receipt_doc.verified_fields_json)
+        except (TypeError, ValueError) as error:
+            raise GatewayFault(
+                "UNCERTAIN_RESULT", "verified Receipt evidence is invalid", 503
+            ) from error
+        if recorded != verified:
+            raise GatewayFault("UNCERTAIN_RESULT", "ERP read-back no longer matches Receipt", 503)
+    try:
+        return serialize_receipt(receipt_doc)
+    except (TypeError, ValueError) as error:
+        raise GatewayFault(
+            "UNCERTAIN_RESULT", "verified Receipt evidence is invalid", 503
+        ) from error
+
+
 def _move_run_to_executing(run: Any) -> Any:
     current = str(run.run_state)
     if current == "PROPOSED":
@@ -462,8 +531,6 @@ def _replay_success(
     if not receipt_name or not target_name:
         raise GatewayFault("UNCERTAIN_RESULT", "verified replay evidence is incomplete", 503)
     try:
-        target = _load_readable_target(action, target_name, actor)
-        verified = verify_material_request_read_back(action, target)
         receipt_doc = frappe.get_doc("Synora Execution Receipt", receipt_name)
     except frappe.DoesNotExistError as error:
         raise GatewayFault(
@@ -474,15 +541,19 @@ def _replay_success(
         or receipt_doc.target_name != target_name
     ):
         raise GatewayFault("UNCERTAIN_RESULT", "verified Receipt conflicts with target", 503)
-    if json.loads(receipt_doc.verified_fields_json) != verified:
-        raise GatewayFault("UNCERTAIN_RESULT", "ERP read-back no longer matches Receipt", 503)
+    serialized_receipt = _serialize_receipt_for_actor(
+        action,
+        reservation,
+        receipt_doc,
+        actor,
+    )
     _audit(run, str(reservation.correlation_id), "CACHED")
     frappe.db.commit()
     return _success_response(
         action_doc,
         run,
         reservation,
-        serialize_receipt(receipt_doc),
+        serialized_receipt,
         target_name,
     )
 
@@ -668,6 +739,20 @@ def _reconciliation_response(
     evidence: dict[str, Any],
     correlation_id: str,
 ) -> dict[str, Any]:
+    action = _load_action_from_doc(action_doc)
+    reservation_target_name = str(getattr(reservation, "target_name", "") or "")
+    if receipt_doc is None and reservation_target_name:
+        raise GatewayFault("UNCERTAIN_RESULT", "verified Receipt evidence is incomplete", 503)
+    serialized_receipt = (
+        _serialize_receipt_for_actor(
+            action,
+            reservation,
+            receipt_doc,
+            str(getattr(frappe.session, "user", "Guest") or "Guest"),
+        )
+        if receipt_doc is not None
+        else None
+    )
     return {
         "ok": True,
         "schema_version": "1",
@@ -681,7 +766,7 @@ def _reconciliation_response(
         },
         "action": serialize_action(action_doc),
         "reservation": _reservation_dict(reservation),
-        "receipt": serialize_receipt(receipt_doc) if receipt_doc is not None else None,
+        "receipt": serialized_receipt,
         "target": (
             {
                 "doctype": TARGET_DOCTYPE,

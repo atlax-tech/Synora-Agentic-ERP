@@ -8,7 +8,6 @@ path.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 from uuid import uuid4
 
@@ -34,6 +33,7 @@ from synora_agentic_erp.governance.execution import (
     _reservation_identity_matches,
     _run_context,
     _safe_key,
+    _serialize_receipt_for_actor,
     _update_reservation,
 )
 from synora_agentic_erp.governance.execution_contracts import (
@@ -55,7 +55,6 @@ from synora_agentic_erp.governance.policy import (
 )
 from synora_agentic_erp.governance.service import (
     serialize_action,
-    serialize_receipt,
     transition_action_state,
     transition_execution_receipt,
 )
@@ -124,8 +123,6 @@ def _replay_success(
     if not receipt_name or not target_name:
         raise GatewayFault("UNCERTAIN_RESULT", "verified replay evidence is incomplete", 503)
     try:
-        target = _load_readable_target(action, target_name, actor)
-        verified = verify_purchase_order_read_back(action, target)
         receipt_doc = frappe.get_doc("Synora Execution Receipt", receipt_name)
     except frappe.DoesNotExistError as error:
         raise GatewayFault(
@@ -136,15 +133,20 @@ def _replay_success(
         or receipt_doc.target_name != target_name
     ):
         raise GatewayFault("UNCERTAIN_RESULT", "verified Receipt conflicts with target", 503)
-    if json.loads(receipt_doc.verified_fields_json) != verified:
-        raise GatewayFault("UNCERTAIN_RESULT", "ERP read-back no longer matches Receipt", 503)
+    serialized_receipt = _serialize_receipt_for_actor(
+        action,
+        reservation,
+        receipt_doc,
+        actor,
+        verify_purchase_order_read_back,
+    )
     _audit(run, str(reservation.correlation_id), "CACHED")
     frappe.db.commit()
     return _success_response(
         action_doc,
         run,
         reservation,
-        serialize_receipt(receipt_doc),
+        serialized_receipt,
         target_name,
     )
 
@@ -272,6 +274,21 @@ def _reconciliation_response(
     evidence: dict[str, Any],
     correlation_id: str,
 ) -> dict[str, Any]:
+    action = _load_action_from_doc(action_doc)
+    reservation_target_name = str(getattr(reservation, "target_name", "") or "")
+    if receipt_doc is None and reservation_target_name:
+        raise GatewayFault("UNCERTAIN_RESULT", "verified Receipt evidence is incomplete", 503)
+    serialized_receipt = (
+        _serialize_receipt_for_actor(
+            action,
+            reservation,
+            receipt_doc,
+            str(getattr(frappe.session, "user", "Guest") or "Guest"),
+            verify_purchase_order_read_back,
+        )
+        if receipt_doc is not None
+        else None
+    )
     return {
         "ok": True,
         "schema_version": "1",
@@ -285,7 +302,7 @@ def _reconciliation_response(
         },
         "action": serialize_action(action_doc),
         "reservation": _reservation_dict(reservation),
-        "receipt": serialize_receipt(receipt_doc) if receipt_doc is not None else None,
+        "receipt": serialized_receipt,
         "target": (
             {"doctype": TARGET_DOCTYPE, "name": str(receipt_doc.target_name), "docstatus": 0}
             if receipt_doc is not None and receipt_doc.target_name

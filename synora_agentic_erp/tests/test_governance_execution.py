@@ -16,6 +16,7 @@ from synora_agentic_erp.api import (
     decide_action,
     evaluate_proposal,
     execute_material_request,
+    get_run,
     issue_run,
     reconcile_material_request,
 )
@@ -219,6 +220,117 @@ class TestGovernedMaterialRequestExecution(FrappeTestCase):  # type: ignore[misc
             frappe.db.count("Material Request", {"name": first["target"]["name"]}),
             1,
         )
+
+    def test_same_key_replay_read_back_drift_returns_typed_uncertain_result(self) -> None:
+        item_code = self._new_item()
+        proposal, action = self._approved_action(item_code)
+        first = self._execute(proposal, action)
+        self.assertTrue(first["ok"], first)
+        before = frappe.db.count("Material Request")
+
+        with patch(
+            "synora_agentic_erp.governance.execution.verify_material_request_read_back",
+            side_effect=ReadBackMismatch("forced replay drift"),
+        ):
+            second = self._execute(proposal, action)
+
+        self.assertFalse(second["ok"])
+        self.assertEqual(second["error"]["code"], "UNCERTAIN_RESULT")
+        frappe.set_user("Administrator")
+        self.assertEqual(frappe.db.count("Material Request"), before)
+
+    def test_finalized_reconcile_rechecks_current_row_scope_before_returning_receipt(self) -> None:
+        item_code = self._new_item()
+        proposal, action = self._approved_action(item_code)
+        first = self._execute(proposal, action)
+        self.assertTrue(first["ok"], first)
+        target_name = str(first["target"]["name"])
+        original_get_list = frappe.get_list
+
+        def hide_target(doctype: str, *args: object, **kwargs: object) -> object:
+            filters = kwargs.get("filters")
+            if doctype == "Material Request" and isinstance(filters, dict):
+                if filters.get("name") == target_name:
+                    return []
+            return original_get_list(doctype, *args, **kwargs)
+
+        with patch("frappe.get_list", side_effect=hide_target):
+            response = reconcile_material_request(
+                proposal["action_id"],
+                action["proposal_digest"],
+                proposal["idempotency_key"],
+                str(uuid4()),
+            )
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "PERMISSION_DENIED")
+        self.assertNotIn("target_name", response)
+        self.assertNotIn("receipt", response)
+
+    def test_reconciled_success_rechecks_current_row_scope_before_returning_receipt(self) -> None:
+        item_code = self._new_item()
+        proposal, action = self._uncertain_action(item_code)
+        target_name = self._create_fixture_draft(proposal)
+        frappe.set_user(BUYER)
+        with patch(
+            "synora_agentic_erp.governance.execution._lease_expired",
+            return_value=True,
+        ):
+            first = reconcile_material_request(
+                proposal["action_id"],
+                action["proposal_digest"],
+                proposal["idempotency_key"],
+                str(uuid4()),
+            )
+        self.assertTrue(first["ok"], first)
+        self.assertEqual(first["result_status"], "RECONCILED_SUCCESS")
+        self.assertEqual(first["target"]["name"], target_name)
+        original_get_list = frappe.get_list
+
+        def hide_target(doctype: str, *args: object, **kwargs: object) -> object:
+            filters = kwargs.get("filters")
+            if doctype == "Material Request" and isinstance(filters, dict):
+                if filters.get("name") == target_name:
+                    return []
+            return original_get_list(doctype, *args, **kwargs)
+
+        with patch("frappe.get_list", side_effect=hide_target):
+            response = reconcile_material_request(
+                proposal["action_id"],
+                action["proposal_digest"],
+                proposal["idempotency_key"],
+                str(uuid4()),
+            )
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "PERMISSION_DENIED")
+        self.assertNotIn("target_name", response)
+        self.assertNotIn("receipt", response)
+
+    def test_run_details_rechecks_current_row_scope_before_returning_receipt(self) -> None:
+        item_code = self._new_item()
+        proposal, action = self._approved_action(item_code)
+        first = self._execute(proposal, action)
+        self.assertTrue(first["ok"], first)
+        target_name = str(first["target"]["name"])
+
+        frappe.set_user(BUYER)
+        visible = get_run(proposal["run_id"])
+        self.assertTrue(visible["ok"], visible)
+        self.assertEqual(visible["governance"][0]["receipt"]["target_name"], target_name)
+
+        original_get_list = frappe.get_list
+
+        def hide_target(doctype: str, *args: object, **kwargs: object) -> object:
+            filters = kwargs.get("filters")
+            if doctype == "Material Request" and isinstance(filters, dict):
+                if filters.get("name") == target_name:
+                    return []
+            return original_get_list(doctype, *args, **kwargs)
+
+        with patch("frappe.get_list", side_effect=hide_target):
+            hidden = get_run(proposal["run_id"])
+        self.assertFalse(hidden["ok"])
+        self.assertEqual(hidden["error"]["code"], "PERMISSION_DENIED")
+        self.assertNotIn("governance", hidden)
 
     def test_digest_conflict_is_rejected_before_reservation_or_business_write(self) -> None:
         item_code = self._new_item()

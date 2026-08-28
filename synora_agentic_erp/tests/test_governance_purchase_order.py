@@ -23,7 +23,10 @@ from synora_agentic_erp.api import (
     reconcile_purchase_order,
 )
 from synora_agentic_erp.governance.contracts import build_proposed_action
-from synora_agentic_erp.governance.execution_contracts import purchase_order_values
+from synora_agentic_erp.governance.execution_contracts import (
+    ReadBackMismatch,
+    purchase_order_values,
+)
 
 BUYER = "synora-p1-buyer@dev.localhost"
 VIEWER = "synora-p1-viewer@dev.localhost"
@@ -260,6 +263,23 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
         self.assertEqual(second["target"]["name"], first["target"]["name"])
         self.assertEqual(second["receipt"]["receipt_id"], first["receipt"]["receipt_id"])
 
+    def test_same_key_replay_read_back_drift_returns_typed_uncertain_result(self) -> None:
+        proposal, action = self._approved_action(self._new_item())
+        first = self._execute(proposal, action)
+        self.assertTrue(first["ok"], first)
+        before = frappe.db.count("Purchase Order")
+
+        with patch(
+            "synora_agentic_erp.governance.purchase_order_execution.verify_purchase_order_read_back",
+            side_effect=ReadBackMismatch("forced replay drift"),
+        ):
+            second = self._execute(proposal, action)
+
+        self.assertFalse(second["ok"])
+        self.assertEqual(second["error"]["code"], "UNCERTAIN_RESULT")
+        frappe.set_user("Administrator")
+        self.assertEqual(frappe.db.count("Purchase Order"), before)
+
     def test_same_key_replay_rechecks_current_row_scope_before_reading_target(self) -> None:
         proposal, action = self._approved_action(self._new_item())
         first = self._execute(proposal, action)
@@ -283,6 +303,54 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
             frappe.db.count("Purchase Order", {"name": target_name}),
             1,
         )
+
+    def test_finalized_reconcile_rechecks_current_row_scope_before_returning_receipt(self) -> None:
+        proposal, action = self._approved_action(self._new_item())
+        first = self._execute(proposal, action)
+        self.assertTrue(first["ok"], first)
+        target_name = str(first["target"]["name"])
+        original_get_list = frappe.get_list
+
+        def hide_target(doctype: str, *args: object, **kwargs: object) -> object:
+            filters = kwargs.get("filters")
+            if doctype == "Purchase Order" and isinstance(filters, dict):
+                if filters.get("name") == target_name:
+                    return []
+            return original_get_list(doctype, *args, **kwargs)
+
+        with patch("frappe.get_list", side_effect=hide_target):
+            response = self._reconcile(proposal, action)
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "PERMISSION_DENIED")
+        self.assertNotIn("target_name", response)
+        self.assertNotIn("receipt", response)
+
+    def test_reconciled_success_rechecks_current_row_scope_before_returning_receipt(self) -> None:
+        proposal, action = self._uncertain_action(self._new_item())
+        target_name = self._create_fixture_draft(proposal)
+        with patch(
+            "synora_agentic_erp.governance.purchase_order_execution._lease_expired",
+            return_value=True,
+        ):
+            first = self._reconcile(proposal, action)
+        self.assertTrue(first["ok"], first)
+        self.assertEqual(first["result_status"], "RECONCILED_SUCCESS")
+        self.assertEqual(first["target"]["name"], target_name)
+        original_get_list = frappe.get_list
+
+        def hide_target(doctype: str, *args: object, **kwargs: object) -> object:
+            filters = kwargs.get("filters")
+            if doctype == "Purchase Order" and isinstance(filters, dict):
+                if filters.get("name") == target_name:
+                    return []
+            return original_get_list(doctype, *args, **kwargs)
+
+        with patch("frappe.get_list", side_effect=hide_target):
+            response = self._reconcile(proposal, action)
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "PERMISSION_DENIED")
+        self.assertNotIn("target_name", response)
+        self.assertNotIn("receipt", response)
 
     def test_viewer_cannot_execute_an_approved_buyer_action(self) -> None:
         proposal, action = self._approved_action(self._new_item())
@@ -603,6 +671,32 @@ class TestGovernedPurchaseOrderExecution(FrappeTestCase):  # type: ignore[misc]
         direct = get_governed_action(proposal["action_id"])
         self.assertTrue(direct["ok"], direct)
         self.assertEqual(direct["action"]["calculation"]["total_amount"], "200")
+
+    def test_run_details_rechecks_current_row_scope_before_returning_receipt(self) -> None:
+        proposal, action = self._approved_action(self._new_item())
+        first = self._execute(proposal, action)
+        self.assertTrue(first["ok"], first)
+        target_name = str(first["target"]["name"])
+
+        frappe.set_user(BUYER)
+        visible = get_run(proposal["run_id"])
+        self.assertTrue(visible["ok"], visible)
+        self.assertEqual(visible["governance"][0]["receipt"]["target_name"], target_name)
+
+        original_get_list = frappe.get_list
+
+        def hide_target(doctype: str, *args: object, **kwargs: object) -> object:
+            filters = kwargs.get("filters")
+            if doctype == "Purchase Order" and isinstance(filters, dict):
+                if filters.get("name") == target_name:
+                    return []
+            return original_get_list(doctype, *args, **kwargs)
+
+        with patch("frappe.get_list", side_effect=hide_target):
+            hidden = get_run(proposal["run_id"])
+        self.assertFalse(hidden["ok"])
+        self.assertEqual(hidden["error"]["code"], "PERMISSION_DENIED")
+        self.assertNotIn("governance", hidden)
 
     def test_endpoint_is_identifier_only_and_writer_never_submits_or_uses_generic_payload(
         self,

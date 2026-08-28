@@ -52,6 +52,10 @@ from synora_agentic_erp.gateway.security import (
     revoke_run as revoke_server_run,
 )
 from synora_agentic_erp.governance.execution import (
+    _load_action_from_doc,
+    _serialize_receipt_for_actor,
+)
+from synora_agentic_erp.governance.execution import (
     execute_material_request as execute_material_request_impl,
 )
 from synora_agentic_erp.governance.execution import (
@@ -76,7 +80,6 @@ from synora_agentic_erp.governance.service import (
     serialize_action,
     serialize_approval_decision,
     serialize_policy_decision,
-    serialize_receipt,
 )
 
 # 未认证入口 (execute, allow_guest) 的安全事件日志预算: 每分钟最多记录条数,
@@ -714,7 +717,7 @@ def get_run(run_id: str) -> dict[str, Any]:
             approval = serialize_approval_decision(
                 frappe.get_doc("Synora Approval Decision", approval_rows[0].name)
             )
-        receipt = None
+        receipt_doc = None
         receipt_rows = frappe.get_all(
             "Synora Execution Receipt",
             filters={"action": action_doc.name},
@@ -724,9 +727,7 @@ def get_run(run_id: str) -> dict[str, Any]:
             ignore_permissions=True,
         )
         if receipt_rows:
-            receipt = serialize_receipt(
-                frappe.get_doc("Synora Execution Receipt", receipt_rows[0].name)
-            )
+            receipt_doc = frappe.get_doc("Synora Execution Receipt", receipt_rows[0].name)
         reservation_rows = frappe.get_all(
             "Synora Execution Reservation",
             filters={"action": action_doc.name},
@@ -782,6 +783,24 @@ def get_run(run_id: str) -> dict[str, Any]:
                     "correlation_id",
                 )
             }
+        if reservation is not None and reservation.get("target_name") and receipt_doc is None:
+            incomplete_fault = GatewayFault(
+                "UNCERTAIN_RESULT", "verified Receipt evidence is incomplete", 503
+            )
+            _set_status(incomplete_fault.status_code)
+            return error_response(incomplete_fault)
+        receipt = None
+        if receipt_doc is not None:
+            try:
+                receipt = _serialize_receipt_for_actor(
+                    _load_action_from_doc(action_doc),
+                    reservation_rows[0] if reservation_rows else None,
+                    receipt_doc,
+                    str(getattr(frappe.session, "user", "Guest") or "Guest"),
+                )
+            except GatewayFault as fault:
+                _set_status(fault.status_code)
+                return error_response(fault)
         governed.append(
             {
                 "action": action,
