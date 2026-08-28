@@ -1,8 +1,8 @@
 {
   "captured_at": "2026-08-28T00:50:00+08:00",
-  "commit_under_test": "99fafb7",
-  "business_code_revision": "99fafb7",
-  "revalidated_at": "2026-08-28T15:37:26+08:00",
+  "commit_under_test": "a36197c",
+  "business_code_revision": "a36197c",
+  "revalidated_at": "2026-08-28T15:53:12+08:00",
   "latest_code_revalidation": {
     "python_compile": "passed",
     "format_lint_type_unit": "passed",
@@ -11,14 +11,14 @@
   "revalidated_read_only": true,
   "revalidated_runs": {
     "successful_purchase_order_readback": {
-      "run_prefix": "ccacda63",
+      "run_prefix": "d5187411",
       "status": "已成功",
       "dialog_opened": true,
       "execute_button_count": 0,
       "reconcile_button_count": 0
     },
     "uncertain_purchase_order_readback": {
-      "run_prefix": "5e1a8a67",
+      "run_prefix": "305ac739",
       "status": "需要对账",
       "dialog_opened": true,
       "execute_button_count": 0,
@@ -35,7 +35,7 @@
   "cases": [
     {
       "name": "successful_purchase_order_readback",
-      "run_prefix": "ccacda63",
+      "run_prefix": "d5187411",
       "status": "已成功",
       "action_status": "已执行并读回",
       "reservation": "SUCCEEDED",
@@ -48,12 +48,12 @@
       "reconcile_button_count": 0,
       "screenshot": "phase6-po-fault-success.png",
       "fault_scenario": "response_loss",
-      "fault_item": "SYNORA-P6-FAULT-a51c9fcc9e83",
-      "receipt_target": "PUR-ORD-2026-00235"
+      "fault_item": "SYNORA-P6-FAULT-39d384ab661e",
+      "receipt_target": "PUR-ORD-2026-00273"
     },
     {
       "name": "uncertain_purchase_order_readback",
-      "run_prefix": "5e1a8a67",
+      "run_prefix": "305ac739",
       "status": "需要对账",
       "action_status": "已过期",
       "reservation": "MANUAL_INTERVENTION",
@@ -67,7 +67,7 @@
       "retry_policy": "manual intervention; no automatic write retry",
       "screenshot": "phase6-po-process-failure.png",
       "fault_scenario": "process_failure",
-      "fault_item": "SYNORA-P6-FAULT-0ff693fe58ec",
+      "fault_item": "SYNORA-P6-FAULT-90ecbe507b26",
       "receipt_target": null
     }
   ],
