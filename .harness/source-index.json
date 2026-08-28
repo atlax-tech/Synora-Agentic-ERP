@@ -304,7 +304,7 @@
       "kind": "code",
       "locator": "Run Plan evidence API：provider/token/reasoning/elapsed/fallback 字段与当前用户详情边界",
       "status": "CONFIRMED",
-      "sha256": "f0faf0a709ad210ec32552f04b5afd3433920a5e11a040fad2ba5beff79f39e7"
+      "sha256": "25e0412a49f6b74b62e7f267656812f1161f4281b2008138acf6c2016b28b413"
     },
     {
       "id": "p35-run-plan-doctype",
@@ -495,7 +495,7 @@
       "path": "docs/development-log/20260827-Phase-6-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "c88332a9354de69557b433f7f813e09b4d7c3b3fe385b7c0ccb34815ad3bb6cc",
+      "sha256": "9889c611c62bdc9cd3c9ecbce407b405bedcca1556bf51227f49e6f31c348b3d",
       "locator": "Phase 6 Step 001 mapping evidence, decisions, failures, and commit checkpoints"
     },
     {
