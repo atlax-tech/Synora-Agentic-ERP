@@ -1,6 +1,6 @@
 # Architecture
 
-Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is complete and its exit is `COMPLETED / PASS` after real ERP, fault, browser, Harness, independent Test, and adversarial Review evidence; Phase 7–13 remain planned, with Phase 7 `READY_NOT_STARTED` until its own user-triggered scope and exit evidence exist.
+Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is complete and its exit is `COMPLETED / PASS` after real ERP, fault, browser, Harness, independent Test, and adversarial Review evidence. Phase 7 Prompt/Context/Skills implementation and exit evidence are complete with status `COMPLETED / PASS`; its Prompt/Context/Skill metadata remains non-authorizing, Frappe remains authoritative, and no ERP write capability was added. Phase 8–13 remain planned and are not started.
 
 ## Architectural Style
 

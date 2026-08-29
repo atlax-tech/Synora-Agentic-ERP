@@ -1,7 +1,7 @@
 # Phase 7 Adoption Card · Prompt、Context Engineering 与 Procurement Skills
 
-状态：`CONDITIONAL / RETAIN PROMPT A`
-日期：2026-08-28
+状态：`ADOPTED / RETAIN PROMPT A`
+日期：2026-08-29
 
 ## Problem
 
@@ -21,6 +21,14 @@ Phase 6 之后的 Native Agent 已经能够在既有六个 typed read-only tools
 - Skill on/off 两组的工具序列、证据、终止原因、任务成功和安全结果均保持；当前两个 Skill manifest hash 为 `14e9dd82a26ae1ebc114c422c0cd4c1dedc971fd9bddc54643e1aac2cedad3eb` 与 `7dafd44000576e93f72a3f9c9e16b5cf0a1764b1aa04087dee45c959b53f7d69`，tool schema hash 为 `1d2d9e779b0ace429fc3a9ee143277461f8619ebae88817408aae525cbf37d16`。
 - 恶意 Skill 文本只使 Context 中出现不可信指导；effective tools 仍为 `item.lookup`，写工具 schema 不存在，Provider 调用为 `0`，评测记录没有原始 Skill 文本。
 - 缺失显式 Context budget 的两组均在 Provider 前返回 `CONTEXT_BUDGET`，Provider 调用为 `0`；这是安全回退证据，不是任务成功证据。
+
+## Exit evidence
+
+- Runtime 全量单元测试 `316 passed`，Frappe app-test `147 tests ... OK`；format、lint、type、compileall 和 `git diff --check` 均通过。
+- 长上下文估算：G01 `31,417 → 14,861`，G08 `31,401 → 14,845`，均低于显式 `16,000` budget；Native Buyer Run 的 recorded Provider 实际输入为 `160` prompt tokens，usage 与 estimate 分开记录。
+- Buyer 登录态 Runs 页面展示了 Prompt schema/profile/hash、ContextBuilder、估算前后、实际 token、Skill refs、事件顺序和状态播报；页面与 API 均未暴露原始 Prompt、Skill 正文、Secret 或不属于当前用户的 Run。
+- Buyer → Frappe → Runtime → recorded Provider → typed read tool → Trace 的只读链路成功；Material Request/Purchase Order 数量未变化，ERP 写交互为 `0`。
+- 本阶段无业务代码收口改动，最终只包含关闭文档和 Harness 指纹同步；依据用户明确授权不启动独立对抗性审查。
 
 ## Responsibility matrix
 
@@ -43,4 +51,4 @@ Phase 6 之后的 Native Agent 已经能够在既有六个 typed read-only tools
 
 ## Limitations and next gate
 
-真实 BYOK Provider、付费 A/B、真实模型质量/成本和登录态浏览器新鲜验收不在本卡证据中；它们不能被本 deterministic/recorded suite 替代。Phase 7 出口仍需完成 Runtime/Frappe 全量验证、真实只读 Buyer 链路、浏览器 no-leak 验收、最终独立对抗 Review 和 Harness 收尾；完成后停止在 Phase 7，不启动 Phase 8。
+真实付费 BYOK 模型质量、付费 A/B、真实模型成本和生产收益未运行；recorded/deterministic suite 不能替代这些结论。MCP、RAG/Memory、Multi-Agent 和第三方依赖保持 `DEFERRED`，Phase 8 仍未启动。Phase 7 已完成并停止在本阶段出口；下一阶段必须由用户明确启动。

@@ -245,7 +245,7 @@ Synora-Agentic-ERP/
 - [x] Phase 4：Agent 执行内核、原生 Tool Calling、停止治理与第一版轨迹评测
 - [x] Phase 5：持久工作流、Plan-and-Execute、checkpoint、HITL 与恢复
 - [x] Phase 6：受治理 MR/PO Draft、审批、幂等、回执与对账
-- [ ] Phase 7：Prompt、Context Engineering 与 Skills
+- [x] Phase 7：Prompt、Context Engineering 与 Skills
 - [ ] Phase 8：Memory、RAG 与 Contextual ERP Coach
 - [ ] Phase 9：Multi-Agent、MCP 与 A2A 实验及证据门禁
 - [ ] Phase 10：完整 P2P 运营 Agent

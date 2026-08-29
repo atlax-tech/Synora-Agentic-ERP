@@ -303,7 +303,7 @@
 
 必读：PRD F-004–F-008、SPEC 7–11、DESIGN 高风险交互、第一受控写入验收、固定 Workflow/权限证据。`approval-workflow-mapping` 未闭环时禁止开放写工具。
 
-实施状态（2026-08-28）：P6.1–P6.5 的治理记录、审批门禁、MR/PO Draft、幂等/对账和 Runs 页面增量已完成；固定真实 ERP、故障恢复、浏览器验收、Harness 五项和独立 Test 均通过，最终独立对抗 Review 明确返回 `PASS`。阶段状态为 `COMPLETED / PASS`；业务代码冻结于 `a36197c`，PO Submit、Receipt、Invoice、Payment、后续 P2P 写操作和 generic writer 仍不可达。Phase 7 仅标记 `READY_NOT_STARTED`，本阶段未实现任何 Phase 7 功能。
+实施状态（2026-08-28）：P6.1–P6.5 的治理记录、审批门禁、MR/PO Draft、幂等/对账和 Runs 页面增量已完成；固定真实 ERP、故障恢复、浏览器验收、Harness 五项和独立 Test 均通过，最终独立对抗 Review 明确返回 `PASS`。阶段状态为 `COMPLETED / PASS`；业务代码冻结于 `a36197c`，PO Submit、Receipt、Invoice、Payment、后续 P2P 写操作和 generic writer 仍不可达。
 
 - **P6.1 治理记录与映射**：完成 Workflow/Role/Permission 取证，实现版本化 ProposedAction、PolicyDecision、ApprovalDecision、ExecutionReceipt、digest 和合法状态转换。
 - **P6.2 决策与执行门禁**：按 schema → identity → permission → deterministic checks → Workflow/policy → snapshot/expiry/digest 执行，写入前全部重检。
@@ -317,7 +317,7 @@
 
 必读：纠偏方案 Phase 7、PRD F-016、Phase 4–6 Trace/预算/安全证据。
 
-状态：`READY_NOT_STARTED`。Phase 6 已完成并停止在本阶段出口；除后续用户明确启动外，不实现、不验收或预先创建 Phase 7 功能与 Assignment。
+状态：`COMPLETED / PASS`（2026-08-29）。Phase 7 已完成并停止在本阶段出口；Phase 8 仍未启动，必须等待用户明确启动，不得预先实现或验收 Phase 8 功能。
 
 - **P7.1 Prompt 分层与版本**：区分边界、决策、恢复与输出契约，记录 version/hash 和单变量 A/B。
 - **P7.2 ContextBuilder**：实现 Gather/Select/Structure/Compress、JIT context、structured notes、summary 和 token budget，Trace 记录选择与丢失。
@@ -325,6 +325,18 @@
 - **P7.4 职责对照**：用同一任务说清 Prompt、Tool、Skill、Workflow 和 MCP 的边界，保留采用/拒绝证据。
 
 出口证据：同一任务可复现 Prompt/Context/Skill 版本；精简上下文后安全不退化且 token 有可测变化；恶意 Skill 不能扩权。
+
+Phase 7 收口证据（CONFIRMED）：
+
+- Prompt A/B 的共同 `boundary`、`recovery`、`output_contract` canonical bytes 完全一致；A hash 为 `1a676172e121c37910512c73b4a77cf3955cad7bca2c659f342d5b2c6e9dbda4`，B hash 为 `49ffea7a309feb53abdd5227e6ec1803646f60eba7940854c912ca8641123572`；B 未形成严格净收益，业务主线保留 A。
+- G01 长上下文估算从 `31,417` 降至 `14,861`，G08 从 `31,401` 降至 `14,845`，均低于显式 `16,000` budget；安全层、最新 Observation、evidence digest 和有效 tool schema 均保留。缺失/非法预算和 Provider 实际超限均在 Provider 动作前或动作后安全回退。
+- 四个采购 Skill 均完成 manifest、版本、来源、hash、自由度、渐进披露和 allowlist 契约；当前 profile 只启用 `replenishment-analysis` 与 `duplicate-purchase-check`。恶意 Skill 的 Provider 调用为 `0`，写工具 schema 不可见。
+- Runtime 全量单元测试 `316 passed`；Frappe app-test `147 tests ... OK`；`make format-check`、`make lint`、`make type`、compileall、`git diff --check` 均通过。
+- 固定开发环境的真实只读链路已由 Buyer Run 验证：Frappe → Runtime → recorded OpenAI-compatible Provider → typed read tool → Trace/evidence；Material Request 与 Purchase Order 数量前后不变，ERP 写交互为 `0`。固定上游 SHA 为 Frappe `6a329d068416768ec47ccd3326b9cc95a8d7bf99`、ERPNext `11e0ba0a1c45f217e2e73e885f699102d06da325`，checkout clean。
+- 登录态 Runs 页面已验证 Trace 版本、上下文估算/实际 token、Skill 元数据、事件顺序、键盘控件、状态播报、HTML 转义和无原始 Prompt/Skill；Viewer 对该 Buyer Run 的列表、详情和 Trace 请求均返回 `404` 且无目标标识泄露。
+- 真实付费模型质量、真实模型 A/B 和生产成本结论未运行；recorded/deterministic 结果只证明工程复现与安全回归，不证明模型质量提升或生产收益。MCP、RAG/Memory、Multi-Agent 和第三方依赖保持 `DEFERRED`。
+
+Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范围 `4`；D3 状态/并发/幂等/恢复 `3`；D4 Agent 信任与成本 `3`；D5 安全与数据保护 `4`；D6 UI/可访问性/双语 `3`；D7 测试/真实集成/复现 `4`；D8 治理/追踪/非虚构 `4`；D9 简洁性/可运维性 `3`。合计 `31/36`，平均 `3.44`；D1/D2/D3/D5/D7/D8 均不低于 `3`，P0/P1 已关闭。阶段收口文档与 Harness 指纹为两个连续小提交；本次收口无业务代码变更，按用户明确授权不启动独立对抗性审查。
 
 ## 17. Phase 8 — Memory、RAG 与 Contextual ERP Coach
 
