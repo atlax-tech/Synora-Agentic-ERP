@@ -15,7 +15,7 @@
       "path": "docs/ARCHITECTURE.md",
       "kind": "architecture",
       "status": "CONFIRMED",
-      "sha256": "43d9c3a47f6d144a22bbb96305580fc4fe360f2cf476de1ccdc21873f945a453",
+      "sha256": "c1747f427dac7e943b6dc4389d2c852c1c2ba9b5ff63d552c483f025993e932c",
       "locator": "approved target architecture; open implementation decisions remain explicit"
     },
     {
@@ -31,7 +31,7 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "e495b898cf17e502730b2929b4048299013570474c3b25be728c6c97d58b5ea0",
+      "sha256": "523077dbfe6324e15c9a4572236559cef40582c9ccd3153d06536014655f645e",
       "locator": "risk-tiered workflow, current phase status, 9-dimension exit Rubric, mentor Assignments, independent adversarial review, and Phase 0 through Phase 13 order"
     },
     {
@@ -95,7 +95,7 @@
       "path": "README.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "86a1aef4711c583c8c8a02d2d1a46fe10d6e2eb8c8396105f7e94b9a9a0b8413",
+      "sha256": "aa4d5cf8285b7131ec6636b52b288d27e95c73e9058d7b54e6e078dd8647f05d",
       "locator": "English repository positioning, evidence status, mentor-led learning workflow, phase gates, architecture summary, and roadmap"
     },
     {
@@ -208,7 +208,7 @@
       "kind": "code",
       "locator": "模型自然语言增强：确定性计算 + 模型仅解释 + 严格校验回退 + provider/usage/reasoning 证据记录",
       "status": "CONFIRMED",
-      "sha256": "7ac094c3ec81433ea19066393ce9beb5a842d834e5457af27cdcdbb9b0a9a8d0"
+      "sha256": "f160226bd96f8286d99e695bd0474757538234aa970f3ffce7affb8d8fbe2352"
     },
     {
       "id": "p34-provider-module",
@@ -272,7 +272,7 @@
       "kind": "testing",
       "locator": "评测集 loader：固定 JSON cases（goal+期望结果+tags）",
       "status": "CONFIRMED",
-      "sha256": "84b02f2f97b7888fa10afdddf5cf0f3b047c86f1594f8ecdf8796a6a13b558ab"
+      "sha256": "a33b7eb9e50dcc925beebc5107073336f39d1fa07b79ed52da25f5f4ca7c7277"
     },
     {
       "id": "p34-evaluation-case-1001",
@@ -288,7 +288,7 @@
       "kind": "code",
       "locator": "P3.5 plan/analyze 编排、Run capability/state/CAS、失败恢复、Runtime tokenized HTTP boundary",
       "status": "CONFIRMED",
-      "sha256": "48bd93aa5c6c3e45dc266e63d08a60d162b6ce39f95c3ad0ef6d4ca65a1c6b18"
+      "sha256": "929573c7f03104e3fcc3063d367b63fd22807fa66cb07e75f4a77b89c3af969c"
     },
     {
       "id": "p35-runtime-app",
@@ -304,7 +304,7 @@
       "kind": "code",
       "locator": "Run Plan evidence API：provider/token/reasoning/elapsed/fallback 字段与当前用户详情边界",
       "status": "CONFIRMED",
-      "sha256": "25e0412a49f6b74b62e7f267656812f1161f4281b2008138acf6c2016b28b413"
+      "sha256": "fe5982111c19a88a429592fab9939f8b2db6a8e778ee1ea01cafcddd19195595"
     },
     {
       "id": "p35-run-plan-doctype",
@@ -312,7 +312,7 @@
       "kind": "code",
       "locator": "Synora Run Plan 只读证据 DocType：provider、prompt/completion/reasoning token、耗时、回退原因",
       "status": "CONFIRMED",
-      "sha256": "83f3001c53c3e4a2d08f803f184fa5bb2437fde46a119ada63c7cf25d70c6ee9"
+      "sha256": "99f3f9f041872d8c257290b04a9b34a246ade9f428c2cbf315643c2125bd4baa"
     },
     {
       "id": "p35-lifecycle-guard-tests",
@@ -505,6 +505,94 @@
       "status": "CONFIRMED",
       "sha256": "1a39c20859f001f1ae99371d977522d48dc2809177ff4f159ff6d85b2a675b0a",
       "locator": "ordered Phase 6 execute/test/review package with write, idempotency, reconciliation, UI, and exit gates"
+    },
+    {
+      "id": "phase7-adoption-card",
+      "path": "docs/adoption-cards/20260828-Phase7-prompt-context-skills.md",
+      "kind": "acceptance",
+      "status": "CONFIRMED",
+      "sha256": "f7930f7101298af72c0f57290a64e39c045ca8a9e08fef712db437e7e2f2f396",
+      "locator": "Phase 7 Prompt/Context/Skill responsibility matrix, recorded evaluation, real read-only chain, limitations, and adoption decision"
+    },
+    {
+      "id": "phase7-development-log",
+      "path": "docs/development-log/20260828-Phase-7-开发日志.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "cac28b25ed03737302a1d23adf69de5eb31891d018d50f4a798bd83b7fa7908c",
+      "locator": "Phase 7 implementation rounds, real read-only chain, browser/API no-leak evidence, exit Rubric, risks, and final commit boundary"
+    },
+    {
+      "id": "phase7-prompt-registry",
+      "path": "services/agent_runtime/src/agent_runtime/agent/prompting.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "8bfdaf1c306c7eff4394ce97a7b35b0d945c8eecf1d25eeb221bab5540489c94",
+      "locator": "Prompt schema v2 registry, four immutable layers, canonical profile hash, and single-variable decision profile"
+    },
+    {
+      "id": "phase7-context-builder",
+      "path": "services/agent_runtime/src/agent_runtime/agent/context.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "65d12b7c1f0bfb1fcdf71971ec5123c49ba897d0f73360f7bc9cd3f3f1ae1c32",
+      "locator": "GSSC ContextBuilder with explicit budget, structured observations, deterministic compression, and provenance"
+    },
+    {
+      "id": "phase7-skill-registry",
+      "path": "services/agent_runtime/src/agent_runtime/skills/registry.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "0f52a873c7d13df2034fb38637b4c9916edde3297c73b7681e81e114e9078bbd",
+      "locator": "Local three-level Skill manifest/resource registry, integrity/path checks, JIT references, and caller tool-subset enforcement"
+    },
+    {
+      "id": "phase7-recorded-evaluation",
+      "path": "services/agent_runtime/src/agent_runtime/evaluation/phase7.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "d05e9b5ff216b115b8290533baaf9ff10176f2b1758bbd681b7c730dcadd0d4b",
+      "locator": "Phase 7 fixed-task recorded comparison for Prompt A/B, Context compression, Skill on/off, malicious Skill, and budget failure"
+    },
+    {
+      "id": "phase7-context-tests",
+      "path": "services/agent_runtime/tests/test_context.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "e6fdd45a947041bf935e3bad7bef1e3829862a5128807665a6ff580f4ae56077",
+      "locator": "Context fragment contract, estimate budget, GSSC compression invariants, untrusted data partition, and provider usage guard tests"
+    },
+    {
+      "id": "phase7-skill-tests",
+      "path": "services/agent_runtime/tests/test_skills.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "9d759c25d3c27e49ef06465487b7b40455e12245749f180b5423496e23bcfc5f",
+      "locator": "Skill manifest/resource integrity, progressive disclosure, path traversal, malicious instruction, and tool subset tests"
+    },
+    {
+      "id": "phase7-evaluation-tests",
+      "path": "services/agent_runtime/tests/test_phase7_evaluation.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "4ef44aaa1dd5fafd7f3a312d8ca56a0571574aeff371c0b7ca75c9c16b83cdd9",
+      "locator": "Phase 7 fixed cases, recorded outputs, adoption decisions, and no-leak evaluation assertions"
+    },
+    {
+      "id": "phase7-frappe-trace-tests",
+      "path": "synora_agentic_erp/tests/test_analyze_run.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "ad0b7b6af27a9e9c5e7ef709ee39cf05cfe524040804de50f7e5ab1a73a35aec",
+      "locator": "Frappe v2 Trace ordering, Context evidence privacy, historical v1 compatibility, evidence validation, and cross-user isolation tests"
+    },
+    {
+      "id": "phase7-runs-page",
+      "path": "synora_agentic_erp/synora_agentic_erp/page/runs/runs.js",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "45c96febf85ae26ddf5176f134a9a0fa0176365af79b759482b65adf829f2966",
+      "locator": "Runs Trace metadata rendering, escaping, status announcements, keyboard controls, pagination, and permission-filtered details"
     }
   ]
 }

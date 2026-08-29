@@ -24,7 +24,7 @@
       "path": "docs/ARCHITECTURE.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "43d9c3a47f6d144a22bbb96305580fc4fe360f2cf476de1ccdc21873f945a453"
+      "sha256": "c1747f427dac7e943b6dc4389d2c852c1c2ba9b5ff63d552c483f025993e932c"
     },
     {
       "path": "docs/DESIGN.md",
@@ -66,7 +66,7 @@
       "path": "docs/PLAN.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "e495b898cf17e502730b2929b4048299013570474c3b25be728c6c97d58b5ea0"
+      "sha256": "523077dbfe6324e15c9a4572236559cef40582c9ccd3153d06536014655f645e"
     },
     {
       "path": "docs/decisions/README.md",
@@ -120,7 +120,7 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "4e88d4b2ab173d4c47fe423386ad3d3d9e11a03262dba88e5908fdd178c8b9a6"
+      "sha256": "306ee002b073b4fc582faadd337fd85397da28493e2190d47b26383675e0a9c1"
     },
     {
       "path": ".harness/unresolved.json",
@@ -132,13 +132,13 @@
       "path": "README.md",
       "owner": "user",
       "mode": "user",
-      "sha256": "86a1aef4711c583c8c8a02d2d1a46fe10d6e2eb8c8396105f7e94b9a9a0b8413"
+      "sha256": "aa4d5cf8285b7131ec6636b52b288d27e95c73e9058d7b54e6e078dd8647f05d"
     },
     {
       "path": "README.zh-CN.md",
       "owner": "user",
       "mode": "user",
-      "sha256": "b0f282744ced3a795e6df620a84abd85fcd425a521c0718b88cb716c08cef4bb"
+      "sha256": "305fff7e1ba628a11d61e29805c2a9b7e518b739b38ce0d9150ba2dfc5cbbd00"
     },
     {
       "path": "LICENSE",
@@ -241,9 +241,21 @@
       "owner": "harness-armor",
       "mode": "managed",
       "sha256": "d1d5b931f969f74a02f26c1d85aeb16aa4caa8fea3b565581a3e1591e252428a"
+    },
+    {
+      "path": "docs/adoption-cards/20260828-Phase7-prompt-context-skills.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "f7930f7101298af72c0f57290a64e39c045ca8a9e08fef712db437e7e2f2f396"
+    },
+    {
+      "path": "docs/development-log/20260828-Phase-7-开发日志.md",
+      "owner": "harness-armor",
+      "mode": "managed",
+      "sha256": "cac28b25ed03737302a1d23adf69de5eb31891d018d50f4a798bd83b7fa7908c"
     }
   ],
   "source_index": ".harness/source-index.json",
   "unresolved_index": ".harness/unresolved.json",
-  "last_updated": "2026-08-28T08:30:25Z"
+  "last_updated": "2026-08-29T10:18:18Z"
 }
