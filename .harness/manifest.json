@@ -12,7 +12,7 @@
       "path": "AGENTS.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "266209e7b2871f38a95e84a175c72231aee217a58d2e088866c70fe14738a39d"
+      "sha256": "46321419c595bc17e0eb78deb7634d126e08f6866de24e4fcc70e8b5d1aece35"
     },
     {
       "path": "docs/PRD.md",
@@ -66,7 +66,7 @@
       "path": "docs/PLAN.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "6d8367d6bfea29fbe128129740decc23cf2631aee2434e5c148162266b5d66a9"
+      "sha256": "0b16a2ea2ad329073304a9834523e64c604153aae95c506d6e61d69965f4761c"
     },
     {
       "path": "docs/decisions/README.md",
@@ -102,7 +102,7 @@
       "path": "docs/development-log/20260824-Phase-0-开发日志.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "f31ad53ff2c84454ef789a4be6aa75cbcb63bd50e8c0250ff28aee7f3ab22b0b"
+      "sha256": "81d2f7276d7c9088ac67efb5863aac9601fb93c2581631f9893566480c9628bb"
     },
     {
       "path": "docs/development-log/20260824-Phase-1-开发日志.md",
@@ -120,7 +120,7 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "3a92714dcc5b857fb0becdeedf2446aabfa401187f62bc78a04f8c78d6669663"
+      "sha256": "8277f9dee310d414eb8d7281a665478e87a8891c1c5d36c2b2839af3d54fcd68"
     },
     {
       "path": ".harness/unresolved.json",
@@ -257,5 +257,5 @@
   ],
   "source_index": ".harness/source-index.json",
   "unresolved_index": ".harness/unresolved.json",
-  "last_updated": "2026-08-29T10:18:18Z"
+  "last_updated": "2026-08-30T11:00:38Z"
 }
