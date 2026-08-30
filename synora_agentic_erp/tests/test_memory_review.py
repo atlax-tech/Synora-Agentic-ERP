@@ -23,6 +23,7 @@ from synora_agentic_erp.memory.service import (
 )
 
 BUYER = "synora-p1-buyer@dev.localhost"
+MANAGER = "testpassword@example.com"
 VIEWER = "synora-p1-viewer@dev.localhost"
 COMPANY = "SYNORA-P1 Test Company"
 WAREHOUSE = "SYNORA-P1 Stores - SP1"
@@ -48,6 +49,7 @@ class TestMemoryReview(FrappeTestCase):
         *,
         initiator: str = BUYER,
         kind: str = "SEMANTIC",
+        warehouse_scope: str | None = WAREHOUSE,
         content: str = "approved replenishment SOP",
         expires_at: str | object | None = _UNSET,
         supersedes_memory: str | None = None,
@@ -57,10 +59,10 @@ class TestMemoryReview(FrappeTestCase):
         values = {
             "doctype": "Synora Memory Record",
             "kind": kind,
-            "state": "CANDIDATE",
+            "state": "PENDING",
             "initiator": initiator,
             "company_scope": COMPANY,
-            "warehouse_scope": WAREHOUSE,
+            "warehouse_scope": warehouse_scope,
             "scope_run": None,
             "source_run": None,
             "source_claim_id": f"claim-{uuid4().hex}",
@@ -84,7 +86,7 @@ class TestMemoryReview(FrappeTestCase):
         for kind in ("EPISODIC", "SEMANTIC", "PROCEDURAL"):
             doc = self._candidate(kind=kind)
             self.assertEqual(doc.kind, kind)
-            self.assertEqual(doc.state, "CANDIDATE")
+            self.assertEqual(doc.state, "PENDING")
         with self.assertRaises(frappe.ValidationError):
             self._candidate(kind="WORKING")
 
@@ -133,6 +135,55 @@ class TestMemoryReview(FrappeTestCase):
         self.assertEqual(reviewed["state"], "APPROVED")
         self.assertEqual(reviewed["reviewer"], "Administrator")
 
+    def test_native_list_and_form_permissions_match_review_scope(self) -> None:
+        own = self._candidate(kind="EPISODIC", initiator=BUYER)
+        foreign = self._candidate(kind="EPISODIC", initiator=VIEWER)
+        semantic = self._candidate(kind="SEMANTIC", warehouse_scope=None)
+
+        frappe.set_user(BUYER)
+        self.assertTrue(
+            frappe.has_permission("Synora Memory Record", "read", doc=own.name, user=BUYER)
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Synora Memory Record",
+                filters={"state": "PENDING"},
+                fields=["name"],
+                pluck="name",
+            ),
+            [own.name],
+        )
+        self.assertFalse(
+            frappe.has_permission("Synora Memory Record", "read", doc=foreign.name, user=BUYER)
+        )
+
+        frappe.set_user(MANAGER)
+        self.assertEqual(
+            set(
+                frappe.get_list(
+                    "Synora Memory Record",
+                    filters={"state": "PENDING"},
+                    fields=["name"],
+                    pluck="name",
+                )
+            ),
+            {semantic.name},
+        )
+        self.assertFalse(
+            frappe.has_permission("Synora Memory Record", "read", doc=foreign.name, user=MANAGER)
+        )
+        frappe.set_user("Administrator")
+        with self.assertRaises(frappe.DoesNotExistError):
+            frappe.get_doc("Synora Memory Record", foreign.name).check_permission()
+
+    def test_native_form_hides_foreign_record_as_unknown(self) -> None:
+        foreign = self._candidate(kind="EPISODIC", initiator=VIEWER)
+        frappe.set_user(BUYER)
+        from frappe.desk.form.load import getdoc
+
+        self.assertEqual(getdoc("Synora Memory Record", foreign.name), [])
+        self.assertEqual(getdoc("Synora Memory Record", str(uuid4())), [])
+
     def test_normal_user_cannot_review_semantic_or_procedural_memory(self) -> None:
         semantic = self._candidate(kind="SEMANTIC")
         procedural = self._candidate(kind="PROCEDURAL")
@@ -172,7 +223,12 @@ class TestMemoryReview(FrappeTestCase):
         self.assertEqual(result["reviewer"], BUYER)
         self.assertTrue(result["reviewed_at"])
 
-        stored = frappe.get_doc("Synora Memory Record", doc.name)
+        stored = frappe.db.get_value(
+            "Synora Memory Record",
+            doc.name,
+            ["state", "state_version", "reviewer"],
+            as_dict=True,
+        )
         self.assertEqual(stored.state, "APPROVED")
         self.assertEqual(stored.state_version, 2)
         self.assertEqual(stored.reviewer, BUYER)
@@ -200,7 +256,17 @@ class TestMemoryReview(FrappeTestCase):
         with self.assertRaises(GatewayFault) as expiry:
             review_candidate(expired.name, "APPROVE", 1)
         self.assertEqual(expiry.exception.code, "CONFLICT")
-        self.assertEqual(frappe.get_doc("Synora Memory Record", expired.name).state, "CANDIDATE")
+        self.assertEqual(
+            frappe.db.get_value("Synora Memory Record", expired.name, "state"),
+            "PENDING",
+        )
+
+        missing_expiry = self._candidate(kind="EPISODIC")
+        frappe.db.set_value("Synora Memory Record", missing_expiry.name, "expires_at", None)
+        self.assertEqual(list_review_queue(50, 0)["total"], 0)
+        with self.assertRaises(GatewayFault) as missing:
+            review_candidate(missing_expiry.name, "APPROVE", 1)
+        self.assertEqual(missing.exception.code, "CONFLICT")
 
         old = self._candidate(kind="EPISODIC")
         correction = self._candidate(kind="EPISODIC", supersedes_memory=old.name, memory_version=2)
@@ -213,7 +279,7 @@ class TestMemoryReview(FrappeTestCase):
         values = {
             "doctype": "Synora Memory Record",
             "kind": "SEMANTIC",
-            "state": "CANDIDATE",
+            "state": "PENDING",
             "initiator": BUYER,
             "company_scope": COMPANY,
             "source_claim_id": "direct-create",

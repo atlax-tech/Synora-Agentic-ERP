@@ -52,7 +52,7 @@ def test_memory_doctype_matches_runtime_durable_contract() -> None:
 
     state_options = str(_field(meta, "state")["options"]).splitlines()
     assert set(state_options) == {
-        "CANDIDATE",
+        "PENDING",
         "APPROVED",
         "REJECTED",
         "SUPERSEDED",
@@ -65,12 +65,19 @@ def test_memory_doctype_matches_runtime_durable_contract() -> None:
 def test_generic_doctype_permissions_cannot_bypass_review_service() -> None:
     meta = _doctype()
     permissions = meta.get("permissions")
-    assert permissions == [{"read": 1, "role": "System Manager"}]
+    assert permissions == [{"read": 1, "role": "All"}]
     assert not any(
         permission.get("create") or permission.get("write") or permission.get("delete")
         for permission in permissions
         if isinstance(permission, dict)
     )
+
+
+def test_native_reads_use_server_scope_hooks() -> None:
+    hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
+    assert '"Synora Memory Record"' in hooks
+    assert "get_permission_query_conditions" in hooks
+    assert "has_permission" in hooks
 
 
 def test_frappe_memory_boundary_has_no_runtime_or_model_dependencies() -> None:
@@ -98,12 +105,19 @@ def test_memory_review_is_not_registered_as_an_agent_or_gateway_tool() -> None:
 
 
 def test_desk_review_renders_memory_as_text_and_exposes_safe_states() -> None:
-    page = PAGE_ROOT / "memory_review.js"
-    assert page.is_file()
-    source = page.read_text(encoding="utf-8")
-    assert "textContent" in source
-    assert "UNTRUSTED" in source
-    assert "aria-live" in source
-    assert "review_memory_candidate" in source
-    assert ".html(content)" not in source
-    assert ".innerHTML = content" not in source
+    doctype_path = APP_ROOT / "synora_agentic_erp" / "doctype" / "synora_memory_record"
+    form = doctype_path / "synora_memory_record.js"
+    list_view = doctype_path / "synora_memory_record_list.js"
+    compatibility_page = PAGE_ROOT / "memory_review.js"
+    assert form.is_file()
+    assert list_view.is_file()
+    assert compatibility_page.is_file()
+    form_source = form.read_text(encoding="utf-8")
+    list_source = list_view.read_text(encoding="utf-8")
+    page_source = compatibility_page.read_text(encoding="utf-8")
+    assert "UNTRUSTED" in form_source
+    assert "review_memory_candidate" in form_source
+    assert 'frappe.listview_settings["Synora Memory Record"]' in list_source
+    assert 'frappe.set_route("List", "Synora Memory Record")' in page_source
+    assert "innerHTML" not in form_source
+    assert "innerHTML" not in list_source

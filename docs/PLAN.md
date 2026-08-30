@@ -391,7 +391,7 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 
 - **T01 / P8.0**：已完成 PRD、PLAN、Architecture 与 Harness 状态对齐；F-013 是 Phase 8 的有限、只读、带引用 Coach，完整 P2P 写闭环仍在 Phase 10。
 - **T02 / P8.1**：已提交的 M1、M1F、M2、M3、M3F、M4、M4F，以及 M5/M5F 的 Runtime 开发适配器，均属于 Memory 领域基础；完整生命周期、候选来源解析、删除 tombstone、纠正和统一召回仍未完成。
-- **T03 / P8.1（首个切片）**：已交付 Frappe-authoritative `Synora Memory Record` DocType、服务端范围/公司/仓库权限重检、候选详情与审核 API、CAS 审核转换、原生 Desk 审核页及真实 Frappe/浏览器安全测试；剩余 T03/P8.1 生命周期入口和完整候选去重/删除/纠正闭环仍待后续 Prompt。
+- **T03 / P8.1（首个切片）**：已交付 Frappe-authoritative `Synora Memory Record` DocType、服务端范围/公司/仓库权限重检、候选详情与审核 API、CAS 审核转换、原生 Desk List/Form 审核入口及真实 Frappe 权限/CAS 测试；无权/未知原生 Form/API 记录统一为空响应，避免 Memory ID 存在性侧信道。原先自定义页面的浏览器证据需在原生入口复验，剩余 T03/P8.1 生命周期入口和完整候选去重/删除/纠正闭环仍待后续 Prompt。
 - **T04 / P8.2 前置**：M5/M5F 的 SQLite 适配器和 M6 exact-scope recall 仅是 LAB_ONLY/开发前置原语；确定性 chunk、FTS5 元数据过滤、ContextBuilder 注入评测尚未实现。
 - **T03、T05–T10**：尚未开始；M7 从未执行或提交。C2C 迭代 1–10 用于此前已执行工作，迭代 11 是只读 T01 提案，迭代 12 是本次 T01 应用；不得虚构额外迭代。
 - Runtime-local SQLite Memory 只保留为 `LAB_ONLY`、单实例开发证据；Frappe 承担未来持久 Memory 的权威身份、权限与业务集成边界，Runtime Memory/cache/index 不得取代它或 ERP 事实。

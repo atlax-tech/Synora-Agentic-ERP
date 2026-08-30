@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
-from frappe.utils import get_datetime, now_datetime
+from frappe.utils import now_datetime
 
 from synora_agentic_erp.gateway.contract import GatewayFault, canonical_uuid
 from synora_agentic_erp.synora_agentic_erp.doctype.synora_memory_record import (
@@ -48,13 +48,6 @@ def _actor() -> str:
     return actor
 
 
-def _is_system_manager(actor: str) -> bool:
-    try:
-        return "System Manager" in frappe.get_roles(actor)
-    except Exception:
-        return False
-
-
 def _not_available() -> GatewayFault:
     return GatewayFault("MEMORY_NOT_AVAILABLE", "memory is not available", 404)
 
@@ -63,49 +56,17 @@ def _memory_id(value: object) -> str:
     return canonical_uuid(value, "memory_id")
 
 
-def _scope_permission(doctype: str, name: str | None, actor: str) -> bool:
-    if not name or not frappe.db.exists(doctype, name):
-        return False
-    try:
-        return bool(frappe.has_permission(doctype, "read", doc=name, user=actor))
-    except Exception:
-        return False
-
-
 def _can_review(memory: Any, actor: str) -> bool:
-    if not frappe.db.get_value("User", actor, "enabled"):
-        return False
-    if not _scope_permission("Company", str(memory.company_scope or ""), actor):
-        return False
-    warehouse = str(memory.warehouse_scope or "")
-    if warehouse:
-        warehouse_row = frappe.db.get_value(
-            "Warehouse", warehouse, ["company", "disabled"], as_dict=True
-        )
-        if (
-            not warehouse_row
-            or warehouse_row.company != memory.company_scope
-            or warehouse_row.disabled
-            or not _scope_permission("Warehouse", warehouse, actor)
-        ):
-            return False
-    if _is_system_manager(actor):
-        return True
-    return memory.kind == "EPISODIC" and str(memory.initiator) == actor
+    return memory_record.can_review_memory(memory, actor)
 
 
 def _is_expired(memory: Any) -> bool:
-    if not memory.expires_at:
-        return False
-    try:
-        return get_datetime(memory.expires_at) <= now_datetime()
-    except TypeError, ValueError:
-        return True
+    return memory_record.is_expired(memory)
 
 
 def _visible_doc(memory: Any, actor: str) -> bool:
     return (
-        str(memory.state or "") == "CANDIDATE"
+        str(memory.state or "") == "PENDING"
         and not memory.supersedes_memory
         and not _is_expired(memory)
         and _can_review(memory, actor)
@@ -139,20 +100,23 @@ def _serialize(memory: Any) -> dict[str, Any]:
 
 
 def _load_candidate(memory_id: str) -> Any:
-    try:
-        memory = frappe.get_doc("Synora Memory Record", memory_id)
-    except frappe.DoesNotExistError as error:
-        raise _not_available() from error
-    if memory.state != "CANDIDATE":
+    memory = _load_memory(memory_id)
+    if memory.state != "PENDING":
         raise _not_available()
     return memory
 
 
 def _load_memory(memory_id: str) -> Any:
-    try:
-        return frappe.get_doc("Synora Memory Record", memory_id)
-    except frappe.DoesNotExistError as error:
-        raise _not_available() from error
+    row = frappe.db.get_value(
+        "Synora Memory Record",
+        memory_id,
+        "*",
+        as_dict=True,
+    )
+    if not row:
+        raise _not_available()
+    row["doctype"] = "Synora Memory Record"
+    return frappe.get_doc(row)
 
 
 def list_review_queue(limit: int = 50, offset: int = 0) -> dict[str, Any]:
@@ -164,7 +128,7 @@ def list_review_queue(limit: int = 50, offset: int = 0) -> dict[str, Any]:
 
     rows = frappe.get_all(
         "Synora Memory Record",
-        filters={"state": "CANDIDATE"},
+        filters={"state": "PENDING"},
         fields=_MEMORY_FIELDS,
         order_by="creation desc, name desc",
         limit_page_length=0,
@@ -234,7 +198,7 @@ def review_candidate(
         raise _not_available()
     if int(row.state_version) != expected_state_version:
         raise GatewayFault("CONFLICT", "memory review changed concurrently", 409)
-    if memory.state != "CANDIDATE":
+    if memory.state != "PENDING":
         raise GatewayFault("CONFLICT", "memory is no longer a candidate", 409)
     if memory.supersedes_memory:
         raise GatewayFault("CONFLICT", "correction candidates are not reviewable yet", 409)

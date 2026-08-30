@@ -39,7 +39,7 @@
    "fieldname": "state",
    "fieldtype": "Select",
    "label": "State",
-   "options": "CANDIDATE\nAPPROVED\nREJECTED\nSUPERSEDED\nEXPIRED\nDELETED",
+   "options": "PENDING\nAPPROVED\nREJECTED\nSUPERSEDED\nEXPIRED\nDELETED",
    "read_only": 1,
    "reqd": 1
   },
@@ -188,7 +188,7 @@
  "permissions": [
   {
    "read": 1,
-   "role": "System Manager"
+   "role": "All"
   }
  ],
  "sort_field": "creation",

@@ -1,15 +1,16 @@
 import hashlib
+from typing import Self, cast
 
 import frappe
-from frappe.model.document import Document
-from frappe.utils import get_datetime
+from frappe.model.document import Document, LazyDocument
+from frappe.utils import get_datetime, now_datetime
 
 SERVICE_FLAG = "synora_memory_service"
 MAX_CONTENT_LENGTH = 32_000
 MAX_SOURCE_LENGTH = 140
 
 DURABLE_KINDS = frozenset({"EPISODIC", "SEMANTIC", "PROCEDURAL"})
-STATES = frozenset({"CANDIDATE", "APPROVED", "REJECTED", "SUPERSEDED", "EXPIRED", "DELETED"})
+STATES = frozenset({"PENDING", "APPROVED", "REJECTED", "SUPERSEDED", "EXPIRED", "DELETED"})
 REVIEW_STATES = frozenset({"APPROVED", "REJECTED"})
 REVIEW_FIELDS = frozenset({"state", "state_version", "reviewed_at", "reviewer", "review_reason"})
 IMMUTABLE_FIELDS = frozenset(
@@ -44,7 +45,173 @@ def _valid_digest(value: object) -> bool:
     )
 
 
+def _is_system_manager(actor: str) -> bool:
+    try:
+        return "System Manager" in frappe.get_roles(actor)
+    except Exception:
+        return False
+
+
+def _scope_permission(doctype: str, name: str, actor: str) -> bool:
+    if not name or not frappe.db.exists(doctype, name):
+        return False
+    try:
+        return bool(frappe.has_permission(doctype, "read", doc=name, user=actor))
+    except Exception:
+        return False
+
+
+def can_review_memory(memory: Document, actor: str) -> bool:
+    """Apply the same scope rule to the native Desk and controlled service."""
+    if actor == "Guest" or not frappe.db.get_value("User", actor, "enabled"):
+        return False
+    company = str(memory.company_scope or "")
+    if not _scope_permission("Company", company, actor):
+        return False
+    warehouse = str(memory.warehouse_scope or "")
+    if warehouse:
+        row = frappe.db.get_value("Warehouse", warehouse, ["company", "disabled"], as_dict=True)
+        if (
+            not row
+            or row.company != company
+            or row.disabled
+            or not _scope_permission("Warehouse", warehouse, actor)
+        ):
+            return False
+    if memory.kind == "EPISODIC":
+        return str(memory.initiator) == actor
+    return memory.kind in {"SEMANTIC", "PROCEDURAL"} and _is_system_manager(actor)
+
+
+def _allowed_scope_names(doctype: str, actor: str) -> list[str]:
+    try:
+        fields = ["name"]
+        if doctype == "Warehouse":
+            fields += ["disabled"]
+        rows = frappe.get_all(
+            doctype,
+            fields=fields,
+            limit_page_length=0,
+            ignore_permissions=True,
+        )
+        names: list[str] = []
+        for row in rows:
+            if doctype == "Warehouse" and row.disabled:
+                continue
+            if frappe.has_permission(doctype, "read", doc=row.name, user=actor):
+                names.append(str(row.name))
+        return names
+    except Exception:
+        return []
+
+
+def get_permission_query_conditions(user: str | None = None, **_: object) -> str:
+    """Keep native List queries within the same review scope as the service."""
+    actor = str(user or getattr(frappe.session, "user", "Guest") or "Guest")
+    table = "`tabSynora Memory Record`"
+    if actor == "Guest" or not frappe.db.get_value("User", actor, "enabled"):
+        return "1=0"
+    companies = _allowed_scope_names("Company", actor)
+    warehouses = _allowed_scope_names("Warehouse", actor)
+    if not companies:
+        return "1=0"
+    company_sql = ", ".join(frappe.db.escape(name) for name in companies)
+    warehouse_sql = ", ".join(frappe.db.escape(name) for name in warehouses)
+    scope = (
+        f"{table}.company_scope in ({company_sql}) and "
+        f"({table}.warehouse_scope is null or {table}.warehouse_scope = '' "
+        f"or {table}.warehouse_scope in ({warehouse_sql or frappe.db.escape('__none__')}))"
+    )
+    expiry = (
+        f"(({table}.kind = 'EPISODIC' and {table}.expires_at is not null and "
+        f"{table}.expires_at > NOW()) or ({table}.kind in ('SEMANTIC', 'PROCEDURAL') and "
+        f"({table}.expires_at is null or {table}.expires_at > NOW())))"
+    )
+    common = (
+        f"{table}.state = 'PENDING' and "
+        f"({table}.supersedes_memory is null or {table}.supersedes_memory = '') and "
+        f"{expiry} and ({scope})"
+    )
+    episodic = f"({table}.kind = 'EPISODIC' and {table}.initiator = {frappe.db.escape(actor)})"
+    if not _is_system_manager(actor):
+        return f"({common}) and {episodic}"
+    durable = f"{table}.kind in ('SEMANTIC', 'PROCEDURAL')"
+    return f"({common}) and ({episodic} or {durable})"
+
+
+def is_expired(doc: Document) -> bool:
+    if doc.kind == "EPISODIC" and not doc.expires_at:
+        return True
+    if not doc.expires_at:
+        return False
+    try:
+        return bool(get_datetime(doc.expires_at) <= now_datetime())
+    except TypeError, ValueError:
+        return True
+
+
+def _native_read_allowed(name: str) -> bool:
+    """Make native Form loading indistinguishable from an unknown record."""
+    row = frappe.db.get_value(
+        "Synora Memory Record",
+        name,
+        [
+            "kind",
+            "state",
+            "initiator",
+            "company_scope",
+            "warehouse_scope",
+            "supersedes_memory",
+            "expires_at",
+        ],
+        as_dict=True,
+    )
+    if not row:
+        return True
+    return _pending_and_unexpired(row) and can_review_memory(
+        row, str(frappe.session.user or "Guest")
+    )
+
+
+def _pending_and_unexpired(doc: Document) -> bool:
+    if str(doc.state or "") != "PENDING" or doc.supersedes_memory:
+        return False
+    return not is_expired(doc)
+
+
+def has_permission(
+    doc: Document | None, ptype: str = "read", user: str | None = None, **_: object
+) -> bool:
+    """Prevent native Form/API reads from bypassing the scoped review service."""
+    if ptype not in {"read", "select"} or doc is None:
+        return True
+    actor = str(user or getattr(frappe.session, "user", "Guest") or "Guest")
+    return _pending_and_unexpired(doc) and can_review_memory(doc, actor)
+
+
 class SynoraMemoryRecord(Document):  # type: ignore[misc]
+    def load_from_db(self) -> Self:
+        if (
+            self.name
+            and not self.flags.ignore_permissions
+            and not isinstance(self, LazyDocument)
+            and not getattr(frappe.flags, "synora_memory_service_read", False)
+            and not _native_read_allowed(str(self.name))
+        ):
+            frappe.throw(
+                "Memory record is not available",
+                frappe.DoesNotExistError(doctype=self.doctype),
+            )
+        return cast(Self, super().load_from_db())
+
+    def has_permission(
+        self, permtype: str = "read", *, debug: bool = False, user: str | None = None
+    ) -> bool:
+        """Keep native Form permission checks scoped even for Frappe Administrator."""
+        if permtype in {"read", "select"} and not self.flags.ignore_permissions:
+            return has_permission(self, permtype, user=user)
+        return bool(super().has_permission(permtype, debug=debug, user=user))
+
     def validate(self) -> None:
         if not self.flags.get(SERVICE_FLAG):
             _fail("Memory records require the controlled memory service")
@@ -88,7 +255,7 @@ class SynoraMemoryRecord(Document):  # type: ignore[misc]
             _fail("Correction memory must increment its version")
 
         if self.is_new():
-            if self.state != "CANDIDATE" or state_version != 1:
+            if self.state != "PENDING" or state_version != 1:
                 _fail("Memory records must start as candidates")
             if not self.supersedes_memory and memory_version != 1:
                 _fail("Initial memory records must use version one")
@@ -108,7 +275,7 @@ class SynoraMemoryRecord(Document):  # type: ignore[misc]
         if changed:
             previous_state = str(self.get_db_value("state") or "")
             previous_version = int(self.get_db_value("state_version") or 0)
-            if previous_state != "CANDIDATE" or self.state not in REVIEW_STATES:
+            if previous_state != "PENDING" or self.state not in REVIEW_STATES:
                 _fail("Memory review transition is invalid")
             if state_version != previous_version + 1:
                 _fail("Memory state version must increase exactly once")
@@ -117,7 +284,7 @@ class SynoraMemoryRecord(Document):  # type: ignore[misc]
         elif self.flags.get(SERVICE_FLAG):
             _fail("Memory transition did not change state")
 
-        if self.state == "CANDIDATE" and (self.reviewer or self.reviewed_at):
+        if self.state == "PENDING" and (self.reviewer or self.reviewed_at):
             _fail("Candidates cannot have review metadata")
         if self.state in REVIEW_STATES and (not self.reviewer or not self.reviewed_at):
             _fail("Reviewed memory requires server review metadata")
