@@ -31,8 +31,8 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "523077dbfe6324e15c9a4572236559cef40582c9ccd3153d06536014655f645e",
-      "locator": "risk-tiered workflow, current phase status, 9-dimension exit Rubric, mentor Assignments, independent adversarial review, and Phase 0 through Phase 13 order"
+      "sha256": "6d8367d6bfea29fbe128129740decc23cf2631aee2434e5c148162266b5d66a9",
+      "locator": "automatic phase trigger, ChatGPT atomic-task decisions, Codex-only execution, risk-tiered gates, independent adversarial review, and Phase 0 through Phase 13 order"
     },
     {
       "id": "approved-project-direction-correction",
@@ -71,8 +71,8 @@
       "path": "AGENTS.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "2168221d1b3880a4ae058176f8d64c81bb00802c5c4f2e5ba08a220d455adc35",
-      "locator": "repository execution boundaries, stage-end independent review gate, mentor-led Assignment workflow, and verbatim question/blocker recording"
+      "sha256": "266209e7b2871f38a95e84a175c72231aee217a58d2e088866c70fe14738a39d",
+      "locator": "repository boundaries, automatic C2C phase workflow, ChatGPT decision and Codex execution split, independent review gate, and mentor-led Assignment workflow"
     },
     {
       "id": "development-log-protocol",
@@ -111,8 +111,8 @@
       "path": "docs/development-log/20260824-Phase-0-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "5ddddd548d59bb57a1c0d4d4ae7e493db55427cdc13cef44326ae4ff3dcf33e4",
-      "locator": "reverse-ordered consolidated Phase 0 governance history; original files remain in Git history"
+      "sha256": "f31ad53ff2c84454ef789a4be6aa75cbcb63bd50e8c0250ff28aee7f3ab22b0b",
+      "locator": "reverse-ordered Phase 0 governance history including automatic GPT-decision and Codex-execution workflow maintenance; original files remain in Git history"
     },
     {
       "id": "phase1-development-log",
