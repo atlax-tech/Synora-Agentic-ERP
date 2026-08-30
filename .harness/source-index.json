@@ -31,7 +31,7 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "b927ac51205b0837847c39f8826f14535c5f69499e9630ee2dac54fd373e51a6",
+      "sha256": "81039ccc6a8b554b26310c47e6030c6db143a98b2749a4e59465e1a67e945227",
       "locator": "automatic phase trigger, ChatGPT atomic-task decisions, Codex-only execution, risk-tiered gates, independent adversarial review, and Phase 0 through Phase 13 order"
     },
     {
@@ -527,7 +527,7 @@
       "path": "docs/development-log/20260830-Phase-8-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "54381f80155f41c42b6b1e9f7a353426a55808edccd3d32f3d9cdb69804be504",
+      "sha256": "45d469f4b9d02d0e64689df9e85bb37c9d69ab27389f880688152f3b79789200",
       "locator": "Phase 8 T01 correction, T03 Frappe Memory review slice, Memory foundation/retrieval prerequisite mapping, validation evidence, and current phase boundary"
     },
     {
@@ -607,7 +607,7 @@
       "path": "synora_agentic_erp/synora_agentic_erp/doctype/synora_memory_record/synora_memory_record.json",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "ed9c1f237b519a2d8f9223b91f5f7df315f938203fca3a8b12f3e64b3ce2cb15",
+      "sha256": "15410aa99c86d8153567127addce34bc341610448ece87b34c7854261c78a164",
       "locator": "T03 Frappe-authoritative Memory DocType fields, durable kinds, candidate/review states, and restricted generic permissions"
     },
     {
@@ -615,7 +615,7 @@
       "path": "synora_agentic_erp/synora_agentic_erp/doctype/synora_memory_record/synora_memory_record.py",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "d41443c6bd82d3b404993c664c6696bb611551d4e217bfa253fe0a3367af2c24",
+      "sha256": "56e92a38eec6666de3f3c8ced6bc7fe85055017428eaf6631d7a413b4e2d4d3b",
       "locator": "T03 service-flagged candidate invariants, digest/content trust label, immutable fields, review state transition, and direct-delete rejection"
     },
     {
@@ -623,7 +623,7 @@
       "path": "synora_agentic_erp/memory/service.py",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "bc98c6de27b2fc397c30f12fcfc7f19e79df28746b7cdfa033be4ec6c9ccc365",
+      "sha256": "d0bb5d794b29ca7f1a2ee46e05c6a349d325cfe950ba1dd69a1b1975120e8477",
       "locator": "T03 scoped review queue/detail/decision service with current Frappe permissions, opaque lookup, row-lock CAS, and timestamp conflict handling"
     },
     {
@@ -631,15 +631,15 @@
       "path": "synora_agentic_erp/synora_agentic_erp/page/memory_review/memory_review.js",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "678b0671d6935a9237ee2a8928d54be62228fbff1a29266ee3f58c89dfaa17c3",
-      "locator": "T03 native Desk Memory Review queue/detail page with text-only UNTRUSTED rendering, status states, and keyboard review actions"
+      "sha256": "03a89225a9e37442c3c1732580248c025b31d17a106bc4714d2825c1ad54934f",
+      "locator": "T03 compatibility route redirecting to the native Synora Memory Record List/Form review surfaces"
     },
     {
       "id": "phase8-memory-review-tests",
       "path": "synora_agentic_erp/tests/test_memory_review.py",
       "kind": "testing",
       "status": "CONFIRMED",
-      "sha256": "f3146795a8ec29182120a3a4d8a7113e6e0216352da38f30d36dbfa248644f6b",
+      "sha256": "8a8747b4e461808da7361f583c13cc1dcf9895ae0ef5a990b240bf49bbf2cb6e",
       "locator": "T03 real Frappe persistence, permission scope, opaque lookup, expiry/correction, server review stamping, CAS and API tests"
     },
     {
@@ -647,8 +647,32 @@
       "path": "tests/test_memory_authority_contract.py",
       "kind": "testing",
       "status": "CONFIRMED",
-      "sha256": "20847b624ac55c73f18c18eec4fdfb42ddcf1a74bd36cf1ed732750ac2416c61",
+      "sha256": "22db6df067b269599a3b1a8092601d03831f113ec5c3d712e1ba412f141e6274",
       "locator": "T03 pure contract checks for Frappe authority, durable kind/state metadata, restricted DocPerm, no Runtime/provider/tool dependency, and safe Desk rendering"
+    },
+    {
+      "id": "phase8-memory-hooks",
+      "path": "synora_agentic_erp/hooks.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "9945f5e660c84c567b25d3ae6fad186b9e49b29cfedcfb3dc72e5ee41a4ac24d",
+      "locator": "T03 server permission_query_conditions and has_permission hooks for scoped native Memory review"
+    },
+    {
+      "id": "phase8-memory-review-form",
+      "path": "synora_agentic_erp/synora_agentic_erp/doctype/synora_memory_record/synora_memory_record.js",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "e6a017ef23f8c341d77d5a682e66121e8e23b10f7d5d348fed9405378e5ad415",
+      "locator": "T03 native Memory Form UNTRUSTED review warning and controlled approve/reject actions"
+    },
+    {
+      "id": "phase8-memory-review-list",
+      "path": "synora_agentic_erp/synora_agentic_erp/doctype/synora_memory_record/synora_memory_record_list.js",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "6a66beb97966ff527bca60952a33527badd4703db9c6ad85c5cb8e787ad648c1",
+      "locator": "T03 native Memory List indicators and scoped review fields"
     }
   ]
 }
