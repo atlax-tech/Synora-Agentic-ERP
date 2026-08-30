@@ -39,13 +39,13 @@ def _record(**overrides: object) -> MemoryRecord:
     values: dict[str, object] = {
         "memory_id": "memory-1",
         "kind": "SEMANTIC",
-        "state": "PENDING",
+        "state": "CANDIDATE",
         "scope": _scope(),
         "source_run_id": RUN_ID,
         "source_claim_id": "claim-1",
         "source_revision": "run-rev-1",
         "content": "Use the approved replenishment SOP.",
-        "created_at": NOW,
+        "created_at": NOW - timedelta(days=1),
     }
     values.update(overrides)
     return MemoryRecord(**values)
@@ -61,13 +61,15 @@ def test_unknown_kind_state_and_extra_capability_fields_are_rejected() -> None:
     with pytest.raises(ValidationError):
         _record(kind="NOT_A_MEMORY_KIND")
     with pytest.raises(ValidationError):
+        _record(state="PENDING")
+    with pytest.raises(ValidationError):
         _record(state="APPROVE_ANYWAY")
     with pytest.raises(ValidationError):
         _record(allowed_tools=("purchase_order.submit",))
 
 
-def test_candidate_and_pending_memory_are_not_recallable() -> None:
-    for state in ("PENDING", "CANDIDATE"):
+def test_candidate_memory_is_not_recallable() -> None:
+    for state in ("CANDIDATE",):
         record = _record(state=state)
         assert is_recallable(record, _scope(), now=NOW) is False
 
@@ -76,6 +78,8 @@ def test_approved_unexpired_exact_scope_is_recallable() -> None:
     record = _record(
         state="APPROVED",
         expires_at=NOW + timedelta(days=1),
+        reviewer="system.manager@example.com",
+        reviewed_at=NOW - timedelta(minutes=1),
     )
     assert is_recallable(record, _scope(), now=NOW) is True
 
@@ -84,7 +88,13 @@ def test_episodic_approval_requires_expiry_but_no_numeric_ttl_is_invented() -> N
     with pytest.raises(ValidationError):
         _record(kind="EPISODIC", state="APPROVED")
 
-    record = _record(kind="EPISODIC", state="APPROVED", expires_at=NOW + timedelta(hours=1))
+    record = _record(
+        kind="EPISODIC",
+        state="APPROVED",
+        expires_at=NOW + timedelta(hours=1),
+        reviewer="system.manager@example.com",
+        reviewed_at=NOW - timedelta(minutes=1),
+    )
     assert record.expires_at == NOW + timedelta(hours=1)
 
 
@@ -100,13 +110,25 @@ def test_episodic_approval_requires_expiry_but_no_numeric_ttl_is_invented() -> N
     ],
 )
 def test_scope_mismatch_never_broadens(scope: MemoryScope, query_scope: MemoryScope) -> None:
-    record = _record(state="APPROVED", expires_at=NOW + timedelta(days=1), scope=scope)
+    record = _record(
+        state="APPROVED",
+        expires_at=NOW + timedelta(days=1),
+        reviewer="system.manager@example.com",
+        reviewed_at=NOW - timedelta(minutes=1),
+        scope=scope,
+    )
     assert is_recallable(record, query_scope, now=NOW) is False
 
 
 @pytest.mark.parametrize("state", ["REJECTED", "SUPERSEDED", "EXPIRED", "DELETED"])
 def test_non_recallable_lifecycle_states_are_excluded(state: str) -> None:
-    record = _record(state=state, expires_at=NOW + timedelta(days=1))
+    overrides: dict[str, object] = {"state": state, "expires_at": NOW + timedelta(days=1)}
+    if state == "REJECTED":
+        overrides.update(
+            reviewer="system.manager@example.com",
+            reviewed_at=NOW - timedelta(minutes=1),
+        )
+    record = _record(**overrides)
     assert is_recallable(record, _scope(), now=NOW) is False
 
 
@@ -115,6 +137,8 @@ def test_expiry_is_checked_at_supplied_time() -> None:
         state="APPROVED",
         created_at=NOW - timedelta(days=1),
         expires_at=NOW,
+        reviewer="system.manager@example.com",
+        reviewed_at=NOW - timedelta(minutes=1),
     )
     assert is_recallable(record, _scope(), now=NOW) is False
     assert is_recallable(record, _scope(), now=NOW - timedelta(seconds=1)) is True
@@ -124,13 +148,18 @@ def test_expiry_metadata_must_be_timezone_aware_and_chronological() -> None:
     with pytest.raises(ValidationError):
         _record(expires_at=datetime(2026, 8, 31, 12, 0))
     with pytest.raises(ValidationError):
-        _record(expires_at=NOW)
+        _record(created_at=NOW, expires_at=NOW)
     with pytest.raises(ValidationError):
-        _record(expires_at=NOW - timedelta(seconds=1))
+        _record(created_at=NOW, expires_at=NOW - timedelta(seconds=1))
 
 
 def test_correction_links_a_new_identity_without_overwriting_the_old_record() -> None:
-    old = _record(state="APPROVED", expires_at=NOW + timedelta(days=1))
+    old = _record(
+        state="APPROVED",
+        expires_at=NOW + timedelta(days=1),
+        reviewer="system.manager@example.com",
+        reviewed_at=NOW - timedelta(minutes=1),
+    )
     corrected = _record(
         memory_id="memory-2",
         version=2,
@@ -155,7 +184,12 @@ def test_digest_is_content_bound_and_content_remains_untrusted() -> None:
 
 
 def test_working_memory_is_never_recallable_or_authorizing() -> None:
-    record = _record(kind="WORKING", state="APPROVED")
+    record = _record(
+        kind="WORKING",
+        state="APPROVED",
+        reviewer="buyer@example.com",
+        reviewed_at=NOW,
+    )
     assert is_recallable(record, _scope(), now=NOW) is False
     assert record.content_classification == "UNTRUSTED"
 
@@ -179,3 +213,56 @@ def test_memory_id_defaults_for_unpersisted_candidates_and_source_is_versioned()
     assert record.memory_id is None
     assert record.version == 1
     assert record.state_version == 1
+
+
+def test_approved_memory_requires_complete_review_metadata() -> None:
+    with pytest.raises(ValidationError):
+        _record(state="APPROVED", expires_at=NOW + timedelta(days=1))
+    with pytest.raises(ValidationError):
+        _record(
+            state="APPROVED",
+            expires_at=NOW + timedelta(days=1),
+            reviewer="system.manager@example.com",
+        )
+    with pytest.raises(ValidationError):
+        _record(
+            state="APPROVED",
+            expires_at=NOW + timedelta(days=1),
+            reviewed_at=NOW - timedelta(minutes=1),
+        )
+
+
+def test_rejected_memory_also_requires_complete_review_metadata() -> None:
+    with pytest.raises(ValidationError):
+        _record(state="REJECTED")
+    record = _record(
+        state="REJECTED",
+        reviewer="system.manager@example.com",
+        reviewed_at=NOW - timedelta(minutes=1),
+    )
+    assert is_recallable(record, _scope(), now=NOW) is False
+
+
+def test_review_cannot_be_in_the_future_or_at_or_after_expiry() -> None:
+    future_review = _record(
+        state="APPROVED",
+        expires_at=NOW + timedelta(days=1),
+        reviewer="system.manager@example.com",
+        reviewed_at=NOW + timedelta(minutes=1),
+    )
+    assert is_recallable(future_review, _scope(), now=NOW) is False
+
+    with pytest.raises(ValidationError):
+        _record(
+            state="APPROVED",
+            expires_at=NOW + timedelta(hours=1),
+            reviewer="system.manager@example.com",
+            reviewed_at=NOW + timedelta(hours=1),
+        )
+    with pytest.raises(ValidationError):
+        _record(
+            state="APPROVED",
+            expires_at=NOW + timedelta(hours=1),
+            reviewer="system.manager@example.com",
+            reviewed_at=NOW + timedelta(hours=2),
+        )

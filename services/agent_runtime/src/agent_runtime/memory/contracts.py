@@ -18,8 +18,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 MemoryKind = Literal["WORKING", "EPISODIC", "SEMANTIC", "PROCEDURAL"]
 MemoryState = Literal[
-    "PENDING",
-    "CANDIDATE",  # Compatibility spelling for the pre-review candidate state.
+    "CANDIDATE",
     "APPROVED",
     "REJECTED",
     "SUPERSEDED",
@@ -31,7 +30,6 @@ ContentClassification = Literal["UNTRUSTED"]
 MEMORY_KINDS = frozenset({"WORKING", "EPISODIC", "SEMANTIC", "PROCEDURAL"})
 MEMORY_STATES = frozenset(
     {
-        "PENDING",
         "CANDIDATE",
         "APPROVED",
         "REJECTED",
@@ -112,7 +110,7 @@ class MemoryRecord(StrictModel):
 
     memory_id: _ID | None = None
     kind: MemoryKind
-    state: MemoryState = "PENDING"
+    state: MemoryState = "CANDIDATE"
     scope: MemoryScope
     source_run_id: UUID | None = None
     source_claim_id: _ID | None = None
@@ -164,8 +162,15 @@ class MemoryRecord(StrictModel):
             raise ValueError("expires_at must be later than created_at")
         if self.reviewed_at is not None and self.reviewed_at < self.created_at:
             raise ValueError("reviewed_at must not precede created_at")
-        if self.reviewer is not None and self.reviewed_at is None:
-            raise ValueError("reviewer requires reviewed_at")
+        if (self.reviewer is None) != (self.reviewed_at is None):
+            raise ValueError("reviewer and reviewed_at must be provided together")
+        if self.state in {"APPROVED", "REJECTED"} and (
+            self.reviewer is None or self.reviewed_at is None
+        ):
+            raise ValueError(f"{self.state.lower()} memory requires review metadata")
+        if self.expires_at is not None and self.reviewed_at is not None:
+            if self.reviewed_at >= self.expires_at:
+                raise ValueError("reviewed_at must be before expires_at")
         if self.kind == "EPISODIC" and self.state == "APPROVED" and self.expires_at is None:
             raise ValueError("approved episodic memory requires an explicit expiry")
         if self.supersedes_memory_id is not None:
@@ -204,12 +209,19 @@ def is_recallable(
     omitted timestamps use the current UTC clock and do not create a TTL.
     """
 
-    if memory.kind == "WORKING" or memory.state != "APPROVED":
+    if (
+        memory.kind == "WORKING"
+        or memory.state != "APPROVED"
+        or memory.reviewer is None
+        or memory.reviewed_at is None
+    ):
         return False
     current = now or datetime.now(UTC)
     try:
         current = _aware_timestamp(current, "now")
     except ValueError:
+        return False
+    if memory.reviewed_at > current:
         return False
     if memory.expires_at is not None and current >= memory.expires_at:
         return False
