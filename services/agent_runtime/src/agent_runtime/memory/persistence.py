@@ -14,6 +14,7 @@ from typing import Literal, NoReturn, Protocol
 from pydantic import ValidationError
 
 from agent_runtime.memory.contracts import MemoryRecord
+from agent_runtime.memory.state import MemoryStateError, transition_state
 
 MemoryPersistenceErrorCode = Literal[
     "INVALID_COMMAND",
@@ -52,10 +53,10 @@ def _validate_record(value: object, field_name: str) -> MemoryRecord:
     if not isinstance(value, MemoryRecord):
         _fail("INVALID_COMMAND", f"{field_name} must be a MemoryRecord")
     try:
-        MemoryRecord(**value.model_dump())
+        validated = MemoryRecord(**value.model_dump())
     except (ValidationError, TypeError, ValueError) as exc:
         raise MemoryPersistenceError("INVALID_COMMAND", f"{field_name} is invalid") from exc
-    return value
+    return validated
 
 
 def _ensure_durable(record: MemoryRecord, field_name: str) -> None:
@@ -77,6 +78,43 @@ def _validate_candidate(record: object) -> MemoryRecord:
     return candidate
 
 
+_IMMUTABLE_FIELDS = (
+    "memory_id",
+    "kind",
+    "scope",
+    "source_run_id",
+    "source_claim_id",
+    "source_revision",
+    "content",
+    "digest",
+    "version",
+    "supersedes_memory_id",
+    "created_at",
+    "expires_at",
+    "content_classification",
+)
+
+
+def _ensure_immutable_fields(current: MemoryRecord, updated: MemoryRecord, field_name: str) -> None:
+    for name in _IMMUTABLE_FIELDS:
+        if getattr(current, name) != getattr(updated, name):
+            _fail("CONFLICT", f"{field_name} immutable field cannot change")
+
+
+def _ensure_lifecycle_update(current: MemoryRecord, updated: MemoryRecord, field_name: str) -> None:
+    try:
+        _, expected_state_version = transition_state(
+            current.state,
+            updated.state,
+            state_version=current.state_version,
+            expected_version=current.state_version,
+        )
+    except MemoryStateError as exc:
+        raise MemoryPersistenceError("CONFLICT", f"{field_name} transition is invalid") from exc
+    if updated.state_version != expected_state_version:
+        _fail("CONFLICT", f"{field_name} state_version must increment by one")
+
+
 @dataclass(frozen=True, slots=True)
 class CandidateInsertCommand:
     """Validated request to insert one unreviewed durable candidate."""
@@ -84,34 +122,49 @@ class CandidateInsertCommand:
     record: MemoryRecord
 
     def __post_init__(self) -> None:
-        _validate_candidate(self.record)
+        object.__setattr__(self, "record", _validate_candidate(self.record))
 
 
 @dataclass(frozen=True, slots=True)
 class SingleRecordCasCommand:
-    """Validated one-record replacement guarded by an expected state version."""
+    """Validated one-record lifecycle update bound to an exact pre-state."""
 
-    target_memory_id: str
-    expected_state_version: int
+    current: MemoryRecord
     updated: MemoryRecord
+    expected_state_version: int
+    target_memory_id: str | None = None
 
     def __post_init__(self) -> None:
-        target_id = _validate_id(self.target_memory_id, "target_memory_id")
         expected = _validate_version(self.expected_state_version, "expected_state_version")
+        current = _validate_record(self.current, "current")
         updated = _validate_record(self.updated, "updated")
+        _ensure_durable(current, "current")
         _ensure_durable(updated, "updated")
-        if updated.memory_id is None:
-            _fail("INVALID_COMMAND", "updated memory must have a durable ID")
-        if updated.memory_id != target_id:
-            _fail("CONFLICT", "updated memory ID does not match target ID")
+
+        if current.memory_id is None or updated.memory_id is None:
+            _fail("INVALID_COMMAND", "current and updated memory must have durable IDs")
+        if current.memory_id != updated.memory_id:
+            _fail("CONFLICT", "current and updated memory IDs must match")
+        if self.target_memory_id is not None:
+            target_id = _validate_id(self.target_memory_id, "target_memory_id")
+            if target_id != current.memory_id:
+                _fail("CONFLICT", "target ID does not match current memory ID")
+        if current.state_version != expected:
+            _fail("STALE_VERSION", "current state_version does not match expected version")
+        _ensure_immutable_fields(current, updated, "memory")
+        _ensure_lifecycle_update(current, updated, "memory")
         if updated.state_version != expected + 1:
             _fail("CONFLICT", "updated state_version must equal expected version plus one")
+        object.__setattr__(self, "current", current)
+        object.__setattr__(self, "updated", updated)
 
 
 @dataclass(frozen=True, slots=True)
 class AtomicCorrectionCommand:
-    """Validated all-or-nothing pair for approving and superseding a correction."""
+    """Validated all-or-nothing correction bound to both exact pre-state snapshots."""
 
+    candidate_before: MemoryRecord
+    prior_before: MemoryRecord
     approved_correction: MemoryRecord
     superseded_prior: MemoryRecord
     expected_candidate_version: int
@@ -122,28 +175,60 @@ class AtomicCorrectionCommand:
             self.expected_candidate_version, "expected_candidate_version"
         )
         expected_prior = _validate_version(self.expected_prior_version, "expected_prior_version")
+        candidate_before = _validate_record(self.candidate_before, "candidate_before")
+        prior_before = _validate_record(self.prior_before, "prior_before")
         correction = _validate_record(self.approved_correction, "approved_correction")
         prior = _validate_record(self.superseded_prior, "superseded_prior")
+        _ensure_durable(candidate_before, "candidate_before")
+        _ensure_durable(prior_before, "prior_before")
         _ensure_durable(correction, "approved_correction")
         _ensure_durable(prior, "superseded_prior")
-        if correction.state != "APPROVED" or prior.state != "SUPERSEDED":
-            _fail("CONFLICT", "correction pair has invalid lifecycle states")
-        if correction.memory_id is None or prior.memory_id is None:
-            _fail("INVALID_COMMAND", "correction pair requires both durable IDs")
-        if correction.memory_id == prior.memory_id:
+
+        if (
+            candidate_before.memory_id is None
+            or prior_before.memory_id is None
+            or correction.memory_id is None
+            or prior.memory_id is None
+        ):
+            _fail("INVALID_COMMAND", "correction pair requires durable IDs")
+        if candidate_before.memory_id != correction.memory_id:
+            _fail("CONFLICT", "candidate snapshot and result IDs must match")
+        if prior_before.memory_id != prior.memory_id:
+            _fail("CONFLICT", "prior snapshot and result IDs must match")
+        if candidate_before.memory_id == prior_before.memory_id:
             _fail("CONFLICT", "correction pair requires distinct memory IDs")
+        if candidate_before.state != "CANDIDATE" or prior_before.state != "APPROVED":
+            _fail("CONFLICT", "correction snapshots have invalid lifecycle states")
+        if correction.state != "APPROVED" or prior.state != "SUPERSEDED":
+            _fail("CONFLICT", "correction results have invalid lifecycle states")
+        if candidate_before.state_version != expected_candidate:
+            _fail("STALE_VERSION", "candidate snapshot does not match expected version")
+        if prior_before.state_version != expected_prior:
+            _fail("STALE_VERSION", "prior snapshot does not match expected version")
+        _ensure_lifecycle_update(candidate_before, correction, "candidate correction")
+        _ensure_lifecycle_update(prior_before, prior, "prior supersession")
+        _ensure_immutable_fields(candidate_before, correction, "candidate correction")
+        _ensure_immutable_fields(prior_before, prior, "prior supersession")
+        if candidate_before.supersedes_memory_id != prior_before.memory_id:
+            _fail("CONFLICT", "candidate snapshot predecessor ID does not match")
         if correction.supersedes_memory_id != prior.memory_id:
             _fail("CONFLICT", "correction predecessor ID does not match")
-        if correction.scope != prior.scope:
+        if candidate_before.scope != prior_before.scope or correction.scope != prior.scope:
             _fail("CONFLICT", "correction pair scopes must match exactly")
-        if correction.kind != prior.kind:
+        if candidate_before.kind != prior_before.kind or correction.kind != prior.kind:
             _fail("CONFLICT", "correction pair kinds must match")
+        if candidate_before.version != prior_before.version + 1:
+            _fail("CONFLICT", "candidate snapshot version must be consecutive")
         if correction.version != prior.version + 1:
             _fail("CONFLICT", "correction version must be consecutive")
         if correction.state_version != expected_candidate + 1:
             _fail("CONFLICT", "correction state_version must equal expected plus one")
         if prior.state_version != expected_prior + 1:
             _fail("CONFLICT", "prior state_version must equal expected plus one")
+        object.__setattr__(self, "candidate_before", candidate_before)
+        object.__setattr__(self, "prior_before", prior_before)
+        object.__setattr__(self, "approved_correction", correction)
+        object.__setattr__(self, "superseded_prior", prior)
 
 
 class MemoryPersistencePort(Protocol):
