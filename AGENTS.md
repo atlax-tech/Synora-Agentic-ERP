@@ -29,7 +29,7 @@ Synora 是“Agent 开发岗位学习仓库 + 真实 ERP 实践载体”，在�
 ## 精简工作流
 
 - 每个新的 Codex 对话首次处理本仓库任务时，必须先读取本文件和 `docs/PLAN.md`，再按官方 `codex-with-chatgpt` 流程检查并复用本工作区已保存的长期会话；不得因为用户没有重复写出 Skill 名称、任务拆解方式或协作步骤而跳过 C2C。这里的“新对话”只指 Codex 对话，不得因此新建 ChatGPT 会话或第二个连接器。
-- 用户在计划模式说“开始推进 Phase X”“开始完成阶段 X”或“开始推进下个阶段”时，Codex 必须自动按 `docs/PLAN.md` 核对阶段状态并形成阶段细化计划；计划获准并进入执行模式后，自动调用全局 `codex-with-chatgpt`，不得要求用户再次提示 Skill、拆解方式或协作步骤。
+- 用户在计划模式说“开始推进 Phase X”“开始完成阶段 X”或“开始推进下个阶段”时，Codex 必须自动按 `docs/PLAN.md` 核对阶段状态并形成阶段细化计划；计划获准并进入执行模式后，自动调用全局 `codex-with-chatgpt`，不得要求用户再次提示 Skill、拆解方式或协作步骤。本仓库把这些阶段指令视为该 Skill 的隐式触发条件，但不改变官方状态流、权限边界或恢复流程。
 - ChatGPT 是阶段执行中的决策者：把已批准的阶段步骤拆成有序原子任务、每次签发一条完整执行 Prompt，并根据真实结果决定下一步。Codex 只执行当前 Prompt；发现假设失效、范围冲突、风险或失败时必须停止受影响动作，按官方 `EXECUTED → REVIEW → PLAN/BLOCKED` 回传事实，不自行选择替代路线。
 - Ponytail 只约束实现保持最小充分，不能推翻 ChatGPT 的已签发决定。C2C 的 `REVIEW` 只是下一步决策检查点；正式独立对抗审查仍由 Codex 按 ChatGPT 生成的 Review Prompt 调度独立只读角色，ChatGPT 不得代替或覆盖其结论。
 - 每个工作区复用一个长期 C2C 连接器和 ChatGPT 会话。只有用户明确授权并由 Codex 推送后，ChatGPT 才可对远端 GitHub 仓库或 PR 做补充性只读 Review；不得评论、批准、请求修改、提交、推送、修改、合并或关闭远端对象。

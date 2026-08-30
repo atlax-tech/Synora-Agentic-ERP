@@ -12,7 +12,7 @@
       "path": "AGENTS.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "46321419c595bc17e0eb78deb7634d126e08f6866de24e4fcc70e8b5d1aece35"
+      "sha256": "1f721f356fc94e375217ccf954b56cfa961b49298308683f15f75d0fe212ff0b"
     },
     {
       "path": "docs/PRD.md",
@@ -102,7 +102,7 @@
       "path": "docs/development-log/20260824-Phase-0-开发日志.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "81d2f7276d7c9088ac67efb5863aac9601fb93c2581631f9893566480c9628bb"
+      "sha256": "8baf1b703eaf34d968603570176159839e176bf4b5766e809b431bc9ba4279ce"
     },
     {
       "path": "docs/development-log/20260824-Phase-1-开发日志.md",
@@ -120,7 +120,7 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "8277f9dee310d414eb8d7281a665478e87a8891c1c5d36c2b2839af3d54fcd68"
+      "sha256": "f4e369fda1c95416350a15885f01534490ea393f050960d81c8b87230dfe8408"
     },
     {
       "path": ".harness/unresolved.json",

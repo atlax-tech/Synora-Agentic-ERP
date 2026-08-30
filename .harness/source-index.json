@@ -71,7 +71,7 @@
       "path": "AGENTS.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "46321419c595bc17e0eb78deb7634d126e08f6866de24e4fcc70e8b5d1aece35",
+      "sha256": "1f721f356fc94e375217ccf954b56cfa961b49298308683f15f75d0fe212ff0b",
       "locator": "repository boundaries, automatic C2C phase workflow, ChatGPT decision and Codex execution split, independent review gate, and mentor-led Assignment workflow"
     },
     {
@@ -111,7 +111,7 @@
       "path": "docs/development-log/20260824-Phase-0-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "81d2f7276d7c9088ac67efb5863aac9601fb93c2581631f9893566480c9628bb",
+      "sha256": "8baf1b703eaf34d968603570176159839e176bf4b5766e809b431bc9ba4279ce",
       "locator": "reverse-ordered Phase 0 governance history including automatic GPT-decision and Codex-execution workflow maintenance; original files remain in Git history"
     },
     {
