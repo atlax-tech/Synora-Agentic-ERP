@@ -13,7 +13,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from pydantic import ValidationError
 
@@ -145,6 +145,49 @@ class SQLiteMemoryStore:
             raise _error("INVALID_COMMAND", "memory record is invalid") from exc
 
     @staticmethod
+    def _json_uuid(value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        try:
+            parsed = UUID(value)
+        except ValueError:
+            return value
+        return parsed if str(parsed) == value else value
+
+    @staticmethod
+    def _json_datetime(value: object) -> object:
+        if not isinstance(value, str) or "T" not in value:
+            return value
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return value
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return value
+        return parsed
+
+    @classmethod
+    def _validate_json_record(cls, payload: str) -> MemoryRecord:
+        decoded = json.loads(payload)
+        if not isinstance(decoded, dict):
+            raise ValueError("payload is not an object")
+
+        normalized = dict(decoded)
+        for field_name in ("source_run_id",):
+            normalized[field_name] = cls._json_uuid(normalized.get(field_name))
+
+        scope = normalized.get("scope")
+        if isinstance(scope, dict):
+            normalized_scope = dict(scope)
+            normalized_scope["run_id"] = cls._json_uuid(normalized_scope.get("run_id"))
+            normalized["scope"] = normalized_scope
+
+        for field_name in ("created_at", "expires_at", "reviewed_at"):
+            normalized[field_name] = cls._json_datetime(normalized.get(field_name))
+
+        return MemoryRecord.model_validate(normalized)
+
+    @staticmethod
     def _serialize(record: MemoryRecord) -> str:
         try:
             payload = json.dumps(
@@ -153,7 +196,7 @@ class SQLiteMemoryStore:
                 sort_keys=True,
                 separators=(",", ":"),
             )
-            MemoryRecord.model_validate_json(payload, strict=False)
+            SQLiteMemoryStore._validate_json_record(payload)
             return payload
         except (ValidationError, TypeError, ValueError) as exc:
             raise _error("INVALID_COMMAND", "memory record is invalid") from exc
@@ -169,7 +212,7 @@ class SQLiteMemoryStore:
             decoded = json.loads(payload)
             if not isinstance(decoded, dict) or decoded.get("memory_id") != row["memory_id"]:
                 raise ValueError("payload identity is invalid")
-            record = MemoryRecord.model_validate_json(payload, strict=False)
+            record = SQLiteMemoryStore._validate_json_record(payload)
             if record.memory_id != row["memory_id"]:
                 raise ValueError("payload identity is invalid")
             if record.state != row["state"] or record.state_version != row["state_version"]:
@@ -225,7 +268,7 @@ class SQLiteMemoryStore:
                     ),
                 )
                 connection.commit()
-                return MemoryRecord.model_validate_json(payload, strict=False)
+                return self._validate_json_record(payload)
             except sqlite3.IntegrityError as exc:
                 if connection is not None:
                     self._rollback(connection)
@@ -298,7 +341,7 @@ class SQLiteMemoryStore:
             if cursor.rowcount != 1:
                 raise _error("STALE_VERSION", "memory record changed concurrently")
             connection.commit()
-            return MemoryRecord.model_validate_json(payload, strict=False)
+            return self._validate_json_record(payload)
         except MemoryPersistenceError:
             if connection is not None:
                 self._rollback(connection)
@@ -378,8 +421,8 @@ class SQLiteMemoryStore:
                 raise _error("STALE_VERSION", "memory record changed concurrently")
             connection.commit()
             return (
-                MemoryRecord.model_validate_json(correction_payload, strict=False),
-                MemoryRecord.model_validate_json(prior_payload, strict=False),
+                self._validate_json_record(correction_payload),
+                self._validate_json_record(prior_payload),
             )
         except MemoryPersistenceError:
             if connection is not None:

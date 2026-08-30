@@ -239,6 +239,53 @@ def test_exact_load_round_trips_all_record_fields(tmp_path: Path) -> None:
     assert _run(store.get_exact("complete-record")) == record
 
 
+def test_complete_json_payload_strictly_round_trips_after_reopen(tmp_path: Path) -> None:
+    path = tmp_path / "memory.db"
+    record = _candidate(
+        memory_id="strict-roundtrip",
+        expires_at=NOW + timedelta(days=3),
+    )
+    assert _create(SQLiteMemoryStore(path), record) == record
+
+    loaded = _run(SQLiteMemoryStore(path).get_exact("strict-roundtrip"))
+
+    assert loaded == record
+    assert loaded.source_run_id == RUN_ID
+    assert loaded.scope.run_id == RUN_ID
+    assert loaded.created_at.tzinfo is not None
+    assert loaded.expires_at is not None and loaded.expires_at.tzinfo is not None
+
+
+@pytest.mark.parametrize(
+    ("field", "corrupted_value"),
+    [
+        ("state_version", "1"),
+        ("version", "2"),
+        ("created_at", "123"),
+    ],
+)
+def test_type_corrupted_json_fails_closed(tmp_path: Path, field: str, corrupted_value: str) -> None:
+    path = tmp_path / f"{field}.db"
+    store = SQLiteMemoryStore(path)
+    memory_id = f"corrupt-{field}"
+    stored = _create(store, _candidate(memory_id=memory_id))
+    with _connection(path) as connection:
+        payload = json.loads(
+            connection.execute(
+                "SELECT payload FROM memory_records WHERE memory_id = ?", (memory_id,)
+            ).fetchone()[0]
+        )
+        payload[field] = corrupted_value
+        connection.execute(
+            "UPDATE memory_records SET payload = ? WHERE memory_id = ?",
+            (json.dumps(payload, sort_keys=True, separators=(",", ":")), stored.memory_id),
+        )
+
+    with pytest.raises(MemoryPersistenceError) as corrupted:
+        _run(store.get_exact(memory_id))
+    assert corrupted.value.code == "ATOMIC_COMMIT_FAILED"
+
+
 def test_unknown_exact_id_returns_not_found(tmp_path: Path) -> None:
     with pytest.raises(MemoryPersistenceError) as missing:
         _run(SQLiteMemoryStore(tmp_path / "memory.db").get_exact("unknown"))
