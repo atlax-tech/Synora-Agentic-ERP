@@ -20,9 +20,16 @@ from agent_runtime.memory.persistence import (
     MemoryPersistencePort,
     SingleRecordCasCommand,
 )
+from agent_runtime.memory.sqlite_store import (
+    MEMORY_DB_PATH_ENV,
+    MEMORY_SCHEMA_VERSION,
+    SQLiteMemoryStore,
+)
 from agent_runtime.memory.state import MemoryStateError, transition_state, validate_transition
 
 __all__ = [
+    "MEMORY_DB_PATH_ENV",
+    "MEMORY_SCHEMA_VERSION",
     "AtomicCorrectionCommand",
     "CandidateInsertCommand",
     "MemoryPersistenceError",
@@ -31,6 +38,7 @@ __all__ = [
     "MemoryRecord",
     "MemoryScope",
     "MemoryStateError",
+    "SQLiteMemoryStore",
     "SingleRecordCasCommand",
     "approve_candidate",
     "approve_correction",
