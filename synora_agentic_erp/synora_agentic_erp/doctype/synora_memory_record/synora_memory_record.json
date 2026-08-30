@@ -1,0 +1,198 @@
+{
+ "actions": [],
+ "autoname": "UUID",
+ "creation": "2026-08-31 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "kind",
+  "state",
+  "initiator",
+  "company_scope",
+  "warehouse_scope",
+  "scope_run",
+  "source_run",
+  "source_claim_id",
+  "source_revision",
+  "content",
+  "content_classification",
+  "digest",
+  "memory_version",
+  "state_version",
+  "supersedes_memory",
+  "expires_at",
+  "reviewed_at",
+  "reviewer",
+  "review_reason"
+ ],
+ "fields": [
+  {
+   "fieldname": "kind",
+   "fieldtype": "Select",
+   "label": "Kind",
+   "options": "EPISODIC\nSEMANTIC\nPROCEDURAL",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Select",
+   "label": "State",
+   "options": "CANDIDATE\nAPPROVED\nREJECTED\nSUPERSEDED\nEXPIRED\nDELETED",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "initiator",
+   "fieldtype": "Link",
+   "label": "Initiator",
+   "options": "User",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "company_scope",
+   "fieldtype": "Link",
+   "label": "Company Scope",
+   "options": "Company",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "warehouse_scope",
+   "fieldtype": "Link",
+   "label": "Warehouse Scope",
+   "options": "Warehouse",
+   "read_only": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "scope_run",
+   "fieldtype": "Link",
+   "label": "Scope Run",
+   "options": "Synora Agent Run",
+   "read_only": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "source_run",
+   "fieldtype": "Link",
+   "label": "Source Run",
+   "options": "Synora Agent Run",
+   "read_only": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "source_claim_id",
+   "fieldtype": "Data",
+   "label": "Source Claim ID",
+   "read_only": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "source_revision",
+   "fieldtype": "Data",
+   "label": "Source Revision",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Long Text",
+   "label": "Content",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "default": "UNTRUSTED",
+   "fieldname": "content_classification",
+   "fieldtype": "Select",
+   "label": "Content Classification",
+   "options": "UNTRUSTED",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "digest",
+   "fieldtype": "Data",
+   "label": "Digest",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "memory_version",
+   "fieldtype": "Int",
+   "label": "Memory Version",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "state_version",
+   "fieldtype": "Int",
+   "label": "State Version",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "supersedes_memory",
+   "fieldtype": "Link",
+   "label": "Supersedes Memory",
+   "options": "Synora Memory Record",
+   "read_only": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "expires_at",
+   "fieldtype": "Datetime",
+   "label": "Expires At",
+   "read_only": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "reviewed_at",
+   "fieldtype": "Datetime",
+   "label": "Reviewed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reviewer",
+   "fieldtype": "Link",
+   "label": "Reviewer",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "review_reason",
+   "fieldtype": "Small Text",
+   "label": "Review Reason",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-31 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Synora Agentic ERP",
+ "name": "Synora Memory Record",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "System Manager"
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

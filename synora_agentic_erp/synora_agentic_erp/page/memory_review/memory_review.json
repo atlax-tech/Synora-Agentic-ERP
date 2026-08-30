@@ -1,0 +1,13 @@
+{
+  "doctype": "Page",
+  "name": "memory-review",
+  "page_name": "memory-review",
+  "title": "Memory Review",
+  "module": "Synora Agentic ERP",
+  "standard": "Yes",
+  "roles": [
+    {
+      "role": "All"
+    }
+  ]
+}

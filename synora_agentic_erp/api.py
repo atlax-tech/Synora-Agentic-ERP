@@ -82,6 +82,11 @@ from synora_agentic_erp.governance.service import (
     serialize_approval_decision,
     serialize_policy_decision,
 )
+from synora_agentic_erp.memory.service import (
+    get_review_candidate,
+    list_review_queue,
+    review_candidate,
+)
 
 # 未认证入口 (execute, allow_guest) 的安全事件日志预算: 每分钟最多记录条数,
 # 用于防日志放大; 超出预算的事件静默丢弃。
@@ -1291,3 +1296,74 @@ def execute(**payload: Any) -> dict[str, Any]:
                 pass
         _set_status(erp_fault.status_code)
         return error_response(erp_fault, safe_correlation_id)
+
+
+def _memory_page_args(limit: object, offset: object) -> tuple[int, int]:
+    safe_limit = 50 if limit is None else positive_int(limit, "limit", 50)
+    safe_offset = 0 if offset is None else positive_int(offset, "offset", 10_000)
+    if safe_limit == 0:
+        raise GatewayFault("INVALID_INPUT", "limit is invalid")
+    return safe_limit, safe_offset
+
+
+@frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def list_memory_review_queue(limit: int | None = None, offset: int | None = None) -> dict[str, Any]:
+    """Return the authenticated user's opaque, permission-filtered candidate queue."""
+    try:
+        if frappe.session.user == "Guest":
+            raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
+        safe_limit, safe_offset = _memory_page_args(limit, offset)
+        result = list_review_queue(safe_limit, safe_offset)
+        return {"ok": True, "schema_version": SCHEMA_VERSION, **result}
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, None)
+    except Exception:
+        frappe.log_error(title="Synora Memory Review Queue Error")
+        memory_fault = GatewayFault("ERP_ERROR", "memory review is unavailable", 500)
+        _set_status(memory_fault.status_code)
+        return error_response(memory_fault, None)
+
+
+@frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def get_memory_review_candidate(memory_id: str) -> dict[str, Any]:
+    """Load one candidate without exposing foreign or non-candidate records."""
+    try:
+        if frappe.session.user == "Guest":
+            raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
+        memory = get_review_candidate(memory_id)
+        return {"ok": True, "schema_version": SCHEMA_VERSION, "memory": memory}
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, None)
+    except Exception:
+        frappe.log_error(title="Synora Memory Review Detail Error")
+        memory_fault = GatewayFault("ERP_ERROR", "memory review is unavailable", 500)
+        _set_status(memory_fault.status_code)
+        return error_response(memory_fault, None)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def review_memory_candidate(
+    memory_id: str,
+    decision: str,
+    expected_state_version: int,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Apply exactly one server-controlled review transition."""
+    try:
+        if frappe.session.user == "Guest":
+            raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
+        memory = review_candidate(memory_id, decision, expected_state_version, reason)
+        return {"ok": True, "schema_version": SCHEMA_VERSION, "memory": memory}
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, None)
+    except Exception:
+        frappe.log_error(title="Synora Memory Review Transition Error")
+        memory_fault = GatewayFault("ERP_ERROR", "memory review is unavailable", 500)
+        _set_status(memory_fault.status_code)
+        return error_response(memory_fault, None)
