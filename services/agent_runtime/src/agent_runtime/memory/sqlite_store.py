@@ -25,6 +25,12 @@ from agent_runtime.memory.persistence import (
     MemoryPersistenceErrorCode,
     SingleRecordCasCommand,
 )
+from agent_runtime.memory.recall import (
+    MemoryRecallError,
+    MemoryRecallQuery,
+    _validate_recall_query,
+    filter_recallable,
+)
 
 MEMORY_DB_PATH_ENV = "SYNORA_MEMORY_DB_PATH"
 MEMORY_SCHEMA_VERSION = "1"
@@ -303,6 +309,33 @@ class SQLiteMemoryStore:
             raise
         except (OSError, sqlite3.Error) as exc:
             raise _error("ATOMIC_COMMIT_FAILED", "memory load failed") from exc
+        finally:
+            if connection is not None:
+                connection.close()
+
+    async def recall_exact(self, query: MemoryRecallQuery) -> tuple[MemoryRecord, ...]:
+        """Recall approved, unexpired records for one exact scope.
+
+        This scans the small Runtime-local development table and deliberately
+        performs no content search or relevance ranking.
+        """
+
+        validated_query = _validate_recall_query(query)
+        connection: sqlite3.Connection | None = None
+        try:
+            connection = self._connect()
+            rows = connection.execute(
+                "SELECT memory_id, state, state_version, schema_version, payload, updated_at "
+                "FROM memory_records"
+            ).fetchall()
+            records = tuple(self._deserialize(row) for row in rows)
+            return filter_recallable(records, validated_query)
+        except MemoryRecallError:
+            raise
+        except MemoryPersistenceError as exc:
+            raise MemoryRecallError("STORE_FAILURE", "memory recall failed") from exc
+        except (OSError, sqlite3.Error, TypeError, ValueError) as exc:
+            raise MemoryRecallError("STORE_FAILURE", "memory recall failed") from exc
         finally:
             if connection is not None:
                 connection.close()

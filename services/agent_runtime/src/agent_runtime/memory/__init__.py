@@ -20,6 +20,13 @@ from agent_runtime.memory.persistence import (
     MemoryPersistencePort,
     SingleRecordCasCommand,
 )
+from agent_runtime.memory.recall import (
+    MemoryRecallError,
+    MemoryRecallErrorCode,
+    MemoryRecallPort,
+    MemoryRecallQuery,
+    filter_recallable,
+)
 from agent_runtime.memory.sqlite_store import (
     MEMORY_DB_PATH_ENV,
     MEMORY_SCHEMA_VERSION,
@@ -35,6 +42,10 @@ __all__ = [
     "MemoryPersistenceError",
     "MemoryPersistenceErrorCode",
     "MemoryPersistencePort",
+    "MemoryRecallError",
+    "MemoryRecallErrorCode",
+    "MemoryRecallPort",
+    "MemoryRecallQuery",
     "MemoryRecord",
     "MemoryScope",
     "MemoryStateError",
@@ -42,6 +53,7 @@ __all__ = [
     "SingleRecordCasCommand",
     "approve_candidate",
     "approve_correction",
+    "filter_recallable",
     "is_recallable",
     "reject_candidate",
     "scope_matches",
