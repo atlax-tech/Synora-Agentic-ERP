@@ -11,13 +11,17 @@ from agent_runtime.memory.contracts import (
     is_recallable,
     scope_matches,
 )
+from agent_runtime.memory.decisions import approve_candidate, approve_correction, reject_candidate
 from agent_runtime.memory.state import MemoryStateError, transition_state, validate_transition
 
 __all__ = [
     "MemoryRecord",
     "MemoryScope",
     "MemoryStateError",
+    "approve_candidate",
+    "approve_correction",
     "is_recallable",
+    "reject_candidate",
     "scope_matches",
     "transition_state",
     "validate_transition",
