@@ -12,12 +12,26 @@ from agent_runtime.memory.contracts import (
     scope_matches,
 )
 from agent_runtime.memory.decisions import approve_candidate, approve_correction, reject_candidate
+from agent_runtime.memory.persistence import (
+    AtomicCorrectionCommand,
+    CandidateInsertCommand,
+    MemoryPersistenceError,
+    MemoryPersistenceErrorCode,
+    MemoryPersistencePort,
+    SingleRecordCasCommand,
+)
 from agent_runtime.memory.state import MemoryStateError, transition_state, validate_transition
 
 __all__ = [
+    "AtomicCorrectionCommand",
+    "CandidateInsertCommand",
+    "MemoryPersistenceError",
+    "MemoryPersistenceErrorCode",
+    "MemoryPersistencePort",
     "MemoryRecord",
     "MemoryScope",
     "MemoryStateError",
+    "SingleRecordCasCommand",
     "approve_candidate",
     "approve_correction",
     "is_recallable",
