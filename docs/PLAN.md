@@ -360,7 +360,7 @@ Codex 只执行当前 Prompt，不重新规划阶段、不提前实现下一任�
 
 必读：纠偏方案 Phase 7、PRD F-016、Phase 4–6 Trace/预算/安全证据。
 
-状态：`COMPLETED / PASS`（2026-08-29）。Phase 7 已完成并停止在本阶段出口；Phase 8 仍未启动，必须等待用户明确启动，不得预先实现或验收 Phase 8 功能。
+状态：`COMPLETED / PASS`（2026-08-29）。Phase 7 已完成并停止在本阶段出口；Phase 8 已在完成 P8.0/T01 权威纠偏后启动，当前仍处于实现中，不得预写阶段出口结论。
 
 - **P7.1 Prompt 分层与版本**：区分边界、决策、恢复与输出契约，记录 version/hash 和单变量 A/B。
 - **P7.2 ContextBuilder**：实现 Gather/Select/Structure/Compress、JIT context、structured notes、summary 和 token budget，Trace 记录选择与丢失。
@@ -384,6 +384,16 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 ## 17. Phase 8 — Memory、RAG 与 Contextual ERP Coach
 
 必读：PRD F-013/F-014/F-016、SPEC Retrieval/Memory 契约、Phase 3 FTS5 与 Phase 7 Context 基线。
+
+状态：`IN_PROGRESS`（2026-08-31，P8.0/T01 权威范围与状态纠偏已完成）。这不是 `PASS` 或 `READY_FOR_NEXT_PHASE`；当前仅有 Memory 基础和受限召回前置原语。
+
+宏观任务映射（不代表未完成任务已验收）：
+
+- **T01 / P8.0**：已完成 PRD、PLAN、Architecture 与 Harness 状态对齐；F-013 是 Phase 8 的有限、只读、带引用 Coach，完整 P2P 写闭环仍在 Phase 10。
+- **T02 / P8.1**：已提交的 M1、M1F、M2、M3、M3F、M4、M4F，以及 M5/M5F 的 Runtime 开发适配器，均属于 Memory 领域基础；尚未形成 Frappe DocType、真实 RBAC、审核 API 或 Desk 审核页。
+- **T04 / P8.2 前置**：M5/M5F 的 SQLite 适配器和 M6 exact-scope recall 仅是 LAB_ONLY/开发前置原语；确定性 chunk、FTS5 元数据过滤、ContextBuilder 注入评测尚未实现。
+- **T03、T05–T10**：尚未开始；M7 从未执行或提交。C2C 迭代 1–10 用于此前已执行工作，迭代 11 是只读 T01 提案，迭代 12 是本次 T01 应用；不得虚构额外迭代。
+- Runtime-local SQLite Memory 只保留为 `LAB_ONLY`、单实例开发证据；Frappe 承担未来持久 Memory 的权威身份、权限与业务集成边界，Runtime Memory/cache/index 不得取代它或 ERP 事实。
 
 - 实现 Working/Episodic/Semantic/Procedural Memory 的写入候选、审核、scope、过期、纠正、删除、召回和污染防护。
 - 用同一语料对比 FTS5/BM25、vector、hybrid 和 rerank；业务主线只采用有净收益的层。

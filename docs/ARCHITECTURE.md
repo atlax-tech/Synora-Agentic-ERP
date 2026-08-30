@@ -1,6 +1,6 @@
 # Architecture
 
-Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is complete and its exit is `COMPLETED / PASS` after real ERP, fault, browser, Harness, independent Test, and adversarial Review evidence. Phase 7 Prompt/Context/Skills implementation and exit evidence are complete with status `COMPLETED / PASS`; its Prompt/Context/Skill metadata remains non-authorizing, Frappe remains authoritative, and no ERP write capability was added. Phase 8–13 remain planned and are not started.
+Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is complete and its exit is `COMPLETED / PASS` after real ERP, fault, browser, Harness, independent Test, and adversarial Review evidence. Phase 7 Prompt/Context/Skills implementation and exit evidence are complete with status `COMPLETED / PASS`; its Prompt/Context/Skill metadata remains non-authorizing, Frappe remains authoritative, and no ERP write capability was added. Phase 8 Memory/RAG/Contextual ERP Coach is `IN_PROGRESS` with only scoped Memory foundations and LAB_ONLY retrieval prerequisites delivered; Phase 9–13 remain planned and are not started.
 
 ## Architectural Style
 
@@ -57,6 +57,8 @@ The separation isolates fast-changing model orchestration from the deterministic
 
 - ERPNext/MariaDB owns suppliers, items, stock, Material Requests, Purchase Orders, Receipts, Invoices, Payment records, and authoritative business state.
 - Synora Frappe DocTypes own Agent Run, Proposed Action, Approval, Execution Receipt, and audit associations.
+- Frappe/Synora Frappe App is the eventual authoritative durable boundary for user-bound Memory records and their permission enforcement.
+- Runtime-local SQLite Memory persistence is `LAB_ONLY` single-instance/development evidence; it is not production authority, permission authority, or an ERP system of record.
 - Agent checkpoints own recoverable orchestration state only; they are not business facts.
 - Repository documents own product intent, architecture decisions, verified ERP knowledge, testing evidence, and development history.
 - Retrieval indexes are rebuildable caches and never become a source of truth.
