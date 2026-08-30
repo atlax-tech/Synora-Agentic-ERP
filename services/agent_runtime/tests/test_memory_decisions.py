@@ -110,6 +110,35 @@ def test_reject_candidate_records_review_reason_without_mutating_input() -> None
     assert candidate.state_version == 1
 
 
+def test_rejection_cannot_backdate_past_candidate_expiry() -> None:
+    accepted = reject_candidate(
+        _candidate(expires_at=NOW + timedelta(hours=1)),
+        reviewer="system.manager@example.com",
+        reviewed_at=NOW,
+        now=NOW,
+        expected_version=1,
+    )
+    assert accepted.state == "REJECTED"
+
+    for candidate, reviewed_at in (
+        (_candidate(expires_at=NOW), NOW - timedelta(minutes=1)),
+        (
+            _candidate(expires_at=NOW - timedelta(hours=1)),
+            NOW - timedelta(hours=2),
+        ),
+    ):
+        with pytest.raises(MemoryStateError):
+            reject_candidate(
+                candidate,
+                reviewer="system.manager@example.com",
+                reviewed_at=reviewed_at,
+                now=NOW,
+                expected_version=1,
+            )
+        assert candidate.state == "CANDIDATE"
+        assert candidate.state_version == 1
+
+
 @pytest.mark.parametrize("operation", [approve_candidate, reject_candidate])
 def test_review_decisions_require_a_fresh_candidate_version(operation: object) -> None:
     candidate = _candidate()

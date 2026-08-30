@@ -108,10 +108,11 @@ def reject_candidate(
 ) -> MemoryRecord:
     """Reject one candidate with optional bounded review rationale."""
 
-    reviewer_value, reviewed, _decision_now = _review_context(reviewer, reviewed_at, now)
+    reviewer_value, reviewed, decision_now = _review_context(reviewer, reviewed_at, now)
     if candidate.kind == "WORKING":
         raise _decision_error("INVALID_DECISION", "working memory cannot be durably rejected")
     _ensure_review_chronology(candidate, reviewed)
+    _ensure_not_expired(candidate, decision_now, "candidate")
     new_state, new_version = transition_state(
         candidate.state,
         "REJECTED",
