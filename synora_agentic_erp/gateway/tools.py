@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 import frappe
@@ -18,6 +18,7 @@ from synora_agentic_erp.gateway.security import RunContext
 MAX_SCOPE_WAREHOUSES = 1_000
 MAX_OPEN_DOCUMENTS = 10_000
 MAX_DEMAND_LINES = 50_000
+MAX_CURRENT_LINES = 50
 
 
 def _optional(label: str) -> InputField:
@@ -26,6 +27,16 @@ def _optional(label: str) -> InputField:
 
 def _required(label: str) -> InputField:
     return InputField(lambda value: bounded_text(value, label), required=True)
+
+
+def _required_identifier(label: str) -> InputField:
+    def parse(value: object) -> str:
+        parsed = bounded_text(value, label)
+        if not parsed.strip():
+            raise GatewayFault("INVALID_INPUT", f"{label} is invalid")
+        return parsed
+
+    return InputField(parse, required=True)
 
 
 def _page(tool_input: dict[str, JsonScalar]) -> tuple[int, int]:
@@ -43,6 +54,73 @@ def _quantity(value: object) -> Decimal:
 
 def _quantity_text(value: Decimal) -> str:
     return format(value, "f")
+
+
+def _nonnegative_quantity(value: object, label: str) -> Decimal:
+    try:
+        quantity = _quantity(value)
+    except (InvalidOperation, ValueError) as error:
+        raise GatewayFault("ERP_ERROR", f"{label} is invalid", 502) from error
+    if not quantity.is_finite() or quantity < 0:
+        raise GatewayFault("ERP_ERROR", f"{label} is invalid", 502)
+    return quantity
+
+
+def _source_text(value: object, label: str) -> str:
+    if value is None:
+        raise GatewayFault("ERP_ERROR", f"{label} is invalid", 502)
+    text = str(value)
+    if not text.strip():
+        raise GatewayFault("ERP_ERROR", f"{label} is invalid", 502)
+    return text
+
+
+def _document_status(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise GatewayFault("ERP_ERROR", "document status is invalid", 502)
+    try:
+        status = int(value)
+    except (TypeError, ValueError) as error:
+        raise GatewayFault("ERP_ERROR", "document status is invalid", 502) from error
+    if status not in {0, 1, 2}:
+        raise GatewayFault("ERP_ERROR", "document status is invalid", 502)
+    return status
+
+
+def _current_parent(
+    run: RunContext,
+    doctype: str,
+    name: str,
+    fields: list[str],
+) -> Any:
+    """Load one current document only through the caller's Frappe scope."""
+
+    rows = frappe.get_list(
+        doctype,
+        fields=fields,
+        filters={"name": name, "company": run.company},
+        user=run.initiator,
+        limit=1,
+    )
+    if not rows:
+        raise GatewayFault("NOT_FOUND", "requested resource is not available", 404)
+    return rows[0]
+
+
+def _current_parent_only_row(
+    *,
+    parent: Any,
+    identifier: str,
+    parent_fields: dict[str, JsonScalar],
+) -> dict[str, JsonScalar]:
+    return {
+        identifier: str(parent.name),
+        **parent_fields,
+        "item_code": None,
+        "warehouse": None,
+        "stock_uom": None,
+        "schedule_date": None,
+    }
 
 
 def _warehouse_names(run: RunContext, requested: str | None) -> list[str]:
@@ -442,6 +520,202 @@ def open_purchase_orders(run: RunContext, tool_input: dict[str, JsonScalar]) -> 
         items=items[offset : offset + limit + 1],
         source_modified_at=modified,
         omissions=omissions,
+    )
+
+
+@register(
+    name="material_request.current",
+    version="1",
+    required_doctypes=("Material Request",),
+    input_fields={"name": _required_identifier("name")},
+)
+def current_material_request(run: RunContext, tool_input: dict[str, JsonScalar]) -> ToolResult:
+    """Read one current Material Request without the open-list filters."""
+
+    offset, limit = _page(tool_input)
+    name = cast(str, tool_input["name"])
+    parent = _current_parent(
+        run,
+        "Material Request",
+        name,
+        [
+            "name",
+            "company",
+            "material_request_type",
+            "docstatus",
+            "status",
+            "transaction_date",
+            "modified",
+        ],
+    )
+    line_filters: dict[str, Any] = {"parent": name}
+    if run.warehouse:
+        line_filters["warehouse"] = run.warehouse
+    lines = frappe.get_list(
+        "Material Request Item",
+        fields=[
+            "parent",
+            "item_code",
+            "warehouse",
+            "stock_uom",
+            "stock_qty",
+            "ordered_qty",
+            "schedule_date",
+            "modified",
+        ],
+        filters=line_filters,
+        parent_doctype="Material Request",
+        user=run.initiator,
+        order_by="idx asc",
+        limit=MAX_CURRENT_LINES + 1,
+    )
+    if len(lines) > MAX_CURRENT_LINES:
+        raise GatewayFault("RESULT_LIMIT", "current material request is too large", 422)
+    if run.warehouse and not lines:
+        raise GatewayFault("NOT_FOUND", "requested resource is not available", 404)
+
+    parent_fields: dict[str, JsonScalar] = {
+        "company": _source_text(parent.company, "company"),
+        "material_request_type": _source_text(
+            parent.material_request_type, "material request type"
+        ),
+        "docstatus": _document_status(parent.docstatus),
+        "status": _source_text(parent.status, "status"),
+        "transaction_date": _source_text(parent.transaction_date, "transaction date"),
+    }
+    items: list[dict[str, JsonScalar]] = []
+    for line in lines:
+        requested = _nonnegative_quantity(line.stock_qty, "requested quantity")
+        ordered = _nonnegative_quantity(line.ordered_qty, "ordered quantity")
+        items.append(
+            {
+                "material_request": str(parent.name),
+                **parent_fields,
+                "item_code": _source_text(line.item_code, "item code"),
+                "warehouse": _source_text(line.warehouse, "warehouse"),
+                "stock_uom": _source_text(line.stock_uom, "stock UOM"),
+                "schedule_date": _source_text(line.schedule_date, "schedule date"),
+                "requested_stock_qty": _quantity_text(requested),
+                "ordered_stock_qty": _quantity_text(ordered),
+                "open_order_stock_qty": _quantity_text(max(requested - ordered, Decimal())),
+            }
+        )
+    if not items:
+        items.append(
+            _current_parent_only_row(
+                parent=parent,
+                identifier="material_request",
+                parent_fields=parent_fields,
+            )
+            | {
+                "requested_stock_qty": None,
+                "ordered_stock_qty": None,
+                "open_order_stock_qty": None,
+            }
+        )
+    return ToolResult(
+        items=items[offset : offset + limit + 1],
+        source_modified_at=_latest_modified([parent, *lines]),
+    )
+
+
+@register(
+    name="purchase_order.current",
+    version="1",
+    required_doctypes=("Purchase Order",),
+    input_fields={"name": _required_identifier("name")},
+)
+def current_purchase_order(run: RunContext, tool_input: dict[str, JsonScalar]) -> ToolResult:
+    """Read one current Purchase Order without the open-list filters."""
+
+    offset, limit = _page(tool_input)
+    name = cast(str, tool_input["name"])
+    parent = _current_parent(
+        run,
+        "Purchase Order",
+        name,
+        [
+            "name",
+            "company",
+            "supplier",
+            "docstatus",
+            "status",
+            "transaction_date",
+            "currency",
+            "modified",
+        ],
+    )
+    line_filters: dict[str, Any] = {"parent": name}
+    if run.warehouse:
+        line_filters["warehouse"] = run.warehouse
+    lines = frappe.get_list(
+        "Purchase Order Item",
+        fields=[
+            "parent",
+            "item_code",
+            "warehouse",
+            "stock_uom",
+            "qty",
+            "received_qty",
+            "conversion_factor",
+            "schedule_date",
+            "modified",
+        ],
+        filters=line_filters,
+        parent_doctype="Purchase Order",
+        user=run.initiator,
+        order_by="idx asc",
+        limit=MAX_CURRENT_LINES + 1,
+    )
+    if len(lines) > MAX_CURRENT_LINES:
+        raise GatewayFault("RESULT_LIMIT", "current purchase order is too large", 422)
+    if run.warehouse and not lines:
+        raise GatewayFault("NOT_FOUND", "requested resource is not available", 404)
+
+    parent_fields: dict[str, JsonScalar] = {
+        "company": _source_text(parent.company, "company"),
+        "supplier": _source_text(parent.supplier, "supplier"),
+        "docstatus": _document_status(parent.docstatus),
+        "status": _source_text(parent.status, "status"),
+        "transaction_date": _source_text(parent.transaction_date, "transaction date"),
+        "currency": _source_text(parent.currency, "currency"),
+    }
+    items: list[dict[str, JsonScalar]] = []
+    for line in lines:
+        conversion = _nonnegative_quantity(line.conversion_factor, "conversion factor")
+        if conversion == 0:
+            raise GatewayFault("ERP_ERROR", "conversion factor is invalid", 502)
+        ordered = _nonnegative_quantity(line.qty, "ordered quantity") * conversion
+        received = _nonnegative_quantity(line.received_qty, "received quantity") * conversion
+        items.append(
+            {
+                "purchase_order": str(parent.name),
+                **parent_fields,
+                "item_code": _source_text(line.item_code, "item code"),
+                "warehouse": _source_text(line.warehouse, "warehouse"),
+                "stock_uom": _source_text(line.stock_uom, "stock UOM"),
+                "schedule_date": _source_text(line.schedule_date, "schedule date"),
+                "ordered_stock_qty": _quantity_text(ordered),
+                "received_stock_qty": _quantity_text(received),
+                "open_receipt_stock_qty": _quantity_text(max(ordered - received, Decimal())),
+            }
+        )
+    if not items:
+        items.append(
+            _current_parent_only_row(
+                parent=parent,
+                identifier="purchase_order",
+                parent_fields=parent_fields,
+            )
+            | {
+                "ordered_stock_qty": None,
+                "received_stock_qty": None,
+                "open_receipt_stock_qty": None,
+            }
+        )
+    return ToolResult(
+        items=items[offset : offset + limit + 1],
+        source_modified_at=_latest_modified([parent, *lines]),
     )
 
 

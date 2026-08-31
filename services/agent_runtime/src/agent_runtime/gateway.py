@@ -48,6 +48,25 @@ class OpenPurchaseOrderInput(PageInput):
     supplier: str | None = Field(default=None, min_length=1, max_length=140)
 
 
+class CurrentDocumentInput(PageInput):
+    name: str = Field(min_length=1, max_length=140)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("name must not be blank")
+        return value
+
+
+class CurrentMaterialRequestInput(CurrentDocumentInput):
+    pass
+
+
+class CurrentPurchaseOrderInput(CurrentDocumentInput):
+    pass
+
+
 class ItemLookupCall(StrictModel):
     name: Literal["item.lookup"]
     version: Literal["1"] = "1"
@@ -84,13 +103,27 @@ class OpenPurchaseOrderCall(StrictModel):
     input: OpenPurchaseOrderInput
 
 
+class CurrentMaterialRequestCall(StrictModel):
+    name: Literal["material_request.current"]
+    version: Literal["1"] = "1"
+    input: CurrentMaterialRequestInput
+
+
+class CurrentPurchaseOrderCall(StrictModel):
+    name: Literal["purchase_order.current"]
+    version: Literal["1"] = "1"
+    input: CurrentPurchaseOrderInput
+
+
 ToolCall = Annotated[
     ItemLookupCall
     | SupplierLookupCall
     | ProjectedStockCall
     | OpenDemandCall
     | OpenMaterialRequestCall
-    | OpenPurchaseOrderCall,
+    | OpenPurchaseOrderCall
+    | CurrentMaterialRequestCall
+    | CurrentPurchaseOrderCall,
     Field(discriminator="name"),
 ]
 

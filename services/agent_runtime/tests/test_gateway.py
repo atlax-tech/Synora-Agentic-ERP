@@ -12,6 +12,10 @@ from agent_runtime.agent.contracts import canonical_json
 from agent_runtime.gateway import (
     GATEWAY_ORIGIN_ENV,
     GATEWAY_PATH,
+    CurrentMaterialRequestCall,
+    CurrentMaterialRequestInput,
+    CurrentPurchaseOrderCall,
+    CurrentPurchaseOrderInput,
     GatewayClient,
     GatewayProtocolError,
     GatewayRejected,
@@ -142,6 +146,43 @@ def test_unknown_tool_and_arbitrary_origin_parts_fail_validation() -> None:
                 GatewayClient()
     with pytest.raises(TypeError):
         GatewayClient("https://evil.example")  # type: ignore[call-arg]
+
+
+def test_current_document_calls_are_strict_internal_wire_types() -> None:
+    current_mr = GatewayRequest(
+        run_id=RUN_ID,
+        capability=CAPABILITY,
+        correlation_id=CORRELATION_ID,
+        tool=CurrentMaterialRequestCall(
+            name="material_request.current",
+            input=CurrentMaterialRequestInput(name="MAT-MR-0001"),
+        ),
+    )
+    current_po = GatewayRequest(
+        run_id=RUN_ID,
+        capability=CAPABILITY,
+        correlation_id=CORRELATION_ID,
+        tool=CurrentPurchaseOrderCall(
+            name="purchase_order.current",
+            input=CurrentPurchaseOrderInput(name="PUR-ORD-0001"),
+        ),
+    )
+    assert current_mr.tool.name == "material_request.current"
+    assert current_po.tool.name == "purchase_order.current"
+    with pytest.raises(ValidationError):
+        CurrentMaterialRequestInput(name=" ")
+    with pytest.raises(ValidationError):
+        CurrentPurchaseOrderInput(name="x" * 141)
+    with pytest.raises(ValidationError):
+        CurrentMaterialRequestCall.model_validate(
+            {
+                "name": "material_request.current",
+                "version": "2",
+                "input": {"name": "MR"},
+            }
+        )
+    with pytest.raises(ValidationError):
+        CurrentPurchaseOrderInput.model_validate({"name": "PO", "tool": "write"})
 
 
 def test_default_client_ignores_ambient_proxy_configuration() -> None:

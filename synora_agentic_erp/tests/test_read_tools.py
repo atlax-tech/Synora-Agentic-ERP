@@ -42,6 +42,8 @@ class TestReadTools(FrappeTestCase):
         )
 
     def _create_other_warehouse(self) -> str:
+        if frappe.db.exists("Warehouse", OTHER_WAREHOUSE):
+            return OTHER_WAREHOUSE
         frappe.set_user("Administrator")
         warehouse = frappe.get_doc(
             {
@@ -60,6 +62,8 @@ class TestReadTools(FrappeTestCase):
         purchase_uom: str | None = None,
         conversion_factor: float | None = None,
     ) -> str:
+        if frappe.db.exists("Item", item_code):
+            return item_code
         frappe.set_user("Administrator")
         values = {
             "doctype": "Item",
@@ -120,6 +124,28 @@ class TestReadTools(FrappeTestCase):
             }
         ).insert()
         order.submit()
+        return order.name
+
+    def _create_draft_purchase_order(self, warehouse: str = WAREHOUSE) -> str:
+        frappe.set_user(BUYER)
+        order = frappe.get_doc(
+            {
+                "doctype": "Purchase Order",
+                "company": COMPANY,
+                "supplier": SUPPLIER,
+                "transaction_date": getdate("2026-08-25"),
+                "schedule_date": getdate("2026-08-30"),
+                "items": [
+                    {
+                        "item_code": ITEM,
+                        "qty": 2,
+                        "rate": 100,
+                        "warehouse": warehouse,
+                        "schedule_date": getdate("2026-08-30"),
+                    }
+                ],
+            }
+        ).insert()
         return order.name
 
     def _create_disabled_supplier_with_open_order(self) -> tuple[str, str, str]:
@@ -192,9 +218,70 @@ class TestReadTools(FrappeTestCase):
         self.assertEqual(result["status"], "To Receive and Bill")
         self.assertEqual(result["currency"], "CNY")
 
+    def test_current_material_request_reads_live_fields_and_is_non_mutating(self) -> None:
+        request_name = self._create_open_material_request()
+        before = frappe.db.get_value(
+            "Material Request", request_name, ["docstatus", "status", "modified"]
+        )
+        run = self._issue()
+
+        response = self._call(run, "material_request.current", {"name": request_name})
+
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["tool"]["name"], "material_request.current")
+        self.assertEqual(response["data"][0]["material_request"], request_name)
+        self.assertEqual(response["data"][0]["company"], COMPANY)
+        self.assertEqual(response["data"][0]["docstatus"], 1)
+        self.assertEqual(Decimal(response["data"][0]["requested_stock_qty"]), Decimal("3"))
+        self.assertEqual(Decimal(response["data"][0]["ordered_stock_qty"]), Decimal("0"))
+        self.assertEqual(Decimal(response["data"][0]["open_order_stock_qty"]), Decimal("3"))
+        self.assertTrue(response["snapshot"]["captured_at"])
+        self.assertTrue(response["snapshot"]["source_modified_at"])
+        after = frappe.db.get_value(
+            "Material Request", request_name, ["docstatus", "status", "modified"]
+        )
+        self.assertEqual(after, before)
+
+    def test_current_purchase_order_reads_live_fields_including_draft(self) -> None:
+        order_name = self._create_draft_purchase_order()
+        before = frappe.db.get_value(
+            "Purchase Order", order_name, ["docstatus", "status", "modified"]
+        )
+        run = self._issue()
+
+        response = self._call(run, "purchase_order.current", {"name": order_name})
+
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["tool"]["name"], "purchase_order.current")
+        self.assertEqual(response["data"][0]["purchase_order"], order_name)
+        self.assertEqual(response["data"][0]["supplier"], SUPPLIER)
+        self.assertEqual(response["data"][0]["currency"], "CNY")
+        self.assertEqual(response["data"][0]["docstatus"], 0)
+        self.assertEqual(response["data"][0]["status"], "Draft")
+        self.assertEqual(Decimal(response["data"][0]["ordered_stock_qty"]), Decimal("2"))
+        self.assertEqual(Decimal(response["data"][0]["received_stock_qty"]), Decimal("0"))
+        self.assertEqual(Decimal(response["data"][0]["open_receipt_stock_qty"]), Decimal("2"))
+        after = frappe.db.get_value(
+            "Purchase Order", order_name, ["docstatus", "status", "modified"]
+        )
+        self.assertEqual(after, before)
+
+    def test_current_read_preserves_cancelled_document_state(self) -> None:
+        order_name = self._create_open_purchase_order()
+        frappe.set_user(BUYER)
+        frappe.get_doc("Purchase Order", order_name).cancel()
+        run = self._issue()
+
+        response = self._call(run, "purchase_order.current", {"name": order_name})
+
+        self.assertEqual(response["data"][0]["docstatus"], 2)
+        self.assertEqual(response["data"][0]["status"], "Cancelled")
+
     def test_accountant_cannot_gain_purchase_order_read_permission(self) -> None:
         run = self._issue(ACCOUNTANT, warehouse=None)
         response = self._call(run, "purchase_order.open", {})
+        self.assertEqual(response["error"]["code"], "PERMISSION_DENIED")
+        response = self._call(run, "purchase_order.current", {"name": "PUR-ORD-NOT-A-REAL-ID"})
         self.assertEqual(response["error"]["code"], "PERMISSION_DENIED")
 
     def test_tool_scope_and_pagination_fail_closed(self) -> None:
@@ -208,6 +295,12 @@ class TestReadTools(FrappeTestCase):
 
         response = self._call(run, "item.lookup", {"limit": 51})
         self.assertEqual(response["error"]["code"], "INVALID_INPUT")
+
+        for name in ("material_request.current", "purchase_order.current"):
+            response = self._call(run, name, {"name": " "})
+            self.assertEqual(response["error"]["code"], "INVALID_INPUT")
+            response = self._call(run, name, {"name": "x" * 141})
+            self.assertEqual(response["error"]["code"], "INVALID_INPUT")
 
     def test_warehouse_scoped_run_excludes_other_warehouse_mr_and_po(self) -> None:
         run = self._issue()
@@ -230,6 +323,86 @@ class TestReadTools(FrappeTestCase):
             orders["snapshot"]["source_modified_at"],
             before_orders["snapshot"]["source_modified_at"],
         )
+
+    def test_current_read_is_opaque_for_missing_or_other_warehouse_documents(self) -> None:
+        self.assertEqual(self._create_other_warehouse(), OTHER_WAREHOUSE)
+        other_request = self._create_open_material_request(OTHER_WAREHOUSE)
+        run = self._issue()
+
+        for name in ("MAT-MR-NOT-A-REAL-ID", other_request):
+            response = self._call(run, "material_request.current", {"name": name})
+            self.assertEqual(response["error"]["code"], "NOT_FOUND")
+            self.assertEqual(response["error"]["message"], "requested resource is not available")
+
+    def test_current_warehouse_scope_excludes_other_lines_without_aggregates(self) -> None:
+        self.assertEqual(self._create_other_warehouse(), OTHER_WAREHOUSE)
+        other_item = self._create_item("SYNORA-P2-Other-Warehouse-Item", "Unit")
+        frappe.set_user(BUYER)
+        request = frappe.get_doc(
+            {
+                "doctype": "Material Request",
+                "material_request_type": "Purchase",
+                "company": COMPANY,
+                "transaction_date": getdate("2026-08-25"),
+                "items": [
+                    {
+                        "item_code": other_item,
+                        "qty": 3,
+                        "warehouse": WAREHOUSE,
+                        "schedule_date": getdate("2026-08-30"),
+                    },
+                    {
+                        "item_code": ITEM,
+                        "qty": 99,
+                        "warehouse": OTHER_WAREHOUSE,
+                        "schedule_date": getdate("2026-08-30"),
+                    },
+                ],
+            }
+        ).insert()
+        request.submit()
+        run = self._issue()
+
+        response = self._call(run, "material_request.current", {"name": request.name})
+
+        self.assertEqual(len(response["data"]), 1)
+        self.assertEqual(response["data"][0]["warehouse"], WAREHOUSE)
+        self.assertEqual(Decimal(response["data"][0]["requested_stock_qty"]), Decimal("3"))
+        self.assertNotIn(OTHER_WAREHOUSE, str(response))
+        self.assertNotEqual(response["data"][0]["requested_stock_qty"], "99")
+
+        frappe.set_user(BUYER)
+        order = frappe.get_doc(
+            {
+                "doctype": "Purchase Order",
+                "company": COMPANY,
+                "supplier": SUPPLIER,
+                "transaction_date": getdate("2026-08-25"),
+                "schedule_date": getdate("2026-08-30"),
+                "items": [
+                    {
+                        "item_code": ITEM,
+                        "qty": 2,
+                        "rate": 100,
+                        "warehouse": WAREHOUSE,
+                        "schedule_date": getdate("2026-08-30"),
+                    },
+                    {
+                        "item_code": other_item,
+                        "qty": 99,
+                        "rate": 100,
+                        "warehouse": OTHER_WAREHOUSE,
+                        "schedule_date": getdate("2026-08-30"),
+                    },
+                ],
+            }
+        ).insert()
+        order.submit()
+        po_response = self._call(run, "purchase_order.current", {"name": order.name})
+        self.assertEqual(len(po_response["data"]), 1)
+        self.assertEqual(po_response["data"][0]["warehouse"], WAREHOUSE)
+        self.assertEqual(Decimal(po_response["data"][0]["ordered_stock_qty"]), Decimal("2"))
+        self.assertNotIn(OTHER_WAREHOUSE, str(po_response))
 
     def test_open_documents_keep_mixed_stock_units_separate(self) -> None:
         unit_item = self._create_item("SYNORA-P2-Mixed-Unit", "Unit")
@@ -319,4 +492,12 @@ class TestReadTools(FrappeTestCase):
         self.assertEqual(
             _TOOLS[("purchase_order.open", "1")].required_doctypes,
             ("Item", "Supplier", "Warehouse", "Purchase Order"),
+        )
+        self.assertEqual(
+            _TOOLS[("material_request.current", "1")].required_doctypes,
+            ("Material Request",),
+        )
+        self.assertEqual(
+            _TOOLS[("purchase_order.current", "1")].required_doctypes,
+            ("Purchase Order",),
         )
