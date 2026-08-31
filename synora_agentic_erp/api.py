@@ -83,9 +83,21 @@ from synora_agentic_erp.governance.service import (
     serialize_policy_decision,
 )
 from synora_agentic_erp.memory.service import (
+    create_memory_candidate as create_memory_candidate_service,
+)
+from synora_agentic_erp.memory.service import (
+    create_memory_correction as create_memory_correction_service,
+)
+from synora_agentic_erp.memory.service import (
+    delete_memory as delete_memory_service,
+)
+from synora_agentic_erp.memory.service import (
     get_review_candidate,
     list_review_queue,
     review_candidate,
+)
+from synora_agentic_erp.memory.service import (
+    list_visible_memories as list_visible_memories_service,
 )
 
 # 未认证入口 (execute, allow_guest) 的安全事件日志预算: 每分钟最多记录条数,
@@ -1352,18 +1364,155 @@ def review_memory_candidate(
     decision: str,
     expected_state_version: int,
     reason: str | None = None,
+    expected_predecessor_state_version: int | None = None,
 ) -> dict[str, Any]:
     """Apply exactly one server-controlled review transition."""
     try:
         if frappe.session.user == "Guest":
             raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
-        memory = review_candidate(memory_id, decision, expected_state_version, reason)
-        return {"ok": True, "schema_version": SCHEMA_VERSION, "memory": memory}
+        reviewed = review_candidate(
+            memory_id,
+            decision,
+            expected_state_version,
+            reason,
+            expected_predecessor_state_version=expected_predecessor_state_version,
+        )
+        # Ordinary reviews return one serialized record. Correction approvals
+        # return the approved replacement and its superseded predecessor; keep
+        # both records at the response top level rather than nesting memory.
+        if "superseded_memory" in reviewed:
+            return {"ok": True, "schema_version": SCHEMA_VERSION, **reviewed}
+        return {"ok": True, "schema_version": SCHEMA_VERSION, "memory": reviewed}
     except GatewayFault as fault:
         _set_status(fault.status_code)
         return error_response(fault, None)
     except Exception:
         frappe.log_error(title="Synora Memory Review Transition Error")
         memory_fault = GatewayFault("ERP_ERROR", "memory review is unavailable", 500)
+        _set_status(memory_fault.status_code)
+        return error_response(memory_fault, None)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def create_memory_candidate(
+    kind: str,
+    source_run: str,
+    source_revision: str,
+    content: str,
+    expires_at: str | None = None,
+    source_claim_id: str | None = None,
+) -> dict[str, Any]:
+    """Create one server-scoped, pending Memory candidate."""
+    try:
+        if frappe.session.user == "Guest":
+            raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
+        memory = create_memory_candidate_service(
+            kind=kind,
+            source_run=source_run,
+            source_revision=source_revision,
+            content=content,
+            expires_at=expires_at,
+            source_claim_id=source_claim_id,
+        )
+        return {"ok": True, "schema_version": SCHEMA_VERSION, **memory}
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, None)
+    except Exception:
+        frappe.log_error(title="Synora Memory Candidate Error")
+        memory_fault = GatewayFault("ERP_ERROR", "memory candidate is unavailable", 500)
+        _set_status(memory_fault.status_code)
+        return error_response(memory_fault, None)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def create_memory_correction(
+    predecessor_memory_id: str,
+    expected_predecessor_state_version: int,
+    source_run: str,
+    source_revision: str,
+    content: str,
+    expires_at: str | None = None,
+    source_claim_id: str | None = None,
+) -> dict[str, Any]:
+    """Create a pending correction bound to an approved predecessor."""
+    try:
+        if frappe.session.user == "Guest":
+            raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
+        memory = create_memory_correction_service(
+            predecessor_memory_id=predecessor_memory_id,
+            expected_predecessor_state_version=expected_predecessor_state_version,
+            source_run=source_run,
+            source_revision=source_revision,
+            content=content,
+            expires_at=expires_at,
+            source_claim_id=source_claim_id,
+        )
+        return {"ok": True, "schema_version": SCHEMA_VERSION, **memory}
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, None)
+    except Exception:
+        frappe.log_error(title="Synora Memory Correction Error")
+        memory_fault = GatewayFault("ERP_ERROR", "memory correction is unavailable", 500)
+        _set_status(memory_fault.status_code)
+        return error_response(memory_fault, None)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def tombstone_memory(
+    memory_id: str,
+    expected_state_version: int,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Delete a Memory body through an auditable, retained tombstone."""
+    try:
+        if frappe.session.user == "Guest":
+            raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
+        memory = delete_memory_service(memory_id, expected_state_version, reason)
+        return {"ok": True, "schema_version": SCHEMA_VERSION, "memory": memory}
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, None)
+    except Exception:
+        frappe.log_error(title="Synora Memory Tombstone Error")
+        memory_fault = GatewayFault("ERP_ERROR", "memory deletion is unavailable", 500)
+        _set_status(memory_fault.status_code)
+        return error_response(memory_fault, None)
+
+
+@frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def list_visible_memories(
+    company: str,
+    warehouse: str | None = None,
+    run_id: str | None = None,
+    kind: str | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> dict[str, Any]:
+    """Return only current, approved Memory rows in the requested scope."""
+    try:
+        if frappe.session.user == "Guest":
+            raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
+        safe_limit, safe_offset = _memory_page_args(limit, offset)
+        memories = list_visible_memories_service(
+            company=company,
+            warehouse=warehouse,
+            run_id=run_id,
+            kind=kind,
+            limit=safe_limit,
+            offset=safe_offset,
+        )
+        return {"ok": True, "schema_version": SCHEMA_VERSION, **memories}
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, None)
+    except Exception:
+        frappe.log_error(title="Synora Visible Memory Error")
+        memory_fault = GatewayFault("ERP_ERROR", "visible memory is unavailable", 500)
         _set_status(memory_fault.status_code)
         return error_response(memory_fault, None)

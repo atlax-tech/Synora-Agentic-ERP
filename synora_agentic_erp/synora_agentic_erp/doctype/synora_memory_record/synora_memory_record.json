@@ -17,13 +17,17 @@
   "content",
   "content_classification",
   "digest",
+  "dedupe_key",
   "memory_version",
   "state_version",
   "supersedes_memory",
   "expires_at",
   "reviewed_at",
   "reviewer",
-  "review_reason"
+  "review_reason",
+  "deleted_at",
+  "deleted_by",
+  "deletion_reason"
  ],
  "fields": [
   {
@@ -104,9 +108,7 @@
    "fieldname": "content",
    "fieldtype": "Long Text",
    "label": "Content",
-   "read_only": 1,
-   "reqd": 1,
-   "set_only_once": 1
+   "read_only": 1
   },
   {
    "default": "UNTRUSTED",
@@ -125,6 +127,15 @@
    "read_only": 1,
    "reqd": 1,
    "set_only_once": 1
+  },
+  {
+   "fieldname": "dedupe_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Dedupe Key",
+   "read_only": 1,
+   "set_only_once": 1,
+   "unique": 1
   },
   {
    "default": "1",
@@ -175,6 +186,25 @@
    "fieldname": "review_reason",
    "fieldtype": "Small Text",
    "label": "Review Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "deleted_at",
+   "fieldtype": "Datetime",
+   "label": "Deleted At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "deleted_by",
+   "fieldtype": "Link",
+   "label": "Deleted By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "deletion_reason",
+   "fieldtype": "Small Text",
+   "label": "Deletion Reason",
    "read_only": 1
   }
  ],

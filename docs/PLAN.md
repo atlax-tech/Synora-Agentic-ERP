@@ -385,15 +385,15 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 
 必读：PRD F-013/F-014/F-016、SPEC Retrieval/Memory 契约、Phase 3 FTS5 与 Phase 7 Context 基线。
 
-状态：`IN_PROGRESS`（2026-08-31，P8.0/T01 权威范围与状态纠偏已完成）。这不是 `PASS` 或 `READY_FOR_NEXT_PHASE`；当前包含 Memory 基础、受限召回前置原语，以及 T03 的 Frappe 审核切片。
+状态：`IN_PROGRESS`（2026-08-31，P8.0/T01 权威范围与状态纠偏已完成）。这不是 `PASS` 或 `READY_FOR_NEXT_PHASE`；当前包含 Memory 基础、受限召回前置原语，以及已完成的 T03/P8.1 Frappe 生命周期切片。
 
 宏观任务映射（不代表未完成任务已验收）：
 
 - **T01 / P8.0**：已完成 PRD、PLAN、Architecture 与 Harness 状态对齐；F-013 是 Phase 8 的有限、只读、带引用 Coach，完整 P2P 写闭环仍在 Phase 10。
 - **T02 / P8.1**：已提交的 M1、M1F、M2、M3、M3F、M4、M4F，以及 M5/M5F 的 Runtime 开发适配器，均属于 Memory 领域基础；完整生命周期、候选来源解析、删除 tombstone、纠正和统一召回仍未完成。
-- **T03 / P8.1（首个切片）**：已交付 Frappe-authoritative `Synora Memory Record` DocType、服务端范围/公司/仓库权限重检、候选详情与审核 API、CAS 审核转换、原生 Desk List/Form 审核入口及真实 Frappe 权限/CAS 测试；无权/未知原生 Form/API 记录统一为空响应，避免 Memory ID 存在性侧信道。原先自定义页面的浏览器证据需在原生入口复验，剩余 T03/P8.1 生命周期入口和完整候选去重/删除/纠正闭环仍待后续 Prompt。
+- **T03 / P8.1**：已交付 Frappe-authoritative `Synora Memory Record` DocType、服务端范围/公司/仓库权限重检、候选来源的真实 Run 解析、数据库唯一键去重、候选详情与审核 API、双 CAS 原子纠正、tombstone 删除、权限安全的可见召回、原生 Desk List/Form 审核入口及真实 Frappe 权限/CAS/无写入测试；无权/未知原生 Form/API 记录统一为空响应，避免 Memory ID 存在性侧信道。`source_claim_id` 仍仅是 provenance metadata，Coach claim authority 解析是 T07 的硬门禁；本切片未增加 RAG、Provider、Agent/model 或 ERP 写工具。
 - **T04 / P8.2 前置**：M5/M5F 的 SQLite 适配器和 M6 exact-scope recall 仅是 LAB_ONLY/开发前置原语；确定性 chunk、FTS5 元数据过滤、ContextBuilder 注入评测尚未实现。
-- **T03、T05–T10**：尚未开始；M7 从未执行或提交。C2C 迭代 1–10 用于此前已执行工作，迭代 11 是只读 T01 提案，迭代 12 是本次 T01 应用；不得虚构额外迭代。
+- **T04、T05–T10**：尚未开始；M7 从未执行或提交。此前 C2C 迭代 1–10 用于已执行的 Memory 基础，迭代 11 是只读 T01 提案，迭代 12 是 T01 应用；当前复用已授权会话的 T03 生命周期执行任务为独立 `iteration 0`，不得把它改写成历史迭代或虚构额外轮次。
 - Runtime-local SQLite Memory 只保留为 `LAB_ONLY`、单实例开发证据；Frappe 承担未来持久 Memory 的权威身份、权限与业务集成边界，Runtime Memory/cache/index 不得取代它或 ERP 事实。
 
 - 实现 Working/Episodic/Semantic/Procedural Memory 的写入候选、审核、scope、过期、纠正、删除、召回和污染防护。

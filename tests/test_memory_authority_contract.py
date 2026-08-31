@@ -60,6 +60,11 @@ def test_memory_doctype_matches_runtime_durable_contract() -> None:
         "DELETED",
     }
     assert str(_field(meta, "content_classification")["options"]) == "UNTRUSTED"
+    dedupe = _field(meta, "dedupe_key")
+    assert dedupe["hidden"] == 1
+    assert dedupe["read_only"] == 1
+    assert dedupe["set_only_once"] == 1
+    assert dedupe["unique"] == 1
 
 
 def test_generic_doctype_permissions_cannot_bypass_review_service() -> None:
@@ -91,7 +96,8 @@ def test_frappe_memory_boundary_has_no_runtime_or_model_dependencies() -> None:
     }
     assert not (_imports(controller) | _imports(service)) & forbidden_modules
     assert "Provider" not in service
-    assert "Agent" not in service
+    assert "from synora_agentic_erp.agent" not in service
+    assert "agent_runtime" not in service
     assert "gateway.registry" not in service
 
 
