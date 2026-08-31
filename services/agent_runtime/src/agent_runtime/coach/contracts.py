@@ -244,6 +244,10 @@ CoachClaimType = Literal[
     "RECOMMENDATION",
     "UNKNOWN",
 ]
+CoachSignableClaimType = Literal["ERP_FACT", "RETRIEVED_KNOWLEDGE", "RECOMMENDATION"]
+COACH_SIGNABLE_CLAIM_TYPES: frozenset[CoachSignableClaimType] = frozenset(
+    {"ERP_FACT", "RETRIEVED_KNOWLEDGE", "RECOMMENDATION"}
+)
 
 
 class CoachLiveCitation(StrictModel):
@@ -420,6 +424,10 @@ class CoachProviderOutput(StrictModel):
                     raise ValueError("RETRIEVED_KNOWLEDGE claims require RETRIEVAL citations")
         if referenced != set(citation_ids):
             raise ValueError("orphan citations are not permitted")
+        if self.answer_status in {"ANSWERED", "CONFLICT"} and any(
+            claim.claim_type == "UNKNOWN" for claim in self.claims
+        ):
+            raise ValueError("displayable answers cannot contain UNKNOWN claims")
         if self.answer_status == "ANSWERED":
             if not self.answer.strip() or not self.claims:
                 raise ValueError("ANSWERED requires an answer and claims")
@@ -485,7 +493,7 @@ class ValidatedCoachClaim(StrictModel):
     correlation_id: UUID
     claim_id: str = Field(pattern=_ID_PATTERN, min_length=1, max_length=120)
     ordinal: int = Field(ge=1, le=32)
-    claim_type: Literal["ERP_FACT", "RETRIEVED_KNOWLEDGE", "RECOMMENDATION"]
+    claim_type: CoachSignableClaimType
     claim_text: str = Field(min_length=1, max_length=4_000)
     claim_digest: str = Field(pattern=_DIGEST_PATTERN, min_length=64, max_length=64)
     citation_provenance: CoachCitationProvenance

@@ -28,6 +28,7 @@ from agent_runtime.coach.context import (
     current_fact_digest,
 )
 from agent_runtime.coach.contracts import (
+    COACH_SIGNABLE_CLAIM_TYPES,
     CoachAnswer,
     CoachAnswerStatus,
     CoachCitationProvenance,
@@ -39,6 +40,7 @@ from agent_runtime.coach.contracts import (
     CoachQuestionRequest,
     CoachRetrievalCitation,
     CoachRetrievalTrace,
+    CoachSignableClaimType,
     CoachTokenUsage,
     MaterialRequestCurrentFact,
     PurchaseOrderCurrentFact,
@@ -209,8 +211,9 @@ def _validated_claims(
     source_revision, source_snapshot = _source_snapshot(context)
     packages: list[ValidatedCoachClaim] = []
     for claim in output.claims:
-        if claim.claim_type not in {"ERP_FACT", "RETRIEVED_KNOWLEDGE", "RECOMMENDATION"}:
+        if claim.claim_type not in COACH_SIGNABLE_CLAIM_TYPES:
             continue
+        claim_type: CoachSignableClaimType = claim.claim_type
         provenance = CoachCitationProvenance(
             citations=tuple(citations_by_id[ref] for ref in claim.citation_refs)
         )
@@ -219,7 +222,7 @@ def _validated_claims(
             correlation_id=request.correlation_id,
             claim_id=claim.claim_id,
             ordinal=claim.ordinal,
-            claim_type=claim.claim_type,
+            claim_type=claim_type,
             claim_text=claim.text,
             claim_digest=hashlib.sha256(claim.text.encode("utf-8")).hexdigest(),
             citation_provenance=provenance,
@@ -286,6 +289,8 @@ def _normalize_grounded_claims(
     facts_by_digest = {current_fact_digest(fact): fact for fact in context.facts}
     normalized_claims: list[CoachClaim] = []
     for claim in output.claims:
+        if claim.claim_type not in COACH_SIGNABLE_CLAIM_TYPES:
+            return None
         if claim.claim_type == "ERP_FACT":
             normalized_text = _normalize_erp_claim(claim, citations_by_id, context, facts_by_digest)
             if normalized_text is None:
@@ -353,9 +358,10 @@ def _validate_citation_graph(
     hits_by_chunk = {hit.chunk_id: hit for hit in selected_hits}
     citations = {citation.citation_id: citation for citation in output.citations}
     for claim in output.claims:
-        if claim.claim_type == "MEMORY":
-            # T07 has no server-selected Memory input.  Accepting a model-only
-            # Memory id would turn an arbitrary string into durable authority.
+        if claim.claim_type not in COACH_SIGNABLE_CLAIM_TYPES:
+            # T07 has no server-selected Memory input and cannot sign unknown
+            # claims.  Accepting either as model-only authority would reopen
+            # an unsigned display path.
             return False
         for citation_id in claim.citation_refs:
             citation = citations[citation_id]

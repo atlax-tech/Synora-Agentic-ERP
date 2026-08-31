@@ -385,7 +385,7 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 
 必读：PRD F-013/F-014/F-016、SPEC Retrieval/Memory 契约、Phase 3 FTS5 与 Phase 7 Context 基线。
 
-状态：`BLOCKED`（2026-08-31，P8.0/T01 权威范围与状态纠偏已完成；T07 实现和宽检查完成，但 C2C iteration 7 的正式独立只读安全复核发现未关闭 P1，且 FIX_ROUND 1/2 已用尽）。这不是 `PASS` 或 `READY_FOR_NEXT_PHASE`；Phase 8 必须停在 T07，等待用户决定是否允许改变已批准的修复轮次/范围。
+状态：`IN_PROGRESS`（2026-08-31，P8.0/T01 权威范围与状态纠偏已完成；T07 曾因 C2C iteration 7 的正式独立只读安全复核发现 P1 而阻塞，用户随后明确授权一个仅针对该 P1 的窄修复批次，当前修复已执行、独立复核待完成）。这不是 `PASS` 或 `READY_FOR_NEXT_PHASE`；在新的独立安全复核通过前不得进入 T08。
 
 宏观任务映射（不代表未完成任务已验收）：
 
@@ -395,7 +395,7 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 - **T04 / P8.2**：已实现确定性 heading-aware chunk、稳定 chunk/content digest（不依赖摄取时间）、chunk-level FTS5/BM25、权限/来源/修订/ERP 版本过滤、可重建索引以及 `SearchHit` 引用元数据；检索到 ContextBuilder 的适配器明确标记 `UNTRUSTED`，最多接收 5 个合法、去重且保留输入 BM25 顺序的命中，引用超预算时保持原有 fail-closed，不自动删除 triggered retrieval refs。固定网络无关评测产物覆盖英文/CJK、权限/版本隔离、正确与错误 revision/ERP version、恶意文本和重建一致性；该切片已取得 C2C `REVIEW: PASS`。
 - **T05 / P8.3**：已完成同一固定 T04 语料上的 FTS5/BM25、真实本地 vector、RRF hybrid 和 bounded cross-encoder rerank 对照；Python 3.14 本地模型加载、9 cases、四路重复指纹、负例策略、scope/version/injection 边界均有证据，四路 `PASS` 且无安全违规。固定数据未产生相对 FTS5 的质量提升，Adoption Card 决策为 `KEEP_FTS5`；vector/hybrid/rerank 仍为 `LAB_ONLY / EVALUATED`，未改变业务路径。
 - **T06 / P8.4**：已交付 Provider-neutral Coach 请求/当前上下文严格契约，以及按 Run 发起人、公司、仓库和 Frappe 权限重检的 `material_request.current@1`、`purchase_order.current@1` 只读 Gateway 工具；覆盖实时 MR/PO 状态、草稿/取消单据、仓库范围、数量公式、来源时间戳、分页完整性和不透明无权/不存在响应。current 工具仍不进入 Provider 工具 schema 或模型 allowlist，也没有增加任何 ERP 写能力。C2C iteration 6 的 `CHANGES_REQUIRED` 已以 `7289d46` 修复并关闭。
-- **T07 / P8.4**：已实现 Provider-neutral Coach 回答契约、严格 Claim/Citation 图校验、服务端确定性实时 MR/PO 读取、Provider `tools=[]`、字段绑定的 ERP grounding、Runtime `ValidatedCoachClaim` 及域隔离 HMAC 签名；Frappe `Synora Coach Claim` 是持久 provenance 权威，服务端重新校验 Run/correlation/company/warehouse、来源版本和 live citation 后才幂等保存，Memory `source_claim_id` 只能解析到同一权威 Claim。当前 `answer_coach` 只编排本次新鲜、服务端选定的 MR/PO ERP context 与有界 FTS5 检索，不注入已审核 Frappe Memory；`MEMORY` citation 在此边界故意拒绝并 fail closed，Claim→Memory 仅是持久 provenance，不等于 Memory-backed Coach answer retrieval。Runtime 聚焦和宽检查、Frappe 聚焦回归均已通过；但 C2C iteration 7 正式独立只读安全复核返回 `BLOCKED`：`CoachClaimType` 仍允许 `UNKNOWN` 在 `ANSWERED/CONFLICT` 中携带 Provider 控制文本，`_validate_citation_graph()` 未拒绝该 claim，`_normalize_grounded_claims()` 未规范化它，而 `_validated_claims()` 跳过签名，导致未签名文本可进入最终答案。FIX_ROUND 1/2 已用尽，按规则不得第三轮修复，也不得进入 T08。
+- **T07 / P8.4**：已实现 Provider-neutral Coach 回答契约、严格 Claim/Citation 图校验、服务端确定性实时 MR/PO 读取、Provider `tools=[]`、字段绑定的 ERP grounding、Runtime `ValidatedCoachClaim` 及域隔离 HMAC 签名；Frappe `Synora Coach Claim` 是持久 provenance 权威，服务端重新校验 Run/correlation/company/warehouse、来源版本和 live citation 后才幂等保存，Memory `source_claim_id` 只能解析到同一权威 Claim。当前 `answer_coach` 只编排本次新鲜、服务端选定的 MR/PO ERP context 与有界 FTS5 检索，不注入已审核 Frappe Memory；`MEMORY` citation 在此边界故意拒绝并 fail closed，Claim→Memory 仅是持久 provenance，不等于 Memory-backed Coach answer retrieval。针对历史独立复核 P1 的用户授权窄修复已执行：保留 `UNKNOWN` 类型定义，但契约拒绝其进入 `ANSWERED/CONFLICT`，服务层统一的可签名 Claim allowlist 对非签名类型再次 fail closed；聚焦和 Runtime 全量测试通过。新的独立安全复核尚未完成，因此 T07 仍为“修复已执行、复核待完成”，不得标记 PASS 或进入 T08。
 - **T08 / P8.5**：尚未开始；Desk New Run、Runs、MR/PO 入口、Memory 原生审核页面、真实浏览器和 BYOK 验收均未实现。
 - **T09 / 阶段出口证据**：尚未开始；真实两例 BYOK、三角色浏览器、固定 ERP 零写入统计、Rubric 和风险收口尚未执行。
 - **T10 / 独立对抗 Review 与收口**：尚未开始；必须在 T08/T09 完成后由 ChatGPT 签发 Review Prompt，独立只读角色通过后才能关闭 Phase 8。

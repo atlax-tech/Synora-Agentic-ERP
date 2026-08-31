@@ -378,6 +378,29 @@ def test_unknown_and_refused_outputs_cannot_carry_business_answer_text() -> None
             )
 
 
+@pytest.mark.parametrize("status", ["ANSWERED", "CONFLICT"])
+def test_displayable_outputs_reject_unknown_claims(status: str) -> None:
+    with pytest.raises(ValidationError):
+        CoachProviderOutput.model_validate(
+            {
+                "schema_version": "1",
+                "answer_status": status,
+                "answer": "Provider-authored unsupported text.",
+                "claims": [
+                    {
+                        "claim_id": "claim-1",
+                        "ordinal": 1,
+                        "claim_type": "UNKNOWN",
+                        "text": "Provider-authored unsupported text.",
+                        "citation_refs": ["live-1"],
+                    }
+                ],
+                "citations": [_live_citation()],
+                "refusal_reason": None,
+            }
+        )
+
+
 def test_coach_answer_requires_bounded_usage_and_trace() -> None:
     with pytest.raises(ValidationError):
         CoachAnswer.model_validate(
