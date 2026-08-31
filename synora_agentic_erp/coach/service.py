@@ -7,12 +7,22 @@ import hmac
 import json
 import os
 import re
+import urllib.error
+import urllib.request
 from collections.abc import Mapping
 from typing import Any
+from uuid import uuid4
 
 import frappe
 
+from synora_agentic_erp.agent.service import (
+    _RUNTIME_RESPONSE_BYTES,
+    _RUNTIME_TIMEOUT_SECONDS,
+    _NoRedirectHandler,
+    _runtime_url,
+)
 from synora_agentic_erp.gateway.contract import GatewayFault, canonical_uuid
+from synora_agentic_erp.gateway.security import resolve_run
 from synora_agentic_erp.memory.service import _actor, _run_scope
 from synora_agentic_erp.synora_agentic_erp.doctype.synora_coach_claim.synora_coach_claim import (
     MAX_SOURCE_SNAPSHOT_LENGTH,
@@ -105,6 +115,39 @@ _CLAIM_FIELDS = [
     "source_snapshot",
     "creation",
 ]
+_CAPABILITY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43}$")
+_COACH_ANSWER_FIELDS = frozenset(
+    {
+        "schema_version",
+        "answer_status",
+        "answer",
+        "claims",
+        "citations",
+        "refusal_reason",
+        "retrieval_trace",
+        "token_usage",
+        "latency_ms",
+        "validated_claims",
+    }
+)
+_COACH_CLAIM_FIELDS = frozenset({"claim_id", "ordinal", "claim_type", "text", "citation_refs"})
+_COACH_TRACE_FIELDS = frozenset(
+    {
+        "selected_chunk_ids",
+        "selected_content_digests",
+        "selected_revisions",
+        "live_fact_digests",
+        "provider_tools",
+        "context_fragment_ids",
+    }
+)
+_COACH_USAGE_FIELDS = frozenset({"prompt_tokens", "completion_tokens", "reasoning_tokens"})
+_COACH_STATUSES = frozenset({"ANSWERED", "UNKNOWN", "CONFLICT", "REFUSED"})
+_COACH_SIGNABLE_TYPES = frozenset({"ERP_FACT", "RETRIEVED_KNOWLEDGE", "RECOMMENDATION"})
+_COACH_SAFE_REFUSAL_REASONS = {
+    "UNKNOWN": "Coach could not produce a grounded answer",
+    "REFUSED": "Coach declined to answer",
+}
 
 
 def _not_available() -> GatewayFault:
@@ -515,6 +558,486 @@ def persist_coach_claim(
     return {"created": True, **_serialize(inserted)}
 
 
+def _coach_run_not_available() -> GatewayFault:
+    """Use one opaque result for every Run/capability visibility failure."""
+    return GatewayFault("COACH_RUN_NOT_AVAILABLE", "Coach run is not available", 404)
+
+
+def _coach_capability(value: object) -> str:
+    capability = _text(value, "capability", 43)
+    if not _CAPABILITY_PATTERN.fullmatch(capability):
+        raise GatewayFault("INVALID_INPUT", "capability is invalid")
+    return capability
+
+
+def validate_coach_capability(value: object) -> str:
+    """Validate the existing raw Run capability without storing or rotating it."""
+    return _coach_capability(value)
+
+
+def _coach_response_invalid() -> GatewayFault:
+    return GatewayFault("COACH_RESPONSE_INVALID", "Coach runtime returned an invalid answer", 502)
+
+
+def _coach_claims_not_persisted() -> GatewayFault:
+    return GatewayFault("COACH_CLAIMS_NOT_PERSISTED", "Coach claims could not be persisted", 503)
+
+
+def _call_coach_runtime(payload: dict[str, object], capability: str) -> dict[str, Any]:
+    """Call Runtime through the existing loopback/host-gateway policy."""
+    runtime_token = os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
+    if not runtime_token:
+        raise GatewayFault("UNAVAILABLE", "Coach runtime authentication is unavailable", 503)
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-Synora-Runtime-Token": runtime_token,
+    }
+    request: Any = None
+    encoded_payload = b""
+    raw = b""
+    try:
+        encoded_payload = json.dumps(
+            payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            _runtime_url("coach/answer"),
+            data=encoded_payload,
+            headers=headers,
+            method="POST",
+        )
+        opener = urllib.request.build_opener(_NoRedirectHandler())
+        with opener.open(request, timeout=_RUNTIME_TIMEOUT_SECONDS) as response:
+            raw = response.read(_RUNTIME_RESPONSE_BYTES + 1)
+        sensitive_values = (capability.encode("utf-8"), runtime_token.encode("utf-8"))
+        if len(raw) > _RUNTIME_RESPONSE_BYTES or any(value in raw for value in sensitive_values):
+            raise ValueError("runtime response is unsafe")
+        body = json.loads(
+            raw,
+            parse_constant=_reject_json_constant,
+            object_pairs_hook=_reject_duplicate_pairs,
+        )
+        if not isinstance(body, dict):
+            raise ValueError("runtime response must be an object")
+        return body
+    except GatewayFault:
+        raise
+    except urllib.error.HTTPError:
+        raise GatewayFault("UNAVAILABLE", "Coach runtime is unavailable", 503) from None
+    except urllib.error.URLError, TimeoutError, OSError:
+        raise GatewayFault("UNAVAILABLE", "Coach runtime is unavailable", 503) from None
+    except TypeError, UnicodeError, ValueError:
+        raise _coach_response_invalid() from None
+    finally:
+        payload.clear()
+        headers.clear()
+        encoded_payload = b""
+        raw = b""
+        request = None
+        runtime_token = ""
+
+
+def _coach_list(value: object, label: str, maximum: int) -> list[Any]:
+    if not isinstance(value, list) or len(value) > maximum:
+        raise ValueError(f"{label} is invalid")
+    return value
+
+
+def _coach_output_claim(value: object) -> dict[str, Any]:
+    claim = _strict_mapping(value, "Coach claim", _COACH_CLAIM_FIELDS)
+    claim_type = claim["claim_type"]
+    if claim_type not in _COACH_SIGNABLE_TYPES:
+        raise ValueError("claim type is invalid")
+    references = claim["citation_refs"]
+    if not isinstance(references, list) or not 1 <= len(references) <= 8:
+        raise ValueError("claim citation refs are invalid")
+    safe_references = [_identifier(reference, "citation_ref") for reference in references]
+    if len(set(safe_references)) != len(safe_references):
+        raise ValueError("claim citation refs are not unique")
+    return {
+        "claim_id": _identifier(claim["claim_id"], "claim_id"),
+        "ordinal": _bounded_int(claim["ordinal"], "ordinal", 1, 32),
+        "claim_type": claim_type,
+        "text": _text(claim["text"], "claim text", MAX_CLAIM_LENGTH),
+        "citation_refs": safe_references,
+    }
+
+
+def _coach_output_trace(value: object) -> dict[str, list[str]]:
+    trace = _strict_mapping(value, "retrieval trace", _COACH_TRACE_FIELDS)
+    limits = {
+        "selected_chunk_ids": 5,
+        "selected_content_digests": 5,
+        "selected_revisions": 5,
+        "live_fact_digests": 50,
+        "provider_tools": 0,
+        "context_fragment_ids": 64,
+    }
+    safe: dict[str, list[str]] = {}
+    for field, maximum in limits.items():
+        values = trace[field]
+        if not isinstance(values, list) or len(values) > maximum:
+            raise ValueError("retrieval trace collection is invalid")
+        if any(not isinstance(item, str) for item in values):
+            raise ValueError("retrieval trace collection is invalid")
+        if field in {"selected_chunk_ids", "selected_content_digests", "live_fact_digests"}:
+            safe[field] = [_digest(item, f"retrieval trace {field}") for item in values]
+        else:
+            safe[field] = [_text(item, f"retrieval trace {field}", 140) for item in values]
+    if safe["provider_tools"]:
+        raise ValueError("provider tools are not allowed")
+    return safe
+
+
+def _coach_output_usage(value: object) -> dict[str, int]:
+    usage = _strict_mapping(value, "token usage", _COACH_USAGE_FIELDS)
+    return {
+        field: _bounded_int(usage[field], field, 0, 10_000_000)
+        for field in ("prompt_tokens", "completion_tokens", "reasoning_tokens")
+    }
+
+
+def _coach_output_package(
+    value: object,
+    *,
+    expected_run: str,
+    expected_correlation: str,
+    expected_doctype: str,
+    expected_name: str,
+    expected_scope: Mapping[str, str | None],
+) -> dict[str, Any]:
+    package = _strict_mapping(value, "validated Coach claim", _PACKAGE_FIELDS)
+    if package["schema_version"] != "1":
+        raise ValueError("validated claim schema is invalid")
+    safe_run = canonical_uuid(package["run_id"], "validated claim run_id")
+    safe_correlation = canonical_uuid(package["correlation_id"], "validated claim correlation_id")
+    if safe_run != expected_run or safe_correlation != expected_correlation:
+        raise ValueError("validated claim identity is invalid")
+    claim_id = _identifier(package["claim_id"], "validated claim id")
+    ordinal = _bounded_int(package["ordinal"], "validated claim ordinal", 1, 32)
+    claim_type = package["claim_type"]
+    if claim_type not in _COACH_SIGNABLE_TYPES:
+        raise ValueError("validated claim type is invalid")
+    claim_text = _text(package["claim_text"], "validated claim text", MAX_CLAIM_LENGTH)
+    claim_digest = _digest(package["claim_digest"], "validated claim digest")
+    if claim_digest != hashlib.sha256(claim_text.encode("utf-8")).hexdigest():
+        raise ValueError("validated claim digest is invalid")
+
+    provenance = _strict_mapping(
+        package["citation_provenance"],
+        "validated citation provenance",
+        frozenset({"citations"}),
+    )
+    raw_citations = provenance["citations"]
+    if not isinstance(raw_citations, list) or not 1 <= len(raw_citations) <= 8:
+        raise ValueError("validated citation provenance is invalid")
+    citations = [_validate_citation(citation) for citation in raw_citations]
+    citation_ids = [str(citation["citation_id"]) for citation in citations]
+    if len(set(citation_ids)) != len(citation_ids):
+        raise ValueError("validated citation ids are not unique")
+    if claim_type == "ERP_FACT" and any(
+        citation["citation_type"] != "LIVE_ERP" for citation in citations
+    ):
+        raise ValueError("validated ERP claim citations are invalid")
+    if claim_type == "RETRIEVED_KNOWLEDGE" and any(
+        citation["citation_type"] != "RETRIEVAL" for citation in citations
+    ):
+        raise ValueError("validated retrieval claim citations are invalid")
+    normalized_provenance = {"citations": citations}
+    provenance_json = _canonical_payload(
+        normalized_provenance, "validated citation provenance", MAX_SOURCE_SNAPSHOT_LENGTH
+    )
+    citation_digest = _digest(package["citation_digest"], "validated citation digest")
+    if citation_digest != hashlib.sha256(provenance_json.encode("utf-8")).hexdigest():
+        raise ValueError("validated citation digest is invalid")
+
+    source_revision = _text(
+        package["source_revision"], "validated source revision", MAX_REVISION_LENGTH
+    )
+    source_snapshot, snapshot = _validate_source_snapshot(
+        package["source_snapshot"], run_id=expected_run, source_revision=source_revision
+    )
+    document = snapshot["document"]
+    scope = snapshot["scope"]
+    if (
+        not isinstance(document, dict)
+        or document.get("doctype") != expected_doctype
+        or document.get("name") != expected_name
+        or not isinstance(scope, dict)
+        or scope.get("company") != expected_scope.get("company")
+        or (scope.get("warehouse") or None) != (expected_scope.get("warehouse") or None)
+    ):
+        raise ValueError("validated source snapshot is outside the request scope")
+    _digest(package["signature"], "validated claim signature")
+    normalized = dict(package)
+    normalized.update(
+        {
+            "run_id": safe_run,
+            "correlation_id": safe_correlation,
+            "claim_id": claim_id,
+            "ordinal": ordinal,
+            "claim_text": claim_text,
+            "claim_digest": claim_digest,
+            "citation_provenance": normalized_provenance,
+            "citation_digest": citation_digest,
+            "source_revision": source_revision,
+            "source_snapshot": source_snapshot,
+        }
+    )
+    return normalized
+
+
+def _validate_coach_answer(
+    value: object,
+    *,
+    expected_run: str,
+    expected_correlation: str,
+    expected_doctype: str,
+    expected_name: str,
+    expected_scope: Mapping[str, str | None],
+) -> dict[str, Any]:
+    """Strictly validate Runtime's complete Coach envelope before persistence."""
+    try:
+        body = _strict_mapping(value, "Coach answer", _COACH_ANSWER_FIELDS)
+        if body["schema_version"] != "1" or body["answer_status"] not in _COACH_STATUSES:
+            raise ValueError("Coach answer identity is invalid")
+        status = str(body["answer_status"])
+        answer = body["answer"]
+        if not isinstance(answer, str) or len(answer) > 8_000:
+            raise ValueError("Coach answer text is invalid")
+        refusal_reason = body["refusal_reason"]
+        if refusal_reason is not None:
+            refusal_reason = _text(refusal_reason, "refusal reason", 500)
+        claims = [_coach_output_claim(item) for item in _coach_list(body["claims"], "claims", 32)]
+        citations = [
+            _validate_citation(item) for item in _coach_list(body["citations"], "citations", 64)
+        ]
+        citation_ids = [str(citation["citation_id"]) for citation in citations]
+        if len(set(citation_ids)) != len(citation_ids):
+            raise ValueError("Coach citation ids are not unique")
+        claim_ids = [claim["claim_id"] for claim in claims]
+        if len(set(claim_ids)) != len(claim_ids):
+            raise ValueError("Coach claim ids are not unique")
+        if [claim["ordinal"] for claim in claims] != list(range(1, len(claims) + 1)):
+            raise ValueError("Coach claim ordinals are not contiguous")
+        citation_map = dict(zip(citation_ids, citations, strict=True))
+        referenced: set[str] = set()
+        for claim in claims:
+            for reference in claim["citation_refs"]:
+                citation = citation_map.get(reference)
+                if citation is None:
+                    raise ValueError("Coach citation reference is missing")
+                referenced.add(reference)
+                if claim["claim_type"] == "ERP_FACT" and citation["citation_type"] != "LIVE_ERP":
+                    raise ValueError("Coach ERP citation type is invalid")
+                if (
+                    claim["claim_type"] == "RETRIEVED_KNOWLEDGE"
+                    and citation["citation_type"] != "RETRIEVAL"
+                ):
+                    raise ValueError("Coach retrieval citation type is invalid")
+        if referenced != set(citation_ids):
+            raise ValueError("orphan Coach citations are not allowed")
+
+        packages = [
+            _coach_output_package(
+                item,
+                expected_run=expected_run,
+                expected_correlation=expected_correlation,
+                expected_doctype=expected_doctype,
+                expected_name=expected_name,
+                expected_scope=expected_scope,
+            )
+            for item in _coach_list(body["validated_claims"], "validated claims", 32)
+        ]
+        package_ids = [package["claim_id"] for package in packages]
+        if len(set(package_ids)) != len(package_ids):
+            raise ValueError("validated claim ids are not unique")
+
+        if status in {"UNKNOWN", "REFUSED"}:
+            if answer.strip() or claims or citations or packages or not refusal_reason:
+                raise ValueError("non-answer Coach status contains answer data")
+        else:
+            if not answer.strip() or not claims or not citations or refusal_reason is not None:
+                raise ValueError("displayable Coach status is incomplete")
+            if answer != "\n".join(claim["text"] for claim in claims):
+                raise ValueError("Coach answer is not rebuilt from claims")
+            if set(package_ids) != set(claim_ids) or len(packages) != len(claims):
+                raise ValueError("every display claim requires one validated package")
+            packages_by_id = {package["claim_id"]: package for package in packages}
+            for claim in claims:
+                package = packages_by_id[claim["claim_id"]]
+                if (
+                    package["ordinal"] != claim["ordinal"]
+                    or package["claim_type"] != claim["claim_type"]
+                    or package["claim_text"] != claim["text"]
+                ):
+                    raise ValueError("validated claim does not match display claim")
+                package_citations = package["citation_provenance"]["citations"]
+                package_refs = [str(citation["citation_id"]) for citation in package_citations]
+                if package_refs != claim["citation_refs"]:
+                    raise ValueError("validated claim provenance does not match refs")
+                for reference, package_citation in zip(
+                    claim["citation_refs"], package_citations, strict=True
+                ):
+                    if _canonical_payload(
+                        package_citation, "citation", MAX_SOURCE_SNAPSHOT_LENGTH
+                    ) != _canonical_payload(
+                        citation_map[reference], "citation", MAX_SOURCE_SNAPSHOT_LENGTH
+                    ):
+                        raise ValueError("validated claim provenance does not match citation")
+            if [package["ordinal"] for package in packages] != list(range(1, len(packages) + 1)):
+                raise ValueError("validated claim ordinals are not contiguous")
+
+        return {
+            "answer_status": status,
+            "answer": answer,
+            "refusal_reason": (
+                None if refusal_reason is None else _COACH_SAFE_REFUSAL_REASONS[status]
+            ),
+            "claims": claims,
+            "citations": citations,
+            "retrieval_trace": _coach_output_trace(body["retrieval_trace"]),
+            "token_usage": _coach_output_usage(body["token_usage"]),
+            "latency_ms": _bounded_int(body["latency_ms"], "latency_ms", 0, 86_400_000),
+            "validated_claims": packages,
+        }
+    except GatewayFault, KeyError, TypeError, ValueError:
+        raise _coach_response_invalid() from None
+
+
+def _persisted_provenance(
+    value: object,
+    package: Mapping[str, Any],
+    *,
+    expected_scope: Mapping[str, str | None],
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("persisted claim is invalid")
+    if (
+        str(value.get("run")) != str(package["run_id"])
+        or str(value.get("correlation_id")) != str(package["correlation_id"])
+        or str(value.get("company_scope")) != str(expected_scope["company"])
+        or (str(value.get("warehouse_scope") or "") or None)
+        != (str(expected_scope.get("warehouse") or "") or None)
+        or str(value.get("claim_digest")) != str(package["claim_digest"])
+        or str(value.get("citation_digest")) != str(package["citation_digest"])
+        or str(value.get("source_revision")) != str(package["source_revision"])
+    ):
+        raise ValueError("persisted claim does not match package")
+    return {
+        "claim_id": package["claim_id"],
+        "ordinal": package["ordinal"],
+        "claim_type": package["claim_type"],
+        "claim_digest": package["claim_digest"],
+        "citation_digest": package["citation_digest"],
+        "source_revision": package["source_revision"],
+        "persisted_claim_id": _text(value.get("name"), "persisted claim id", 140),
+    }
+
+
+def _persist_coach_claims(
+    packages: list[dict[str, Any]],
+    *,
+    expected_scope: Mapping[str, str | None],
+) -> list[dict[str, Any]]:
+    if not packages:
+        return []
+    savepoint = f"synora_coach_claims_{uuid4().hex}"
+    try:
+        frappe.db.savepoint(savepoint)
+        persisted = [
+            _persisted_provenance(
+                persist_coach_claim(validated_claim=package),
+                package,
+                expected_scope=expected_scope,
+            )
+            for package in packages
+        ]
+        return persisted
+    except Exception:
+        try:
+            frappe.db.rollback(save_point=savepoint)
+        except Exception:
+            pass
+        raise _coach_claims_not_persisted() from None
+
+
+def answer_contextual_coach(
+    *,
+    run_id: object,
+    capability: object,
+    question: object,
+    current_doctype: object,
+    current_name: object,
+) -> dict[str, Any]:
+    """Answer a Coach question from one authenticated, server-bound Run."""
+    actor = _actor()
+    safe_run = canonical_uuid(run_id, "run_id")
+    safe_capability = validate_coach_capability(capability)
+    safe_question = _text(question, "question", 1_000)
+    if not isinstance(current_doctype, str) or current_doctype not in {
+        "Material Request",
+        "Purchase Order",
+    }:
+        raise GatewayFault("INVALID_INPUT", "current_doctype is invalid")
+    safe_doctype = str(current_doctype)
+    safe_name = _text(current_name, "current_name", 140)
+
+    try:
+        scope = _run_scope(safe_run, actor)
+        resolved = resolve_run(safe_run, safe_capability)
+        safe_correlation = canonical_uuid(scope.get("correlation_id"), "run correlation_id")
+    except GatewayFault:
+        raise _coach_run_not_available() from None
+    except Exception:
+        raise _coach_run_not_available() from None
+    if (
+        resolved.run_id != scope["run_id"]
+        or str(resolved.initiator) != str(scope["initiator"])
+        or str(resolved.company) != str(scope["company"])
+        or (str(resolved.warehouse or "") or None) != (str(scope["warehouse"] or "") or None)
+    ):
+        raise _coach_run_not_available()
+
+    payload: dict[str, object] = {
+        "schema_version": "1",
+        "run_id": safe_run,
+        "correlation_id": safe_correlation,
+        "question": safe_question,
+        "current_document": {"doctype": safe_doctype, "name": safe_name},
+        "capability": safe_capability,
+    }
+    runtime_answer = _call_coach_runtime(payload, safe_capability)
+    validated = _validate_coach_answer(
+        runtime_answer,
+        expected_run=safe_run,
+        expected_correlation=safe_correlation,
+        expected_doctype=safe_doctype,
+        expected_name=safe_name,
+        expected_scope=scope,
+    )
+    persisted = _persist_coach_claims(
+        validated["validated_claims"],
+        expected_scope=scope,
+    )
+    return {
+        "ok": True,
+        "schema_version": "1",
+        "correlation_id": safe_correlation,
+        "coach": {
+            "answer_status": validated["answer_status"],
+            "answer": validated["answer"],
+            "refusal_reason": validated["refusal_reason"],
+            "claims": validated["claims"],
+            "citations": validated["citations"],
+            "retrieval_trace": validated["retrieval_trace"],
+            "token_usage": validated["token_usage"],
+            "latency_ms": validated["latency_ms"],
+            "provenance": persisted,
+        },
+    }
+
+
 def resolve_coach_claim(
     claim_id: object,
     *,
@@ -561,4 +1084,9 @@ def resolve_coach_claim(
     return _serialize(row)
 
 
-__all__ = ["persist_coach_claim", "resolve_coach_claim"]
+__all__ = [
+    "answer_contextual_coach",
+    "persist_coach_claim",
+    "resolve_coach_claim",
+    "validate_coach_capability",
+]

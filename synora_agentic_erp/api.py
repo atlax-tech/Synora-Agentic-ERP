@@ -22,6 +22,10 @@ from synora_agentic_erp.agent.service import (
 from synora_agentic_erp.agent.service import (
     plan_run as plan_server_run,
 )
+from synora_agentic_erp.coach.service import (
+    answer_contextual_coach,
+    validate_coach_capability,
+)
 from synora_agentic_erp.gateway.contract import (
     SCHEMA_VERSION,
     GatewayFault,
@@ -432,6 +436,50 @@ def issue_run(
     except GatewayFault as fault:
         _set_status(fault.status_code)
         return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def ask_coach(
+    run_id: object,
+    capability: object,
+    question: object,
+    current_doctype: object,
+    current_name: object,
+    **extra: object,
+) -> dict[str, Any]:
+    """Answer one bounded Coach question through an authenticated Run."""
+    try:
+        reject_mixed_user_credentials()
+        if extra:
+            raise GatewayFault("INVALID_INPUT", "request fields are invalid")
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        safe_capability = validate_coach_capability(capability)
+        safe_question = bounded_text(question, "question", 1_000)
+        if not safe_question.strip():
+            raise GatewayFault("INVALID_INPUT", "question is invalid")
+        if not isinstance(current_doctype, str) or current_doctype not in {
+            "Material Request",
+            "Purchase Order",
+        }:
+            raise GatewayFault("INVALID_INPUT", "current_doctype is invalid")
+        safe_name = bounded_text(current_name, "current_name")
+        return answer_contextual_coach(
+            run_id=safe_run_id,
+            capability=safe_capability,
+            question=safe_question,
+            current_doctype=current_doctype,
+            current_name=safe_name,
+        )
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        # The Run correlation is intentionally derived only after capability and
+        # actor checks; callers cannot supply or override it on an error path.
+        return error_response(fault, None)
+    except Exception:
+        service_fault = GatewayFault("ERP_ERROR", "Coach service is unavailable", 503)
+        _set_status(service_fault.status_code)
+        return error_response(service_fault, None)
 
 
 @frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
