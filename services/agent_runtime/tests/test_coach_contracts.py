@@ -9,11 +9,16 @@ import pytest
 from agent_runtime.agent.contracts import Action
 from agent_runtime.agent.native_tool_calling import READ_TOOL_NAMES, provider_tool_specs
 from agent_runtime.coach import (
+    CoachAnswer,
+    CoachClaim,
     CoachContextError,
+    CoachLiveCitation,
+    CoachProviderOutput,
     CoachQuestionRequest,
     MaterialRequestCurrentFact,
     PurchaseOrderCurrentFact,
     build_current_document_context,
+    parse_coach_provider_output,
 )
 from agent_runtime.gateway import GatewaySuccess
 from pydantic import ValidationError
@@ -196,5 +201,166 @@ def test_current_tools_are_not_provider_or_agent_callable() -> None:
                 "tool_name": "material_request.current",
                 "canonical_args": {"name": "MAT-MR-0001"},
                 "correlation_id": CORRELATION_ID,
+            }
+        )
+
+
+def _live_citation(**overrides: object) -> dict[str, object]:
+    value: dict[str, object] = {
+        "citation_type": "LIVE_ERP",
+        "citation_id": "live-1",
+        "run_id": str(RUN_ID),
+        "document_doctype": "Material Request",
+        "document_name": "MAT-MR-0001",
+        "state_version": 3,
+        "captured_at": "2026-08-30 12:00:00",
+        "source_modified_at": "2026-08-30 11:59:00",
+        "fact_digest": "a" * 64,
+    }
+    value.update(overrides)
+    return value
+
+
+def _retrieval_citation(**overrides: object) -> dict[str, object]:
+    value: dict[str, object] = {
+        "citation_type": "RETRIEVAL",
+        "citation_id": "retrieval-1",
+        "chunk_id": "b" * 64,
+        "content_digest": "c" * 64,
+        "ordinal": 1,
+        "source_type": "sop",
+        "revision": "v1",
+        "erp_version": "erp-a",
+        "permission_scope": "internal",
+    }
+    value.update(overrides)
+    return value
+
+
+def test_coach_output_is_strict_and_citations_are_resolved_by_claim_refs() -> None:
+    output = CoachProviderOutput.model_validate(
+        {
+            "schema_version": "1",
+            "answer_status": "ANSWERED",
+            "answer": "The request has two open units.",
+            "claims": [
+                {
+                    "claim_id": "claim-1",
+                    "ordinal": 1,
+                    "claim_type": "ERP_FACT",
+                    "text": "Two units remain open.",
+                    "citation_refs": ["live-1"],
+                }
+            ],
+            "citations": [_live_citation()],
+            "refusal_reason": None,
+        }
+    )
+    assert output.claims[0].citation_refs == ("live-1",)
+    assert output.citations[0].citation_id == "live-1"
+    assert CoachClaim.model_validate(output.claims[0].model_dump())
+    assert CoachLiveCitation.model_validate(output.citations[0].model_dump())
+
+    with pytest.raises(ValidationError):
+        CoachProviderOutput.model_validate(
+            {
+                "schema_version": "1",
+                "answer_status": "ANSWERED",
+                "answer": "unsupported",
+                "claims": [],
+                "citations": [],
+                "refusal_reason": None,
+                "unexpected": True,
+            }
+        )
+    with pytest.raises(ValidationError):
+        CoachProviderOutput.model_validate(
+            {
+                "schema_version": "1",
+                "answer_status": "ANSWERED",
+                "answer": "unsupported",
+                "claims": [
+                    {
+                        "claim_id": "claim-1",
+                        "ordinal": 1,
+                        "claim_type": "ERP_FACT",
+                        "text": "uncited",
+                        "citation_refs": ["missing"],
+                    }
+                ],
+                "citations": [],
+                "refusal_reason": None,
+            }
+        )
+    with pytest.raises(ValidationError):
+        CoachProviderOutput.model_validate(
+            {
+                "schema_version": "1",
+                "answer_status": "ANSWERED",
+                "answer": "unsupported",
+                "claims": [
+                    {
+                        "claim_id": "claim-1",
+                        "ordinal": 1,
+                        "claim_type": "ERP_FACT",
+                        "text": "duplicate refs",
+                        "citation_refs": ["live-1"],
+                    }
+                ],
+                "citations": [_live_citation(), _live_citation(citation_id="live-1")],
+                "refusal_reason": None,
+            }
+        )
+
+
+def test_provider_json_parser_rejects_duplicate_keys_and_unknown_citation_types() -> None:
+    valid = (
+        '{"schema_version":"1","answer_status":"REFUSED",'
+        '"answer":"","claims":[],"citations":[],"refusal_reason":"not enough evidence"}'
+    )
+    parsed = parse_coach_provider_output(valid)
+    assert parsed.answer_status == "REFUSED"
+    with pytest.raises(ValueError):
+        parse_coach_provider_output(valid.replace('"answer":""', '"answer":"","answer":"x"'))
+    with pytest.raises(ValidationError):
+        CoachProviderOutput.model_validate(
+            {
+                "schema_version": "1",
+                "answer_status": "ANSWERED",
+                "answer": "bad citation",
+                "claims": [
+                    {
+                        "claim_id": "claim-1",
+                        "ordinal": 1,
+                        "claim_type": "ERP_FACT",
+                        "text": "bad",
+                        "citation_refs": ["unknown"],
+                    }
+                ],
+                "citations": [
+                    {
+                        **_retrieval_citation(),
+                        "citation_type": "TOOL",
+                        "citation_id": "unknown",
+                    }
+                ],
+                "refusal_reason": None,
+            }
+        )
+
+
+def test_coach_answer_requires_bounded_usage_and_trace() -> None:
+    with pytest.raises(ValidationError):
+        CoachAnswer.model_validate(
+            {
+                "schema_version": "1",
+                "answer_status": "REFUSED",
+                "answer": "",
+                "claims": [],
+                "citations": [],
+                "refusal_reason": "no evidence",
+                "retrieval_trace": {"selected_chunk_ids": ["bad"]},
+                "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "reasoning_tokens": 0},
+                "latency_ms": 0,
             }
         )

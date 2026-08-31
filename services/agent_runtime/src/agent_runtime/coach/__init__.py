@@ -1,20 +1,55 @@
 """Provider-neutral contracts for the contextual ERP Coach."""
 
-from agent_runtime.coach.context import CoachContextError, build_current_document_context
+from agent_runtime.coach.context import (
+    CoachContextError,
+    build_current_document_context,
+    current_context_to_fragment,
+    current_fact_digest,
+)
 from agent_runtime.coach.contracts import (
+    CoachAnswer,
+    CoachAnswerStatus,
+    CoachCitation,
+    CoachCitationProvenance,
+    CoachClaim,
+    CoachClaimType,
     CoachCurrentDocumentContext,
     CoachDocumentRef,
+    CoachLiveCitation,
+    CoachMemoryCitation,
+    CoachProviderOutput,
     CoachQuestionRequest,
+    CoachRetrievalCitation,
+    CoachRetrievalTrace,
+    CoachTokenUsage,
     MaterialRequestCurrentFact,
     PurchaseOrderCurrentFact,
+    ValidatedCoachClaim,
+    parse_coach_provider_output,
 )
 
 __all__ = [
+    "CoachAnswer",
+    "CoachAnswerStatus",
+    "CoachCitation",
+    "CoachCitationProvenance",
+    "CoachClaim",
+    "CoachClaimType",
     "CoachContextError",
     "CoachCurrentDocumentContext",
     "CoachDocumentRef",
+    "CoachLiveCitation",
+    "CoachMemoryCitation",
+    "CoachProviderOutput",
     "CoachQuestionRequest",
+    "CoachRetrievalCitation",
+    "CoachRetrievalTrace",
+    "CoachTokenUsage",
     "MaterialRequestCurrentFact",
     "PurchaseOrderCurrentFact",
+    "ValidatedCoachClaim",
     "build_current_document_context",
+    "current_context_to_fragment",
+    "current_fact_digest",
+    "parse_coach_provider_output",
 ]

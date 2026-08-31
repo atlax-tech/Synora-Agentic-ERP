@@ -1,24 +1,35 @@
-"""Strict, provider-neutral live context contracts for Coach T06.
+"""Strict, provider-neutral contracts for the contextual ERP Coach.
 
-Only the user's question identity and one freshly authorized ERP snapshot are
-represented here.  Claims, citations, retrieval evidence, Memory and provider
-output are deliberately absent until the following Coach task.
+The provider output is still untrusted text.  These models describe the only
+shape that may cross the runtime boundary; the service subsequently resolves
+each citation against the current ERP snapshot and the selected retrieval
+hits.  No model-generated identifier is an authority by itself.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 
-from agent_runtime.agent.contracts import StrictModel
+from agent_runtime.agent.contracts import StrictModel, canonical_json
 
 CoachDocumentType = Literal["Material Request", "Purchase Order"]
 CoachCoverage = Literal["FULL_DOCUMENT", "WAREHOUSE_SCOPED"]
 _IDENTIFIER = Field(min_length=1, max_length=140)
 _QUANTITY_PATTERN = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\Z")
+_DIGEST_PATTERN = r"^[0-9a-f]{64}$"
+_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$"
+
+
+def _tuple_from_json(value: object) -> object:
+    if isinstance(value, list):
+        return tuple(value)
+    return value
 
 
 def _nonblank(value: str, field_name: str) -> str:
@@ -154,6 +165,8 @@ class CoachCurrentDocumentContext(StrictModel):
     coverage: CoachCoverage
     captured_at: str = _IDENTIFIER
     source_modified_at: str | None = Field(default=None, max_length=140)
+    frappe_revision: str | None = Field(default=None, max_length=140)
+    erpnext_revision: str | None = Field(default=None, max_length=140)
     facts: tuple[MaterialRequestCurrentFact | PurchaseOrderCurrentFact, ...] = Field(max_length=50)
 
     @field_validator("run_id", mode="before")
@@ -167,7 +180,9 @@ class CoachCurrentDocumentContext(StrictModel):
         field_name = getattr(info, "field_name", "field")
         return _nonblank(value, str(field_name))
 
-    @field_validator("authorized_warehouse", "source_modified_at")
+    @field_validator(
+        "authorized_warehouse", "source_modified_at", "frappe_revision", "erpnext_revision"
+    )
     @classmethod
     def validate_optional_metadata(cls, value: str | None, info: object) -> str | None:
         if value is None:
@@ -201,12 +216,349 @@ class CoachCurrentDocumentContext(StrictModel):
         return self
 
 
+CoachAnswerStatus = Literal["ANSWERED", "UNKNOWN", "CONFLICT", "REFUSED"]
+CoachClaimType = Literal[
+    "ERP_FACT",
+    "RETRIEVED_KNOWLEDGE",
+    "MEMORY",
+    "RECOMMENDATION",
+    "UNKNOWN",
+]
+
+
+class CoachLiveCitation(StrictModel):
+    """A citation to one fact in the server-selected live ERP snapshot."""
+
+    citation_type: Literal["LIVE_ERP"] = "LIVE_ERP"
+    citation_id: str = Field(pattern=_ID_PATTERN, min_length=1, max_length=120)
+    run_id: UUID
+    document_doctype: CoachDocumentType
+    document_name: str = _IDENTIFIER
+    state_version: int = Field(ge=1, le=1_000_000)
+    captured_at: str = _IDENTIFIER
+    source_modified_at: str | None = Field(default=None, max_length=140)
+    frappe_revision: str | None = Field(default=None, max_length=140)
+    erpnext_revision: str | None = Field(default=None, max_length=140)
+    fact_digest: str = Field(pattern=_DIGEST_PATTERN, min_length=64, max_length=64)
+
+    @field_validator("run_id", mode="before")
+    @classmethod
+    def validate_run_uuid(cls, value: object) -> UUID:
+        return _canonical_uuid(value, "run_id")
+
+    @field_validator("document_name", "captured_at")
+    @classmethod
+    def validate_required_metadata(cls, value: str, info: object) -> str:
+        return _nonblank(value, str(getattr(info, "field_name", "field")))
+
+    @field_validator("source_modified_at", "frappe_revision", "erpnext_revision")
+    @classmethod
+    def validate_optional_source_time(cls, value: str | None) -> str | None:
+        return None if value is None else _nonblank(value, "source_modified_at")
+
+
+class CoachRetrievalCitation(StrictModel):
+    """A citation to an exact, bounded T04 SearchHit."""
+
+    citation_type: Literal["RETRIEVAL"] = "RETRIEVAL"
+    citation_id: str = Field(pattern=_ID_PATTERN, min_length=1, max_length=120)
+    chunk_id: str = Field(pattern=_DIGEST_PATTERN, min_length=64, max_length=64)
+    content_digest: str = Field(pattern=_DIGEST_PATTERN, min_length=64, max_length=64)
+    ordinal: int = Field(ge=1, le=1_000_000)
+    source_type: str = _IDENTIFIER
+    revision: str = _IDENTIFIER
+    erp_version: str = _IDENTIFIER
+    permission_scope: str = _IDENTIFIER
+
+
+class CoachMemoryCitation(StrictModel):
+    """The future Memory citation shape; T07 accepts it only after service resolution."""
+
+    citation_type: Literal["MEMORY"] = "MEMORY"
+    citation_id: str = Field(pattern=_ID_PATTERN, min_length=1, max_length=120)
+    memory_id: UUID
+    memory_version: int = Field(ge=1, le=1_000_000)
+    content_digest: str = Field(pattern=_DIGEST_PATTERN, min_length=64, max_length=64)
+    reviewed_at: str = _IDENTIFIER
+    reviewer: str = _IDENTIFIER
+
+    @field_validator("memory_id", mode="before")
+    @classmethod
+    def validate_memory_uuid(cls, value: object) -> UUID:
+        return _canonical_uuid(value, "memory_id")
+
+
+CoachCitation = Annotated[
+    CoachLiveCitation | CoachRetrievalCitation | CoachMemoryCitation,
+    Field(discriminator="citation_type"),
+]
+
+
+class CoachCitationProvenance(StrictModel):
+    """The exact citations that support one validated Coach claim."""
+
+    citations: Annotated[tuple[CoachCitation, ...], Field(min_length=1, max_length=8)]
+
+    @field_validator("citations", mode="before")
+    @classmethod
+    def validate_citations_tuple(cls, value: object) -> object:
+        return _tuple_from_json(value)
+
+    @model_validator(mode="after")
+    def validate_unique_citations(self) -> CoachCitationProvenance:
+        identifiers = [citation.citation_id for citation in self.citations]
+        if len(set(identifiers)) != len(identifiers):
+            raise ValueError("validated citation ids must be unique")
+        return self
+
+
+class CoachClaim(StrictModel):
+    claim_id: str = Field(pattern=_ID_PATTERN, min_length=1, max_length=120)
+    ordinal: int = Field(ge=1, le=32)
+    claim_type: CoachClaimType
+    text: str = Field(min_length=1, max_length=4_000)
+    citation_refs: Annotated[tuple[str, ...], Field(min_length=1, max_length=8)] = ()
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        return _nonblank(value, "claim text")
+
+    @field_validator("citation_refs", mode="before")
+    @classmethod
+    def validate_refs_tuple(cls, value: object) -> object:
+        return _tuple_from_json(value)
+
+    @model_validator(mode="after")
+    def validate_unique_refs(self) -> CoachClaim:
+        if len(set(self.citation_refs)) != len(self.citation_refs):
+            raise ValueError("claim citation refs must be unique")
+        return self
+
+
+class CoachProviderOutput(StrictModel):
+    """Strict model response before evidence resolution."""
+
+    schema_version: Literal["1"] = "1"
+    answer_status: CoachAnswerStatus
+    answer: str = Field(default="", max_length=8_000)
+    claims: Annotated[tuple[CoachClaim, ...], Field(max_length=32)] = ()
+    citations: Annotated[tuple[CoachCitation, ...], Field(max_length=64)] = ()
+    refusal_reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("claims", "citations", mode="before")
+    @classmethod
+    def validate_collection_tuple(cls, value: object) -> object:
+        return _tuple_from_json(value)
+
+    @field_validator("answer")
+    @classmethod
+    def validate_answer_text(cls, value: str) -> str:
+        return value if not value or value.strip() else ""
+
+    @field_validator("refusal_reason")
+    @classmethod
+    def validate_refusal_reason(cls, value: str | None) -> str | None:
+        return None if value is None else _nonblank(value, "refusal_reason")
+
+    @model_validator(mode="after")
+    def validate_claim_graph(self) -> CoachProviderOutput:
+        citation_ids = [citation.citation_id for citation in self.citations]
+        if len(set(citation_ids)) != len(citation_ids):
+            raise ValueError("citation ids must be unique")
+        claim_ids = [claim.claim_id for claim in self.claims]
+        if len(set(claim_ids)) != len(claim_ids):
+            raise ValueError("claim ids must be unique")
+        if tuple(claim.ordinal for claim in self.claims) != tuple(range(1, len(self.claims) + 1)):
+            raise ValueError("claim ordinals must be contiguous")
+        citation_map = {citation.citation_id: citation for citation in self.citations}
+        referenced: set[str] = set()
+        for claim in self.claims:
+            for reference in claim.citation_refs:
+                citation = citation_map.get(reference)
+                if citation is None:
+                    raise ValueError("claim citation ref is not supplied")
+                referenced.add(reference)
+                if claim.claim_type == "ERP_FACT" and citation.citation_type != "LIVE_ERP":
+                    raise ValueError("ERP_FACT claims require LIVE_ERP citations")
+                if (
+                    claim.claim_type == "RETRIEVED_KNOWLEDGE"
+                    and citation.citation_type != "RETRIEVAL"
+                ):
+                    raise ValueError("RETRIEVED_KNOWLEDGE claims require RETRIEVAL citations")
+        if referenced != set(citation_ids):
+            raise ValueError("orphan citations are not permitted")
+        if self.answer_status == "ANSWERED":
+            if not self.answer.strip() or not self.claims:
+                raise ValueError("ANSWERED requires an answer and claims")
+            if self.refusal_reason is not None:
+                raise ValueError("ANSWERED cannot include refusal_reason")
+        elif self.answer_status in {"UNKNOWN", "REFUSED"}:
+            if self.claims or self.citations or not self.refusal_reason:
+                raise ValueError("UNKNOWN and REFUSED require a reason and no claims")
+        elif self.answer_status == "CONFLICT":
+            if not self.answer.strip() or not self.claims or not self.citations:
+                raise ValueError("CONFLICT requires cited claims")
+            if self.refusal_reason is not None:
+                raise ValueError("CONFLICT cannot include refusal_reason")
+        return self
+
+
+class CoachTokenUsage(StrictModel):
+    prompt_tokens: int = Field(default=0, ge=0, le=10_000_000)
+    completion_tokens: int = Field(default=0, ge=0, le=10_000_000)
+    reasoning_tokens: int = Field(default=0, ge=0, le=10_000_000)
+
+
+class CoachRetrievalTrace(StrictModel):
+    selected_chunk_ids: Annotated[tuple[str, ...], Field(max_length=5)] = ()
+    selected_content_digests: Annotated[tuple[str, ...], Field(max_length=5)] = ()
+    selected_revisions: Annotated[tuple[str, ...], Field(max_length=5)] = ()
+    live_fact_digests: Annotated[tuple[str, ...], Field(max_length=50)] = ()
+    provider_tools: Annotated[tuple[str, ...], Field(max_length=0)] = ()
+    context_fragment_ids: Annotated[tuple[str, ...], Field(max_length=64)] = ()
+
+    @field_validator(
+        "selected_chunk_ids",
+        "selected_content_digests",
+        "selected_revisions",
+        "live_fact_digests",
+        "provider_tools",
+        "context_fragment_ids",
+        mode="before",
+    )
+    @classmethod
+    def validate_trace_tuples(cls, value: object) -> object:
+        return _tuple_from_json(value)
+
+    @field_validator("selected_chunk_ids", "selected_content_digests", "live_fact_digests")
+    @classmethod
+    def validate_trace_digests(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        for digest in value:
+            if not re.fullmatch(_DIGEST_PATTERN, digest):
+                raise ValueError("trace digest is invalid")
+        return value
+
+
+class ValidatedCoachClaim(StrictModel):
+    """Runtime-validated, signed payload accepted by the Frappe authority.
+
+    The signature is intentionally part of the wire contract.  Frappe does
+    not trust a caller-provided boolean or an internal-looking field; it
+    verifies the domain-separated HMAC over every field before persistence.
+    """
+
+    schema_version: Literal["1"] = "1"
+    run_id: UUID
+    correlation_id: UUID
+    claim_id: str = Field(pattern=_ID_PATTERN, min_length=1, max_length=120)
+    ordinal: int = Field(ge=1, le=32)
+    claim_type: Literal["ERP_FACT", "RETRIEVED_KNOWLEDGE", "RECOMMENDATION"]
+    claim_text: str = Field(min_length=1, max_length=4_000)
+    claim_digest: str = Field(pattern=_DIGEST_PATTERN, min_length=64, max_length=64)
+    citation_provenance: CoachCitationProvenance
+    citation_digest: str = Field(pattern=_DIGEST_PATTERN, min_length=64, max_length=64)
+    source_revision: str = Field(min_length=1, max_length=140)
+    source_snapshot: str = Field(min_length=2, max_length=16_000)
+    signature: str = Field(pattern=_DIGEST_PATTERN, min_length=64, max_length=64)
+
+    @field_validator("run_id", "correlation_id", mode="before")
+    @classmethod
+    def validate_identity_uuid(cls, value: object, info: object) -> UUID:
+        field_name = getattr(info, "field_name", "identity")
+        return _canonical_uuid(value, str(field_name))
+
+    @field_validator("claim_text", "source_revision")
+    @classmethod
+    def validate_package_text(cls, value: str, info: object) -> str:
+        return _nonblank(value, str(getattr(info, "field_name", "text")))
+
+    @field_validator("source_snapshot")
+    @classmethod
+    def validate_snapshot_json(cls, value: str) -> str:
+        try:
+            decoded = json.loads(value)
+            if not isinstance(decoded, dict) or canonical_json(decoded) != value:
+                raise ValueError("source snapshot must be canonical JSON")
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise ValueError("source snapshot must be canonical JSON") from error
+        return value
+
+    @model_validator(mode="after")
+    def validate_package_digests(self) -> ValidatedCoachClaim:
+        expected_claim = hashlib.sha256(self.claim_text.encode("utf-8")).hexdigest()
+        if self.claim_digest != expected_claim:
+            raise ValueError("claim digest does not match claim text")
+        provenance = canonical_json(self.citation_provenance.model_dump(mode="json"))
+        expected_citations = hashlib.sha256(provenance.encode("utf-8")).hexdigest()
+        if self.citation_digest != expected_citations:
+            raise ValueError("citation digest does not match provenance")
+        return self
+
+
+class CoachAnswer(CoachProviderOutput):
+    """Validated answer plus bounded, non-secret execution metadata."""
+
+    retrieval_trace: CoachRetrievalTrace
+    token_usage: CoachTokenUsage = CoachTokenUsage()
+    latency_ms: int = Field(ge=0, le=86_400_000)
+    validated_claims: Annotated[tuple[ValidatedCoachClaim, ...], Field(max_length=32)] = ()
+
+    @field_validator("validated_claims", mode="before")
+    @classmethod
+    def validate_claims_tuple(cls, value: object) -> object:
+        return _tuple_from_json(value)
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant: {value}")
+
+
+def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def parse_coach_provider_output(raw: object) -> CoachProviderOutput:
+    """Parse provider JSON with duplicate-key and size rejection."""
+    if not isinstance(raw, str) or len(raw.encode("utf-8")) > 256_000:
+        raise ValueError("provider Coach output is invalid")
+    import json
+
+    value = json.loads(
+        raw,
+        parse_constant=_reject_json_constant,
+        object_pairs_hook=_reject_duplicate_pairs,
+    )
+    if not isinstance(value, dict):
+        raise ValueError("provider Coach output must be an object")
+    return CoachProviderOutput.model_validate(value)
+
+
 __all__ = [
+    "CoachAnswer",
+    "CoachAnswerStatus",
+    "CoachCitation",
+    "CoachCitationProvenance",
+    "CoachClaim",
+    "CoachClaimType",
     "CoachCoverage",
     "CoachCurrentDocumentContext",
     "CoachDocumentRef",
     "CoachDocumentType",
+    "CoachLiveCitation",
+    "CoachMemoryCitation",
+    "CoachProviderOutput",
     "CoachQuestionRequest",
+    "CoachRetrievalCitation",
+    "CoachRetrievalTrace",
+    "CoachTokenUsage",
     "MaterialRequestCurrentFact",
     "PurchaseOrderCurrentFact",
+    "ValidatedCoachClaim",
+    "parse_coach_provider_output",
 ]

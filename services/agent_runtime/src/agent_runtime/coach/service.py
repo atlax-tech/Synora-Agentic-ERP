@@ -1,0 +1,454 @@
+"""Fail-closed, server-orchestrated Coach answer validation.
+
+This module deliberately has no ERP client and no persistence side effects.  A
+caller supplies the already-authorized current snapshot and bounded retrieval
+hits; the service builds a zero-tool provider request and mechanically resolves
+the provider's citation graph against those exact inputs.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import os
+import re
+import time
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+from agent_runtime.agent.context import (
+    ContextBuilder,
+    ContextBuildError,
+    record_provider_prompt_tokens,
+)
+from agent_runtime.agent.contracts import canonical_json
+from agent_runtime.agent.prompting import ERP_COACH_PROFILE_ID
+from agent_runtime.coach.context import (
+    CoachContextError,
+    current_context_to_fragment,
+    current_fact_digest,
+)
+from agent_runtime.coach.contracts import (
+    CoachAnswer,
+    CoachAnswerStatus,
+    CoachCitationProvenance,
+    CoachCurrentDocumentContext,
+    CoachLiveCitation,
+    CoachMemoryCitation,
+    CoachProviderOutput,
+    CoachQuestionRequest,
+    CoachRetrievalCitation,
+    CoachRetrievalTrace,
+    CoachTokenUsage,
+    ValidatedCoachClaim,
+    parse_coach_provider_output,
+)
+from agent_runtime.providers import Provider, ProviderError, ProviderResponse
+from agent_runtime.retrieval.context import search_hits_to_context_fragments
+from agent_runtime.retrieval.index import SearchHit
+
+_SAFE_REASONS = {
+    "context": "current ERP context is not available",
+    "budget": "Coach context budget is unavailable",
+    "provider": "Coach provider did not return a usable answer",
+    "citation": "the answer could not be grounded in supplied evidence",
+    "tools": "Coach provider returned an unsupported tool request",
+}
+_RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
+_CLAIM_HMAC_DOMAIN = b"synora-coach-claim-v1"
+_NUMBER_TOKEN = re.compile(r"(?<![A-Za-z0-9.])-?\d+(?:\.\d+)?(?![A-Za-z0-9.])")
+
+
+def _usage(
+    response: ProviderResponse | None = None, error: ProviderError | None = None
+) -> CoachTokenUsage:
+    source: Any = response if response is not None else error
+    return CoachTokenUsage(
+        prompt_tokens=max(0, int(getattr(source, "prompt_tokens", 0))),
+        completion_tokens=max(0, int(getattr(source, "completion_tokens", 0))),
+        reasoning_tokens=max(0, int(getattr(source, "reasoning_tokens", 0))),
+    )
+
+
+def _trace(
+    *,
+    retrieval_hits: Sequence[SearchHit],
+    live_digests: Sequence[str],
+    context_fragment_ids: Sequence[str] = (),
+) -> CoachRetrievalTrace:
+    return CoachRetrievalTrace(
+        selected_chunk_ids=tuple(hit.chunk_id for hit in retrieval_hits),
+        selected_content_digests=tuple(hit.content_digest for hit in retrieval_hits),
+        selected_revisions=tuple(hit.revision for hit in retrieval_hits),
+        live_fact_digests=tuple(live_digests),
+        provider_tools=(),
+        context_fragment_ids=tuple(context_fragment_ids),
+    )
+
+
+def _failed_answer(
+    status: CoachAnswerStatus,
+    reason: str,
+    *,
+    usage: CoachTokenUsage | None = None,
+    latency_ms: int = 0,
+    trace: CoachRetrievalTrace | None = None,
+) -> CoachAnswer:
+    # UNKNOWN/REFUSED deliberately have no provider claims or answer text.
+    return CoachAnswer(
+        schema_version="1",
+        answer_status=status,
+        answer="",
+        claims=(),
+        citations=(),
+        refusal_reason=reason,
+        retrieval_trace=trace or CoachRetrievalTrace(),
+        token_usage=usage or CoachTokenUsage(),
+        latency_ms=max(0, latency_ms),
+    )
+
+
+def _same_optional(left: str | None, right: str | None) -> bool:
+    return left == right
+
+
+def _number_tokens(text: str) -> set[str]:
+    """Extract bounded numeric tokens using the repository evidence rule."""
+    return set(_NUMBER_TOKEN.findall(text))
+
+
+def _runtime_token(environ: Mapping[str, str] | None) -> str | None:
+    source: Mapping[str, str] = os.environ if environ is None else environ
+    token = source.get(_RUNTIME_TOKEN_ENV, "")
+    if not isinstance(token, str):
+        return None
+    token = token.strip()
+    return token or None
+
+
+def _claim_signing_key(token: str) -> bytes:
+    """Derive a key for Coach claims without reusing bearer-token bytes directly."""
+    return hmac.new(token.encode("utf-8"), _CLAIM_HMAC_DOMAIN, hashlib.sha256).digest()
+
+
+def _claim_signature(payload: Mapping[str, object], token: str) -> str:
+    canonical = canonical_json(payload).encode("utf-8")
+    return hmac.new(_claim_signing_key(token), canonical, hashlib.sha256).hexdigest()
+
+
+def _source_snapshot(context: CoachCurrentDocumentContext) -> tuple[str, str]:
+    snapshot = canonical_json(
+        {
+            "run_id": str(context.run_id),
+            "document": context.current_document.model_dump(mode="json"),
+            "scope": {
+                "company": context.authorized_company,
+                "warehouse": context.authorized_warehouse,
+                "coverage": context.coverage,
+            },
+            "state_version": context.state_version,
+            "captured_at": context.captured_at,
+            "source_modified_at": context.source_modified_at,
+            "frappe_revision": context.frappe_revision,
+            "erpnext_revision": context.erpnext_revision,
+        }
+    )
+    revision = context.frappe_revision or context.erpnext_revision
+    if revision is None:
+        revision = f"snapshot-{hashlib.sha256(snapshot.encode('utf-8')).hexdigest()}"
+    return revision, snapshot
+
+
+def _validated_claims(
+    output: CoachProviderOutput,
+    request: CoachQuestionRequest,
+    context: CoachCurrentDocumentContext,
+    *,
+    environ: Mapping[str, str] | None,
+) -> tuple[ValidatedCoachClaim, ...]:
+    """Create signed packages only after every claim/citation check succeeds."""
+    token = _runtime_token(environ)
+    if token is None:
+        # Answering remains read-only, but without the existing internal secret
+        # there is deliberately no package that a Frappe process can persist.
+        return ()
+    citations_by_id = {citation.citation_id: citation for citation in output.citations}
+    source_revision, source_snapshot = _source_snapshot(context)
+    packages: list[ValidatedCoachClaim] = []
+    for claim in output.claims:
+        if claim.claim_type not in {"ERP_FACT", "RETRIEVED_KNOWLEDGE", "RECOMMENDATION"}:
+            continue
+        provenance = CoachCitationProvenance(
+            citations=tuple(citations_by_id[ref] for ref in claim.citation_refs)
+        )
+        package = ValidatedCoachClaim(
+            run_id=request.run_id,
+            correlation_id=request.correlation_id,
+            claim_id=claim.claim_id,
+            ordinal=claim.ordinal,
+            claim_type=claim.claim_type,
+            claim_text=claim.text,
+            claim_digest=hashlib.sha256(claim.text.encode("utf-8")).hexdigest(),
+            citation_provenance=provenance,
+            citation_digest=hashlib.sha256(
+                canonical_json(provenance.model_dump(mode="json")).encode("utf-8")
+            ).hexdigest(),
+            source_revision=source_revision,
+            source_snapshot=source_snapshot,
+            signature="0" * 64,
+        )
+        payload = package.model_dump(mode="json")
+        payload.pop("signature", None)
+        packages.append(package.model_copy(update={"signature": _claim_signature(payload, token)}))
+    return tuple(packages)
+
+
+def _validate_numeric_grounding(
+    output: CoachProviderOutput,
+    context: CoachCurrentDocumentContext,
+    selected_hits: Sequence[SearchHit],
+) -> bool:
+    facts_by_digest = {
+        current_fact_digest(fact): canonical_json(fact.model_dump(mode="json"))
+        for fact in context.facts
+    }
+    citations_by_id = {citation.citation_id: citation for citation in output.citations}
+    hits_by_chunk = {hit.chunk_id: hit for hit in selected_hits}
+    for claim in output.claims:
+        if claim.claim_type != "ERP_FACT":
+            continue
+        evidence_parts: list[str] = []
+        for reference in claim.citation_refs:
+            citation = citations_by_id[reference]
+            if isinstance(citation, CoachLiveCitation):
+                fact = facts_by_digest.get(citation.fact_digest)
+                if fact is not None:
+                    evidence_parts.append(fact)
+        evidence = "\n".join(evidence_parts)
+        if not _number_tokens(claim.text).issubset(_number_tokens(evidence)):
+            return False
+    answer_evidence: list[str] = []
+    for citation in output.citations:
+        if isinstance(citation, CoachLiveCitation):
+            fact = facts_by_digest.get(citation.fact_digest)
+            if fact is not None:
+                answer_evidence.append(fact)
+        elif isinstance(citation, CoachRetrievalCitation):
+            hit = hits_by_chunk.get(citation.chunk_id)
+            if hit is not None:
+                answer_evidence.append(hit.content)
+    return _number_tokens(output.answer).issubset(_number_tokens("\n".join(answer_evidence)))
+
+
+def _validate_live_citation(
+    citation: CoachLiveCitation,
+    request: CoachQuestionRequest,
+    context: CoachCurrentDocumentContext,
+    fact_digests: set[str],
+) -> bool:
+    return (
+        citation.run_id == request.run_id == context.run_id
+        and citation.document_doctype == context.current_document.doctype
+        and citation.document_name == context.current_document.name
+        and citation.state_version == context.state_version
+        and citation.captured_at == context.captured_at
+        and _same_optional(citation.source_modified_at, context.source_modified_at)
+        and _same_optional(citation.frappe_revision, context.frappe_revision)
+        and _same_optional(citation.erpnext_revision, context.erpnext_revision)
+        and citation.fact_digest in fact_digests
+    )
+
+
+def _validate_retrieval_citation(
+    citation: CoachRetrievalCitation,
+    hits_by_chunk: Mapping[str, SearchHit],
+) -> bool:
+    hit = hits_by_chunk.get(citation.chunk_id)
+    return bool(
+        hit
+        and hit.content_digest == citation.content_digest
+        and hit.ordinal == citation.ordinal
+        and hit.source_type == citation.source_type
+        and hit.revision == citation.revision
+        and hit.erp_version == citation.erp_version
+        and hit.permission_scope == citation.permission_scope
+    )
+
+
+def _validate_citation_graph(
+    output: CoachProviderOutput,
+    request: CoachQuestionRequest,
+    context: CoachCurrentDocumentContext,
+    selected_hits: Sequence[SearchHit],
+    fact_digests: set[str],
+) -> bool:
+    hits_by_chunk = {hit.chunk_id: hit for hit in selected_hits}
+    citations = {citation.citation_id: citation for citation in output.citations}
+    for claim in output.claims:
+        if claim.claim_type == "MEMORY":
+            # T07 has no server-selected Memory input.  Accepting a model-only
+            # Memory id would turn an arbitrary string into durable authority.
+            return False
+        for citation_id in claim.citation_refs:
+            citation = citations[citation_id]
+            if isinstance(citation, CoachLiveCitation):
+                if not _validate_live_citation(citation, request, context, fact_digests):
+                    return False
+            elif isinstance(citation, CoachRetrievalCitation):
+                if not _validate_retrieval_citation(citation, hits_by_chunk):
+                    return False
+            elif isinstance(citation, CoachMemoryCitation):
+                return False
+            else:  # pragma: no cover - union validation makes this unreachable
+                return False
+    return True
+
+
+def _valid_selected_hits(hits: Sequence[SearchHit]) -> tuple[SearchHit, ...]:
+    fragments = search_hits_to_context_fragments(hits)
+    selected_ids = {
+        fragment.source.removeprefix("retrieval:")
+        for fragment in fragments
+        if fragment.source.startswith("retrieval:")
+    }
+    return tuple(hit for hit in hits if hit.chunk_id in selected_ids)
+
+
+async def answer_coach(
+    request: CoachQuestionRequest,
+    current_context: CoachCurrentDocumentContext,
+    retrieval_hits: Sequence[SearchHit],
+    provider: Provider,
+    *,
+    environ: Mapping[str, str] | None = None,
+    model: str | None = None,
+    max_tokens: int | None = None,
+) -> CoachAnswer:
+    """Answer one question from one fresh snapshot and bounded retrieval set."""
+    started = time.monotonic()
+    try:
+        current_fragment = current_context_to_fragment(request, current_context)
+        fact_digests = {current_fact_digest(fact) for fact in current_context.facts}
+        selected_hits = _valid_selected_hits(retrieval_hits)
+        retrieval_fragments = search_hits_to_context_fragments(selected_hits)
+        context_result = ContextBuilder().build(
+            profile_id=ERP_COACH_PROFILE_ID,
+            goal=request.question,
+            task_profile="ERP_COACH",
+            tools=(),
+            allowed_tools=frozenset(),
+            reference_fragments=(current_fragment, *retrieval_fragments),
+            environ=environ,
+        )
+    except CoachContextError:
+        return _failed_answer("UNKNOWN", _SAFE_REASONS["context"], latency_ms=_elapsed(started))
+    except ContextBuildError as error:
+        reason = (
+            _SAFE_REASONS["budget"] if error.code == "CONTEXT_BUDGET" else _SAFE_REASONS["context"]
+        )
+        return _failed_answer("UNKNOWN", reason, latency_ms=_elapsed(started))
+    except Exception:
+        return _failed_answer("UNKNOWN", _SAFE_REASONS["context"], latency_ms=_elapsed(started))
+
+    trace = _trace(
+        retrieval_hits=selected_hits,
+        live_digests=tuple(sorted(fact_digests)),
+        context_fragment_ids=context_result.selected_fragment_ids,
+    )
+    response: ProviderResponse | None = None
+    try:
+        # Explicit [] is part of the security contract: current ERP tools are
+        # server-selected and never appear in the provider's tool schema.
+        response = await provider.complete(
+            list(context_result.messages), tools=[], model=model, max_tokens=max_tokens
+        )
+        context_result = record_provider_prompt_tokens(context_result, response.prompt_tokens)
+        if response.tool_calls:
+            return _failed_answer(
+                "REFUSED",
+                _SAFE_REASONS["tools"],
+                usage=_usage(response),
+                latency_ms=_elapsed(started),
+                trace=trace,
+            )
+        parsed = parse_coach_provider_output(response.text)
+    except ProviderError as error:
+        return _failed_answer(
+            "REFUSED",
+            _SAFE_REASONS["provider"],
+            usage=_usage(error=error),
+            latency_ms=_elapsed(started),
+            trace=trace,
+        )
+    except ContextBuildError as error:
+        reason = (
+            _SAFE_REASONS["budget"] if error.code == "CONTEXT_BUDGET" else _SAFE_REASONS["provider"]
+        )
+        return _failed_answer(
+            "REFUSED",
+            reason,
+            usage=_usage(response),
+            latency_ms=_elapsed(started),
+            trace=trace,
+        )
+    except Exception:
+        return _failed_answer(
+            "UNKNOWN",
+            _SAFE_REASONS["provider"],
+            usage=_usage(response),
+            latency_ms=_elapsed(started),
+            trace=trace,
+        )
+
+    if parsed.answer_status in {"UNKNOWN", "REFUSED"}:
+        return CoachAnswer(
+            **parsed.model_dump(mode="python"),
+            retrieval_trace=trace,
+            token_usage=_usage(response),
+            latency_ms=_elapsed(started),
+        )
+    if not _validate_citation_graph(parsed, request, current_context, selected_hits, fact_digests):
+        return _failed_answer(
+            "UNKNOWN",
+            _SAFE_REASONS["citation"],
+            usage=_usage(response),
+            latency_ms=_elapsed(started),
+            trace=trace,
+        )
+    if not _validate_numeric_grounding(parsed, current_context, selected_hits):
+        return _failed_answer(
+            "UNKNOWN",
+            _SAFE_REASONS["citation"],
+            usage=_usage(response),
+            latency_ms=_elapsed(started),
+            trace=trace,
+        )
+    try:
+        validated_claims = _validated_claims(
+            parsed,
+            request,
+            current_context,
+            environ=environ,
+        )
+    except Exception:
+        return _failed_answer(
+            "UNKNOWN",
+            _SAFE_REASONS["citation"],
+            usage=_usage(response),
+            latency_ms=_elapsed(started),
+            trace=trace,
+        )
+    return CoachAnswer(
+        **parsed.model_dump(mode="python"),
+        retrieval_trace=trace,
+        token_usage=_usage(response),
+        latency_ms=_elapsed(started),
+        validated_claims=validated_claims,
+    )
+
+
+def _elapsed(started: float) -> int:
+    return max(0, int((time.monotonic() - started) * 1_000))
+
+
+__all__ = ["answer_coach"]

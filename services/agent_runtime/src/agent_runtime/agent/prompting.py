@@ -28,6 +28,7 @@ LAYER_ORDER: tuple[PromptLayerName, ...] = (
 
 NATIVE_AGENT_PROFILE_ID = "native-agent"
 PLAN_ENHANCEMENT_PROFILE_ID = "deterministic-plan-enhancement"
+ERP_COACH_PROFILE_ID = "erp-coach"
 
 
 def _immutable_layers(value: object) -> object:
@@ -142,6 +143,18 @@ _ENHANCEMENT_DECISION = (
     "Use the deterministic plan as the only source of business facts; simplify its wording "
     "without adding a new decision."
 )
+_COACH_DECISION = (
+    "Answer the caller's question using only the supplied current ERP evidence and bounded "
+    "retrieval resources. Keep live ERP facts separate from retrieved text. If evidence is "
+    "insufficient or conflicts, report that explicitly instead of filling the gap."
+)
+_COACH_OUTPUT = (
+    "Return only one JSON object matching the CoachProviderOutput schema: schema_version, "
+    "answer_status, answer, claims, citations, refusal_reason. Every substantive claim must "
+    "have a citation_refs entry. Use only the supplied citation identifiers and exact metadata; "
+    "do not invent a fact, number, source, memory, citation, tool, permission, or write. "
+    "For unknown or refused answers return no claims/citations and a bounded refusal_reason."
+)
 
 
 def _profile(
@@ -177,9 +190,11 @@ class PromptRegistry:
             _ENHANCEMENT_DECISION,
             _ENHANCEMENT_OUTPUT,
         )
+        coach = _profile(ERP_COACH_PROFILE_ID, "A", _COACH_DECISION, _COACH_OUTPUT)
         self._profiles: dict[str, dict[PromptVariant, PromptProfile]] = {
             NATIVE_AGENT_PROFILE_ID: {"A": native_a, "B": native_b},
             PLAN_ENHANCEMENT_PROFILE_ID: {"A": enhancement},
+            ERP_COACH_PROFILE_ID: {"A": coach},
         }
 
     def resolve(self, profile_id: str, *, variant: str = "A") -> PromptProfile:

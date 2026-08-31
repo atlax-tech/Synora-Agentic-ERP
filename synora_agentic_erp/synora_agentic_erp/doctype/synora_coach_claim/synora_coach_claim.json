@@ -1,0 +1,45 @@
+{
+ "actions": [],
+ "autoname": "UUID",
+ "creation": "2026-08-31 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "run",
+  "correlation_id",
+  "initiator",
+  "company_scope",
+  "warehouse_scope",
+  "claim_digest",
+  "citation_digest",
+  "source_revision",
+  "source_snapshot",
+  "dedupe_key"
+ ],
+ "fields": [
+  {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "initiator", "fieldtype": "Link", "label": "Initiator", "options": "User", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "company_scope", "fieldtype": "Link", "label": "Company Scope", "options": "Company", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "warehouse_scope", "fieldtype": "Link", "label": "Warehouse Scope", "options": "Warehouse", "read_only": 1, "set_only_once": 1},
+  {"fieldname": "claim_digest", "fieldtype": "Data", "label": "Claim Digest", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "citation_digest", "fieldtype": "Data", "label": "Citation Digest", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "source_revision", "fieldtype": "Data", "label": "Source Revision", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "source_snapshot", "fieldtype": "Long Text", "label": "Source Snapshot", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "dedupe_key", "fieldtype": "Data", "hidden": 1, "label": "Dedupe Key", "read_only": 1, "reqd": 1, "unique": 1, "set_only_once": 1}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-31 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Synora Agentic ERP",
+ "name": "Synora Coach Claim",
+ "owner": "Administrator",
+ "permissions": [
+  {"read": 1, "role": "System Manager"}
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

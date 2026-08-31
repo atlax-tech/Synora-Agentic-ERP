@@ -385,7 +385,7 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 
 必读：PRD F-013/F-014/F-016、SPEC Retrieval/Memory 契约、Phase 3 FTS5 与 Phase 7 Context 基线。
 
-状态：`IN_PROGRESS`（2026-08-31，P8.0/T01 权威范围与状态纠偏已完成）。这不是 `PASS` 或 `READY_FOR_NEXT_PHASE`；当前包含 Memory 基础、受限召回前置原语，以及已完成的 T03/P8.1 Frappe 生命周期切片。
+状态：`IN_PROGRESS`（2026-08-31，P8.0/T01 权威范围与状态纠偏已完成，T07 实现和宽检查已完成，最终独立只读安全复核待执行）。这不是 `PASS` 或 `READY_FOR_NEXT_PHASE`；当前包含 Memory 生命周期、确定性 FTS5/RAG 基线、检索对照，以及已实现但尚未完成最终独立复核的带引用 Coach。
 
 宏观任务映射（不代表未完成任务已验收）：
 
@@ -394,8 +394,11 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 - **T03 / P8.1**：已交付 Frappe-authoritative `Synora Memory Record` DocType、服务端范围/公司/仓库权限重检、候选来源的真实 Run 解析、数据库唯一键去重、候选详情与审核 API、双 CAS 原子纠正、tombstone 删除、权限安全的可见召回、原生 Desk List/Form 审核入口及真实 Frappe 权限/CAS/无写入测试；无权/未知原生 Form/API 记录统一为空响应，避免 Memory ID 存在性侧信道。`source_claim_id` 仍仅是 provenance metadata，Coach claim authority 解析是 T07 的硬门禁；本切片未增加 RAG、Provider、Agent/model 或 ERP 写工具。
 - **T04 / P8.2**：已实现确定性 heading-aware chunk、稳定 chunk/content digest（不依赖摄取时间）、chunk-level FTS5/BM25、权限/来源/修订/ERP 版本过滤、可重建索引以及 `SearchHit` 引用元数据；检索到 ContextBuilder 的适配器明确标记 `UNTRUSTED`，最多接收 5 个合法、去重且保留输入 BM25 顺序的命中，引用超预算时保持原有 fail-closed，不自动删除 triggered retrieval refs。固定网络无关评测产物覆盖英文/CJK、权限/版本隔离、正确与错误 revision/ERP version、恶意文本和重建一致性；该切片已取得 C2C `REVIEW: PASS`。
 - **T05 / P8.3**：已完成同一固定 T04 语料上的 FTS5/BM25、真实本地 vector、RRF hybrid 和 bounded cross-encoder rerank 对照；Python 3.14 本地模型加载、9 cases、四路重复指纹、负例策略、scope/version/injection 边界均有证据，四路 `PASS` 且无安全违规。固定数据未产生相对 FTS5 的质量提升，Adoption Card 决策为 `KEEP_FTS5`；vector/hybrid/rerank 仍为 `LAB_ONLY / EVALUATED`，未改变业务路径。
-- **T06 / P8.4**：已交付 Provider-neutral Coach 请求/当前上下文严格契约，以及按 Run 发起人、公司、仓库和 Frappe 权限重检的 `material_request.current@1`、`purchase_order.current@1` 只读 Gateway 工具；覆盖实时 MR/PO 状态、草稿/取消单据、仓库范围、数量公式、来源时间戳、分页完整性和不透明无权/不存在响应。当前切片没有实现 Coach 答案、Claim/Citation、RAG/Memory 编排、Provider 工具 schema、API 或 UI，也没有增加任何 ERP 写能力。C2C iteration 6 首次 `REVIEW` 为 `CHANGES_REQUIRED`：已补充完整 app-test、current 工具取消 Run 回归，并纠正文档术语；修复提交和复核完成前不得进入 T07。
-- **T07–T10**：尚未开始；Phase 8 仍为 `IN_PROGRESS`，不得预写阶段出口结论。
+- **T06 / P8.4**：已交付 Provider-neutral Coach 请求/当前上下文严格契约，以及按 Run 发起人、公司、仓库和 Frappe 权限重检的 `material_request.current@1`、`purchase_order.current@1` 只读 Gateway 工具；覆盖实时 MR/PO 状态、草稿/取消单据、仓库范围、数量公式、来源时间戳、分页完整性和不透明无权/不存在响应。current 工具仍不进入 Provider 工具 schema 或模型 allowlist，也没有增加任何 ERP 写能力。C2C iteration 6 的 `CHANGES_REQUIRED` 已以 `7289d46` 修复并关闭。
+- **T07 / P8.4**：已实现 Provider-neutral Coach 回答契约、严格 Claim/Citation 图校验、服务端确定性实时 MR/PO 读取、当前可见 Memory/RAG 证据编排、Provider `tools=[]`、ERP 数值 grounding、Runtime `ValidatedCoachClaim` 及域隔离 HMAC 签名；Frappe `Synora Coach Claim` 是持久 provenance 权威，服务端重新校验 Run/correlation/company/warehouse、来源版本和 live citation 后才幂等保存，Memory `source_claim_id` 只能解析到同一权威 Claim。Runtime 聚焦 49、全量 580，Frappe 聚焦 6+16+15+14、全量 188，format/lint/type/compile/diff-check 均通过；当前等待最终独立只读安全复核，尚未进入 T08。
+- **T08 / P8.5**：尚未开始；Desk New Run、Runs、MR/PO 入口、Memory 原生审核页面、真实浏览器和 BYOK 验收均未实现。
+- **T09 / 阶段出口证据**：尚未开始；真实两例 BYOK、三角色浏览器、固定 ERP 零写入统计、Rubric 和风险收口尚未执行。
+- **T10 / 独立对抗 Review 与收口**：尚未开始；必须在 T08/T09 完成后由 ChatGPT 签发 Review Prompt，独立只读角色通过后才能关闭 Phase 8。
 - Runtime-local SQLite Memory 只保留为 `LAB_ONLY`、单实例开发证据；Frappe 承担未来持久 Memory 的权威身份、权限与业务集成边界，Runtime Memory/cache/index 不得取代它或 ERP 事实。
 
 - 实现 Working/Episodic/Semantic/Procedural Memory 的写入候选、审核、scope、过期、纠正、删除、召回和污染防护。

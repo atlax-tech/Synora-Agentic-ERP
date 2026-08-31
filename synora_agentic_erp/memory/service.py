@@ -92,6 +92,40 @@ def _optional_text(value: object, label: str, maximum: int) -> str | None:
     return _required_text(value, label, maximum)
 
 
+def _validated_source_claim(
+    source_claim_id: str | None,
+    *,
+    source_run: str,
+    source_revision: str,
+    content: str,
+    scope: dict[str, str | None],
+) -> str | None:
+    """Resolve claim provenance through Frappe; never trust an arbitrary ID."""
+    if source_claim_id is None:
+        return None
+    from synora_agentic_erp.coach.service import resolve_coach_claim
+
+    try:
+        claim = resolve_coach_claim(
+            source_claim_id,
+            run_id=source_run,
+            source_revision=source_revision,
+        )
+    except GatewayFault:
+        raise _not_available() from None
+    if (
+        str(claim.get("run")) != str(scope["run_id"])
+        or str(claim.get("initiator")) != str(scope["initiator"])
+        or str(claim.get("company_scope")) != str(scope["company"])
+        or (str(claim.get("warehouse_scope") or "") or None)
+        != (str(scope["warehouse"] or "") or None)
+        or str(claim.get("source_revision")) != source_revision
+        or str(claim.get("claim_digest")) != hashlib.sha256(content.encode("utf-8")).hexdigest()
+    ):
+        raise _not_available()
+    return str(claim["name"])
+
+
 def _kind(value: object) -> str:
     kind = _required_text(value, "kind", 20)
     if kind not in MEMORY_KINDS:
@@ -165,6 +199,7 @@ def _run_scope(source_run: object, actor: str) -> dict[str, str | None]:
             "initiator",
             "company_scope",
             "warehouse_scope",
+            "correlation_id",
             "status",
             "revoked",
         ],
@@ -184,6 +219,7 @@ def _run_scope(source_run: object, actor: str) -> dict[str, str | None]:
         "initiator": str(row.initiator),
         "company": str(row.company_scope),
         "warehouse": str(row.warehouse_scope or "") or None,
+        "correlation_id": str(row.correlation_id or "") or None,
     }
 
 
@@ -435,6 +471,13 @@ def create_memory_candidate(
     safe_claim = _optional_text(source_claim_id, "source_claim_id", MAX_SOURCE_LENGTH)
     safe_expiry = _expiry(expires_at, safe_kind)
     scope = _run_scope(source_run, actor)
+    safe_claim = _validated_source_claim(
+        safe_claim,
+        source_run=str(scope["run_id"]),
+        source_revision=safe_revision,
+        content=safe_content,
+        scope=scope,
+    )
     digest = hashlib.sha256(safe_content.encode("utf-8")).hexdigest()
     dedupe_key = _candidate_key(
         kind=safe_kind,
@@ -505,6 +548,13 @@ def create_memory_correction(
         or (scope["warehouse"] or None) != (str(predecessor.warehouse_scope or "") or None)
     ):
         raise _not_available()
+    safe_claim = _validated_source_claim(
+        safe_claim,
+        source_run=str(scope["run_id"]),
+        source_revision=safe_revision,
+        content=safe_content,
+        scope=scope,
+    )
     safe_expiry = _expiry(expires_at, str(predecessor.kind))
     digest = hashlib.sha256(safe_content.encode("utf-8")).hexdigest()
     scope_run = str(predecessor.scope_run or "") or str(scope["run_id"])
