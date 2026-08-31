@@ -1,6 +1,6 @@
 # Architecture
 
-Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is complete and its exit is `COMPLETED / PASS` after real ERP, fault, browser, Harness, independent Test, and adversarial Review evidence. Phase 7 Prompt/Context/Skills implementation and exit evidence are complete with status `COMPLETED / PASS`; its Prompt/Context/Skill metadata remains non-authorizing, Frappe remains authoritative, and no ERP write capability was added. Phase 8 Memory/RAG/Contextual ERP Coach is `IN_PROGRESS`; the Frappe-authoritative Memory lifecycle and deterministic chunk/FTS5 retrieval slices are implemented, while vector comparison, Coach, and phase-exit evidence remain pending. Phase 9–13 remain planned and are not started.
+Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is complete and its exit is `COMPLETED / PASS` after real ERP, fault, browser, Harness, independent Test, and adversarial Review evidence. Phase 7 Prompt/Context/Skills implementation and exit evidence are complete with status `COMPLETED / PASS`; its Prompt/Context/Skill metadata remains non-authorizing, Frappe remains authoritative, and no ERP write capability was added. Phase 8 Memory/RAG/Contextual ERP Coach is `IN_PROGRESS`; the Frappe-authoritative Memory lifecycle, deterministic chunk/FTS5 retrieval, and T05 local retrieval comparison are implemented, while Coach and phase-exit evidence remain pending. Phase 9–13 remain planned and are not started.
 
 ## Architectural Style
 
@@ -114,7 +114,7 @@ The entries below describe the approved target or a conditional candidate. They 
 | Structured contracts | Versioned Pydantic models and discriminated unions | `CONFIRMED` safety boundary; unknown actions and fields fail closed |
 | Stateful Agent workflow | Hand-written baseline first; LangGraph evaluated for multi-step interruption, approval, resume, and reconciliation | `CONDITIONAL`; Phase 5 implements the hand-written Plan-and-Execute boundary and same-task lab comparison; LangGraph remains `LAB_ONLY` until ADR-0006 adoption gates and exit evidence pass |
 | Model access | Provider interface; local Ollama/OpenAI-compatible runtime by default, optional remote compatible providers | `CONDITIONAL`; concrete models are selected by the same evaluation set, while CI uses deterministic recorded or mock responses |
-| Retrieval | Curated versioned Markdown, metadata filtering, SQLite FTS5/BM25 baseline | `CONFIRMED` first stage; embeddings, vector search, hybrid retrieval, and reranking require measured evaluation benefit |
+| Retrieval | Curated versioned Markdown, metadata filtering, SQLite FTS5/BM25 baseline | `CONFIRMED` business baseline; T05 measured local embeddings/vector, RRF hybrid, and bounded reranking remain `LAB_ONLY / EVALUATED` with no measured quality gain and require explicit adoption approval |
 | Agent checkpoint | SQLite for development or a verified single-instance workflow only | `CONDITIONAL`; Phase 5 verifies WAL/CAS/lease behavior for development and a single Runtime instance; never treat checkpoint state as an ERP fact or claim production scalability |
 | Frontend | Synora AI Operations inside ERPNext Desk using verified Frappe components | `CONFIRMED` product form; detailed component/token baseline remains a frontend design decision |
 | Python engineering | `uv` lock, Ruff, mypy, pytest | `CONFIRMED` target toolchain; commands become verified only after scaffolding and successful execution |
@@ -131,7 +131,7 @@ Candidate roles are Procurement Planner, Policy/Compliance Reviewer, ERP Coach, 
 
 ## RAG Evolution Boundary
 
-The initial retrieval implementation uses curated, versioned, heading-aware chunks with SQLite FTS5/BM25 and metadata filtering. Retrieved chunks enter ContextBuilder only as `UNTRUSTED` reference fragments; the target evolution path permits local embeddings, vector retrieval, hybrid search, reranking, context compression, grounded generation, permission filtering, and regression feedback only when retrieval evaluation justifies each step.
+The initial retrieval implementation uses curated, versioned, heading-aware chunks with SQLite FTS5/BM25 and metadata filtering. Retrieved chunks enter ContextBuilder only as `UNTRUSTED` reference fragments. T05 compared local embeddings, vector retrieval, RRF hybrid search, and bounded reranking on the same fixed corpus; all arms preserved scope/version/injection boundaries, but none improved the FTS5 baseline, so they remain LAB_ONLY. The target evolution path permits moving an alternative into the business path only after a new evidence-backed Adoption Card, explicit user approval, and regression/rollback review.
 
 ## Open Architecture Decisions
 
