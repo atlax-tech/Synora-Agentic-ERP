@@ -1,4 +1,4 @@
-"""T08.2 authenticated Frappe-to-Runtime Coach adapter tests."""
+"""Phase 8 authenticated Frappe-to-Runtime Coach adapter tests."""
 
 from __future__ import annotations
 
@@ -14,7 +14,13 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import now_datetime
 
-from synora_agentic_erp.api import ask_coach, issue_run, revoke_run
+from synora_agentic_erp.api import (
+    ask_coach,
+    coach_run_detail,
+    issue_run,
+    revoke_run,
+    start_erp_coach,
+)
 from synora_agentic_erp.coach import service as coach_service
 from synora_agentic_erp.gateway.contract import GatewayFault
 
@@ -25,6 +31,23 @@ WAREHOUSE = "SYNORA-P1 Stores - SP1"
 RUNTIME_TOKEN = "test-runtime-token"
 CLAIM_DOMAIN = b"synora-coach-claim-v1"
 CAPABILITY = "A" * 43
+
+
+def _current_material_request() -> str:
+    """Use a seeded, warehouse-visible ERP document instead of a fixed autoname."""
+    candidates = frappe.get_list(
+        "Material Request",
+        fields=["name"],
+        filters={"company": COMPANY},
+        user=BUYER,
+        order_by="creation desc",
+        limit=100,
+    )
+    for candidate in candidates:
+        name = str(candidate.name)
+        if frappe.db.exists("Material Request Item", {"parent": name, "warehouse": WAREHOUSE}):
+            return name
+    raise AssertionError("No buyer-visible seeded Material Request matches the test warehouse")
 
 
 class _RuntimeResponse:
@@ -51,12 +74,13 @@ def _signature(payload: dict[str, object]) -> str:
 
 
 def _live_citation(run_id: str, *, citation_id: str = "live-1") -> dict[str, object]:
+    document_name = _current_material_request()
     return {
         "citation_type": "LIVE_ERP",
         "citation_id": citation_id,
         "run_id": run_id,
         "document_doctype": "Material Request",
-        "document_name": "MAT-MR-0001",
+        "document_name": document_name,
         "state_version": 3,
         "captured_at": "2026-08-30 12:00:00",
         "source_modified_at": "2026-08-30 11:59:00",
@@ -82,10 +106,11 @@ def _retrieval_citation(*, citation_id: str = "retrieval-1") -> dict[str, object
 
 
 def _source_snapshot(run_id: str) -> str:
+    document_name = _current_material_request()
     return _canonical(
         {
             "run_id": run_id,
-            "document": {"doctype": "Material Request", "name": "MAT-MR-0001"},
+            "document": {"doctype": "Material Request", "name": document_name},
             "scope": {
                 "company": COMPANY,
                 "warehouse": WAREHOUSE,
@@ -192,6 +217,7 @@ class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
 
     def tearDown(self) -> None:
         frappe.set_user("Administrator")
+        frappe.db.delete("Synora Coach Result")
         frappe.db.delete("Synora Coach Claim")
         frappe.db.delete("Synora Agent Run")
         self._token_patch.stop()
@@ -227,7 +253,7 @@ class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
                 capability=run.get("capability", CAPABILITY),
                 question="How many units remain open?",
                 current_doctype="Material Request",
-                current_name="MAT-MR-0001",
+                current_name=_current_material_request(),
                 **fields,
             ),
         )
@@ -240,7 +266,7 @@ class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
                 capability=CAPABILITY,
                 question="What remains?",
                 current_doctype="Material Request",
-                current_name="MAT-MR-0001",
+                current_name=_current_material_request(),
             )
         self.assertEqual(response["error"]["code"], "AUTHENTICATION_REQUIRED")
         runtime.assert_not_called()
@@ -492,3 +518,165 @@ class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
 
         self.assertEqual(response["error"]["code"], "COACH_CLAIMS_NOT_PERSISTED")
         self.assertEqual(frappe.db.count("Synora Coach Claim"), 0)
+
+    def test_coach_result_history_keeps_claims_and_strips_internal_snapshot(self) -> None:
+        run = self._issue()
+        run_id = str(run["run_id"])
+        correlation_id = str(run["correlation_id"])
+        citation = _live_citation(run_id)
+        package = _signed_package(
+            run_id,
+            correlation_id,
+            claim_id="claim-history-1",
+            ordinal=1,
+            claim_type="ERP_FACT",
+            claim_text="open_order_stock_qty=2",
+            citations=[citation],
+        )
+        claim = {
+            "claim_id": "claim-history-1",
+            "ordinal": 1,
+            "claim_type": "ERP_FACT",
+            "text": "open_order_stock_qty=2",
+            "citation_refs": ["live-1"],
+        }
+        with patch(
+            "synora_agentic_erp.coach.service._call_coach_runtime",
+            return_value=_answer(
+                run_id,
+                correlation_id,
+                packages=[package],
+                claims=[claim],
+                citations=[citation],
+            ),
+        ):
+            response = self._ask(run)
+
+        self.assertTrue(response["ok"])
+        self.assertEqual(frappe.db.count("Synora Coach Result"), 1)
+        detail = coach_run_detail(run_id)
+        self.assertTrue(detail["ok"])
+        result = detail["results"][0]
+        self.assertEqual(result["answer_status"], "ANSWERED")
+        self.assertEqual(result["claims"][0]["claim_type"], "ERP_FACT")
+        self.assertEqual(result["citations"][0]["citation_type"], "LIVE_ERP")
+        self.assertNotIn("source_snapshot", json.dumps(detail))
+        self.assertNotIn(str(run["capability"]), json.dumps(detail))
+
+    def test_unknown_result_is_persisted_without_claims(self) -> None:
+        run = self._issue()
+        with patch(
+            "synora_agentic_erp.coach.service._call_coach_runtime",
+            return_value=_unknown_answer("provider detail contains a secret"),
+        ):
+            response = self._ask(run)
+
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["coach"]["answer_status"], "UNKNOWN")
+        self.assertEqual(frappe.db.count("Synora Coach Result"), 1)
+        detail = coach_run_detail(str(run["run_id"]))
+        self.assertEqual(detail["results"][0]["answer_status"], "UNKNOWN")
+        self.assertEqual(detail["results"][0]["claims"], [])
+        self.assertEqual(detail["results"][0]["citations"], [])
+
+    def test_start_coach_without_context_refuses_before_runtime_and_hides_capability(self) -> None:
+        frappe.set_user(BUYER)
+        with patch("synora_agentic_erp.coach.service._call_coach_runtime") as runtime:
+            response = start_erp_coach(
+                question="What should be checked before replenishment?", company=COMPANY
+            )
+
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["coach"]["answer_status"], "REFUSED")
+        self.assertEqual(response["coach"]["refusal_reason"], "CONTEXT_REQUIRED")
+        self.assertNotIn("capability", json.dumps(response))
+        runtime.assert_not_called()
+        detail = coach_run_detail(response["run_id"])
+        self.assertEqual(detail["results"][0]["refusal_reason"], "CONTEXT_REQUIRED")
+
+    def test_start_coach_rejects_caller_owned_authority_fields(self) -> None:
+        frappe.set_user(BUYER)
+        with patch("synora_agentic_erp.coach.service._call_coach_runtime") as runtime:
+            response = start_erp_coach(
+                question="What remains?", company=COMPANY, correlation_id=str(uuid4())
+            )
+        self.assertEqual(response["error"]["code"], "INVALID_INPUT")
+        runtime.assert_not_called()
+
+    def test_result_insert_save_failure_rolls_back_claim_and_result(self) -> None:
+        run = self._issue()
+        run_id = str(run["run_id"])
+        correlation_id = str(run["correlation_id"])
+        citation = _live_citation(run_id)
+        package = _signed_package(
+            run_id,
+            correlation_id,
+            claim_id="claim-result-rollback",
+            ordinal=1,
+            claim_type="ERP_FACT",
+            claim_text="open_order_stock_qty=2",
+            citations=[citation],
+        )
+        claim = {
+            "claim_id": "claim-result-rollback",
+            "ordinal": 1,
+            "claim_type": "ERP_FACT",
+            "text": "open_order_stock_qty=2",
+            "citation_refs": ["live-1"],
+        }
+        with (
+            patch(
+                "synora_agentic_erp.coach.service._call_coach_runtime",
+                return_value=_answer(
+                    run_id,
+                    correlation_id,
+                    packages=[package],
+                    claims=[claim],
+                    citations=[citation],
+                ),
+            ),
+            patch(
+                "synora_agentic_erp.coach.service._persist_coach_result",
+                side_effect=RuntimeError("simulated result failure"),
+            ),
+        ):
+            response = self._ask(run)
+        self.assertEqual(response["error"]["code"], "COACH_RESULT_NOT_PERSISTED")
+        self.assertEqual(frappe.db.count("Synora Coach Claim"), 0)
+        self.assertEqual(frappe.db.count("Synora Coach Result"), 0)
+
+    def test_viewer_cannot_read_another_users_coach_history(self) -> None:
+        run = self._issue()
+        run_id = str(run["run_id"])
+        correlation_id = str(run["correlation_id"])
+        citation = _live_citation(run_id)
+        package = _signed_package(
+            run_id,
+            correlation_id,
+            claim_id="claim-viewer-1",
+            ordinal=1,
+            claim_type="ERP_FACT",
+            claim_text="open_order_stock_qty=2",
+            citations=[citation],
+        )
+        claim = {
+            "claim_id": "claim-viewer-1",
+            "ordinal": 1,
+            "claim_type": "ERP_FACT",
+            "text": "open_order_stock_qty=2",
+            "citation_refs": ["live-1"],
+        }
+        with patch(
+            "synora_agentic_erp.coach.service._call_coach_runtime",
+            return_value=_answer(
+                run_id,
+                correlation_id,
+                packages=[package],
+                claims=[claim],
+                citations=[citation],
+            ),
+        ):
+            self._ask(run)
+        frappe.set_user(VIEWER)
+        response = coach_run_detail(run_id)
+        self.assertEqual(response["error"]["code"], "COACH_RESULT_NOT_AVAILABLE")

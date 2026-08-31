@@ -8,6 +8,17 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 
 	let scope = [];
 
+	page.purpose_field = page.add_field({
+		fieldname: "purpose",
+		label: __("用途"),
+		fieldtype: "Select",
+		options: "PROCUREMENT_ANALYSIS\nERP_COACH",
+		default: "PROCUREMENT_ANALYSIS",
+		change: function () {
+			set_purpose_mode();
+		},
+	});
+
 	// 目标输入（P3.1 批准：服务端 1000 字符上限，前端同样提示）
 	page.goal_field = page.add_field({
 		fieldname: "goal",
@@ -27,6 +38,33 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 		} else {
 			page.goal_counter.css("color", "");
 		}
+	});
+	page.coach_question_field = page.add_field({
+		fieldname: "coach_question",
+		label: __("Coach 问题"),
+		fieldtype: "Small Text",
+		reqd: 1,
+		max_length: 1000,
+		hidden: 1,
+		description: __("请输入关于已保存 MR/PO 的问题，最多 1000 字符。"),
+	});
+	page.coach_context_type_field = page.add_field({
+		fieldname: "coach_context_type",
+		label: __("可选单据类型"),
+		fieldtype: "Select",
+		options: "\nMaterial Request\nPurchase Order",
+		hidden: 1,
+		change: function () {
+			refresh_coach_context_name();
+		},
+	});
+	page.coach_context_name_field = page.add_field({
+		fieldname: "coach_context_name",
+		label: __("可选单据"),
+		fieldtype: "Link",
+		options: "Material Request",
+		hidden: 1,
+		description: __("仅选择当前用户有权限读取的已保存单据。"),
 	});
 
 	// 授权范围：公司 / 仓库（空 = 公司全部仓库，P3.1 批准）
@@ -71,6 +109,39 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 	page.set_primary_action(__("开始分析"), function () {
 		submit_goal();
 	});
+	set_purpose_mode();
+
+	function set_field_visible(field, visible) {
+		field.$wrapper.toggle(Boolean(visible));
+	}
+
+	function refresh_coach_context_name() {
+		const doctype = page.coach_context_type_field.value || "";
+		page.coach_context_name_field.df.options = doctype || "Material Request";
+		page.coach_context_name_field.refresh();
+		set_field_visible(page.coach_context_name_field, Boolean(doctype));
+		if (!doctype) {
+			page.coach_context_name_field.set_value("");
+		}
+	}
+
+	function set_purpose_mode() {
+		const coach = page.purpose_field.value === "ERP_COACH";
+		set_field_visible(page.goal_field, !coach);
+		page.goal_counter.toggle(!coach);
+		set_field_visible(page.coach_question_field, coach);
+		set_field_visible(page.coach_context_type_field, coach);
+		set_field_visible(page.window_field, !coach);
+		set_field_visible(page.execution_mode_field, !coach);
+		set_field_visible(
+			page.coach_context_name_field,
+			coach && Boolean(page.coach_context_type_field.value)
+		);
+		page.btn_primary.html(coach ? __("Ask Synora") : __("开始分析"));
+		if (coach) {
+			refresh_coach_context_name();
+		}
+	}
 
 	function render_warehouses() {
 		const company = page.company_field.value;
@@ -135,6 +206,10 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 	});
 
 	function submit_goal() {
+		if (page.purpose_field.value === "ERP_COACH") {
+			submit_coach();
+			return;
+		}
 		const goal = page.goal_field.$input.val() || "";
 		const company = page.company_field.value;
 		if (!goal || !goal.trim()) {
@@ -194,16 +269,69 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 		});
 	}
 
-	function show_failure(xhr) {
+	function submit_coach() {
+		const question = page.coach_question_field.$input.val() || "";
+		const company = page.company_field.value;
+		const context_doctype = page.coach_context_type_field.value || "";
+		const context_name = page.coach_context_name_field.value || "";
+		if (!question || !question.trim()) {
+			set_status(__("缺少 Coach 问题。请描述你要核对的 ERP 事实。"), "danger");
+			return;
+		}
+		if (question.length > 1000) {
+			set_status(__("Coach 问题超过 1000 字符上限，请缩短后重试。"), "danger");
+			return;
+		}
+		if (!company) {
+			set_status(__("缺少公司范围。请选择要核对的公司。"), "danger");
+			return;
+		}
+		if (context_doctype && !context_name) {
+			set_status(__("已选择单据类型，请同时选择具体单据。"), "danger");
+			return;
+		}
+		const args = { question: question, company: company };
+		if (page.warehouse_field.value) {
+			args.warehouse = page.warehouse_field.value;
+		}
+		if (context_doctype) {
+			args.current_doctype = context_doctype;
+			args.current_name = context_name;
+		}
+		page.btn_primary.attr("disabled", true);
+		page.btn_primary.html('<span class="spinner-border spinner-border-sm"></span> ' + __("正在读取 ERP 并生成 Coach 结果…"));
+		frappe.call({
+			method: "synora_agentic_erp.api.start_erp_coach",
+			type: "POST",
+			args: args,
+			callback: function (r) {
+				if (r.message && r.message.ok && r.message.run_id) {
+					frappe.set_route("runs");
+					return;
+				}
+				page.btn_primary.attr("disabled", false);
+				set_purpose_mode();
+				show_failure(r.message || {}, __("Coach 运行创建失败。"));
+			},
+			error: function (xhr) {
+				page.btn_primary.attr("disabled", false);
+				set_purpose_mode();
+				show_failure(xhr, __("Coach 运行请求失败。"));
+			},
+		});
+	}
+
+	function show_failure(xhr, fallback) {
 		let code = "";
-		let message = __("创建运行失败，请稍后重试。");
+		const failure_copy = fallback || __("创建运行失败，请稍后重试。");
+		let message = failure_copy;
 		let correlation_id = "";
 		if (xhr && xhr.responseJSON && xhr.responseJSON.error) {
 			code = xhr.responseJSON.error.code || "";
 			message = xhr.responseJSON.error.message || message;
 			correlation_id = xhr.responseJSON.correlation_id || "";
 		}
-		let html = __("创建运行失败") + "（" + frappe.utils.escape_html(code) + "）：" + frappe.utils.escape_html(message);
+		let html = frappe.utils.escape_html(failure_copy) + "（" + frappe.utils.escape_html(code) + "）：" + frappe.utils.escape_html(message);
 		if (correlation_id) {
 			html += "<br>" + __("关联标识") + ": " + frappe.utils.escape_html(correlation_id);
 		}

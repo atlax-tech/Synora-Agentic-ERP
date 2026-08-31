@@ -28,6 +28,9 @@ from synora_agentic_erp.synora_agentic_erp.doctype.synora_coach_claim.synora_coa
     MAX_SOURCE_SNAPSHOT_LENGTH,
     SERVICE_FLAG,
 )
+from synora_agentic_erp.synora_agentic_erp.doctype.synora_coach_result.synora_coach_result import (
+    SERVICE_FLAG as RESULT_SERVICE_FLAG,
+)
 
 MAX_CLAIM_LENGTH = 4_000
 MAX_REVISION_LENGTH = 140
@@ -148,6 +151,34 @@ _COACH_SAFE_REFUSAL_REASONS = {
     "UNKNOWN": "Coach could not produce a grounded answer",
     "REFUSED": "Coach declined to answer",
 }
+_RESULT_REFUSAL_REASONS = frozenset(
+    {
+        "Coach could not produce a grounded answer",
+        "Coach declined to answer",
+        "CONTEXT_REQUIRED",
+    }
+)
+_RESULT_JSON_MAX_LENGTH = 256_000
+_RESULT_CLAIM_RECORD_MAX = 32
+_RESULT_CITATION_MAX = 64
+_RESULT_FIELDS = [
+    "name",
+    "run",
+    "correlation_id",
+    "purpose",
+    "answer_status",
+    "answer",
+    "refusal_reason",
+    "current_doctype",
+    "current_name",
+    "claim_records_json",
+    "claims_json",
+    "citations_json",
+    "trace_json",
+    "usage_json",
+    "latency_ms",
+    "creation",
+]
 
 
 def _not_available() -> GatewayFault:
@@ -598,6 +629,14 @@ def _coach_claims_not_persisted() -> GatewayFault:
     return GatewayFault("COACH_CLAIMS_NOT_PERSISTED", "Coach claims could not be persisted", 503)
 
 
+def _coach_result_not_persisted() -> GatewayFault:
+    return GatewayFault("COACH_RESULT_NOT_PERSISTED", "Coach result could not be persisted", 503)
+
+
+def _coach_result_not_available() -> GatewayFault:
+    return GatewayFault("COACH_RESULT_NOT_AVAILABLE", "Coach result is not available", 404)
+
+
 def _call_coach_runtime(payload: dict[str, object], capability: str) -> dict[str, Any]:
     """Call Runtime through the existing loopback/host-gateway policy."""
     runtime_token = os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
@@ -979,6 +1018,369 @@ def _persist_coach_claims(
         raise _coach_claims_not_persisted() from None
 
 
+def _result_json(value: object, label: str) -> str:
+    try:
+        encoded = json.dumps(
+            value,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError) as error:
+        raise _coach_result_not_persisted() from error
+    if len(encoded) > _RESULT_JSON_MAX_LENGTH:
+        raise _coach_result_not_persisted()
+    return encoded
+
+
+def _coach_envelope(
+    validated: Mapping[str, Any], persisted: list[dict[str, Any]]
+) -> dict[str, Any]:
+    return {
+        "answer_status": validated["answer_status"],
+        "answer": validated["answer"],
+        "refusal_reason": validated["refusal_reason"],
+        "claims": validated["claims"],
+        "citations": validated["citations"],
+        "retrieval_trace": validated["retrieval_trace"],
+        "token_usage": validated["token_usage"],
+        "latency_ms": validated["latency_ms"],
+        "provenance": persisted,
+    }
+
+
+def _result_document_values(
+    *,
+    run_id: str,
+    correlation_id: str,
+    current_doctype: str | None,
+    current_name: str | None,
+    validated: Mapping[str, Any],
+    persisted: list[dict[str, Any]],
+) -> dict[str, Any]:
+    status = validated.get("answer_status")
+    if status not in _COACH_STATUSES:
+        raise _coach_result_not_persisted()
+    answer = validated.get("answer")
+    refusal_reason = validated.get("refusal_reason")
+    claims = validated.get("claims")
+    citations = validated.get("citations")
+    trace = validated.get("retrieval_trace")
+    usage = validated.get("token_usage")
+    latency_ms = validated.get("latency_ms")
+    if not isinstance(answer, str) or len(answer) > 8_000:
+        raise _coach_result_not_persisted()
+    if refusal_reason is not None and refusal_reason not in _RESULT_REFUSAL_REASONS:
+        raise _coach_result_not_persisted()
+    if not isinstance(claims, list) or not isinstance(citations, list):
+        raise _coach_result_not_persisted()
+    if not isinstance(persisted, list) or len(persisted) != len(claims):
+        raise _coach_result_not_persisted()
+    if current_doctype is None or current_name is None:
+        if current_doctype is not None or current_name is not None:
+            raise _coach_result_not_persisted()
+    elif current_doctype not in {"Material Request", "Purchase Order"}:
+        raise _coach_result_not_persisted()
+    else:
+        _text(current_name, "current_name", 140)
+    safe_claims = [
+        {
+            "claim_id": claim["claim_id"],
+            "ordinal": claim["ordinal"],
+            "claim_type": claim["claim_type"],
+            "text": claim["text"],
+            "citation_refs": claim["citation_refs"],
+        }
+        for claim in claims
+        if isinstance(claim, dict)
+    ]
+    if len(safe_claims) != len(claims):
+        raise _coach_result_not_persisted()
+    claim_record_ids = []
+    for item in persisted:
+        if not isinstance(item, dict):
+            raise _coach_result_not_persisted()
+        claim_record_ids.append(_identifier(item.get("persisted_claim_id"), "claim record id"))
+    if status in {"UNKNOWN", "REFUSED"}:
+        if answer.strip() or safe_claims or citations or claim_record_ids or not refusal_reason:
+            raise _coach_result_not_persisted()
+    elif not answer.strip() or not safe_claims or not citations or refusal_reason is not None:
+        raise _coach_result_not_persisted()
+    return {
+        "doctype": "Synora Coach Result",
+        "run": run_id,
+        "correlation_id": correlation_id,
+        "purpose": "ERP_COACH",
+        "answer_status": status,
+        "answer": answer,
+        "refusal_reason": refusal_reason,
+        "current_doctype": current_doctype,
+        "current_name": current_name,
+        "claim_records_json": _result_json(claim_record_ids, "claim records"),
+        "claims_json": _result_json(safe_claims, "claims"),
+        "citations_json": _result_json(citations, "citations"),
+        "trace_json": _result_json(trace, "trace"),
+        "usage_json": _result_json(usage, "usage"),
+        "latency_ms": latency_ms,
+    }
+
+
+def _persist_coach_result(
+    *,
+    run_id: str,
+    correlation_id: str,
+    current_doctype: str | None,
+    current_name: str | None,
+    validated: Mapping[str, Any],
+    persisted: list[dict[str, Any]],
+) -> dict[str, str]:
+    values = _result_document_values(
+        run_id=run_id,
+        correlation_id=correlation_id,
+        current_doctype=current_doctype,
+        current_name=current_name,
+        validated=validated,
+        persisted=persisted,
+    )
+    try:
+        doc = frappe.get_doc(values)
+        doc.flags[RESULT_SERVICE_FLAG] = True
+        inserted = doc.insert(ignore_permissions=True)
+    except GatewayFault:
+        raise
+    except Exception:
+        raise _coach_result_not_persisted() from None
+    return {"result_id": str(inserted.name), "created_at": str(inserted.creation or "")}
+
+
+def _persist_coach_evidence(
+    *,
+    validated: Mapping[str, Any],
+    expected_scope: Mapping[str, str | None],
+    current_doctype: str,
+    current_name: str,
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    savepoint = f"synora_coach_evidence_{uuid4().hex}"
+    try:
+        frappe.db.savepoint(savepoint)
+        persisted = _persist_coach_claims(
+            validated["validated_claims"],
+            expected_scope=expected_scope,
+        )
+        result = _persist_coach_result(
+            run_id=str(expected_scope["run_id"]),
+            correlation_id=str(expected_scope["correlation_id"]),
+            current_doctype=current_doctype,
+            current_name=current_name,
+            validated=validated,
+            persisted=persisted,
+        )
+        return persisted, result
+    except GatewayFault:
+        try:
+            frappe.db.rollback(save_point=savepoint)
+        except Exception:
+            pass
+        raise
+    except Exception:
+        try:
+            frappe.db.rollback(save_point=savepoint)
+        except Exception:
+            pass
+        raise _coach_result_not_persisted() from None
+
+
+def _context_required_answer() -> dict[str, Any]:
+    return {
+        "answer_status": "REFUSED",
+        "answer": "",
+        "refusal_reason": "CONTEXT_REQUIRED",
+        "claims": [],
+        "citations": [],
+        "retrieval_trace": {
+            "selected_chunk_ids": [],
+            "selected_content_digests": [],
+            "selected_revisions": [],
+            "live_fact_digests": [],
+            "provider_tools": [],
+            "context_fragment_ids": [],
+        },
+        "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "reasoning_tokens": 0},
+        "latency_ms": 0,
+        "validated_claims": [],
+    }
+
+
+def persist_context_required_coach_result(
+    *, run_id: object, correlation_id: object
+) -> dict[str, Any]:
+    """Persist the safe no-context refusal without invoking Runtime or Provider."""
+    actor = _actor()
+    safe_run = canonical_uuid(run_id, "run_id")
+    safe_correlation = canonical_uuid(correlation_id, "correlation_id")
+    scope = _run_scope(safe_run, actor)
+    if str(scope.get("correlation_id") or "") != safe_correlation:
+        raise _coach_run_not_available()
+    validated = _context_required_answer()
+    savepoint = f"synora_coach_refusal_{uuid4().hex}"
+    try:
+        frappe.db.savepoint(savepoint)
+        result = _persist_coach_result(
+            run_id=safe_run,
+            correlation_id=safe_correlation,
+            current_doctype=None,
+            current_name=None,
+            validated=validated,
+            persisted=[],
+        )
+    except GatewayFault:
+        try:
+            frappe.db.rollback(save_point=savepoint)
+        except Exception:
+            pass
+        raise
+    except Exception:
+        try:
+            frappe.db.rollback(save_point=savepoint)
+        except Exception:
+            pass
+        raise _coach_result_not_persisted() from None
+    return {"result": result, "coach": _coach_envelope(validated, [])}
+
+
+def _result_row_value(row: Any, field: str) -> object:
+    if isinstance(row, Mapping):
+        return row.get(field)
+    return getattr(row, field, None)
+
+
+def _stored_result_json(
+    value: object, label: str, expected: type[list[Any]] | type[dict[str, Any]]
+) -> Any:
+    raw = value if isinstance(value, str) else ""
+    if not raw or len(raw) > _RESULT_JSON_MAX_LENGTH:
+        raise ValueError(f"{label} is invalid")
+    parsed = json.loads(
+        raw,
+        parse_constant=_reject_json_constant,
+        object_pairs_hook=_reject_duplicate_pairs,
+    )
+    if not isinstance(parsed, expected):
+        raise ValueError(f"{label} is invalid")
+    canonical = json.dumps(
+        parsed, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
+    )
+    if canonical != raw:
+        raise ValueError(f"{label} is not canonical")
+    return parsed
+
+
+def serialize_coach_result(row: Any) -> dict[str, Any]:
+    """Return only the immutable, safe presentation model for Runs history."""
+    try:
+        result_id = _identifier(_result_row_value(row, "name"), "result_id")
+        run_id = canonical_uuid(_result_row_value(row, "run"), "run")
+        correlation_id = canonical_uuid(_result_row_value(row, "correlation_id"), "correlation_id")
+        if _result_row_value(row, "purpose") != "ERP_COACH":
+            raise ValueError("purpose is invalid")
+        status = _result_row_value(row, "answer_status")
+        if status not in _COACH_STATUSES:
+            raise ValueError("answer status is invalid")
+        answer = _result_row_value(row, "answer")
+        if not isinstance(answer, str) or len(answer) > 8_000:
+            raise ValueError("answer is invalid")
+        refusal_reason = _result_row_value(row, "refusal_reason")
+        if refusal_reason is not None and refusal_reason not in _RESULT_REFUSAL_REASONS:
+            raise ValueError("refusal reason is invalid")
+        raw_claims = _stored_result_json(_result_row_value(row, "claims_json"), "claims", list)
+        claims = [_coach_output_claim(item) for item in raw_claims]
+        raw_citations = _stored_result_json(
+            _result_row_value(row, "citations_json"), "citations", list
+        )
+        citations = [_validate_citation(item) for item in raw_citations]
+        raw_claim_records = _stored_result_json(
+            _result_row_value(row, "claim_records_json"), "claim records", list
+        )
+        claim_record_ids = [_identifier(item, "claim record id") for item in raw_claim_records]
+        trace = _coach_output_trace(
+            _stored_result_json(_result_row_value(row, "trace_json"), "trace", dict)
+        )
+        usage = _coach_output_usage(
+            _stored_result_json(_result_row_value(row, "usage_json"), "usage", dict)
+        )
+        latency_ms = _bounded_int(_result_row_value(row, "latency_ms"), "latency_ms", 0, 86_400_000)
+        if [claim["ordinal"] for claim in claims] != list(range(1, len(claims) + 1)):
+            raise ValueError("claim ordinals are invalid")
+        if len(claim_record_ids) != len(claims):
+            raise ValueError("claim records do not match claims")
+        citation_ids = [str(citation["citation_id"]) for citation in citations]
+        if len(set(citation_ids)) != len(citation_ids):
+            raise ValueError("citation ids are invalid")
+        citation_map = dict(zip(citation_ids, citations, strict=True))
+        referenced: set[str] = set()
+        for claim in claims:
+            for reference in claim["citation_refs"]:
+                citation = citation_map.get(reference)
+                if citation is None:
+                    raise ValueError("claim citation is missing")
+                referenced.add(reference)
+                if claim["claim_type"] == "ERP_FACT" and citation["citation_type"] != "LIVE_ERP":
+                    raise ValueError("ERP claim citation is invalid")
+                if (
+                    claim["claim_type"] == "RETRIEVED_KNOWLEDGE"
+                    and citation["citation_type"] != "RETRIEVAL"
+                ):
+                    raise ValueError("retrieval claim citation is invalid")
+        if referenced != set(citation_ids):
+            raise ValueError("orphan citation")
+        if status in {"UNKNOWN", "REFUSED"}:
+            if answer.strip() or claims or citations or claim_record_ids or not refusal_reason:
+                raise ValueError("non-answer result contains answer data")
+        elif not answer.strip() or not claims or not citations or refusal_reason is not None:
+            raise ValueError("answer result is incomplete")
+        elif answer != "\n".join(claim["text"] for claim in claims):
+            raise ValueError("answer does not match claims")
+        current_doctype = _result_row_value(row, "current_doctype")
+        current_name = _result_row_value(row, "current_name")
+        # Frappe represents an empty optional Select/Data value as either an
+        # empty string or None depending on the read path.
+        if current_doctype == "":
+            current_doctype = None
+        if current_name == "":
+            current_name = None
+        if current_doctype is None and current_name is None:
+            current_document = None
+        elif (
+            current_doctype in {"Material Request", "Purchase Order"}
+            and isinstance(current_name, str)
+            and current_name
+            and len(current_name) <= 140
+        ):
+            current_document = {"doctype": current_doctype, "name": current_name}
+        else:
+            raise ValueError("current document is invalid")
+        return {
+            "result_id": result_id,
+            "run_id": run_id,
+            "correlation_id": correlation_id,
+            "purpose": "ERP_COACH",
+            "answer_status": status,
+            "answer": answer,
+            "refusal_reason": refusal_reason,
+            "current_document": current_document,
+            "claims": claims,
+            "citations": citations,
+            "trace": trace,
+            "usage": usage,
+            "latency_ms": latency_ms,
+            "created_at": str(_result_row_value(row, "creation") or "")[:64],
+            "_claim_record_ids": claim_record_ids,
+        }
+    except GatewayFault, KeyError, TypeError, ValueError, json.JSONDecodeError:
+        raise _coach_result_not_available() from None
+
+
 def answer_contextual_coach(
     *,
     run_id: object,
@@ -1033,25 +1435,18 @@ def answer_contextual_coach(
         expected_name=safe_name,
         expected_scope=scope,
     )
-    persisted = _persist_coach_claims(
-        validated["validated_claims"],
+    persisted, result = _persist_coach_evidence(
+        validated=validated,
         expected_scope=scope,
+        current_doctype=safe_doctype,
+        current_name=safe_name,
     )
     return {
         "ok": True,
         "schema_version": "1",
         "correlation_id": safe_correlation,
-        "coach": {
-            "answer_status": validated["answer_status"],
-            "answer": validated["answer"],
-            "refusal_reason": validated["refusal_reason"],
-            "claims": validated["claims"],
-            "citations": validated["citations"],
-            "retrieval_trace": validated["retrieval_trace"],
-            "token_usage": validated["token_usage"],
-            "latency_ms": validated["latency_ms"],
-            "provenance": persisted,
-        },
+        "result_id": result["result_id"],
+        "coach": _coach_envelope(validated, persisted),
     }
 
 
@@ -1104,6 +1499,8 @@ def resolve_coach_claim(
 __all__ = [
     "answer_contextual_coach",
     "persist_coach_claim",
+    "persist_context_required_coach_result",
     "resolve_coach_claim",
+    "serialize_coach_result",
     "validate_coach_capability",
 ]

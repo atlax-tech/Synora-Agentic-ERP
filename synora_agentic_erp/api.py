@@ -24,6 +24,8 @@ from synora_agentic_erp.agent.service import (
 )
 from synora_agentic_erp.coach.service import (
     answer_contextual_coach,
+    persist_context_required_coach_result,
+    serialize_coach_result,
     validate_coach_capability,
 )
 from synora_agentic_erp.gateway.contract import (
@@ -436,6 +438,101 @@ def issue_run(
     except GatewayFault as fault:
         _set_status(fault.status_code)
         return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def start_erp_coach(
+    question: object,
+    company: object,
+    warehouse: object = None,
+    current_doctype: object = None,
+    current_name: object = None,
+    **extra: object,
+) -> dict[str, Any]:
+    """Create and answer one Coach Run without returning a browser capability."""
+    safe_correlation_id: str | None = None
+    savepoint = f"synora_start_coach_{uuid4().hex}"
+    capability = ""
+    try:
+        reject_mixed_user_credentials()
+        if extra:
+            raise GatewayFault("INVALID_INPUT", "request fields are invalid")
+        safe_question = bounded_text(question, "question", 1_000)
+        if not safe_question.strip():
+            raise GatewayFault("INVALID_INPUT", "question is invalid")
+        safe_company = bounded_text(company, "company")
+        safe_warehouse = optional_text(warehouse, "warehouse")
+        has_doctype = current_doctype not in (None, "")
+        has_name = current_name not in (None, "")
+        if has_doctype != has_name:
+            raise GatewayFault("INVALID_INPUT", "current document fields are incomplete")
+        safe_doctype: str | None = None
+        safe_name: str | None = None
+        if has_doctype:
+            if not isinstance(current_doctype, str) or current_doctype not in {
+                "Material Request",
+                "Purchase Order",
+            }:
+                raise GatewayFault("INVALID_INPUT", "current_doctype is invalid")
+            safe_doctype = str(current_doctype)
+            safe_name = bounded_text(current_name, "current_name")
+        safe_correlation_id = validate_correlation_id(str(uuid4()))
+        frappe.db.savepoint(savepoint)
+        run = create_run(
+            safe_company,
+            safe_question,
+            safe_warehouse,
+            DEFAULT_TIME_WINDOW_DAYS,
+            safe_correlation_id,
+            "DETERMINISTIC",
+        )
+        run_id = str(run["run_id"])
+        capability = str(run["capability"])
+        if safe_doctype is None or safe_name is None:
+            refused = persist_context_required_coach_result(
+                run_id=run_id, correlation_id=safe_correlation_id
+            )
+            return {
+                "ok": True,
+                "schema_version": SCHEMA_VERSION,
+                "correlation_id": safe_correlation_id,
+                "run_id": run_id,
+                "result_id": refused["result"]["result_id"],
+                "coach": refused["coach"],
+            }
+        answered = answer_contextual_coach(
+            run_id=run_id,
+            capability=capability,
+            question=safe_question,
+            current_doctype=safe_doctype,
+            current_name=safe_name,
+        )
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": safe_correlation_id,
+            "run_id": run_id,
+            "result_id": answered["result_id"],
+            "coach": answered["coach"],
+        }
+    except GatewayFault as fault:
+        try:
+            frappe.db.rollback(save_point=savepoint)
+        except Exception:
+            pass
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+    except Exception:
+        try:
+            frappe.db.rollback(save_point=savepoint)
+        except Exception:
+            pass
+        service_fault = GatewayFault("ERP_ERROR", "Coach service is unavailable", 503)
+        _set_status(service_fault.status_code)
+        return error_response(service_fault, safe_correlation_id)
+    finally:
+        capability = ""
 
 
 @frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
@@ -963,6 +1060,175 @@ def get_run(run_id: str) -> dict[str, Any]:
         "plan": plan,
         "governance": governed,
     }
+
+
+def _history_scope_readable(run: Any, actor: str) -> bool:
+    try:
+        if not frappe.has_permission("Company", "read", doc=run.company_scope, user=actor):
+            return False
+        if not run.warehouse_scope:
+            return True
+        warehouse = frappe.db.get_value(
+            "Warehouse", run.warehouse_scope, ["company", "disabled"], as_dict=True
+        )
+        return bool(
+            warehouse
+            and str(warehouse.company) == str(run.company_scope)
+            and not warehouse.disabled
+            and frappe.has_permission("Warehouse", "read", doc=run.warehouse_scope, user=actor)
+        )
+    except Exception:
+        return False
+
+
+def _history_document_readable(run: Any, document: dict[str, str], actor: str) -> bool:
+    doctype = document["doctype"]
+    name = document["name"]
+    try:
+        if not frappe.has_permission(doctype, "read", doc=name, user=actor):
+            return False
+        rows = frappe.get_list(
+            doctype,
+            fields=["name"],
+            filters={"name": name, "company": run.company_scope},
+            user=actor,
+            limit=1,
+        )
+        if not rows:
+            return False
+        if not run.warehouse_scope:
+            return True
+        child_doctype = (
+            "Material Request Item" if doctype == "Material Request" else "Purchase Order Item"
+        )
+        return bool(
+            frappe.get_list(
+                child_doctype,
+                fields=["name"],
+                filters={"parent": name, "warehouse": run.warehouse_scope},
+                parent_doctype=doctype,
+                user=actor,
+                limit=1,
+            )
+        )
+    except Exception:
+        return False
+
+
+def _result_claims_belong_to_run(
+    claim_ids: list[str], *, run_id: str, correlation_id: str, initiator: str, run: Any
+) -> bool:
+    if not claim_ids:
+        return True
+    rows = frappe.get_all(
+        "Synora Coach Claim",
+        filters={"name": ["in", claim_ids]},
+        fields=[
+            "name",
+            "run",
+            "correlation_id",
+            "initiator",
+            "company_scope",
+            "warehouse_scope",
+        ],
+        ignore_permissions=True,
+    )
+    if len(rows) != len(claim_ids):
+        return False
+    by_name = {str(row.name): row for row in rows}
+    if set(by_name) != set(claim_ids):
+        return False
+    return all(
+        str(row.run) == run_id
+        and str(row.correlation_id) == correlation_id
+        and str(row.initiator) == initiator
+        and str(row.company_scope) == str(run.company_scope)
+        and (str(row.warehouse_scope or "") or None) == (str(run.warehouse_scope or "") or None)
+        for row in by_name.values()
+    )
+
+
+@frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def coach_run_detail(run_id: object) -> dict[str, Any]:
+    """Read safe Coach history only after current Run and ERP permission checks."""
+    try:
+        if frappe.session.user == "Guest":
+            raise GatewayFault("AUTHENTICATION_REQUIRED", "authenticated user required", 401)
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        if not frappe.db.exists("Synora Agent Run", safe_run_id):
+            raise GatewayFault("COACH_RESULT_NOT_AVAILABLE", "Coach result is not available", 404)
+        run = frappe.get_doc("Synora Agent Run", safe_run_id)
+        actor = str(frappe.session.user)
+        if run.initiator != actor and not _is_system_manager():
+            raise GatewayFault("COACH_RESULT_NOT_AVAILABLE", "Coach result is not available", 404)
+        if not _history_scope_readable(run, actor):
+            raise GatewayFault("COACH_RESULT_NOT_AVAILABLE", "Coach result is not available", 404)
+        rows = frappe.get_all(
+            "Synora Coach Result",
+            filters={"run": safe_run_id},
+            fields=[
+                "name",
+                "run",
+                "correlation_id",
+                "purpose",
+                "answer_status",
+                "answer",
+                "refusal_reason",
+                "current_doctype",
+                "current_name",
+                "claim_records_json",
+                "claims_json",
+                "citations_json",
+                "trace_json",
+                "usage_json",
+                "latency_ms",
+                "creation",
+            ],
+            order_by="creation desc",
+            limit=50,
+            ignore_permissions=True,
+        )
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            view = serialize_coach_result(row)
+            if view["run_id"] != safe_run_id or view["correlation_id"] != str(run.correlation_id):
+                raise GatewayFault(
+                    "COACH_RESULT_NOT_AVAILABLE", "Coach result is not available", 404
+                )
+            claim_ids = view.pop("_claim_record_ids")
+            if not _result_claims_belong_to_run(
+                claim_ids,
+                run_id=safe_run_id,
+                correlation_id=view["correlation_id"],
+                initiator=str(run.initiator),
+                run=run,
+            ):
+                raise GatewayFault(
+                    "COACH_RESULT_NOT_AVAILABLE", "Coach result is not available", 404
+                )
+            document = view["current_document"]
+            if document is not None and not _history_document_readable(run, document, actor):
+                raise GatewayFault(
+                    "COACH_RESULT_NOT_AVAILABLE", "Coach result is not available", 404
+                )
+            results.append(view)
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "run_id": safe_run_id,
+            "results": results,
+            "count": len(results),
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, None)
+    except Exception:
+        service_fault = GatewayFault(
+            "COACH_RESULT_NOT_AVAILABLE", "Coach result is not available", 404
+        )
+        _set_status(service_fault.status_code)
+        return error_response(service_fault, None)
 
 
 @frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]

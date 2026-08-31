@@ -20,6 +20,17 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		DECLINED: __("已拒绝"),
 		EXPIRED: __("已过期"),
 	};
+	const COACH_STATUS_COPY = {
+		ANSWERED: __("已回答"),
+		CONFLICT: __("存在冲突，需要人工确认"),
+		UNKNOWN: __("无法形成有依据的答案"),
+		REFUSED: __("已拒绝回答"),
+	};
+	const COACH_CLAIM_TYPE_COPY = {
+		ERP_FACT: __("ERP 事实"),
+		RETRIEVED_KNOWLEDGE: __("检索知识"),
+		RECOMMENDATION: __("建议"),
+	};
 	const GOVERNANCE_ACTION_COPY = {
 		CREATE_MR_DRAFT: __("创建 Material Request 草稿"),
 		CREATE_PO_DRAFT: __("创建 Purchase Order 草稿"),
@@ -953,6 +964,112 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		});
 	}
 
+	function coach_citation(citation) {
+		if (!citation || typeof citation !== "object") {
+			return '<div class="small text-muted">' + __("来源不可用。") + "</div>";
+		}
+		if (citation.citation_type === "LIVE_ERP") {
+			return '<div class="border-top pt-2 mt-2 small text-muted">' +
+				"<b>" + __("实时 ERP") + "</b> · " +
+				__("来源") + ": " + esc(citation.document_doctype) + " / " + esc(citation.document_name) +
+				" · " + __("ERP 修改时间") + ": " + esc(citation.source_modified_at || "—") +
+				" · " + __("读取时间") + ": " + esc(citation.captured_at || "—") +
+				" · " + __("版本") + ": " + esc(citation.frappe_revision || citation.erpnext_revision || "—") +
+				"</div>";
+		}
+		if (citation.citation_type === "RETRIEVAL") {
+			return '<div class="border-top pt-2 mt-2 small text-muted">' +
+				"<b>" + __("检索资料") + "</b> · " +
+				__("来源类型") + ": " + esc(citation.source_type) +
+				" · " + __("修订版本") + ": " + esc(citation.revision) +
+				" · " + __("ERP 版本") + ": " + esc(citation.erp_version) +
+				"</div>";
+		}
+		return '<div class="small text-muted">' + __("来源类型不可用。") + "</div>";
+	}
+
+	function render_coach_result(result, index) {
+		const status = typeof result.answer_status === "string" ? result.answer_status : "";
+		const status_copy = COACH_STATUS_COPY[status] || esc(status || __("状态不可用"));
+		const status_class = status === "CONFLICT" ? "border-warning" : "border";
+		let html = '<article class="coach-result ' + status_class + ' rounded p-3 mb-3" data-coach-result="' + esc(index) + '">';
+		html += '<div class="d-flex justify-content-between align-items-start flex-wrap"><h6>' + __("回答状态") + ": " + status_copy + '</h6>' +
+			'<span class="small text-muted">' + esc(result.created_at || "—") + "</span></div>";
+		if (result.current_document) {
+			html += '<div class="small text-muted mb-2">' + __("上下文") + ": " +
+				esc(result.current_document.doctype) + " / " + esc(result.current_document.name) + "</div>";
+		}
+		if (status === "CONFLICT") {
+			html += '<div class="alert alert-warning py-2" role="alert">' + __("当前证据存在冲突，请以 ERP 当前状态和人工核对为准。") + "</div>";
+		}
+		if (status === "UNKNOWN" || status === "REFUSED") {
+			html += '<div class="alert alert-secondary py-2" role="status"><b>' + __("未形成答案") + "</b>: " +
+				esc(result.refusal_reason || __("没有可展示的原因。")) + "</div>";
+		} else if (status === "ANSWERED" || status === "CONFLICT") {
+			html += '<section class="mb-2"><h6>' + __("有依据的回答") + '</h6><p style="white-space: pre-wrap; overflow-wrap:anywhere;">' +
+				esc(result.answer) + "</p></section>";
+		}
+		const citations = Array.isArray(result.citations) ? result.citations : [];
+		const claims = Array.isArray(result.claims) ? result.claims : [];
+		if (claims.length) {
+			html += '<section class="mb-2"><h6>' + __("逐条 Claim 与来源") + "</h6>";
+			claims.forEach(function (claim) {
+				const refs = Array.isArray(claim.citation_refs) ? claim.citation_refs : [];
+				html += '<article class="border rounded p-2 mb-2"><div><b>#' + esc(claim.ordinal) + " · " +
+					esc(COACH_CLAIM_TYPE_COPY[claim.claim_type] || claim.claim_type || __("未知类型")) +
+					'</b></div><p class="mb-1" style="white-space: pre-wrap; overflow-wrap:anywhere;">' + esc(claim.text) + "</p>";
+				refs.forEach(function (reference) {
+					const citation = citations.find(function (item) {
+						return item && item.citation_id === reference;
+					});
+					html += coach_citation(citation);
+				});
+				html += "</article>";
+			});
+			html += "</section>";
+		}
+		const trace = result.trace && typeof result.trace === "object" ? result.trace : {};
+		const trace_id = "coach-trace-" + String(index).replace(/[^a-zA-Z0-9_-]/g, "");
+		html += '<details class="mt-2"><summary>' + __("Trace 与运行元数据") + "</summary>" +
+			'<div id="' + trace_id + '" class="small text-muted mt-2" style="overflow-wrap:anywhere;">' +
+			__("Run") + ": " + esc(result.run_id) + " · " + __("Correlation") + ": " + esc(result.correlation_id) +
+			" · " + __("耗时") + ": " + esc(result.latency_ms) + "ms<br>" + render_trace_payload(trace) + "</div></details>";
+		return html + "</article>";
+	}
+
+	function render_coach_results(wrapper, results) {
+		if (!Array.isArray(results) || !results.length) {
+			wrapper.text(__("当前运行尚无 ERP Coach 结果。"));
+			return;
+		}
+		wrapper.html(results.map(render_coach_result).join(""));
+	}
+
+	function load_coach_detail(run_id, wrapper) {
+		wrapper.text(__("加载 ERP Coach 结果…"));
+		frappe.call({
+			method: "synora_agentic_erp.api.coach_run_detail",
+			args: { run_id: run_id },
+			type: "GET",
+			callback: function (r) {
+				if (!r.message || !r.message.ok) {
+					wrapper.text(__("Coach 历史结果不可用。"));
+					return;
+				}
+				render_coach_results(wrapper, r.message.results);
+			},
+			error: function () {
+				wrapper.text(__("Coach 历史结果读取失败，请刷新重试。"));
+			},
+		});
+	}
+
+	function build_coach_panel() {
+		return '<section class="coach-history mt-3" aria-labelledby="coach-history-label">' +
+			'<h5 id="coach-history-label">' + __("ERP Coach 历史") + "</h5>" +
+			'<div class="coach-detail-content" aria-live="polite" role="status"></div></section>';
+	}
+
 	function show_detail(run_id) {
 		frappe.call({
 			method: "synora_agentic_erp.api.get_run",
@@ -1063,8 +1180,9 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 						dialog.hide();
 					},
 				});
-				const scope = esc(run.company_scope + (run.warehouse_scope ? " / " + run.warehouse_scope : __(" / 全部仓库")));
-				const trace_panel = build_trace_panel(run);
+					const scope = esc(run.company_scope + (run.warehouse_scope ? " / " + run.warehouse_scope : __(" / 全部仓库")));
+					const coach_panel = build_coach_panel();
+					const trace_panel = build_trace_panel(run);
 				const workflow_panel = build_workflow_panel(run);
 				const content_wrapper = dialog.fields_dict.content.$wrapper;
 				content_wrapper.html(
@@ -1075,9 +1193,10 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					" &nbsp; <b>" + __("范围") + ":</b> " + scope +
 					" &nbsp; <b>" + __("时间窗口") + ":</b> " + esc(run.time_window_days) + " " + __("天") +
 					(run.workflow_expires_at ? " &nbsp; <b>" + __("工作流到期") + ":</b> " + esc(workflow_time(run.workflow_expires_at)) : "") +
-					"</div>" +
-					rows_html +
-					governance_panel +
+						"</div>" +
+						rows_html +
+						coach_panel +
+						governance_panel +
 					trace_panel +
 					workflow_panel
 				);
@@ -1095,9 +1214,10 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 						load_trace(run.run_id, trace_content, button);
 					}
 				});
-				bind_governance_actions(content_wrapper, run.run_id, dialog);
-				dialog.show();
-			},
+					bind_governance_actions(content_wrapper, run.run_id, dialog);
+					dialog.show();
+					load_coach_detail(run.run_id, content_wrapper.find(".coach-detail-content"));
+				},
 		});
 	}
 
