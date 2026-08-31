@@ -383,6 +383,16 @@ def _security_event_budget_allowed() -> bool:
     return True
 
 
+def _reject_unexpected_rpc_fields(extra: dict[str, object], *, expected_cmd: str) -> None:
+    """Allow only Frappe's canonical RPC route metadata."""
+    if "cmd" in extra:
+        cmd = extra.pop("cmd")
+        if cmd != expected_cmd:
+            raise GatewayFault("INVALID_INPUT", "request fields are invalid")
+    if extra:
+        raise GatewayFault("INVALID_INPUT", "request fields are invalid")
+
+
 @frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
 @do_not_record  # type: ignore[untyped-decorator]
 def issue_run(
@@ -456,8 +466,7 @@ def start_erp_coach(
     capability = ""
     try:
         reject_mixed_user_credentials()
-        if extra:
-            raise GatewayFault("INVALID_INPUT", "request fields are invalid")
+        _reject_unexpected_rpc_fields(extra, expected_cmd="synora_agentic_erp.api.start_erp_coach")
         safe_question = bounded_text(question, "question", 1_000)
         if not safe_question.strip():
             raise GatewayFault("INVALID_INPUT", "question is invalid")
@@ -548,8 +557,7 @@ def ask_coach(
     """Answer one bounded Coach question through an authenticated Run."""
     try:
         reject_mixed_user_credentials()
-        if extra:
-            raise GatewayFault("INVALID_INPUT", "request fields are invalid")
+        _reject_unexpected_rpc_fields(extra, expected_cmd="synora_agentic_erp.api.ask_coach")
         safe_run_id = canonical_uuid(run_id, "run_id")
         safe_capability = validate_coach_capability(capability)
         safe_question = bounded_text(question, "question", 1_000)

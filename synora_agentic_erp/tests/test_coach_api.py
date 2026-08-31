@@ -583,7 +583,9 @@ class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
         frappe.set_user(BUYER)
         with patch("synora_agentic_erp.coach.service._call_coach_runtime") as runtime:
             response = start_erp_coach(
-                question="What should be checked before replenishment?", company=COMPANY
+                question="What should be checked before replenishment?",
+                company=COMPANY,
+                cmd="synora_agentic_erp.api.start_erp_coach",
             )
 
         self.assertTrue(response["ok"])
@@ -593,6 +595,54 @@ class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
         runtime.assert_not_called()
         detail = coach_run_detail(response["run_id"])
         self.assertEqual(detail["results"][0]["refusal_reason"], "CONTEXT_REQUIRED")
+
+    def test_ask_rpc_cmd_is_accepted_but_unexpected_fields_stay_rejected(self) -> None:
+        run = self._issue()
+        with patch(
+            "synora_agentic_erp.coach.service._call_coach_runtime",
+            return_value=_unknown_answer("provider unavailable"),
+        ) as runtime:
+            accepted = self._ask(
+                run,
+                extra_fields={"cmd": "synora_agentic_erp.api.ask_coach"},
+            )
+        self.assertTrue(accepted["ok"])
+        runtime.assert_called_once()
+
+        with patch("synora_agentic_erp.coach.service._call_coach_runtime") as runtime:
+            missing_value = self._ask(run, extra_fields={"cmd": None})
+        self.assertEqual(missing_value["error"]["code"], "INVALID_INPUT")
+        runtime.assert_not_called()
+
+        with patch("synora_agentic_erp.coach.service._call_coach_runtime") as runtime:
+            wrong_cmd = self._ask(
+                run,
+                extra_fields={"cmd": "synora_agentic_erp.api.start_erp_coach"},
+            )
+        self.assertEqual(wrong_cmd["error"]["code"], "INVALID_INPUT")
+        runtime.assert_not_called()
+
+        with patch("synora_agentic_erp.coach.service._call_coach_runtime") as runtime:
+            caller_extra = self._ask(
+                run,
+                extra_fields={
+                    "cmd": "synora_agentic_erp.api.ask_coach",
+                    "correlation_id": str(uuid4()),
+                },
+            )
+        self.assertEqual(caller_extra["error"]["code"], "INVALID_INPUT")
+        runtime.assert_not_called()
+
+    def test_start_coach_rejects_wrong_rpc_cmd(self) -> None:
+        frappe.set_user(BUYER)
+        with patch("synora_agentic_erp.coach.service._call_coach_runtime") as runtime:
+            response = start_erp_coach(
+                question="What remains?",
+                company=COMPANY,
+                cmd="synora_agentic_erp.api.ask_coach",
+            )
+        self.assertEqual(response["error"]["code"], "INVALID_INPUT")
+        runtime.assert_not_called()
 
     def test_start_coach_rejects_caller_owned_authority_fields(self) -> None:
         frappe.set_user(BUYER)
