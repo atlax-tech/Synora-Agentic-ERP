@@ -183,11 +183,7 @@ def get_permission_query_conditions(user: str | None = None, **_: object) -> str
         f"{table}.expires_at > NOW()) or ({table}.kind in ('SEMANTIC', 'PROCEDURAL') and "
         f"({table}.expires_at is null or {table}.expires_at > NOW())))"
     )
-    common = (
-        f"{table}.state = 'PENDING' and "
-        f"({table}.supersedes_memory is null or {table}.supersedes_memory = '') and "
-        f"{expiry} and ({scope})"
-    )
+    common = f"{table}.state = 'PENDING' and {expiry} and ({scope})"
     episodic = f"({table}.kind = 'EPISODIC' and {table}.initiator = {frappe.db.escape(actor)})"
     if not _is_system_manager(actor):
         return f"({common}) and {episodic}"
@@ -232,7 +228,7 @@ def _native_read_allowed(name: str) -> bool:
 
 
 def _pending_and_unexpired(doc: Document) -> bool:
-    if str(doc.state or "") != "PENDING" or doc.supersedes_memory:
+    if str(doc.state or "") != "PENDING":
         return False
     return not is_expired(doc)
 

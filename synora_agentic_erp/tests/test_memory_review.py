@@ -18,6 +18,8 @@ from synora_agentic_erp.api import (
 from synora_agentic_erp.gateway.contract import GatewayFault
 from synora_agentic_erp.memory.service import (
     SERVICE_FLAG,
+    delete_memory,
+    get_review_candidate,
     list_review_queue,
     review_candidate,
 )
@@ -248,7 +250,7 @@ class TestMemoryReview(FrappeTestCase):
             review_candidate(doc.name, "UNKNOWN", 2)
         self.assertEqual(invalid.exception.code, "INVALID_INPUT")
 
-    def test_expired_and_correction_candidates_are_not_reviewed(self) -> None:
+    def test_expired_candidates_are_not_reviewed(self) -> None:
         expired = self._candidate(kind="EPISODIC")
         frappe.db.set_value("Synora Memory Record", expired.name, "expires_at", _past())
         frappe.set_user(BUYER)
@@ -268,11 +270,99 @@ class TestMemoryReview(FrappeTestCase):
             review_candidate(missing_expiry.name, "APPROVE", 1)
         self.assertEqual(missing.exception.code, "CONFLICT")
 
-        old = self._candidate(kind="EPISODIC")
-        correction = self._candidate(kind="EPISODIC", supersedes_memory=old.name, memory_version=2)
-        with self.assertRaises(GatewayFault) as correction_error:
-            review_candidate(correction.name, "APPROVE", 1)
-        self.assertEqual(correction_error.exception.code, "CONFLICT")
+    def test_authorized_correction_is_reviewable_with_predecessor_cas(self) -> None:
+        old = self._candidate(kind="EPISODIC", initiator=BUYER, content="old SOP")
+        frappe.set_user(BUYER)
+        review_candidate(old.name, "APPROVE", 1)
+        correction = self._candidate(
+            kind="EPISODIC",
+            initiator=BUYER,
+            content="corrected SOP",
+            supersedes_memory=old.name,
+            memory_version=2,
+        )
+
+        queue = list_review_queue(50, 0)
+        self.assertEqual(queue["total"], 1)
+        self.assertEqual(queue["items"][0]["name"], correction.name)
+        detail = get_review_candidate(correction.name)
+        self.assertEqual(detail["supersedes_memory"], old.name)
+        self.assertEqual(detail["predecessor_state_version"], 2)
+        api_detail = get_memory_review_candidate(correction.name)
+        self.assertTrue(api_detail["ok"])
+        self.assertEqual(api_detail["memory"]["predecessor_state_version"], 2)
+        self.assertTrue(
+            frappe.has_permission("Synora Memory Record", "read", doc=correction.name, user=BUYER)
+        )
+        self.assertEqual(
+            frappe.get_list(
+                "Synora Memory Record",
+                filters={"state": "PENDING"},
+                fields=["name"],
+                pluck="name",
+            ),
+            [correction.name],
+        )
+        self.assertEqual(
+            frappe.get_doc("Synora Memory Record", correction.name).name, correction.name
+        )
+
+        frappe.set_user(VIEWER)
+        self.assertEqual(list_review_queue(50, 0)["total"], 0)
+        self.assertEqual(
+            frappe.get_list(
+                "Synora Memory Record",
+                filters={"state": "PENDING"},
+                fields=["name"],
+                pluck="name",
+            ),
+            [],
+        )
+        with self.assertRaises(GatewayFault) as foreign:
+            get_review_candidate(correction.name)
+        self.assertEqual(foreign.exception.code, "MEMORY_NOT_AVAILABLE")
+        from frappe.desk.form.load import getdoc
+
+        self.assertEqual(getdoc("Synora Memory Record", correction.name), [])
+
+        frappe.set_user(BUYER)
+        reviewed = review_memory_candidate(
+            correction.name,
+            "APPROVE",
+            1,
+            expected_predecessor_state_version=detail["predecessor_state_version"],
+        )
+        self.assertTrue(reviewed["ok"])
+        self.assertEqual(reviewed["memory"]["state"], "APPROVED")
+        self.assertEqual(reviewed["superseded_memory"]["state"], "SUPERSEDED")
+
+    def test_correction_review_rejects_stale_predecessor_version(self) -> None:
+        old = self._candidate(kind="EPISODIC", initiator=BUYER, content="old SOP")
+        frappe.set_user(BUYER)
+        review_candidate(old.name, "APPROVE", 1)
+        correction = self._candidate(
+            kind="EPISODIC",
+            initiator=BUYER,
+            content="corrected SOP",
+            supersedes_memory=old.name,
+            memory_version=2,
+        )
+        detail = get_review_candidate(correction.name)
+        self.assertEqual(detail["predecessor_state_version"], 2)
+        delete_memory(old.name, 2, "obsolete predecessor")
+
+        stale = review_memory_candidate(
+            correction.name,
+            "APPROVE",
+            1,
+            expected_predecessor_state_version=detail["predecessor_state_version"],
+        )
+        self.assertFalse(stale["ok"])
+        self.assertEqual(stale["error"]["code"], "CONFLICT")
+        self.assertEqual(
+            frappe.db.get_value("Synora Memory Record", correction.name, "state"),
+            "PENDING",
+        )
 
     def test_generic_docperm_and_guest_api_cannot_bypass_service(self) -> None:
         frappe.set_user(BUYER)

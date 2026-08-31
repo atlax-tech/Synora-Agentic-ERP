@@ -206,7 +206,6 @@ def _is_expired(memory: Any) -> bool:
 def _visible_doc(memory: Any, actor: str) -> bool:
     return (
         str(memory.state or "") == "PENDING"
-        and not memory.supersedes_memory
         and not _is_expired(memory)
         and _can_review(memory, actor)
     )
@@ -259,6 +258,18 @@ def _serialize(memory: Any) -> dict[str, Any]:
         "deletion_reason": str(memory.deletion_reason or "") or None,
         "created_at": str(memory.creation or ""),
     }
+
+
+def _serialize_review_candidate(memory: Any, actor: str) -> dict[str, Any]:
+    """Add only the predecessor CAS value needed to review a correction."""
+    serialized = _serialize(memory)
+    predecessor_id = str(memory.supersedes_memory or "") or None
+    if predecessor_id:
+        predecessor = _load_memory(predecessor_id)
+        if not memory_record.can_read_memory(predecessor, actor):
+            raise _not_available()
+        serialized["predecessor_state_version"] = int(predecessor.state_version)
+    return serialized
 
 
 def _load_memory(memory_id: str) -> Any:
@@ -561,11 +572,11 @@ def get_review_candidate(memory_id: object) -> dict[str, Any]:
     actor = _actor()
     safe_id = _memory_id(memory_id)
     memory = _load_memory(safe_id)
-    if memory.supersedes_memory or _is_expired(memory) or not _can_review(memory, actor):
+    if _is_expired(memory) or not _can_review(memory, actor):
         raise _not_available()
     if memory.state != "PENDING":
         raise _not_available()
-    return _serialize(memory)
+    return _serialize_review_candidate(memory, actor)
 
 
 def review_candidate(

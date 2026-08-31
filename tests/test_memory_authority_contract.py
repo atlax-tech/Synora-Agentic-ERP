@@ -123,6 +123,8 @@ def test_desk_review_renders_memory_as_text_and_exposes_safe_states() -> None:
     page_source = compatibility_page.read_text(encoding="utf-8")
     assert "UNTRUSTED" in form_source
     assert "review_memory_candidate" in form_source
+    assert "get_memory_review_candidate" in form_source
+    assert "expected_predecessor_state_version" in form_source
     assert 'frappe.listview_settings["Synora Memory Record"]' in list_source
     assert 'frappe.set_route("List", "Synora Memory Record")' in page_source
     assert "innerHTML" not in form_source
