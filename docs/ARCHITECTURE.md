@@ -1,6 +1,6 @@
 # Architecture
 
-Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is complete and its exit is `COMPLETED / PASS` after real ERP, fault, browser, Harness, independent Test, and adversarial Review evidence. Phase 7 Prompt/Context/Skills implementation and exit evidence are complete with status `COMPLETED / PASS`; its Prompt/Context/Skill metadata remains non-authorizing, Frappe remains authoritative, and no ERP write capability was added. Phase 8 Memory/RAG/Contextual ERP Coach is `IN_PROGRESS`; the Frappe-authoritative Memory lifecycle slice is now proven, while deterministic retrieval, Coach, and phase-exit evidence remain pending. Phase 9–13 remain planned and are not started.
+Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is complete and its exit is `COMPLETED / PASS` after real ERP, fault, browser, Harness, independent Test, and adversarial Review evidence. Phase 7 Prompt/Context/Skills implementation and exit evidence are complete with status `COMPLETED / PASS`; its Prompt/Context/Skill metadata remains non-authorizing, Frappe remains authoritative, and no ERP write capability was added. Phase 8 Memory/RAG/Contextual ERP Coach is `IN_PROGRESS`; the Frappe-authoritative Memory lifecycle and deterministic chunk/FTS5 retrieval slices are implemented, while vector comparison, Coach, and phase-exit evidence remain pending. Phase 9–13 remain planned and are not started.
 
 ## Architectural Style
 
@@ -62,7 +62,7 @@ The separation isolates fast-changing model orchestration from the deterministic
 - Runtime-local SQLite Memory persistence is `LAB_ONLY` single-instance/development evidence; it is not production authority, permission authority, or an ERP system of record.
 - Agent checkpoints own recoverable orchestration state only; they are not business facts.
 - Repository documents own product intent, architecture decisions, verified ERP knowledge, testing evidence, and development history.
-- Retrieval indexes are rebuildable caches and never become a source of truth.
+- Retrieval indexes are rebuildable chunk caches with source/revision/scope metadata and never become a source of truth.
 
 ## Dependency Direction
 
@@ -131,7 +131,7 @@ Candidate roles are Procurement Planner, Policy/Compliance Reviewer, ERP Coach, 
 
 ## RAG Evolution Boundary
 
-The initial retrieval implementation uses curated, versioned sources with SQLite FTS5/BM25 and metadata filtering. The target evolution path permits local embeddings, vector retrieval, hybrid search, reranking, context compression, grounded generation, permission filtering, and regression feedback only when retrieval evaluation justifies each step.
+The initial retrieval implementation uses curated, versioned, heading-aware chunks with SQLite FTS5/BM25 and metadata filtering. Retrieved chunks enter ContextBuilder only as `UNTRUSTED` reference fragments; the target evolution path permits local embeddings, vector retrieval, hybrid search, reranking, context compression, grounded generation, permission filtering, and regression feedback only when retrieval evaluation justifies each step.
 
 ## Open Architecture Decisions
 
