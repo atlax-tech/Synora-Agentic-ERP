@@ -199,6 +199,7 @@ class _RecordingProvider:
         self.messages: list[ProviderMessage] | None = None
         self.tools: list[ProviderToolSpec] | None = None
         self.model: str | None = None
+        self.max_tokens: int | None = None
         self.closed = False
 
     async def complete(
@@ -208,10 +209,10 @@ class _RecordingProvider:
         model: str | None = None,
         max_tokens: int | None = None,
     ) -> ProviderResponse:
-        del max_tokens
         self.messages = messages
         self.tools = tools
         self.model = model
+        self.max_tokens = max_tokens
         if self.error is not None:
             raise self.error
         assert self.response is not None
@@ -271,12 +272,60 @@ def test_runtime_selects_only_the_current_read_tool_and_binds_identity(
     assert sent.correlation_id == CORRELATION_ID
     assert sent.capability.get_secret_value() == CAPABILITY
     assert provider.tools == []
+    assert provider.max_tokens == 1024
     assert provider.messages is not None
     assert CAPABILITY not in repr(request)
     assert CAPABILITY not in repr(result)
     assert all(CAPABILITY not in message.content for message in provider.messages)
     assert provider.closed is True
     assert gateway.closed is True
+
+
+def test_runtime_uses_tuned_shared_provider_output_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _request()
+    gateway = _FakeGateway(_gateway())
+    provider = _RecordingProvider(_provider_response(request, _gateway()))
+    _patch_dependencies(monkeypatch, gateway, provider)
+
+    result = asyncio.run(
+        answer_coach_runtime(
+            request,
+            environ={
+                "SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000",
+                "SYNORA_PROVIDER_MAX_OUTPUT_TOKENS": "800",
+                "SYNORA_RUNTIME_TOKEN": RUNTIME_TOKEN,
+            },
+        )
+    )
+
+    assert result.answer_status == "ANSWERED"
+    assert provider.max_tokens == 800
+
+
+def test_runtime_rejects_invalid_shared_provider_output_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway = _FakeGateway(_gateway())
+    provider = _RecordingProvider(_provider_response(_request(), _gateway()))
+    _patch_dependencies(monkeypatch, gateway, provider)
+
+    result = asyncio.run(
+        answer_coach_runtime(
+            _request(),
+            environ={
+                "SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000",
+                "SYNORA_PROVIDER_MAX_OUTPUT_TOKENS": "1025",
+                "SYNORA_RUNTIME_TOKEN": RUNTIME_TOKEN,
+            },
+        )
+    )
+
+    assert result.answer_status == "REFUSED"
+    assert result.refusal_reason == "Coach provider is not available"
+    assert provider.messages is None
+    assert provider.closed is True
 
 
 @pytest.mark.parametrize("field", ["facts", "retrieval_hits", "tools", "provider"])

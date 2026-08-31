@@ -22,11 +22,13 @@ sys.path.insert(0, "services/agent_runtime/src")
 from agent_runtime.providers import (
     PROVIDER_API_KEY_ENV,
     PROVIDER_BASE_URL_ENV,
+    PROVIDER_MAX_OUTPUT_TOKENS_ENV,
     PROVIDER_MODEL_ENV,
     PROVIDER_REASONING_EFFORT_ENV,
     ProviderError,
     ProviderMessage,
     provider_from_environment,
+    provider_max_output_tokens,
 )
 
 _PROVIDER_ENV_NAMES = (
@@ -34,6 +36,7 @@ _PROVIDER_ENV_NAMES = (
     PROVIDER_API_KEY_ENV,
     PROVIDER_MODEL_ENV,
     PROVIDER_REASONING_EFFORT_ENV,
+    PROVIDER_MAX_OUTPUT_TOKENS_ENV,
 )
 
 
@@ -56,9 +59,10 @@ async def main() -> None:
         _load_env_file(args.env)
     try:
         provider = provider_from_environment()
-        # 成本护栏: 连通测试只发 1 条最小消息, 输出上限 16 token。
+        # 与真实 Coach 共用同一可配置输出上限; 默认最大 1024 token。
         response = await provider.complete(
-            [ProviderMessage(role="user", content="ping")], max_tokens=16
+            [ProviderMessage(role="user", content="ping")],
+            max_tokens=provider_max_output_tokens(),
         )
     except ProviderError as error:
         print(f"PROVIDER-FAIL: {error}")

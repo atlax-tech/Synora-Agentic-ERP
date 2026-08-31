@@ -40,6 +40,7 @@ from agent_runtime.providers import (
     Provider,
     ProviderError,
     provider_from_environment,
+    provider_max_output_tokens,
 )
 from agent_runtime.retrieval.index import RetrievalIndex, SearchHit
 from agent_runtime.retrieval.sources import ERP_VERSION, load_curated_sources
@@ -167,6 +168,7 @@ async def answer_coach_runtime(
 
         try:
             provider = provider_from_environment()
+            max_output_tokens = provider_max_output_tokens(environ)
         except ProviderError, ValueError:
             return _failed_answer("REFUSED", _SAFE_PROVIDER_REASON, latency_ms=_elapsed(started))
 
@@ -177,6 +179,7 @@ async def answer_coach_runtime(
             provider,
             environ=environ,
             model=os.environ.get(PROVIDER_MODEL_ENV, "").strip() or None,
+            max_tokens=max_output_tokens,
         )
     except Exception:
         return _failed_answer("UNKNOWN", _SAFE_GATEWAY_REASON, latency_ms=_elapsed(started))

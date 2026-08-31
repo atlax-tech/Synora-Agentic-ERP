@@ -26,7 +26,31 @@ PROVIDER_BASE_URL_ENV = "SYNORA_PROVIDER_BASE_URL"
 PROVIDER_API_KEY_ENV = "SYNORA_PROVIDER_API_KEY"
 PROVIDER_MODEL_ENV = "SYNORA_PROVIDER_MODEL"
 PROVIDER_REASONING_EFFORT_ENV = "SYNORA_PROVIDER_REASONING_EFFORT"
+PROVIDER_MAX_OUTPUT_TOKENS_ENV = "SYNORA_PROVIDER_MAX_OUTPUT_TOKENS"
+PROVIDER_MAX_OUTPUT_TOKENS = 1024
 _REASONING_EFFORTS = {"low", "medium", "high", "xhigh"}
+
+
+def provider_max_output_tokens(environ: Mapping[str, str] | None = None) -> int:
+    """Return the one bounded output cap shared by real provider call sites.
+
+    The default and hard ceiling are intentionally the same: callers may tune
+    the effective value downward through one environment key, but no caller
+    can raise the phase-approved 1024-token maximum by configuration.
+    """
+    values = os.environ if environ is None else environ
+    raw = values.get(PROVIDER_MAX_OUTPUT_TOKENS_ENV, "")
+    if not raw.strip():
+        return PROVIDER_MAX_OUTPUT_TOKENS
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as error:
+        raise ValueError("provider max output tokens must be an integer") from error
+    if not 1 <= value <= PROVIDER_MAX_OUTPUT_TOKENS:
+        raise ValueError(
+            f"provider max output tokens must be within 1..{PROVIDER_MAX_OUTPUT_TOKENS}"
+        )
+    return value
 
 
 class StrictModel(BaseModel):

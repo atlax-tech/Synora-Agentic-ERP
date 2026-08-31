@@ -12,6 +12,8 @@ import pytest
 from agent_runtime.providers import (
     PROVIDER_API_KEY_ENV,
     PROVIDER_BASE_URL_ENV,
+    PROVIDER_MAX_OUTPUT_TOKENS,
+    PROVIDER_MAX_OUTPUT_TOKENS_ENV,
     PROVIDER_MODEL_ENV,
     PROVIDER_REASONING_EFFORT_ENV,
     DeterministicProvider,
@@ -22,6 +24,7 @@ from agent_runtime.providers import (
     ProviderToolCall,
     ProviderToolSpec,
     provider_from_environment,
+    provider_max_output_tokens,
 )
 from pydantic import SecretStr, ValidationError
 
@@ -42,6 +45,20 @@ def _transport_that_raises(error: Exception) -> httpx.MockTransport:
 
 def _messages(*, text: str = "user input") -> list[ProviderMessage]:
     return [ProviderMessage(role="user", content=text)]
+
+
+def test_provider_max_output_tokens_defaults_to_phase_cap() -> None:
+    assert provider_max_output_tokens({}) == PROVIDER_MAX_OUTPUT_TOKENS == 1024
+
+
+def test_provider_max_output_tokens_can_be_tuned_down() -> None:
+    assert provider_max_output_tokens({PROVIDER_MAX_OUTPUT_TOKENS_ENV: "800"}) == 800
+
+
+@pytest.mark.parametrize("value", ["0", "1025", "not-an-integer"])
+def test_provider_max_output_tokens_rejects_invalid_configuration(value: str) -> None:
+    with pytest.raises(ValueError, match="provider max output tokens"):
+        provider_max_output_tokens({PROVIDER_MAX_OUTPUT_TOKENS_ENV: value})
 
 
 class TestDeterministicProvider:
