@@ -121,6 +121,11 @@ class TestSecurityEval(FrappeTestCase):
             "demand.open",
             "material_request.open",
             "purchase_order.open",
+            # T06 current-document reads are Gateway-internal Coach inputs;
+            # they remain READ-only but are intentionally absent from the
+            # Runtime Agent/Provider allowlist.
+            "material_request.current",
+            "purchase_order.current",
         }
         # The contract test class registers three explicit test doubles under
         # ``contract.*``; exclude those fixtures while mechanically checking

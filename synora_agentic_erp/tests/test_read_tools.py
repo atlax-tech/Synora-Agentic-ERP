@@ -4,7 +4,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
-from synora_agentic_erp.api import execute, issue_run
+from synora_agentic_erp.api import cancel_run, execute, issue_run
 from synora_agentic_erp.gateway.registry import _TOOLS
 
 BUYER = "synora-p1-buyer@dev.localhost"
@@ -276,6 +276,23 @@ class TestReadTools(FrappeTestCase):
 
         self.assertEqual(response["data"][0]["docstatus"], 2)
         self.assertEqual(response["data"][0]["status"], "Cancelled")
+
+    def test_current_reads_reject_cancelled_run_before_handler(self) -> None:
+        request_name = self._create_open_material_request()
+        order_name = self._create_draft_purchase_order()
+        run = self._issue()
+
+        frappe.set_user(BUYER)
+        cancelled = cancel_run(str(run["run_id"]), CORRELATION_ID)
+        self.assertTrue(cancelled["ok"])
+        self.assertEqual(cancelled["run"]["run_state"], "CANCELLED")
+
+        for tool_name, name in (
+            ("material_request.current", request_name),
+            ("purchase_order.current", order_name),
+        ):
+            response = self._call(run, tool_name, {"name": name})
+            self.assertEqual(response["error"]["code"], "RUN_REJECTED")
 
     def test_accountant_cannot_gain_purchase_order_read_permission(self) -> None:
         run = self._issue(ACCOUNTANT, warehouse=None)
