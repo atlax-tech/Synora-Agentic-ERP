@@ -304,6 +304,29 @@ def test_runtime_uses_tuned_shared_provider_output_cap(
     assert provider.max_tokens == 800
 
 
+def test_runtime_uses_glm_quality_default_output_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _request()
+    gateway = _FakeGateway(_gateway())
+    provider = _RecordingProvider(_provider_response(request, _gateway()))
+    _patch_dependencies(monkeypatch, gateway, provider)
+
+    result = asyncio.run(
+        answer_coach_runtime(
+            request,
+            environ={
+                "SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000",
+                "SYNORA_PROVIDER_MODEL": "glm-4.7-flash",
+                "SYNORA_RUNTIME_TOKEN": RUNTIME_TOKEN,
+            },
+        )
+    )
+
+    assert result.answer_status == "ANSWERED"
+    assert provider.max_tokens == 65_536
+
+
 def test_runtime_rejects_invalid_shared_provider_output_cap(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -316,7 +339,8 @@ def test_runtime_rejects_invalid_shared_provider_output_cap(
             _request(),
             environ={
                 "SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000",
-                "SYNORA_PROVIDER_MAX_OUTPUT_TOKENS": "1025",
+                "SYNORA_PROVIDER_MAX_OUTPUT_TOKENS": "131073",
+                "SYNORA_PROVIDER_MODEL": "glm-4.7-flash",
                 "SYNORA_RUNTIME_TOKEN": RUNTIME_TOKEN,
             },
         )

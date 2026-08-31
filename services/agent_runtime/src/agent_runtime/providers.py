@@ -26,31 +26,61 @@ PROVIDER_BASE_URL_ENV = "SYNORA_PROVIDER_BASE_URL"
 PROVIDER_API_KEY_ENV = "SYNORA_PROVIDER_API_KEY"
 PROVIDER_MODEL_ENV = "SYNORA_PROVIDER_MODEL"
 PROVIDER_REASONING_EFFORT_ENV = "SYNORA_PROVIDER_REASONING_EFFORT"
+PROVIDER_THINKING_ENV = "SYNORA_PROVIDER_THINKING"
+PROVIDER_PROXY_ENV = "SYNORA_PROVIDER_PROXY"
 PROVIDER_MAX_OUTPUT_TOKENS_ENV = "SYNORA_PROVIDER_MAX_OUTPUT_TOKENS"
 PROVIDER_MAX_OUTPUT_TOKENS = 1024
+PROVIDER_MAX_OUTPUT_TOKEN_LIMIT = 8192
+GLM_4_7_FLASH_MODEL = "glm-4.7-flash"
+GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS = 65_536
+GLM_4_7_FLASH_MAX_OUTPUT_TOKENS = 131_072
 _REASONING_EFFORTS = {"low", "medium", "high", "xhigh"}
+_THINKING_MODES = {"enabled", "disabled"}
+
+
+def _output_token_limits(model: str | None) -> tuple[int, int]:
+    if (model or "").strip().lower() == GLM_4_7_FLASH_MODEL:
+        return GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS, GLM_4_7_FLASH_MAX_OUTPUT_TOKENS
+    return PROVIDER_MAX_OUTPUT_TOKENS, PROVIDER_MAX_OUTPUT_TOKEN_LIMIT
+
+
+def provider_max_output_token_limit(model: str | None = None) -> int:
+    """Return the model-specific hard ceiling for one provider request."""
+    return _output_token_limits(model)[1]
 
 
 def provider_max_output_tokens(environ: Mapping[str, str] | None = None) -> int:
-    """Return the one bounded output cap shared by real provider call sites.
+    """Return the bounded output cap shared by real provider call sites.
 
-    The default and hard ceiling are intentionally the same: callers may tune
-    the effective value downward through one environment key, but no caller
-    can raise the phase-approved 1024-token maximum by configuration.
+    The default follows the configured model's quality policy. One environment
+    key can tune the effective value in either direction, but never above the
+    model-specific hard ceiling.
     """
     values = os.environ if environ is None else environ
+    default, hard_limit = _output_token_limits(values.get(PROVIDER_MODEL_ENV))
     raw = values.get(PROVIDER_MAX_OUTPUT_TOKENS_ENV, "")
     if not raw.strip():
-        return PROVIDER_MAX_OUTPUT_TOKENS
+        return default
     try:
         value = int(raw)
     except (TypeError, ValueError) as error:
         raise ValueError("provider max output tokens must be an integer") from error
-    if not 1 <= value <= PROVIDER_MAX_OUTPUT_TOKENS:
-        raise ValueError(
-            f"provider max output tokens must be within 1..{PROVIDER_MAX_OUTPUT_TOKENS}"
-        )
+    if not 1 <= value <= hard_limit:
+        raise ValueError(f"provider max output tokens must be within 1..{hard_limit}")
     return value
+
+
+def provider_thinking_mode(environ: Mapping[str, str] | None = None) -> str | None:
+    """Resolve the vendor-neutral thinking mode for the configured model."""
+    values = os.environ if environ is None else environ
+    raw = values.get(PROVIDER_THINKING_ENV, "").strip()
+    if raw:
+        if raw not in _THINKING_MODES:
+            raise ValueError("provider thinking must be enabled or disabled")
+        return raw
+    if (values.get(PROVIDER_MODEL_ENV, "").strip().lower()) == GLM_4_7_FLASH_MODEL:
+        return "enabled"
+    return None
 
 
 class StrictModel(BaseModel):
@@ -103,6 +133,7 @@ class ProviderResponse(StrictModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     reasoning_tokens: int = 0
+    reasoning_content_present: bool = False
 
 
 class ProviderError(Exception):
@@ -116,6 +147,7 @@ class ProviderError(Exception):
         completion_tokens: int = 0,
         reasoning_tokens: int = 0,
         budget_code: Literal["TOKEN_BUDGET"] | None = None,
+        failure_code: str = "PROVIDER_ERROR",
     ) -> None:
         super().__init__(message)
         # 即使结果因预算门禁被拒绝, 已观测的 usage 仍需进入证据, 便于审计。
@@ -126,6 +158,7 @@ class ProviderError(Exception):
         # violated the bounded output contract. Preserve that classification so
         # the kernel does not turn an auditable budget stop into MODEL_ERROR.
         self.budget_code = budget_code
+        self.failure_code = failure_code
 
 
 class Provider(Protocol):
@@ -234,6 +267,8 @@ class OpenAICompatibleProvider:
         api_key: SecretStr | None = None,
         model: str = "",
         reasoning_effort: str | None = None,
+        thinking: str | None = None,
+        proxy: str | None = None,
         timeout_seconds: float = 60.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -255,6 +290,21 @@ class OpenAICompatibleProvider:
             raise ValueError("provider timeout must be positive")
         if reasoning_effort is not None and reasoning_effort not in _REASONING_EFFORTS:
             raise ValueError("provider reasoning_effort must be low, medium, high, or xhigh")
+        if thinking is not None and thinking not in _THINKING_MODES:
+            raise ValueError("provider thinking must be enabled or disabled")
+        proxy_url = httpx.URL(proxy) if proxy else None
+        if proxy_url is not None and (
+            proxy_url.scheme not in {"http", "https"}
+            or not proxy_url.host
+            or proxy_url.userinfo
+            or proxy_url.query
+            or proxy_url.fragment
+            or proxy_url.path not in {"", "/"}
+        ):
+            raise ValueError(
+                "provider proxy must be an HTTP(S) address without credentials, path, "
+                "query, or fragment"
+            )
         self._base_url = str(url).rstrip("/")
         # 兼容两种填法: 根地址 (https://host/v1) 或完整端点 (https://host/v1/chat/completions)。
         if self._base_url.endswith("/chat/completions"):
@@ -264,6 +314,8 @@ class OpenAICompatibleProvider:
         self._api_key = api_key
         self._model = model
         self._reasoning_effort = reasoning_effort
+        self._thinking = thinking
+        self._proxy = str(proxy_url).rstrip("/") if proxy_url else None
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         if api_key is not None:
             headers["Authorization"] = f"Bearer {api_key.get_secret_value()}"
@@ -272,6 +324,7 @@ class OpenAICompatibleProvider:
             timeout=httpx.Timeout(timeout_seconds),
             transport=transport,
             trust_env=False,
+            proxy=self._proxy,
             # 显式禁止跟随重定向: 防止请求 (含 Bearer Key) 被 3xx 转发到非预期地址。
             follow_redirects=False,
             headers=headers,
@@ -294,20 +347,24 @@ class OpenAICompatibleProvider:
         max_tokens: int | None = None,
     ) -> ProviderResponse:
         if not messages:
-            raise ProviderError("provider requires at least one message")
+            raise ProviderError(
+                "provider requires at least one message", failure_code="INVALID_REQUEST"
+            )
+        requested_model = model or self._model
         payload: dict[str, object] = {
-            "model": model or self._model,
+            "model": requested_model,
             "messages": [_serialize_message(message) for message in messages],
             "stream": False,
         }
-        # 成本护栏: 补全价格通常是输入的 5 倍, 每次调用显式限制最大输出 token,
-        # 防止异常/冗长响应浪费费用; 默认不发送 (服务商默认值), 测试与工具调用
-        # 必须显式传小值。
+        # max_tokens 是生成侧上限, 不是包含 prompt 的 total_tokens 上限。
         if max_tokens is not None:
-            if max_tokens < 1 or max_tokens > 8192:
-                raise ValueError("provider max_tokens must be within 1..8192")
+            hard_limit = provider_max_output_token_limit(requested_model)
+            if max_tokens < 1 or max_tokens > hard_limit:
+                raise ValueError(f"provider max_tokens must be within 1..{hard_limit}")
             payload["max_tokens"] = max_tokens
-        if self._reasoning_effort is not None:
+        if self._thinking is not None:
+            payload["thinking"] = {"type": self._thinking}
+        if self._reasoning_effort is not None and self._thinking != "disabled":
             # Grok reasoning models default to high effort; simple plan explanations
             # opt in to a lower, explicit effort without weakening output validation.
             payload["reasoning_effort"] = self._reasoning_effort
@@ -327,26 +384,34 @@ class OpenAICompatibleProvider:
             response = await self._client.post(self._chat_url, json=payload)
             body = response.content
         except httpx.TimeoutException as error:
-            raise ProviderError("provider request timed out") from error
+            raise ProviderError("provider request timed out", failure_code="TIMEOUT") from error
         except httpx.HTTPError as error:
-            raise ProviderError("provider request failed") from error
+            raise ProviderError("provider request failed", failure_code="HTTP_ERROR") from error
         if len(body) > MAX_PROVIDER_RESPONSE_BYTES:
-            raise ProviderError("provider response exceeded size limit")
+            raise ProviderError(
+                "provider response exceeded size limit", failure_code="RESPONSE_TOO_LARGE"
+            )
         if not response.is_success:
-            raise ProviderError(f"provider returned HTTP {response.status_code}")
+            failure_code = "RATE_LIMITED" if response.status_code == 429 else "HTTP_ERROR"
+            raise ProviderError(
+                f"provider returned HTTP {response.status_code}", failure_code=failure_code
+            )
 
         try:
             completion = _CompletionEnvelope.model_validate_json(body)
         except (ValueError, TypeError, RecursionError) as error:
-            raise ProviderError("provider returned an invalid response") from error
+            raise ProviderError(
+                "provider returned an invalid response", failure_code="RESPONSE_SCHEMA"
+            ) from error
         if not completion.choices:
-            raise ProviderError("provider returned no choices")
+            raise ProviderError("provider returned no choices", failure_code="RESPONSE_NO_CHOICES")
         if max_tokens is not None and completion.usage is None:
             # 没有 usage 就无法证明服务商遵守输出预算; 宁可回退, 也不接受
             # 未验证的真实模型结果。请求参数仍是服务商侧的首要成本护栏。
             raise ProviderError(
                 "provider omitted usage for budgeted response",
                 budget_code="TOKEN_BUDGET",
+                failure_code="USAGE_MISSING",
             )
         usage = completion.usage
         reasoning_tokens = (
@@ -355,33 +420,59 @@ class OpenAICompatibleProvider:
             else 0
         )
         completion_tokens = usage.completion_tokens if usage else 0
-        if completion_tokens < 0 or reasoning_tokens < 0:
-            raise ProviderError("provider returned invalid token usage", budget_code="TOKEN_BUDGET")
-        billed_output_tokens = completion_tokens + reasoning_tokens
-        if max_tokens is not None and billed_output_tokens > max_tokens:
-            # 成本护栏覆盖最终文本与推理 token; 服务商可能忽略请求参数或把
-            # 推理 token 单独计入账单, 任一合计超预算都 fail closed。
-            raise ProviderError(
-                f"provider exceeded max_tokens budget ({billed_output_tokens} > {max_tokens})",
-                prompt_tokens=usage.prompt_tokens if usage else 0,
-                completion_tokens=completion_tokens,
-                reasoning_tokens=reasoning_tokens,
-                budget_code="TOKEN_BUDGET",
-            )
+        if usage is not None:
+            if (
+                usage.prompt_tokens < 0
+                or completion_tokens < 0
+                or reasoning_tokens < 0
+                or usage.total_tokens < 0
+            ):
+                raise ProviderError(
+                    "provider returned invalid token usage",
+                    budget_code="TOKEN_BUDGET",
+                    failure_code="USAGE_INVALID",
+                )
+            # Some providers report reasoning_tokens as a subset of completion_tokens
+            # (e.g. GLM), while others report it separately. total - prompt is the
+            # provider-neutral billed output count and avoids double-counting either form.
+            billed_output_tokens = usage.total_tokens - usage.prompt_tokens
+            if billed_output_tokens < 0:
+                raise ProviderError(
+                    "provider returned invalid token usage",
+                    budget_code="TOKEN_BUDGET",
+                    failure_code="USAGE_INVALID",
+                )
+            if max_tokens is not None and billed_output_tokens > max_tokens:
+                # 成本护栏覆盖服务商报告的完整输出 token; 不假设 reasoning token
+                # 在不同服务商的 completion_tokens 中采用同一种统计方式。
+                raise ProviderError(
+                    f"provider exceeded max_tokens budget ({billed_output_tokens} > {max_tokens})",
+                    prompt_tokens=usage.prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    reasoning_tokens=reasoning_tokens,
+                    budget_code="TOKEN_BUDGET",
+                    failure_code="BUDGET_EXCEEDED",
+                )
         message = completion.choices[0].message
+        tool_calls = tuple(
+            ProviderToolCall(
+                id=call.id,
+                name=call.function.name,
+                arguments=call.function.arguments,
+            )
+            for call in message.tool_calls or ()
+        )
+        if not message.content and not tool_calls:
+            raise ProviderError(
+                "provider returned no final content", failure_code="RESPONSE_CONTENT_MISSING"
+            )
         return ProviderResponse(
             text=message.content or "",
-            tool_calls=tuple(
-                ProviderToolCall(
-                    id=call.id,
-                    name=call.function.name,
-                    arguments=call.function.arguments,
-                )
-                for call in message.tool_calls or ()
-            ),
+            tool_calls=tool_calls,
             prompt_tokens=usage.prompt_tokens if usage else 0,
             completion_tokens=completion_tokens,
             reasoning_tokens=reasoning_tokens,
+            reasoning_content_present=message.reasoning_content is not None,
         )
 
 
@@ -399,6 +490,7 @@ class _ProviderToolCall(StrictModel):
 class _AssistantMessage(StrictModel):
     role: Literal["assistant"]
     content: str | None = None
+    reasoning_content: str | None = None
     # OpenAI 兼容响应 (如 grok) 常携带 refusal 字段 (通常为 null), 纳入严格模型。
     refusal: str | None = None
     tool_calls: tuple[_ProviderToolCall, ...] = ()
@@ -430,6 +522,7 @@ class _Usage(BaseModel):
 class _CompletionEnvelope(StrictModel):
     # 标准 OpenAI chat.completion 元数据字段 (白名单), 缺失时容错默认。
     id: str = ""
+    request_id: str = ""
     object: str = ""
     created: int = 0
     model: str = ""
@@ -445,6 +538,8 @@ def provider_from_environment(
     - SYNORA_PROVIDER_BASE_URL: 必填, HTTP(S) origin 加路径段 (如 https://api.example.com/v1);
     - SYNORA_PROVIDER_API_KEY: 可选, 由用户填写, 仅以 SecretStr 传入 (脱敏);
     - SYNORA_PROVIDER_MODEL: 可选, 默认模型名。
+    - SYNORA_PROVIDER_THINKING: 可选, enabled 或 disabled (智谱 GLM 可用);
+    - SYNORA_PROVIDER_PROXY: 可选, 显式 HTTP(S) 代理; 不读取通用代理环境变量。
 
     base_url 未配置时抛 ProviderError (fail closed, 不猜测默认地址)。
     """
@@ -457,5 +552,7 @@ def provider_from_environment(
         api_key=SecretStr(api_key) if api_key else None,
         model=os.environ.get(PROVIDER_MODEL_ENV, ""),
         reasoning_effort=os.environ.get(PROVIDER_REASONING_EFFORT_ENV) or None,
+        thinking=provider_thinking_mode(),
+        proxy=os.environ.get(PROVIDER_PROXY_ENV) or None,
         transport=transport,
     )

@@ -1,4 +1,4 @@
-"""BYOK 连通性自检: 向已配置的 model provider 发一个最小请求并打印响应片段。
+"""BYOK 连通性自检: 向已配置的 model provider 发一个最小请求并打印脱敏结构。
 
 用法:
     uv run --python 3.14 python services/agent_runtime/scripts/check_provider.py
@@ -24,11 +24,14 @@ from agent_runtime.providers import (
     PROVIDER_BASE_URL_ENV,
     PROVIDER_MAX_OUTPUT_TOKENS_ENV,
     PROVIDER_MODEL_ENV,
+    PROVIDER_PROXY_ENV,
     PROVIDER_REASONING_EFFORT_ENV,
+    PROVIDER_THINKING_ENV,
     ProviderError,
     ProviderMessage,
     provider_from_environment,
     provider_max_output_tokens,
+    provider_thinking_mode,
 )
 
 _PROVIDER_ENV_NAMES = (
@@ -36,6 +39,8 @@ _PROVIDER_ENV_NAMES = (
     PROVIDER_API_KEY_ENV,
     PROVIDER_MODEL_ENV,
     PROVIDER_REASONING_EFFORT_ENV,
+    PROVIDER_THINKING_ENV,
+    PROVIDER_PROXY_ENV,
     PROVIDER_MAX_OUTPUT_TOKENS_ENV,
 )
 
@@ -59,24 +64,35 @@ async def main() -> None:
         _load_env_file(args.env)
     try:
         provider = provider_from_environment()
-        # 与真实 Coach 共用同一可配置输出上限; 默认最大 1024 token。
+        max_output_tokens = provider_max_output_tokens()
+        thinking = provider_thinking_mode()
         response = await provider.complete(
             [ProviderMessage(role="user", content="ping")],
-            max_tokens=provider_max_output_tokens(),
+            max_tokens=max_output_tokens,
         )
     except ProviderError as error:
-        print(f"PROVIDER-FAIL: {error}")
+        print(
+            "PROVIDER-FAIL:",
+            f"code={error.failure_code}",
+            f"prompt={error.prompt_tokens}",
+            f"completion={error.completion_tokens}",
+            f"reasoning={error.reasoning_tokens}",
+        )
         raise SystemExit(1) from error
     except ValueError as error:
         print(f"PROVIDER-CONFIG-FAIL: {error}")
         raise SystemExit(1) from error
+    model = " ".join(os.environ.get(PROVIDER_MODEL_ENV, "").split())[:120] or "<unset>"
     print(
         "PROVIDER-OK:",
-        response.text[:80],
-        "| tokens:"
-        f" in={response.prompt_tokens}"
-        f" out={response.completion_tokens}"
-        f" reasoning={response.reasoning_tokens}",
+        f"model={model}",
+        f"max_output_tokens={max_output_tokens}",
+        f"thinking={thinking or 'disabled'}",
+        f"content_present={'YES' if response.text else 'NO'}",
+        f"reasoning_content_present={'YES' if response.reasoning_content_present else 'NO'}",
+        f"tokens_in={response.prompt_tokens}",
+        f"tokens_out={response.completion_tokens}",
+        f"reasoning_tokens={response.reasoning_tokens}",
     )
 
 
