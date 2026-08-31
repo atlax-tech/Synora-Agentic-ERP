@@ -16,6 +16,11 @@ from agent_runtime.agent.execution import (
     AgentExecuteResponse,
     execute_agent,
 )
+from agent_runtime.coach.contracts import CoachAnswer
+from agent_runtime.coach.runtime import (
+    CoachRuntimeRequest,
+    answer_coach_runtime,
+)
 from agent_runtime.providers import PROVIDER_MODEL_ENV, ProviderError, provider_from_environment
 from agent_runtime.workflow.checkpoint import (
     CheckpointConflict,
@@ -110,6 +115,28 @@ async def _execute_with_disconnect_guard(
         raise
 
 
+async def _coach_with_disconnect_guard(
+    request: CoachRuntimeRequest, http_request: Request
+) -> CoachAnswer:
+    """Cancel the Coach transport promptly when its internal caller disappears."""
+    task = asyncio.create_task(answer_coach_runtime(request))
+    try:
+        while not task.done():
+            if await http_request.is_disconnected():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                raise HTTPException(status_code=499, detail="request disconnected")
+            await asyncio.sleep(0.05)
+        return await task
+    except BaseException:
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        raise
+
+
 @app.get("/healthz", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(service="synora-agent-runtime", status="ok")
@@ -164,6 +191,16 @@ async def execute_agent_run(
     """Internal Frappe-to-Runtime read-only Agent execution endpoint."""
     _require_runtime_token(http_request)
     return await _execute_with_disconnect_guard(request, http_request)
+
+
+@app.post("/coach/answer", response_model=CoachAnswer)
+async def answer_coach_run(
+    request: CoachRuntimeRequest,
+    http_request: Request,
+) -> CoachAnswer:
+    """Internal Frappe-to-Runtime read-only contextual Coach endpoint."""
+    _require_runtime_token(http_request)
+    return await _coach_with_disconnect_guard(request, http_request)
 
 
 @app.post("/workflow/start", response_model=WorkflowResponse)

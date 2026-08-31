@@ -24,6 +24,7 @@ def test_agent_route_is_internal_and_documentation_is_disabled() -> None:
         "/healthz",
         "/enhance",
         "/agent/execute",
+        "/coach/answer",
         "/workflow/start",
         "/workflow/resume",
         "/workflow/cancel",
