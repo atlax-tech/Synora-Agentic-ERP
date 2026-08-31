@@ -96,6 +96,7 @@ class TestCoachClaims(FrappeTestCase):  # type: ignore[misc]
                         "source_modified_at": "2026-08-30 11:59:00",
                         "frappe_revision": "f" * 40,
                         "erpnext_revision": "e" * 40,
+                        "fact_fields": ["open_order_stock_qty"],
                         "fact_digest": "a" * 64,
                     }
                 ]
@@ -196,6 +197,21 @@ class TestCoachClaims(FrappeTestCase):  # type: ignore[misc]
         with self.assertRaises(GatewayFault) as revision:
             resolve_coach_claim(claim["name"], run_id=run_id, source_revision="old")
         self.assertEqual(revision.exception.code, "COACH_CLAIM_NOT_AVAILABLE")
+
+    def test_live_citation_fields_are_revalidated_at_frappe_boundary(self) -> None:
+        run_id = self._run()
+        package = self._signed_package(run_id)
+        provenance = json.loads(json.dumps(package["citation_provenance"]))
+        provenance["citations"][0]["fact_fields"] = ["not_a_current_field"]
+        with self.assertRaises(GatewayFault) as invalid:
+            self._persist(run_id, citation_provenance=provenance)
+        self.assertEqual(invalid.exception.code, "INVALID_INPUT")
+
+        malformed = json.loads(json.dumps(package["citation_provenance"]))
+        malformed["citations"][0]["fact_fields"] = [{}]
+        with self.assertRaises(GatewayFault) as malformed_error:
+            self._persist(run_id, citation_provenance=malformed)
+        self.assertEqual(malformed_error.exception.code, "INVALID_INPUT")
 
     def test_memory_source_claim_must_be_frappe_claim_bound_to_same_run_and_revision(self) -> None:
         run_id = self._run()

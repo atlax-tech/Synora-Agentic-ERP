@@ -12,6 +12,7 @@ from agent_runtime.coach import (
     CoachQuestionRequest,
     build_current_document_context,
 )
+from agent_runtime.coach.context import current_fact_digest
 from agent_runtime.coach.service import answer_coach
 from agent_runtime.gateway import GatewaySuccess
 from agent_runtime.providers import (
@@ -127,6 +128,7 @@ def _response(
     hit: SearchHit,
     answer: str = "Two units remain open.",
     claim_text: str = "Two units remain open.",
+    fact_fields: list[str] | None = None,
 ) -> ProviderResponse:
     del hit
     payload = {
@@ -154,6 +156,7 @@ def _response(
                 "source_modified_at": "2026-08-30 11:59:00",
                 "frappe_revision": "f" * 40,
                 "erpnext_revision": "e" * 40,
+                "fact_fields": fact_fields or ["open_order_stock_qty"],
                 "fact_digest": live_digest,
             }
         ],
@@ -264,9 +267,9 @@ async def _test_coach_service_rejects_unsupported_numeric_claims_and_summary() -
         RecordingProvider(false_claim),
         environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
     )
-    assert result.answer_status == "UNKNOWN"
-    assert result.claims == ()
-    assert result.validated_claims == ()
+    assert result.answer_status == "ANSWERED"
+    assert result.claims[0].text == 'open_order_stock_qty="2"'
+    assert "20" not in result.answer
 
     supported_claim = _response(
         live_digest=_live_digest(),
@@ -282,7 +285,7 @@ async def _test_coach_service_rejects_unsupported_numeric_claims_and_summary() -
         environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
     )
     assert result.answer_status == "ANSWERED"
-    assert result.claims[0].text == "2 units remain open."
+    assert result.claims[0].text == 'open_order_stock_qty="2"'
 
     unsupported_summary = _response(
         live_digest=_live_digest(),
@@ -297,8 +300,114 @@ async def _test_coach_service_rejects_unsupported_numeric_claims_and_summary() -
         RecordingProvider(unsupported_summary),
         environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
     )
-    assert result.answer_status == "UNKNOWN"
-    assert result.validated_claims == ()
+    assert result.answer_status == "ANSWERED"
+    assert result.claims[0].text == 'open_order_stock_qty="2"'
+    assert "20" not in result.answer
+
+
+async def _test_coach_service_rejects_date_and_status_grounding_pollution() -> None:
+    hit = _hit()
+    date_pollution = _response(
+        live_digest=_live_digest(),
+        hit=hit,
+        answer="2026 units remain open.",
+        claim_text="2026 units remain open.",
+    )
+    result = await answer_coach(
+        _request(),
+        _context(),
+        (hit,),
+        RecordingProvider(date_pollution),
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+    assert result.answer_status == "ANSWERED"
+    assert result.claims[0].text == 'open_order_stock_qty="2"'
+    assert "2026 units" not in result.answer
+
+    status_pollution = _response(
+        live_digest=_live_digest(),
+        hit=hit,
+        answer="Approved.",
+        claim_text="Approved.",
+        fact_fields=["status"],
+    )
+    result = await answer_coach(
+        _request(),
+        _context(),
+        (hit,),
+        RecordingProvider(status_pollution),
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+    assert result.answer_status == "ANSWERED"
+    assert result.claims[0].text == 'status="Pending"'
+    assert "Approved" not in result.answer
+
+
+async def _test_coach_service_rejects_cross_citation_numeric_mix() -> None:
+    request = _request()
+    first = _mr_row(open_order_stock_qty="2", requested_stock_qty="3")
+    second = _mr_row(open_order_stock_qty="7", requested_stock_qty="7", item_code="ITEM-2")
+    context = build_current_document_context(
+        request,
+        _gateway(data=[first, second]),
+    )
+    live_digests = [current_fact_digest(fact) for fact in context.facts]
+    hit = _hit()
+    payload = {
+        "schema_version": "1",
+        "answer_status": "ANSWERED",
+        "answer": "7 units remain open.",
+        "claims": [
+            {
+                "claim_id": "claim-1",
+                "ordinal": 1,
+                "claim_type": "ERP_FACT",
+                "text": "7 units remain open.",
+                "citation_refs": ["live-1", "live-2"],
+            }
+        ],
+        "citations": [
+            {
+                "citation_type": "LIVE_ERP",
+                "citation_id": "live-1",
+                "run_id": str(RUN_ID),
+                "document_doctype": "Material Request",
+                "document_name": "MAT-MR-0001",
+                "state_version": 3,
+                "captured_at": "2026-08-30 12:00:00",
+                "source_modified_at": "2026-08-30 11:59:00",
+                "frappe_revision": "f" * 40,
+                "erpnext_revision": "e" * 40,
+                "fact_fields": ["open_order_stock_qty"],
+                "fact_digest": live_digests[0],
+            },
+            {
+                "citation_type": "LIVE_ERP",
+                "citation_id": "live-2",
+                "run_id": str(RUN_ID),
+                "document_doctype": "Material Request",
+                "document_name": "MAT-MR-0001",
+                "state_version": 3,
+                "captured_at": "2026-08-30 12:00:00",
+                "source_modified_at": "2026-08-30 11:59:00",
+                "frappe_revision": "f" * 40,
+                "erpnext_revision": "e" * 40,
+                "fact_fields": ["requested_stock_qty"],
+                "fact_digest": live_digests[1],
+            },
+        ],
+        "refusal_reason": None,
+    }
+    result = await answer_coach(
+        request,
+        context,
+        (hit,),
+        RecordingProvider(ProviderResponse(text=json.dumps(payload))),
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+    assert result.answer_status == "ANSWERED"
+    assert result.claims[0].text == 'open_order_stock_qty="2"; requested_stock_qty="7"'
+    assert "7 units remain open" not in result.answer
 
 
 async def _test_coach_service_emits_signed_claim_package_only_after_validation() -> None:
@@ -391,6 +500,14 @@ def test_coach_service_rejects_invented_live_or_retrieval_citations() -> None:
 
 def test_coach_service_rejects_unsupported_numeric_claims_and_summary() -> None:
     asyncio.run(_test_coach_service_rejects_unsupported_numeric_claims_and_summary())
+
+
+def test_coach_service_rejects_date_and_status_grounding_pollution() -> None:
+    asyncio.run(_test_coach_service_rejects_date_and_status_grounding_pollution())
+
+
+def test_coach_service_rejects_cross_citation_numeric_mix() -> None:
+    asyncio.run(_test_coach_service_rejects_cross_citation_numeric_mix())
 
 
 def test_coach_service_emits_signed_claim_package_only_after_validation() -> None:

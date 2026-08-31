@@ -11,7 +11,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
-import re
 import time
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -32,6 +31,7 @@ from agent_runtime.coach.contracts import (
     CoachAnswer,
     CoachAnswerStatus,
     CoachCitationProvenance,
+    CoachClaim,
     CoachCurrentDocumentContext,
     CoachLiveCitation,
     CoachMemoryCitation,
@@ -40,6 +40,8 @@ from agent_runtime.coach.contracts import (
     CoachRetrievalCitation,
     CoachRetrievalTrace,
     CoachTokenUsage,
+    MaterialRequestCurrentFact,
+    PurchaseOrderCurrentFact,
     ValidatedCoachClaim,
     parse_coach_provider_output,
 )
@@ -56,7 +58,43 @@ _SAFE_REASONS = {
 }
 _RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
 _CLAIM_HMAC_DOMAIN = b"synora-coach-claim-v1"
-_NUMBER_TOKEN = re.compile(r"(?<![A-Za-z0-9.])-?\d+(?:\.\d+)?(?![A-Za-z0-9.])")
+_LIVE_FACT_FIELDS: dict[str, frozenset[str]] = {
+    "Material Request": frozenset(
+        {
+            "company",
+            "docstatus",
+            "status",
+            "transaction_date",
+            "item_code",
+            "warehouse",
+            "stock_uom",
+            "schedule_date",
+            "material_request",
+            "material_request_type",
+            "requested_stock_qty",
+            "ordered_stock_qty",
+            "open_order_stock_qty",
+        }
+    ),
+    "Purchase Order": frozenset(
+        {
+            "company",
+            "docstatus",
+            "status",
+            "transaction_date",
+            "item_code",
+            "warehouse",
+            "stock_uom",
+            "schedule_date",
+            "purchase_order",
+            "supplier",
+            "currency",
+            "ordered_stock_qty",
+            "received_stock_qty",
+            "open_receipt_stock_qty",
+        }
+    ),
+}
 
 
 def _usage(
@@ -110,11 +148,6 @@ def _failed_answer(
 
 def _same_optional(left: str | None, right: str | None) -> bool:
     return left == right
-
-
-def _number_tokens(text: str) -> set[str]:
-    """Extract bounded numeric tokens using the repository evidence rule."""
-    return set(_NUMBER_TOKEN.findall(text))
 
 
 def _runtime_token(environ: Mapping[str, str] | None) -> str | None:
@@ -203,41 +236,76 @@ def _validated_claims(
     return tuple(packages)
 
 
-def _validate_numeric_grounding(
+def _canonical_field_atom(field_name: str, value: object) -> str:
+    return f"{field_name}={canonical_json(value)}"
+
+
+def _normalize_erp_claim(
+    claim: CoachClaim,
+    citations_by_id: Mapping[str, object],
+    context: CoachCurrentDocumentContext,
+    facts_by_digest: Mapping[str, MaterialRequestCurrentFact | PurchaseOrderCurrentFact],
+) -> str | None:
+    """Render an ERP claim only from the exact fields named by its citations."""
+    allowed_fields = _LIVE_FACT_FIELDS[context.current_document.doctype]
+    atoms: list[tuple[str, object]] = []
+    used_fields: set[str] = set()
+    for reference in claim.citation_refs:
+        citation = citations_by_id.get(reference)
+        if not isinstance(citation, CoachLiveCitation):
+            return None
+        fact = facts_by_digest.get(citation.fact_digest)
+        if fact is None:
+            return None
+        values = fact.model_dump(mode="json")
+        for field_name in citation.fact_fields:
+            if field_name not in allowed_fields or field_name not in values:
+                return None
+            if field_name in used_fields:
+                # A field may not borrow a value from another row/citation.
+                return None
+            value = values[field_name]
+            if value is None:
+                return None
+            used_fields.add(field_name)
+            atoms.append((field_name, value))
+    if not atoms:
+        return None
+    return "; ".join(
+        _canonical_field_atom(field_name, value)
+        for field_name, value in sorted(atoms, key=lambda item: item[0])
+    )
+
+
+def _normalize_grounded_claims(
     output: CoachProviderOutput,
     context: CoachCurrentDocumentContext,
-    selected_hits: Sequence[SearchHit],
-) -> bool:
-    facts_by_digest = {
-        current_fact_digest(fact): canonical_json(fact.model_dump(mode="json"))
-        for fact in context.facts
-    }
+) -> CoachProviderOutput | None:
+    """Rebuild answer text from server-bound claim atoms, never Provider prose."""
     citations_by_id = {citation.citation_id: citation for citation in output.citations}
-    hits_by_chunk = {hit.chunk_id: hit for hit in selected_hits}
+    facts_by_digest = {current_fact_digest(fact): fact for fact in context.facts}
+    normalized_claims: list[CoachClaim] = []
     for claim in output.claims:
-        if claim.claim_type != "ERP_FACT":
-            continue
-        evidence_parts: list[str] = []
-        for reference in claim.citation_refs:
-            citation = citations_by_id[reference]
-            if isinstance(citation, CoachLiveCitation):
-                fact = facts_by_digest.get(citation.fact_digest)
-                if fact is not None:
-                    evidence_parts.append(fact)
-        evidence = "\n".join(evidence_parts)
-        if not _number_tokens(claim.text).issubset(_number_tokens(evidence)):
-            return False
-    answer_evidence: list[str] = []
-    for citation in output.citations:
-        if isinstance(citation, CoachLiveCitation):
-            fact = facts_by_digest.get(citation.fact_digest)
-            if fact is not None:
-                answer_evidence.append(fact)
-        elif isinstance(citation, CoachRetrievalCitation):
-            hit = hits_by_chunk.get(citation.chunk_id)
-            if hit is not None:
-                answer_evidence.append(hit.content)
-    return _number_tokens(output.answer).issubset(_number_tokens("\n".join(answer_evidence)))
+        if claim.claim_type == "ERP_FACT":
+            normalized_text = _normalize_erp_claim(claim, citations_by_id, context, facts_by_digest)
+            if normalized_text is None:
+                return None
+            normalized_claims.append(claim.model_copy(update={"text": normalized_text}))
+        else:
+            normalized_claims.append(claim)
+    normalized_answer = "\n".join(claim.text for claim in normalized_claims)
+    if not normalized_answer or len(normalized_answer) > 8_000:
+        return None
+    try:
+        return CoachProviderOutput.model_validate(
+            {
+                **output.model_dump(mode="json"),
+                "answer": normalized_answer,
+                "claims": [claim.model_dump(mode="json") for claim in normalized_claims],
+            }
+        )
+    except Exception:
+        return None
 
 
 def _validate_live_citation(
@@ -415,7 +483,8 @@ async def answer_coach(
             latency_ms=_elapsed(started),
             trace=trace,
         )
-    if not _validate_numeric_grounding(parsed, current_context, selected_hits):
+    normalized = _normalize_grounded_claims(parsed, current_context)
+    if normalized is None:
         return _failed_answer(
             "UNKNOWN",
             _SAFE_REASONS["citation"],
@@ -423,6 +492,7 @@ async def answer_coach(
             latency_ms=_elapsed(started),
             trace=trace,
         )
+    parsed = normalized
     try:
         validated_claims = _validated_claims(
             parsed,

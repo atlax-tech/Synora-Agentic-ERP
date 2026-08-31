@@ -153,7 +153,9 @@ _COACH_OUTPUT = (
     "answer_status, answer, claims, citations, refusal_reason. Every substantive claim must "
     "have a citation_refs entry. Use only the supplied citation identifiers and exact metadata; "
     "do not invent a fact, number, source, memory, citation, tool, permission, or write. "
-    "For unknown or refused answers return no claims/citations and a bounded refusal_reason."
+    "Every LIVE_ERP citation must name the exact current fact_fields it uses; Provider prose "
+    "is not authoritative and server validation may normalize it. For unknown or refused "
+    "answers return an empty answer, no claims/citations, and a bounded refusal_reason."
 )
 
 

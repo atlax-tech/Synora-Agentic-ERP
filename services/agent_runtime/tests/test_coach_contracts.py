@@ -215,6 +215,7 @@ def _live_citation(**overrides: object) -> dict[str, object]:
         "state_version": 3,
         "captured_at": "2026-08-30 12:00:00",
         "source_modified_at": "2026-08-30 11:59:00",
+        "fact_fields": ["open_order_stock_qty"],
         "fact_digest": "a" * 64,
     }
     value.update(overrides)
@@ -347,6 +348,34 @@ def test_provider_json_parser_rejects_duplicate_keys_and_unknown_citation_types(
                 "refusal_reason": None,
             }
         )
+
+
+def test_live_citation_requires_unique_known_fact_fields() -> None:
+    valid = _live_citation(fact_fields=["status", "open_order_stock_qty"])
+    citation = CoachLiveCitation.model_validate(valid)
+    assert citation.fact_fields == ("status", "open_order_stock_qty")
+
+    with pytest.raises(ValidationError):
+        CoachLiveCitation.model_validate(_live_citation(fact_fields=[]))
+    with pytest.raises(ValidationError):
+        CoachLiveCitation.model_validate(_live_citation(fact_fields=["unknown_field"]))
+    with pytest.raises(ValidationError):
+        CoachLiveCitation.model_validate(_live_citation(fact_fields=["status", "status"]))
+
+
+def test_unknown_and_refused_outputs_cannot_carry_business_answer_text() -> None:
+    for status in ("UNKNOWN", "REFUSED"):
+        with pytest.raises(ValidationError):
+            CoachProviderOutput.model_validate(
+                {
+                    "schema_version": "1",
+                    "answer_status": status,
+                    "answer": "The PO is approved.",
+                    "claims": [],
+                    "citations": [],
+                    "refusal_reason": "not enough evidence",
+                }
+            )
 
 
 def test_coach_answer_requires_bounded_usage_and_trace() -> None:

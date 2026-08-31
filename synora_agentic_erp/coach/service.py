@@ -26,6 +26,43 @@ _CLAIM_HMAC_DOMAIN = b"synora-coach-claim-v1"
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$")
 _DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _CLAIM_TYPES = frozenset({"ERP_FACT", "RETRIEVED_KNOWLEDGE", "RECOMMENDATION"})
+_LIVE_FACT_FIELDS = {
+    "Material Request": frozenset(
+        {
+            "company",
+            "docstatus",
+            "status",
+            "transaction_date",
+            "item_code",
+            "warehouse",
+            "stock_uom",
+            "schedule_date",
+            "material_request",
+            "material_request_type",
+            "requested_stock_qty",
+            "ordered_stock_qty",
+            "open_order_stock_qty",
+        }
+    ),
+    "Purchase Order": frozenset(
+        {
+            "company",
+            "docstatus",
+            "status",
+            "transaction_date",
+            "item_code",
+            "warehouse",
+            "stock_uom",
+            "schedule_date",
+            "purchase_order",
+            "supplier",
+            "currency",
+            "ordered_stock_qty",
+            "received_stock_qty",
+            "open_receipt_stock_qty",
+        }
+    ),
+}
 _SNAPSHOT_FIELDS = frozenset(
     {
         "run_id",
@@ -160,6 +197,7 @@ def _validate_citation(value: object) -> dict[str, Any]:
                 "source_modified_at",
                 "frappe_revision",
                 "erpnext_revision",
+                "fact_fields",
                 "fact_digest",
             }
         )
@@ -176,6 +214,18 @@ def _validate_citation(value: object) -> dict[str, Any]:
         _optional_metadata(citation["source_modified_at"], "citation.source_modified_at")
         _optional_metadata(citation["frappe_revision"], "citation.frappe_revision")
         _optional_metadata(citation["erpnext_revision"], "citation.erpnext_revision")
+        fact_fields = citation["fact_fields"]
+        if (
+            not isinstance(fact_fields, list)
+            or not 1 <= len(fact_fields) <= 16
+            or not all(isinstance(field, str) for field in fact_fields)
+            or len(set(fact_fields)) != len(fact_fields)
+            or any(
+                field not in _LIVE_FACT_FIELDS[citation["document_doctype"]]
+                for field in fact_fields
+            )
+        ):
+            raise GatewayFault("INVALID_INPUT", "citation.fact_fields is invalid")
         _digest(citation["fact_digest"], "citation.fact_digest")
         return citation
     if citation_type == "RETRIEVAL":

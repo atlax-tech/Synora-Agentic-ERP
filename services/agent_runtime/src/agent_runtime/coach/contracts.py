@@ -20,6 +20,26 @@ from agent_runtime.agent.contracts import StrictModel, canonical_json
 
 CoachDocumentType = Literal["Material Request", "Purchase Order"]
 CoachCoverage = Literal["FULL_DOCUMENT", "WAREHOUSE_SCOPED"]
+CoachLiveFactField = Literal[
+    "company",
+    "docstatus",
+    "status",
+    "transaction_date",
+    "item_code",
+    "warehouse",
+    "stock_uom",
+    "schedule_date",
+    "material_request",
+    "material_request_type",
+    "requested_stock_qty",
+    "ordered_stock_qty",
+    "open_order_stock_qty",
+    "purchase_order",
+    "supplier",
+    "currency",
+    "received_stock_qty",
+    "open_receipt_stock_qty",
+]
 _IDENTIFIER = Field(min_length=1, max_length=140)
 _QUANTITY_PATTERN = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\Z")
 _DIGEST_PATTERN = r"^[0-9a-f]{64}$"
@@ -239,6 +259,7 @@ class CoachLiveCitation(StrictModel):
     source_modified_at: str | None = Field(default=None, max_length=140)
     frappe_revision: str | None = Field(default=None, max_length=140)
     erpnext_revision: str | None = Field(default=None, max_length=140)
+    fact_fields: Annotated[tuple[CoachLiveFactField, ...], Field(min_length=1, max_length=16)]
     fact_digest: str = Field(pattern=_DIGEST_PATTERN, min_length=64, max_length=64)
 
     @field_validator("run_id", mode="before")
@@ -255,6 +276,17 @@ class CoachLiveCitation(StrictModel):
     @classmethod
     def validate_optional_source_time(cls, value: str | None) -> str | None:
         return None if value is None else _nonblank(value, "source_modified_at")
+
+    @field_validator("fact_fields", mode="before")
+    @classmethod
+    def validate_fact_fields_tuple(cls, value: object) -> object:
+        return _tuple_from_json(value)
+
+    @model_validator(mode="after")
+    def validate_unique_fact_fields(self) -> CoachLiveCitation:
+        if len(set(self.fact_fields)) != len(self.fact_fields):
+            raise ValueError("live citation fact fields must be unique")
+        return self
 
 
 class CoachRetrievalCitation(StrictModel):
@@ -394,7 +426,7 @@ class CoachProviderOutput(StrictModel):
             if self.refusal_reason is not None:
                 raise ValueError("ANSWERED cannot include refusal_reason")
         elif self.answer_status in {"UNKNOWN", "REFUSED"}:
-            if self.claims or self.citations or not self.refusal_reason:
+            if self.answer.strip() or self.claims or self.citations or not self.refusal_reason:
                 raise ValueError("UNKNOWN and REFUSED require a reason and no claims")
         elif self.answer_status == "CONFLICT":
             if not self.answer.strip() or not self.claims or not self.citations:
@@ -551,6 +583,7 @@ __all__ = [
     "CoachDocumentRef",
     "CoachDocumentType",
     "CoachLiveCitation",
+    "CoachLiveFactField",
     "CoachMemoryCitation",
     "CoachProviderOutput",
     "CoachQuestionRequest",
