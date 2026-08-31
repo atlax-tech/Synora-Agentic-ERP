@@ -198,6 +198,21 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object
     return result
 
 
+def _contains_sensitive_text(value: object, sensitive_values: tuple[str, ...]) -> bool:
+    pending: list[object] = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, str):
+            if any(secret in current for secret in sensitive_values):
+                return True
+        elif isinstance(current, dict):
+            for key, nested in current.items():
+                pending.extend((key, nested))
+        elif isinstance(current, list):
+            pending.extend(current)
+    return False
+
+
 def _strict_mapping(value: object, label: str, fields: frozenset[str]) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != fields:
         raise GatewayFault("INVALID_INPUT", f"{label} fields are invalid")
@@ -617,7 +632,9 @@ def _call_coach_runtime(payload: dict[str, object], capability: str) -> dict[str
             parse_constant=_reject_json_constant,
             object_pairs_hook=_reject_duplicate_pairs,
         )
-        if not isinstance(body, dict):
+        if not isinstance(body, dict) or _contains_sensitive_text(
+            body, (capability, runtime_token)
+        ):
             raise ValueError("runtime response must be an object")
         return body
     except GatewayFault:

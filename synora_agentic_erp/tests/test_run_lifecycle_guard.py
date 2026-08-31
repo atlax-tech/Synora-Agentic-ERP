@@ -219,9 +219,26 @@ class TestRunLifecycleGuard(FrappeTestCase):
 
     def test_runtime_url_accepts_loopback(self) -> None:
         with mock.patch.dict(
-            "os.environ", {"SYNORA_RUNTIME_URL": "http://127.0.0.1:8001"}, clear=False
+            "os.environ", {"SYNORA_RUNTIME_URL": "http://127.0.0.1:8001/"}, clear=False
         ):
             self.assertEqual(agent_service._runtime_enhance_url(), "http://127.0.0.1:8001/enhance")
+            self.assertEqual(
+                agent_service._runtime_url("coach/answer"),
+                "http://127.0.0.1:8001/coach/answer",
+            )
+
+    def test_runtime_url_rejects_non_origin_components(self) -> None:
+        for configured in (
+            "http://127.0.0.1:8001/base",
+            "http://127.0.0.1:8001?target=evil",
+            "http://127.0.0.1:8001/#fragment",
+            "http://127.0.0.1:8001/base?target=evil",
+            "http://evil.example.com:8001",
+        ):
+            with self.subTest(configured=configured):
+                with mock.patch.dict("os.environ", {"SYNORA_RUNTIME_URL": configured}, clear=False):
+                    with self.assertRaises(GatewayFault):
+                        agent_service._runtime_url("coach/answer")
 
     def test_runtime_url_rejects_host_gateway_without_explicit_config(self) -> None:
         with mock.patch.dict(

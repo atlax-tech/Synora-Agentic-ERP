@@ -599,7 +599,7 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 def _runtime_url(path: str) -> str:
-    configured = os.environ.get(_RUNTIME_URL_ENV, "").strip().rstrip("/")
+    configured = os.environ.get(_RUNTIME_URL_ENV, "").strip()
     if configured:
         # 严格校验: 仅接受 http(s) 回环地址; 拒绝 userinfo/凭据/任意 host,
         # 防止 urllib 把 userinfo@evil 解析到非本机地址 (SSRF 纵深防御)。
@@ -608,7 +608,14 @@ def _runtime_url(path: str) -> str:
         except ValueError as error:
             raise GatewayFault("CONFIG_ERROR", "runtime url is invalid", 500) from error
         hostname = (parsed.hostname or "").lower()
-        if parsed.scheme not in ("http", "https") or parsed.username or parsed.password:
+        if (
+            parsed.scheme not in ("http", "https")
+            or parsed.username
+            or parsed.password
+            or parsed.path not in ("", "/")
+            or parsed.query
+            or parsed.fragment
+        ):
             raise GatewayFault("CONFIG_ERROR", "runtime url must be a loopback address", 500)
         loopback_hosts = {"127.0.0.1", "localhost", "::1"}
         if hostname == _RUNTIME_HOST_GATEWAY:
@@ -625,7 +632,8 @@ def _runtime_url(path: str) -> str:
                 )
         elif hostname not in loopback_hosts:
             raise GatewayFault("CONFIG_ERROR", "runtime url must be a loopback address", 500)
-        return f"{configured.rstrip('/')}/{path.lstrip('/')}"
+        origin = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+        return f"{origin}/{path.lstrip('/')}"
     return f"{_RUNTIME_DEFAULT_URL}/{path.lstrip('/')}"
 
 

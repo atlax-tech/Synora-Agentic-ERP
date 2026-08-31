@@ -7,7 +7,7 @@ import hmac
 import json
 import os
 from typing import Any, cast
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 import frappe
@@ -16,6 +16,7 @@ from frappe.utils import now_datetime
 
 from synora_agentic_erp.api import ask_coach, issue_run, revoke_run
 from synora_agentic_erp.coach import service as coach_service
+from synora_agentic_erp.gateway.contract import GatewayFault
 
 BUYER = "synora-p1-buyer@dev.localhost"
 VIEWER = "synora-p1-viewer@dev.localhost"
@@ -24,6 +25,20 @@ WAREHOUSE = "SYNORA-P1 Stores - SP1"
 RUNTIME_TOKEN = "test-runtime-token"
 CLAIM_DOMAIN = b"synora-coach-claim-v1"
 CAPABILITY = "A" * 43
+
+
+class _RuntimeResponse:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def __enter__(self) -> _RuntimeResponse:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+    def read(self, _limit: int) -> bytes:
+        return self.body
 
 
 def _canonical(value: object) -> str:
@@ -163,6 +178,10 @@ def _unknown_answer(reason: str) -> dict[str, object]:
         "latency_ms": 0,
         "validated_claims": [],
     }
+
+
+def _unicode_escape(value: str) -> str:
+    return "".join(f"\\u{ord(character):04x}" for character in value)
 
 
 class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
@@ -347,6 +366,58 @@ class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
         with patch("synora_agentic_erp.coach.service._call_coach_runtime", return_value=malformed):
             response = self._ask(run)
         self.assertEqual(response["error"]["code"], "COACH_RESPONSE_INVALID")
+        self.assertEqual(frappe.db.count("Synora Coach Claim"), 0)
+
+    def test_runtime_rejects_json_escaped_secret_before_persistence(self) -> None:
+        run = self._issue()
+        runtime_token = 'rt"secret'
+        answer = _unknown_answer(f"prefix {runtime_token} suffix")
+        raw = json.dumps(answer, ensure_ascii=True, separators=(",", ":")).encode()
+        self.assertNotIn(runtime_token.encode(), raw)
+        fake_opener = Mock()
+        fake_opener.open.return_value = _RuntimeResponse(raw)
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SYNORA_RUNTIME_URL": "http://127.0.0.1:8001",
+                    "SYNORA_RUNTIME_TOKEN": runtime_token,
+                },
+                clear=False,
+            ),
+            patch("urllib.request.build_opener", return_value=fake_opener),
+        ):
+            response = self._ask(run)
+
+        self.assertEqual(response["error"]["code"], "COACH_RESPONSE_INVALID")
+        self.assertNotIn(runtime_token, json.dumps(response, ensure_ascii=False))
+        self.assertEqual(frappe.db.count("Synora Coach Claim"), 0)
+
+    def test_runtime_rejects_unicode_escaped_capability_before_validation(self) -> None:
+        run = self._issue()
+        capability = str(run.get("capability", CAPABILITY))
+        reason = f"prefix {capability} suffix"
+        answer = _unknown_answer(reason)
+        raw_json = json.dumps(answer, ensure_ascii=True, separators=(",", ":"))
+        encoded_reason = json.dumps(reason, ensure_ascii=True, separators=(",", ":"))
+        escaped_reason = f'"prefix {_unicode_escape(capability)} suffix"'
+        raw_json = raw_json.replace(encoded_reason, escaped_reason, 1)
+        raw = raw_json.encode()
+        self.assertNotIn(capability.encode(), raw)
+        fake_opener = Mock()
+        fake_opener.open.return_value = _RuntimeResponse(raw)
+        with (
+            patch.dict(
+                os.environ,
+                {"SYNORA_RUNTIME_URL": "http://127.0.0.1:8001"},
+                clear=False,
+            ),
+            patch("urllib.request.build_opener", return_value=fake_opener),
+        ):
+            with self.assertRaises(GatewayFault) as context:
+                coach_service._call_coach_runtime({"schema_version": "1"}, capability)
+
+        self.assertEqual(context.exception.code, "COACH_RESPONSE_INVALID")
         self.assertEqual(frappe.db.count("Synora Coach Claim"), 0)
 
     def test_multi_claim_persistence_rolls_back_as_one_unit(self) -> None:
