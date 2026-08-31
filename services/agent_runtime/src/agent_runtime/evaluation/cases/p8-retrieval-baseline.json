@@ -138,6 +138,18 @@
       "injection": false
     },
     {
+      "case_id": "wrong-revision",
+      "query": "revision target",
+      "permission_scope": "internal",
+      "top_k": 5,
+      "source_type": "sop",
+      "revision": "v9",
+      "expected_path": null,
+      "expected_revision": null,
+      "expect_hit": false,
+      "injection": false
+    },
+    {
       "case_id": "erp-version-match",
       "query": "ERP version target",
       "permission_scope": "internal",
@@ -147,6 +159,18 @@
       "expected_path": "erp-b.md",
       "expected_revision": "v1",
       "expect_hit": true,
+      "injection": false
+    },
+    {
+      "case_id": "wrong-erp-version",
+      "query": "ERP version target",
+      "permission_scope": "internal",
+      "top_k": 5,
+      "source_type": "baseline",
+      "erp_version": "erp-z",
+      "expected_path": null,
+      "expected_revision": null,
+      "expect_hit": false,
       "injection": false
     },
     {

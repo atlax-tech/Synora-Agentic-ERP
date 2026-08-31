@@ -12,12 +12,19 @@ from agent_runtime.retrieval.index import SearchHit
 from agent_runtime.retrieval.sources import PERMISSION_SCOPES
 
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
+MAX_CONTEXT_RETRIEVAL_HITS = 5
 
 
 def search_hits_to_context_fragments(
     hits: Sequence[SearchHit],
+    max_hits: int = MAX_CONTEXT_RETRIEVAL_HITS,
 ) -> tuple[ContextFragment, ...]:
     """Build bounded reference fragments without granting retrieved text authority."""
+    if isinstance(max_hits, bool) or not isinstance(max_hits, int) or max_hits < 0:
+        return ()
+    max_hits = min(max_hits, MAX_CONTEXT_RETRIEVAL_HITS)
+    if max_hits == 0:
+        return ()
     fragments: list[ContextFragment] = []
     seen: set[str] = set()
     for hit in hits:
@@ -34,10 +41,12 @@ def search_hits_to_context_fragments(
             continue
         if hit.chunk_id in seen:
             continue
+        rank = len(fragments) + 1
         payload = canonical_json(
             {
                 "retrieval_provenance": {
                     "chunk_id": hit.chunk_id,
+                    "rank": rank,
                     "ordinal": hit.ordinal,
                     "title": hit.title,
                     "path": hit.path,
@@ -53,7 +62,7 @@ def search_hits_to_context_fragments(
         )
         try:
             fragment = ContextFragment.from_content(
-                fragment_id=f"retrieval:{hit.chunk_id}",
+                fragment_id=f"retrieval:{rank:03d}:{hit.chunk_id}",
                 fragment_type="reference",
                 source=f"retrieval:{hit.chunk_id}",
                 version=hit.revision,
@@ -65,9 +74,14 @@ def search_hits_to_context_fragments(
             continue
         seen.add(hit.chunk_id)
         fragments.append(fragment)
+        if len(fragments) >= max_hits:
+            break
     return tuple(fragments)
 
 
-def context_fragments_from_hits(hits: Sequence[SearchHit]) -> tuple[ContextFragment, ...]:
+def context_fragments_from_hits(
+    hits: Sequence[SearchHit],
+    max_hits: int = MAX_CONTEXT_RETRIEVAL_HITS,
+) -> tuple[ContextFragment, ...]:
     """Backward-friendly name for the retrieval-to-context adapter."""
-    return search_hits_to_context_fragments(hits)
+    return search_hits_to_context_fragments(hits, max_hits=max_hits)

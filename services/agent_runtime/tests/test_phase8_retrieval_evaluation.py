@@ -12,13 +12,15 @@ def test_phase8_retrieval_dataset_has_required_positive_and_negative_cases() -> 
     dataset = load_phase8_retrieval_dataset()
 
     assert len(dataset.sources) >= 7
-    assert len(dataset.cases) >= 7
+    assert len(dataset.cases) >= 9
     assert {case.case_id for case in dataset.cases} >= {
         "normal-english",
         "cjk-sop",
         "wrong-permission",
         "revision-match",
+        "wrong-revision",
         "erp-version-match",
+        "wrong-erp-version",
         "unrelated",
         "retrieval-injection",
     }
