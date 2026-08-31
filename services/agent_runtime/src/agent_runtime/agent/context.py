@@ -431,11 +431,40 @@ class ContextBuilder:
         selected_references = tuple(
             fragment for fragment in reference_fragments if fragment.triggered
         )
+        selected_fragments = (
+            *base_fragments,
+            *selected_skill_fragments,
+            *selected_references,
+            *observation_fragments,
+        )
+        selected_ids = tuple(fragment.fragment_id for fragment in selected_fragments)
+        dropped_ids = tuple(
+            fragment.fragment_id
+            for fragment in (*skill_catalog_fragments, *reference_fragments)
+            if fragment.fragment_id not in selected_ids
+        )
         reasons: list[str] = []
         if skill_catalog_fragments:
             reasons.append("removed unselected skill catalog")
         if any(not fragment.triggered for fragment in reference_fragments):
             reasons.append("removed untriggered reference")
+
+        stage_decisions = [
+            ContextStageDecision(
+                stage="gather",
+                selected_fragment_ids=all_ids,
+                reason=(
+                    "gathered boundary, task, caller, tool, skill, reference, and "
+                    "observation inputs"
+                ),
+            ),
+            ContextStageDecision(
+                stage="select",
+                selected_fragment_ids=selected_ids,
+                dropped_fragment_ids=dropped_ids,
+                reason="selected only server-authorized profile and triggered resources",
+            ),
+        ]
 
         def candidate(
             *,
@@ -463,35 +492,6 @@ class ContextBuilder:
             messages: tuple[ProviderMessage, ...],
             estimated_after: int,
         ) -> ContextBuildResult:
-            selected_fragments = (
-                *base_fragments,
-                *selected_skill_fragments,
-                *selected_references,
-                *observation_fragments,
-            )
-            selected_ids = tuple(fragment.fragment_id for fragment in selected_fragments)
-            selected_id_set = set(selected_ids)
-            dropped_ids = tuple(
-                fragment.fragment_id
-                for fragment in (*skill_catalog_fragments, *reference_fragments)
-                if fragment.fragment_id not in selected_id_set
-            )
-            stage_decisions = (
-                ContextStageDecision(
-                    stage="gather",
-                    selected_fragment_ids=all_ids,
-                    reason=(
-                        "gathered boundary, task, caller, tool, skill, reference, and "
-                        "observation inputs"
-                    ),
-                ),
-                ContextStageDecision(
-                    stage="select",
-                    selected_fragment_ids=selected_ids,
-                    dropped_fragment_ids=dropped_ids,
-                    reason="selected only server-authorized profile and triggered resources",
-                ),
-            )
             decisions = (
                 *stage_decisions,
                 ContextStageDecision(
@@ -549,23 +549,6 @@ class ContextBuilder:
         messages, estimated_after = candidate(mode="summary", old_excerpt=0, latest_excerpt=256)
         if estimated_after <= budget:
             return result_for(messages, estimated_after)
-
-        optional_references = tuple(
-            sorted(
-                (fragment for fragment in selected_references if not fragment.required),
-                key=lambda fragment: (fragment.priority, fragment.fragment_id),
-            )
-        )
-        for fragment in optional_references:
-            selected_references = tuple(
-                selected
-                for selected in selected_references
-                if selected.fragment_id != fragment.fragment_id
-            )
-            reasons.append("dropped optional retrieval reference")
-            messages, estimated_after = candidate(mode="summary", old_excerpt=0, latest_excerpt=256)
-            if estimated_after <= budget:
-                return result_for(messages, estimated_after)
 
         raise ContextBuildError("CONTEXT_BUDGET", "mandatory context exceeds the configured budget")
 

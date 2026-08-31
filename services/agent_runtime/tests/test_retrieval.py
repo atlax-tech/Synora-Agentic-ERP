@@ -43,6 +43,10 @@ def test_search_finds_relevant_source_with_metadata(tmp_path: Path) -> None:
         assert top.path
         assert top.erp_version
         assert top.permission_scope
+        assert len(top.chunk_id) == 64
+        assert top.ordinal >= 1
+        assert len(top.content_digest) == 64
+        assert top.content
         assert top.score <= 0  # bm25 越小越相关
 
 
