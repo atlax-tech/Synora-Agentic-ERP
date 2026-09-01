@@ -662,17 +662,22 @@ def _normalize_provider_compatibility(value: dict[str, object]) -> dict[str, obj
                 citations.append(citation)
             else:
                 citations.append(raw_citation)
-        claim_references = {
-            reference
-            for claim in normalized.get("claims", [])
-            if isinstance(claim, dict)
-            for reference in claim.get("citation_refs", [])
-            if isinstance(reference, str)
-        }
-        all_erp_claims = bool(normalized.get("claims")) and all(
-            isinstance(claim, dict) and claim.get("claim_type") == "ERP_FACT"
-            for claim in normalized.get("claims", [])
-        )
+        normalized_claims = normalized.get("claims")
+        if isinstance(normalized_claims, list):
+            claim_references = {
+                reference
+                for claim in normalized_claims
+                if isinstance(claim, dict)
+                for reference in claim.get("citation_refs", [])
+                if isinstance(reference, str)
+            }
+            all_erp_claims = bool(normalized_claims) and all(
+                isinstance(claim, dict) and claim.get("claim_type") == "ERP_FACT"
+                for claim in normalized_claims
+            )
+        else:
+            claim_references = set()
+            all_erp_claims = False
         if (
             not citations
             and all_erp_claims
