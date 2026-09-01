@@ -283,6 +283,18 @@ def _canonical_field_atom(field_name: str, value: object) -> str:
     return f"{field_name}={canonical_json(value)}"
 
 
+def _requested_live_fields(
+    question: str,
+    allowed_fields: frozenset[str],
+) -> frozenset[str]:
+    normalized_question = question.casefold()
+    return frozenset(
+        field_name
+        for field_name in allowed_fields
+        if field_name.casefold() in normalized_question
+    )
+
+
 def _normalize_erp_claim(
     claim: CoachClaim,
     citations_by_id: Mapping[str, object],
@@ -290,6 +302,7 @@ def _normalize_erp_claim(
     facts_by_digest: Mapping[str, MaterialRequestCurrentFact | PurchaseOrderCurrentFact],
     *,
     include_context: bool,
+    requested_fields: frozenset[str],
 ) -> str | None:
     """Render an ERP claim only from the exact fields named by its citations."""
     allowed_fields = _LIVE_FACT_FIELDS[context.current_document.doctype]
@@ -306,6 +319,8 @@ def _normalize_erp_claim(
         for field_name in citation.fact_fields:
             if field_name not in allowed_fields or field_name not in values:
                 return None
+            if requested_fields and field_name not in requested_fields:
+                continue
             if field_name in used_fields:
                 # A field may not borrow a value from another row/citation.
                 return None
@@ -341,7 +356,12 @@ def _normalize_grounded_claims(
     include_context = any(cue in question.casefold() for cue in _EXPLANATION_CUES)
     citations_by_id = {citation.citation_id: citation for citation in output.citations}
     facts_by_digest = {current_fact_digest(fact): fact for fact in context.facts}
+    requested_fields = _requested_live_fields(
+        question,
+        _LIVE_FACT_FIELDS[context.current_document.doctype],
+    )
     normalized_claims: list[CoachClaim] = []
+    seen_claims: set[tuple[str, str, tuple[str, ...]]] = set()
     for claim in output.claims:
         if claim.claim_type not in COACH_SIGNABLE_CLAIM_TYPES:
             return None
@@ -352,12 +372,26 @@ def _normalize_grounded_claims(
                 context,
                 facts_by_digest,
                 include_context=include_context,
+                requested_fields=requested_fields,
             )
             if normalized_text is None:
                 return None
-            normalized_claims.append(claim.model_copy(update={"text": normalized_text}))
+            normalized_claim = claim.model_copy(update={"text": normalized_text})
         else:
-            normalized_claims.append(claim)
+            normalized_claim = claim
+        claim_key = (
+            normalized_claim.claim_type,
+            normalized_claim.text,
+            normalized_claim.citation_refs,
+        )
+        if claim_key in seen_claims:
+            continue
+        seen_claims.add(claim_key)
+        normalized_claims.append(normalized_claim)
+    normalized_claims = [
+        claim.model_copy(update={"ordinal": ordinal})
+        for ordinal, claim in enumerate(normalized_claims, start=1)
+    ]
     normalized_answer = "\n".join(claim.text for claim in normalized_claims)
     if not normalized_answer or len(normalized_answer) > 8_000:
         return None

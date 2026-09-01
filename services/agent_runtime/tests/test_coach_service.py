@@ -449,6 +449,56 @@ async def _test_coach_service_rejects_date_and_status_grounding_pollution() -> N
     assert "Approved" not in result.answer
 
 
+async def _test_coach_service_compacts_repeated_claims_to_requested_fields() -> None:
+    hit = _hit()
+    payload = json.loads(
+        _response(
+            live_digest=_live_digest(),
+            hit=hit,
+            answer="verbose provider answer",
+            claim_text="verbose provider claim",
+            fact_fields=[
+                "company",
+                "docstatus",
+                "item_code",
+                "open_order_stock_qty",
+                "ordered_stock_qty",
+                "requested_stock_qty",
+                "status",
+                "transaction_date",
+                "warehouse",
+            ],
+        ).text
+    )
+    duplicate = dict(payload["claims"][0])
+    duplicate["claim_id"] = "claim-2"
+    duplicate["ordinal"] = 2
+    payload["claims"].append(duplicate)
+    request = _request(
+        question=(
+            "In one short answer, give the current open_order_stock_qty value "
+            "and why it matters."
+        )
+    )
+
+    result = await answer_coach(
+        request,
+        _context(),
+        (hit,),
+        RecordingProvider(ProviderResponse(text=json.dumps(payload))),
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+
+    assert result.answer_status == "ANSWERED"
+    assert len(result.claims) == 1
+    assert result.claims[0].ordinal == 1
+    assert result.claims[0].text == (
+        'open_order_stock_qty="2" This current fact shows the requested quantity not yet '
+        "covered by an order, which helps explain the document's remaining fulfillment gap."
+    )
+    assert len(result.answer) < 500
+
+
 async def _test_coach_service_rejects_cross_citation_numeric_mix() -> None:
     request = _request()
     first = _mr_row(open_order_stock_qty="2", requested_stock_qty="3")
@@ -691,6 +741,10 @@ def test_coach_service_rejects_unsupported_numeric_claims_and_summary() -> None:
 
 def test_coach_service_rejects_date_and_status_grounding_pollution() -> None:
     asyncio.run(_test_coach_service_rejects_date_and_status_grounding_pollution())
+
+
+def test_coach_service_compacts_repeated_claims_to_requested_fields() -> None:
+    asyncio.run(_test_coach_service_compacts_repeated_claims_to_requested_fields())
 
 
 def test_coach_service_rejects_cross_citation_numeric_mix() -> None:
