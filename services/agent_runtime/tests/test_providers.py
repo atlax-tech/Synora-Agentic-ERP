@@ -657,7 +657,7 @@ class TestProviderFromEnvironment:
 
         asyncio.run(run())
 
-    def test_fallback_retries_transient_transport_failure_once(
+    def test_fallback_retries_transient_transport_failure_twice(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         async def run() -> None:
@@ -665,13 +665,14 @@ class TestProviderFromEnvironment:
             monkeypatch.setenv(PROVIDER_FALLBACK_API_KEY_ENV, "fallback-secret")
             monkeypatch.setenv(PROVIDER_FALLBACK_BASE_URL_ENV, "https://fallback.example/v1")
             monkeypatch.setenv(PROVIDER_FALLBACK_MODEL_ENV, "backup-model")
+            monkeypatch.setattr("agent_runtime.providers._FALLBACK_RETRY_DELAY_SECONDS", 0.0)
             requests: list[str] = []
 
             def handler(request: httpx.Request) -> httpx.Response:
                 requests.append(request.url.host or "")
                 if len(requests) == 1:
                     return httpx.Response(429, json={"error": "rate limited"}, request=request)
-                if len(requests) == 2:
+                if len(requests) in {2, 3}:
                     raise httpx.ReadError("connection reset", request=request)
                 return httpx.Response(
                     200,
@@ -683,7 +684,12 @@ class TestProviderFromEnvironment:
             assert isinstance(provider, FailoverProvider)
             response = await provider.complete(_messages())
             assert response.text == "backup"
-            assert requests == ["primary.example", "fallback.example", "fallback.example"]
+            assert requests == [
+                "primary.example",
+                "fallback.example",
+                "fallback.example",
+                "fallback.example",
+            ]
             await provider.aclose()
 
         asyncio.run(run())

@@ -11,6 +11,7 @@ API key 脱敏约定 (用户要求):
 - 构造对象后立即使用, 不在模块级保存明文。
 """
 
+import asyncio
 import math
 import os
 from collections.abc import Mapping, Sequence
@@ -47,6 +48,8 @@ _FAILOVER_FAILURE_CODES = frozenset(
     {"RATE_LIMITED", "UPSTREAM_UNAVAILABLE", "TIMEOUT", "TRANSPORT_ERROR"}
 )
 _FALLBACK_RETRY_FAILURE_CODES = _FAILOVER_FAILURE_CODES
+_FALLBACK_MAX_RETRIES = 2
+_FALLBACK_RETRY_DELAY_SECONDS = 1.0
 ProviderResponseFormat = Literal["json_object"]
 
 
@@ -517,7 +520,7 @@ class FailoverProvider:
 
     A backup never masks invalid requests, authentication failures, malformed
     responses, or budget violations. The wrapper owns both clients and makes
-    at most one bounded retry when a backup transport is transiently unavailable.
+    at most two bounded retries when a backup transport is transiently unavailable.
     """
 
     def __init__(self, primary: Provider, fallback: Provider) -> None:
@@ -563,7 +566,10 @@ class FailoverProvider:
                     response_format=response_format,
                 )
             except ProviderError as fallback_error:
-                if fallback_error.failure_code in _FALLBACK_RETRY_FAILURE_CODES:
+                for _retry_index in range(_FALLBACK_MAX_RETRIES):
+                    if fallback_error.failure_code not in _FALLBACK_RETRY_FAILURE_CODES:
+                        break
+                    await asyncio.sleep(_FALLBACK_RETRY_DELAY_SECONDS)
                     try:
                         return await self._fallback.complete(
                             messages,

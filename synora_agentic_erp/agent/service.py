@@ -63,10 +63,10 @@ _RUNTIME_ALLOW_HOST_GATEWAY_ENV = "SYNORA_RUNTIME_ALLOW_HOST_GATEWAY"
 _RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
 _RUNTIME_HOST_GATEWAY = "host.docker.internal"
 _RUNTIME_DEFAULT_URL = "http://127.0.0.1:8001"
-# BYOK Coach 可能先经历一次主 Provider 超时, 再等待备用模型及其一次瞬时
-# 重试完成结构化回答; 跨进程墙钟覆盖三个串行 Provider 上限并留出余量。
+# BYOK Coach 可能先经历一次主 Provider 超时, 再等待备用模型及其两次瞬时
+# 重试完成结构化回答; 跨进程墙钟覆盖四个串行 Provider 上限并留出余量。
 # 该上限不是成本上限, 成本仍由 max_tokens/usage 校验控制。
-_RUNTIME_TIMEOUT_SECONDS = 195.0
+_RUNTIME_TIMEOUT_SECONDS = 255.0
 _RUNTIME_RESPONSE_BYTES = 1_000_000
 _CURRENT_PROMPT_SCHEMA_VERSION = "2"
 _SUPPORTED_PROMPT_SCHEMA_VERSIONS = frozenset({"1", _CURRENT_PROMPT_SCHEMA_VERSION})
