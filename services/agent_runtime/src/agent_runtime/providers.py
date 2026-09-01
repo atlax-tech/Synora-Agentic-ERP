@@ -36,6 +36,7 @@ GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS = 65_536
 GLM_4_7_FLASH_MAX_OUTPUT_TOKENS = 131_072
 _REASONING_EFFORTS = {"low", "medium", "high", "xhigh"}
 _THINKING_MODES = {"enabled", "disabled"}
+ProviderResponseFormat = Literal["json_object"]
 
 
 def _output_token_limits(model: str | None) -> tuple[int, int]:
@@ -168,6 +169,7 @@ class Provider(Protocol):
         tools: list[ProviderToolSpec] | None = None,
         model: str | None = None,
         max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
     ) -> ProviderResponse: ...
 
 
@@ -233,8 +235,9 @@ class DeterministicProvider:
         tools: list[ProviderToolSpec] | None = None,
         model: str | None = None,
         max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
     ) -> ProviderResponse:
-        del tools, model, max_tokens
+        del tools, model, max_tokens, response_format
         if not messages:
             raise ProviderError("provider requires at least one message")
         if self._scripted:
@@ -345,6 +348,7 @@ class OpenAICompatibleProvider:
         tools: list[ProviderToolSpec] | None = None,
         model: str | None = None,
         max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
     ) -> ProviderResponse:
         if not messages:
             raise ProviderError(
@@ -362,6 +366,8 @@ class OpenAICompatibleProvider:
             if max_tokens < 1 or max_tokens > hard_limit:
                 raise ValueError(f"provider max_tokens must be within 1..{hard_limit}")
             payload["max_tokens"] = max_tokens
+        if response_format is not None:
+            payload["response_format"] = {"type": response_format}
         if self._thinking is not None:
             payload["thinking"] = {"type": self._thinking}
         if self._reasoning_effort is not None and self._thinking != "disabled":

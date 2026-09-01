@@ -434,7 +434,11 @@ async def answer_coach(
         # Explicit [] is part of the security contract: current ERP tools are
         # server-selected and never appear in the provider's tool schema.
         response = await provider.complete(
-            list(context_result.messages), tools=[], model=model, max_tokens=max_tokens
+            list(context_result.messages),
+            tools=[],
+            model=model,
+            max_tokens=max_tokens,
+            response_format="json_object",
         )
         context_result = record_provider_prompt_tokens(context_result, response.prompt_tokens)
         if response.tool_calls:

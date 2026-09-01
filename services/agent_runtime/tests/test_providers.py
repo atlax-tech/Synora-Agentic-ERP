@@ -341,6 +341,28 @@ class TestOpenAICompatibleProvider:
             assert body["max_tokens"] == 65_536
             assert body["thinking"] == {"type": "enabled"}
 
+    def test_request_can_enable_provider_json_object_mode(self) -> None:
+        async def run() -> None:
+            captured: dict[str, object] = {}
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                captured["json"] = json.loads(request.content)
+                return httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"role": "assistant", "content": "{}"}}]},
+                    request=request,
+                )
+
+            async with OpenAICompatibleProvider(
+                base_url="https://open.bigmodel.cn/api/paas/v4",
+                model="glm-4.7-flash",
+                transport=httpx.MockTransport(handler),
+            ) as provider:
+                await provider.complete(_messages(), response_format="json_object")
+            body = captured["json"]
+            assert isinstance(body, dict)
+            assert body["response_format"] == {"type": "json_object"}
+
         asyncio.run(run())
 
     def test_glm_request_rejects_cap_above_model_limit(self) -> None:

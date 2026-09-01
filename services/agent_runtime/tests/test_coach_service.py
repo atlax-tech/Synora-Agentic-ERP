@@ -176,6 +176,7 @@ class RecordingProvider:
         self.error = error
         self.tools: list[ProviderToolSpec] | None = None
         self.messages: list[ProviderMessage] | None = None
+        self.response_format: str | None = None
 
     async def complete(
         self,
@@ -183,10 +184,12 @@ class RecordingProvider:
         tools: list[ProviderToolSpec] | None = None,
         model: str | None = None,
         max_tokens: int | None = None,
+        response_format: str | None = None,
     ) -> ProviderResponse:
         del model, max_tokens
         self.messages = messages
         self.tools = tools
+        self.response_format = response_format
         if self.error:
             raise self.error
         assert self.response is not None
@@ -212,6 +215,7 @@ async def _test_coach_service_validates_live_and_retrieval_evidence_and_exposes_
     assert result.validated_claims == ()
     assert result.retrieval_trace.selected_chunk_ids == (hit.chunk_id,)
     assert provider.tools == []
+    assert provider.response_format == "json_object"
     messages = provider.messages
     assert messages is not None
     assert '"trust_level":"UNTRUSTED"' in messages[1].content

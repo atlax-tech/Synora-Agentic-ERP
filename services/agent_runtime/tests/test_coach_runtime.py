@@ -200,6 +200,7 @@ class _RecordingProvider:
         self.tools: list[ProviderToolSpec] | None = None
         self.model: str | None = None
         self.max_tokens: int | None = None
+        self.response_format: str | None = None
         self.closed = False
 
     async def complete(
@@ -208,11 +209,13 @@ class _RecordingProvider:
         tools: list[ProviderToolSpec] | None = None,
         model: str | None = None,
         max_tokens: int | None = None,
+        response_format: str | None = None,
     ) -> ProviderResponse:
         self.messages = messages
         self.tools = tools
         self.model = model
         self.max_tokens = max_tokens
+        self.response_format = response_format
         if self.error is not None:
             raise self.error
         assert self.response is not None
@@ -272,6 +275,7 @@ def test_runtime_selects_only_the_current_read_tool_and_binds_identity(
     assert sent.correlation_id == CORRELATION_ID
     assert sent.capability.get_secret_value() == CAPABILITY
     assert provider.tools == []
+    assert provider.response_format == "json_object"
     assert provider.max_tokens == 1024
     assert provider.messages is not None
     assert CAPABILITY not in repr(request)
