@@ -350,6 +350,22 @@ def test_provider_json_parser_rejects_duplicate_keys_and_unknown_citation_types(
         )
 
 
+def test_provider_json_parser_normalizes_only_known_version_alias() -> None:
+    valid = (
+        '{"schema_version":"1.0","answer_status":"REFUSED",'
+        '"answer":"","claims":[],"citations":[],"refusal_reason":"probe"}'
+    )
+    parsed = parse_coach_provider_output(valid)
+    assert parsed.schema_version == "1"
+
+    numeric = valid.replace('"schema_version":"1.0"', '"schema_version":1.0')
+    with pytest.raises(ValidationError):
+        parse_coach_provider_output(numeric)
+    unknown = valid.replace('"schema_version":"1.0"', '"schema_version":"1.1"')
+    with pytest.raises(ValidationError):
+        parse_coach_provider_output(unknown)
+
+
 def test_live_citation_requires_unique_known_fact_fields() -> None:
     valid = _live_citation(fact_fields=["status", "open_order_stock_qty"])
     citation = CoachLiveCitation.model_validate(valid)

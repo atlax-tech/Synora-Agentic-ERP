@@ -564,7 +564,13 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object
 
 
 def parse_coach_provider_output(raw: object) -> CoachProviderOutput:
-    """Parse provider JSON with duplicate-key and size rejection."""
+    """Parse provider JSON with bounded, explicit wire compatibility.
+
+    Some OpenAI-compatible models render the current contract version as the
+    semantically equivalent string ``"1.0"`` even when the prompt requests
+    ``"1"``.  Normalize only that exact string before strict validation; all
+    other versions and numeric values remain rejected.
+    """
     if not isinstance(raw, str) or len(raw.encode("utf-8")) > 256_000:
         raise ValueError("provider Coach output is invalid")
     import json
@@ -576,6 +582,8 @@ def parse_coach_provider_output(raw: object) -> CoachProviderOutput:
     )
     if not isinstance(value, dict):
         raise ValueError("provider Coach output must be an object")
+    if value.get("schema_version") == "1.0":
+        value = {**value, "schema_version": "1"}
     return CoachProviderOutput.model_validate(value)
 
 
