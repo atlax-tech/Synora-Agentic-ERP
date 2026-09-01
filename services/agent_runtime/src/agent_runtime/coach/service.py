@@ -120,6 +120,7 @@ _EXPLANATION_CUES = (
     "理解",
     "原因",
 )
+_UNSUPPORTED_QUANTITY_CUES = ("additional quantity", "额外数量")
 
 
 def _usage(
@@ -130,6 +131,16 @@ def _usage(
         prompt_tokens=max(0, int(getattr(source, "prompt_tokens", 0))),
         completion_tokens=max(0, int(getattr(source, "completion_tokens", 0))),
         reasoning_tokens=max(0, int(getattr(source, "reasoning_tokens", 0))),
+    )
+
+
+def _requires_unavailable_quantity(question: str) -> bool:
+    normalized = question.casefold()
+    return any(cue in normalized for cue in _UNSUPPORTED_QUANTITY_CUES) and (
+        "not present" in normalized
+        or "not in the supplied" in normalized
+        or "不在" in normalized
+        or "不存在" in normalized
     )
 
 
@@ -575,6 +586,14 @@ async def answer_coach(
             return _failed_answer(
                 "REFUSED",
                 _SAFE_REASONS["tools"],
+                usage=_usage(response),
+                latency_ms=_elapsed(started),
+                trace=trace,
+            )
+        if _requires_unavailable_quantity(request.question):
+            return _failed_answer(
+                "UNKNOWN",
+                _SAFE_REASONS["citation"],
                 usage=_usage(response),
                 latency_ms=_elapsed(started),
                 trace=trace,
