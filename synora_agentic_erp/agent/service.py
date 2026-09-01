@@ -63,10 +63,10 @@ _RUNTIME_ALLOW_HOST_GATEWAY_ENV = "SYNORA_RUNTIME_ALLOW_HOST_GATEWAY"
 _RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
 _RUNTIME_HOST_GATEWAY = "host.docker.internal"
 _RUNTIME_DEFAULT_URL = "http://127.0.0.1:8001"
-# Grok reasoning 模型的简单解释实测约 13 秒, 低推理强度的完整计划实测约 9 秒;
-# 仍以 20 秒墙钟上限防止请求悬挂,
-# 超时后回退确定性摘要。该上限不是成本上限, 成本仍由 max_tokens/usage 校验控制。
-_RUNTIME_TIMEOUT_SECONDS = 20.0
+# BYOK Coach 可能先经历一次主 Provider 限流, 再等待备用模型完成结构化回答;
+# 跨进程墙钟必须覆盖备用请求的正常响应时间, 仍以 75 秒防止请求悬挂。
+# 该上限不是成本上限, 成本仍由 max_tokens/usage 校验控制。
+_RUNTIME_TIMEOUT_SECONDS = 75.0
 _RUNTIME_RESPONSE_BYTES = 1_000_000
 _CURRENT_PROMPT_SCHEMA_VERSION = "2"
 _SUPPORTED_PROMPT_SCHEMA_VERSIONS = frozenset({"1", _CURRENT_PROMPT_SCHEMA_VERSION})
@@ -2028,7 +2028,7 @@ def _lock_proposed_run(run_id: str) -> Any:
     """锁住本 Run 的提议行, 避免并发 plan_run 重复调用模型。
 
     这是 Synora 自有 DocType 的事务行锁; 锁在本次请求结束时释放, 进程崩溃
-    不会留下业务锁。模型调用仍有 20 秒上限, 锁的范围限定为单个 Run。
+    不会留下业务锁。模型调用仍有 75 秒上限, 锁的范围限定为单个 Run。
     """
     locked = frappe.db.sql(
         """
