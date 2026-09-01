@@ -596,6 +596,63 @@ class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
         detail = coach_run_detail(response["run_id"])
         self.assertEqual(detail["results"][0]["refusal_reason"], "CONTEXT_REQUIRED")
 
+    def test_start_coach_publishes_run_before_cross_process_runtime(self) -> None:
+        frappe.set_user(BUYER)
+        events: list[str] = []
+        original_commit = frappe.db.commit
+
+        def commit() -> None:
+            events.append("commit")
+            original_commit()
+
+        def runtime(payload: dict[str, object], _capability: str) -> dict[str, object]:
+            events.append("runtime")
+            self.assertTrue(frappe.db.exists("Synora Agent Run", payload["run_id"]))
+            return _unknown_answer("provider unavailable")
+
+        with (
+            patch.object(frappe.db, "commit", side_effect=commit),
+            patch("synora_agentic_erp.coach.service._call_coach_runtime", side_effect=runtime),
+        ):
+            response = start_erp_coach(
+                question="How many units remain open?",
+                company=COMPANY,
+                warehouse=WAREHOUSE,
+                current_doctype="Material Request",
+                current_name=_current_material_request(),
+                cmd="synora_agentic_erp.api.start_erp_coach",
+            )
+
+        self.assertTrue(response["ok"])
+        self.assertLess(events.index("commit"), events.index("runtime"))
+        self.assertEqual(response["coach"]["answer_status"], "UNKNOWN")
+
+    def test_start_coach_revokes_published_run_after_runtime_failure(self) -> None:
+        frappe.set_user(BUYER)
+        with patch(
+            "synora_agentic_erp.coach.service._call_coach_runtime",
+            side_effect=RuntimeError("simulated runtime failure"),
+        ):
+            response = start_erp_coach(
+                question="How many units remain open?",
+                company=COMPANY,
+                warehouse=WAREHOUSE,
+                current_doctype="Material Request",
+                current_name=_current_material_request(),
+                cmd="synora_agentic_erp.api.start_erp_coach",
+            )
+
+        self.assertEqual(response["error"]["code"], "ERP_ERROR")
+        run = frappe.get_all(
+            "Synora Agent Run",
+            filters={"correlation_id": response["correlation_id"]},
+            fields=["status", "revoked"],
+            limit=1,
+        )
+        self.assertEqual(run, [{"status": "REVOKED", "revoked": 1}])
+        self.assertEqual(frappe.db.count("Synora Coach Claim"), 0)
+        self.assertEqual(frappe.db.count("Synora Coach Result"), 0)
+
     def test_ask_rpc_cmd_is_accepted_but_unexpected_fields_stay_rejected(self) -> None:
         run = self._issue()
         with patch(

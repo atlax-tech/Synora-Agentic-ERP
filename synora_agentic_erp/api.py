@@ -464,6 +464,8 @@ def start_erp_coach(
     safe_correlation_id: str | None = None
     savepoint = f"synora_start_coach_{uuid4().hex}"
     capability = ""
+    run_id: str | None = None
+    published = False
     try:
         reject_mixed_user_credentials()
         _reject_unexpected_rpc_fields(extra, expected_cmd="synora_agentic_erp.api.start_erp_coach")
@@ -510,6 +512,12 @@ def start_erp_coach(
                 "result_id": refused["result"]["result_id"],
                 "coach": refused["coach"],
             }
+        # Runtime resolves the Run through a separate Frappe transaction. Publish
+        # the capability digest before crossing that process boundary; otherwise
+        # the Runtime can only fail closed because this request's insert is still
+        # invisible to its Gateway read.
+        frappe.db.commit()
+        published = True
         answered = answer_contextual_coach(
             run_id=run_id,
             capability=capability,
@@ -527,16 +535,24 @@ def start_erp_coach(
         }
     except GatewayFault as fault:
         try:
-            frappe.db.rollback(save_point=savepoint)
+            if published and run_id and safe_correlation_id:
+                revoke_server_run(run_id, safe_correlation_id)
+                frappe.db.commit()
+            else:
+                frappe.db.rollback(save_point=savepoint)
         except Exception:
-            pass
+            frappe.db.rollback()
         _set_status(fault.status_code)
         return error_response(fault, safe_correlation_id)
     except Exception:
         try:
-            frappe.db.rollback(save_point=savepoint)
+            if published and run_id and safe_correlation_id:
+                revoke_server_run(run_id, safe_correlation_id)
+                frappe.db.commit()
+            else:
+                frappe.db.rollback(save_point=savepoint)
         except Exception:
-            pass
+            frappe.db.rollback()
         service_fault = GatewayFault("ERP_ERROR", "Coach service is unavailable", 503)
         _set_status(service_fault.status_code)
         return error_response(service_fault, safe_correlation_id)
