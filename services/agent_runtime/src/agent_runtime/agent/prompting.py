@@ -151,7 +151,8 @@ _COACH_DECISION = (
 _COACH_OUTPUT = (
     "Return exactly one JSON object, never Markdown or a code fence, matching the "
     'CoachProviderOutput schema: schema_version must be the exact string "1" (not "1.0"), '
-    "then answer_status, answer, claims, "
+    'answer_status must be exactly "ANSWERED", "UNKNOWN", "CONFLICT", or "REFUSED", '
+    "then answer, claims, "
     "citations, refusal_reason. Every substantive claim must have citation_refs. "
     "For an answer grounded in the supplied LIVE_ERP object, output only citation_type "
     '"LIVE_ERP", citation_id "live-1", and fact_fields containing only the fields used '

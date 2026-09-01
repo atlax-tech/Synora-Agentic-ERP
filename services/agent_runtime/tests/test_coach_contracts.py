@@ -429,6 +429,24 @@ def test_provider_json_parser_normalizes_only_known_version_alias() -> None:
         parse_coach_provider_output(unknown)
 
 
+def test_provider_json_parser_normalizes_observed_success_shape() -> None:
+    raw = (
+        '{"schema_version":"1","answer_status":"SUCCESS",'
+        '"answer":"open_order_stock_qty=2",'
+        '"claims":[{"claim_type":"ERP_FACT","citation_refs":["live-1"]}],'
+        '"citations":[{"citation_type":"LIVE_ERP","citation_id":"live-1",'
+        '"fact_fields":{"open_order_stock_qty":2}}],"refusal_reason":""}'
+    )
+    parsed = parse_coach_provider_output(raw)
+    assert parsed.answer_status == "ANSWERED"
+    assert parsed.refusal_reason is None
+    assert parsed.claims[0].claim_id == "claim-1"
+    assert parsed.claims[0].ordinal == 1
+    assert parsed.claims[0].text == "server-bound ERP fact"
+    assert isinstance(parsed.citations[0], CoachProviderLiveCitation)
+    assert parsed.citations[0].fact_fields == ("open_order_stock_qty",)
+
+
 def test_live_citation_requires_unique_known_fact_fields() -> None:
     valid = _live_citation(fact_fields=["status", "open_order_stock_qty"])
     citation = CoachLiveCitation.model_validate(valid)

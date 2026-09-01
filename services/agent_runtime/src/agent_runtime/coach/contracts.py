@@ -598,6 +598,55 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object
     return result
 
 
+def _normalize_provider_compatibility(value: dict[str, object]) -> dict[str, object]:
+    """Normalize only observed, non-authoritative model formatting variants."""
+    normalized = dict(value)
+    if normalized.get("answer_status") == "SUCCESS":
+        normalized["answer_status"] = "ANSWERED"
+    if normalized.get("refusal_reason") == "" and normalized.get("answer_status") in {
+        "ANSWERED",
+        "CONFLICT",
+    }:
+        normalized["refusal_reason"] = None
+
+    raw_claims = normalized.get("claims")
+    if isinstance(raw_claims, list):
+        claims: list[object] = []
+        for ordinal, raw_claim in enumerate(raw_claims, start=1):
+            if isinstance(raw_claim, dict) and raw_claim.get("claim_type") == "ERP_FACT":
+                claim = dict(raw_claim)
+                claim.setdefault("claim_id", f"claim-{ordinal}")
+                claim.setdefault("ordinal", ordinal)
+                # The service replaces ERP claim prose with server-bound field
+                # atoms after citation resolution, so this placeholder carries
+                # no business meaning or model authority.
+                claim.setdefault("text", "server-bound ERP fact")
+                claims.append(claim)
+            else:
+                claims.append(raw_claim)
+        normalized["claims"] = claims
+
+    raw_citations = normalized.get("citations")
+    if isinstance(raw_citations, list):
+        citations: list[object] = []
+        for raw_citation in raw_citations:
+            if (
+                isinstance(raw_citation, dict)
+                and raw_citation.get("citation_type") == "LIVE_ERP"
+                and isinstance(raw_citation.get("fact_fields"), dict)
+            ):
+                citation = dict(raw_citation)
+                # Some models encode field selection as {field: value}.  Only
+                # the keys can be considered a selector; all values are
+                # discarded and the server still validates every key.
+                citation["fact_fields"] = list(citation["fact_fields"])
+                citations.append(citation)
+            else:
+                citations.append(raw_citation)
+        normalized["citations"] = citations
+    return normalized
+
+
 def parse_coach_provider_output(raw: object) -> CoachProviderOutput:
     """Parse provider JSON with bounded, explicit wire compatibility.
 
@@ -617,6 +666,7 @@ def parse_coach_provider_output(raw: object) -> CoachProviderOutput:
     )
     if not isinstance(value, dict):
         raise ValueError("provider Coach output must be an object")
+    value = _normalize_provider_compatibility(value)
     if value.get("schema_version") == "1.0":
         value = {**value, "schema_version": "1"}
     return CoachProviderOutput.model_validate(value)

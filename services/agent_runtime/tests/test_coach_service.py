@@ -260,13 +260,16 @@ async def _test_coach_service_rebinds_live_metadata_and_rejects_invented_retriev
 async def _test_coach_service_materializes_minimal_live_selector() -> None:
     hit = _hit()
     payload = json.loads(_response(live_digest=_live_digest(), hit=hit).text)
+    payload["answer_status"] = "SUCCESS"
+    payload["claims"] = [{"claim_type": "ERP_FACT", "citation_refs": ["live-1"]}]
     payload["citations"] = [
         {
             "citation_type": "LIVE_ERP",
             "citation_id": "live-1",
-            "fact_fields": ["open_order_stock_qty"],
+            "fact_fields": {"open_order_stock_qty": 2},
         }
     ]
+    payload["refusal_reason"] = ""
     result = await answer_coach(
         _request(),
         _context(),
