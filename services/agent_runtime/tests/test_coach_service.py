@@ -289,6 +289,30 @@ async def _test_coach_service_materializes_minimal_live_selector() -> None:
     assert result.citations[0].fact_digest == _live_digest()
 
 
+async def _test_coach_service_adds_controlled_context_for_explanatory_questions() -> None:
+    hit = _hit()
+    request = _request(
+        question=(
+            "Tell me the current open_order_stock_qty value and why that current fact "
+            "matters for understanding the document."
+        )
+    )
+    result = await answer_coach(
+        request,
+        _context().model_copy(),
+        (hit,),
+        RecordingProvider(_response(live_digest=_live_digest(), hit=hit)),
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+
+    assert result.answer_status == "ANSWERED"
+    assert result.answer == (
+        'open_order_stock_qty="2" This current fact shows the requested quantity not yet '
+        "covered by an order, which helps explain the document's remaining fulfillment gap."
+    )
+    assert result.answer == result.claims[0].text
+
+
 async def _test_coach_service_rejects_unsupported_numeric_claims_and_summary() -> None:
     hit = _hit()
     false_claim = _response(
@@ -602,6 +626,10 @@ def test_coach_service_rebinds_live_metadata_and_rejects_invented_retrieval() ->
 
 def test_coach_service_materializes_minimal_live_selector() -> None:
     asyncio.run(_test_coach_service_materializes_minimal_live_selector())
+
+
+def test_coach_service_adds_controlled_context_for_explanatory_questions() -> None:
+    asyncio.run(_test_coach_service_adds_controlled_context_for_explanatory_questions())
 
 
 def test_coach_service_rejects_unsupported_numeric_claims_and_summary() -> None:

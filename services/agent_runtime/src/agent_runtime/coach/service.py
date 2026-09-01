@@ -98,6 +98,28 @@ _LIVE_FACT_FIELDS: dict[str, frozenset[str]] = {
         }
     ),
 }
+_ERP_FACT_CONTEXT = {
+    "open_order_stock_qty": (
+        "This current fact shows the requested quantity not yet covered by an order, "
+        "which helps explain the document's remaining fulfillment gap."
+    ),
+    "open_receipt_stock_qty": (
+        "This current fact shows the ordered quantity not yet received, "
+        "which helps explain the document's remaining receipt gap."
+    ),
+}
+_EXPLANATION_CUES = (
+    "why",
+    "matter",
+    "understand",
+    "explain",
+    "reason",
+    "为什么",
+    "为何",
+    "意义",
+    "理解",
+    "原因",
+)
 
 
 def _usage(
@@ -255,6 +277,8 @@ def _normalize_erp_claim(
     citations_by_id: Mapping[str, object],
     context: CoachCurrentDocumentContext,
     facts_by_digest: Mapping[str, MaterialRequestCurrentFact | PurchaseOrderCurrentFact],
+    *,
+    include_context: bool,
 ) -> str | None:
     """Render an ERP claim only from the exact fields named by its citations."""
     allowed_fields = _LIVE_FACT_FIELDS[context.current_document.doctype]
@@ -281,17 +305,29 @@ def _normalize_erp_claim(
             atoms.append((field_name, value))
     if not atoms:
         return None
-    return "; ".join(
+    normalized = "; ".join(
         _canonical_field_atom(field_name, value)
         for field_name, value in sorted(atoms, key=lambda item: item[0])
     )
+    if include_context:
+        explanations = [
+            _ERP_FACT_CONTEXT[field_name]
+            for field_name, _value in sorted(atoms, key=lambda item: item[0])
+            if field_name in _ERP_FACT_CONTEXT
+        ]
+        if explanations:
+            normalized = f"{normalized} {' '.join(explanations)}"
+    return normalized
 
 
 def _normalize_grounded_claims(
     output: CoachProviderOutput,
     context: CoachCurrentDocumentContext,
+    *,
+    question: str,
 ) -> CoachProviderOutput | None:
-    """Rebuild answer text from server-bound claim atoms, never Provider prose."""
+    """Rebuild grounded answer text without trusting Provider prose."""
+    include_context = any(cue in question.casefold() for cue in _EXPLANATION_CUES)
     citations_by_id = {citation.citation_id: citation for citation in output.citations}
     facts_by_digest = {current_fact_digest(fact): fact for fact in context.facts}
     normalized_claims: list[CoachClaim] = []
@@ -299,7 +335,13 @@ def _normalize_grounded_claims(
         if claim.claim_type not in COACH_SIGNABLE_CLAIM_TYPES:
             return None
         if claim.claim_type == "ERP_FACT":
-            normalized_text = _normalize_erp_claim(claim, citations_by_id, context, facts_by_digest)
+            normalized_text = _normalize_erp_claim(
+                claim,
+                citations_by_id,
+                context,
+                facts_by_digest,
+                include_context=include_context,
+            )
             if normalized_text is None:
                 return None
             normalized_claims.append(claim.model_copy(update={"text": normalized_text}))
@@ -584,7 +626,11 @@ async def answer_coach(
             latency_ms=_elapsed(started),
             trace=trace,
         )
-    normalized = _normalize_grounded_claims(materialized, current_context)
+    normalized = _normalize_grounded_claims(
+        materialized,
+        current_context,
+        question=request.question,
+    )
     if normalized is None:
         return _failed_answer(
             "UNKNOWN",
