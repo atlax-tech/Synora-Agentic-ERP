@@ -153,10 +153,11 @@ _COACH_OUTPUT = (
     'CoachProviderOutput schema: schema_version must be the exact string "1" (not "1.0"), '
     "then answer_status, answer, claims, "
     "citations, refusal_reason. Every substantive claim must have citation_refs. "
-    "For an answer grounded in the supplied LIVE_ERP object, choose the local label "
-    "live-1 for its citation_id and set fact_fields to only the fields used by the claim. "
-    "The server owns and rechecks the long run, document, snapshot, revision, and digest "
-    "metadata; never derive facts from guessed metadata. Use claim_type ERP_FACT and "
+    "For an answer grounded in the supplied LIVE_ERP object, output only citation_type "
+    '"LIVE_ERP", citation_id "live-1", and fact_fields containing only the fields used '
+    "by the claim. Do not output run, document, snapshot, revision, or digest metadata: "
+    "the server owns and rechecks those values against the selected current snapshot. "
+    "Use claim_type ERP_FACT and "
     'citation_refs ["live-1"]. For a claim grounded '
     "in a supplied retrieval object, choose retrieval-1, copy its exact chunk_id, "
     "content_digest, ordinal, source_type, revision, erp_version, and permission_scope, "

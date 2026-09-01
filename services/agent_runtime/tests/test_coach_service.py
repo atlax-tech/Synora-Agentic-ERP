@@ -257,6 +257,29 @@ async def _test_coach_service_rebinds_live_metadata_and_rejects_invented_retriev
     assert result.answer_status in {"UNKNOWN", "CONFLICT", "REFUSED"}
 
 
+async def _test_coach_service_materializes_minimal_live_selector() -> None:
+    hit = _hit()
+    payload = json.loads(_response(live_digest=_live_digest(), hit=hit).text)
+    payload["citations"] = [
+        {
+            "citation_type": "LIVE_ERP",
+            "citation_id": "live-1",
+            "fact_fields": ["open_order_stock_qty"],
+        }
+    ]
+    result = await answer_coach(
+        _request(),
+        _context(),
+        (),
+        RecordingProvider(ProviderResponse(text=json.dumps(payload))),
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+    assert result.answer_status == "ANSWERED"
+    assert result.answer == 'open_order_stock_qty="2"'
+    assert result.citations[0].run_id == RUN_ID
+    assert result.citations[0].fact_digest == _live_digest()
+
+
 async def _test_coach_service_rejects_unsupported_numeric_claims_and_summary() -> None:
     hit = _hit()
     false_claim = _response(
@@ -566,6 +589,10 @@ def test_coach_service_validates_live_and_retrieval_evidence_and_exposes_no_tool
 
 def test_coach_service_rebinds_live_metadata_and_rejects_invented_retrieval() -> None:
     asyncio.run(_test_coach_service_rebinds_live_metadata_and_rejects_invented_retrieval())
+
+
+def test_coach_service_materializes_minimal_live_selector() -> None:
+    asyncio.run(_test_coach_service_materializes_minimal_live_selector())
 
 
 def test_coach_service_rejects_unsupported_numeric_claims_and_summary() -> None:

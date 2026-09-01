@@ -36,6 +36,7 @@ from agent_runtime.coach.contracts import (
     CoachCurrentDocumentContext,
     CoachLiveCitation,
     CoachMemoryCitation,
+    CoachProviderLiveCitation,
     CoachProviderOutput,
     CoachQuestionRequest,
     CoachRetrievalCitation,
@@ -214,9 +215,15 @@ def _validated_claims(
         if claim.claim_type not in COACH_SIGNABLE_CLAIM_TYPES:
             continue
         claim_type: CoachSignableClaimType = claim.claim_type
-        provenance = CoachCitationProvenance(
-            citations=tuple(citations_by_id[ref] for ref in claim.citation_refs)
-        )
+        resolved_citations = []
+        for reference in claim.citation_refs:
+            citation = citations_by_id[reference]
+            if isinstance(citation, CoachProviderLiveCitation) or not isinstance(
+                citation, (CoachLiveCitation, CoachRetrievalCitation, CoachMemoryCitation)
+            ):
+                raise ValueError("validated claims require materialized citations")
+            resolved_citations.append(citation)
+        provenance = CoachCitationProvenance(citations=tuple(resolved_citations))
         package = ValidatedCoachClaim(
             run_id=request.run_id,
             correlation_id=request.correlation_id,
@@ -328,6 +335,31 @@ def _materialize_live_citations(
     facts = tuple((current_fact_digest(fact), fact) for fact in context.facts)
     materialized: list[CoachLiveCitation | CoachRetrievalCitation | CoachMemoryCitation] = []
     for citation in output.citations:
+        if isinstance(citation, CoachProviderLiveCitation):
+            candidates = []
+            for fact_digest, fact in facts:
+                values = fact.model_dump(mode="json")
+                if all(values.get(field_name) is not None for field_name in citation.fact_fields):
+                    candidates.append((fact_digest, fact))
+            if len(candidates) != 1:
+                return None
+            fact_digest, _fact = candidates[0]
+            materialized.append(
+                CoachLiveCitation(
+                    citation_id=citation.citation_id,
+                    run_id=request.run_id,
+                    document_doctype=context.current_document.doctype,
+                    document_name=context.current_document.name,
+                    state_version=context.state_version,
+                    captured_at=context.captured_at,
+                    source_modified_at=context.source_modified_at,
+                    frappe_revision=context.frappe_revision,
+                    erpnext_revision=context.erpnext_revision,
+                    fact_fields=citation.fact_fields,
+                    fact_digest=fact_digest,
+                )
+            )
+            continue
         if not isinstance(citation, CoachLiveCitation):
             materialized.append(citation)
             continue

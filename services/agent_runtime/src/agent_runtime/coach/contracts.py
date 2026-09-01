@@ -293,6 +293,31 @@ class CoachLiveCitation(StrictModel):
         return self
 
 
+class CoachProviderLiveCitation(StrictModel):
+    """The minimal live citation a provider may emit.
+
+    Snapshot identity and fact digests are server-owned metadata.  Requiring
+    the model to copy those long values made the provider wire contract
+    impossible to follow reliably; the service binds this selector to the
+    authorized current snapshot before any answer can be displayed.
+    """
+
+    citation_type: Literal["LIVE_ERP"] = "LIVE_ERP"
+    citation_id: str = Field(pattern=_ID_PATTERN, min_length=1, max_length=120)
+    fact_fields: Annotated[tuple[CoachLiveFactField, ...], Field(min_length=1, max_length=16)]
+
+    @field_validator("fact_fields", mode="before")
+    @classmethod
+    def validate_fact_fields_tuple(cls, value: object) -> object:
+        return _tuple_from_json(value)
+
+    @model_validator(mode="after")
+    def validate_unique_fact_fields(self) -> CoachProviderLiveCitation:
+        if len(set(self.fact_fields)) != len(self.fact_fields):
+            raise ValueError("live citation fact fields must be unique")
+        return self
+
+
 class CoachRetrievalCitation(StrictModel):
     """A citation to an exact, bounded T04 SearchHit."""
 
@@ -328,6 +353,9 @@ CoachCitation = Annotated[
     CoachLiveCitation | CoachRetrievalCitation | CoachMemoryCitation,
     Field(discriminator="citation_type"),
 ]
+CoachProviderCitation = (
+    CoachProviderLiveCitation | CoachLiveCitation | CoachRetrievalCitation | CoachMemoryCitation
+)
 
 
 class CoachCitationProvenance(StrictModel):
@@ -379,7 +407,7 @@ class CoachProviderOutput(StrictModel):
     answer_status: CoachAnswerStatus
     answer: str = Field(default="", max_length=8_000)
     claims: Annotated[tuple[CoachClaim, ...], Field(max_length=32)] = ()
-    citations: Annotated[tuple[CoachCitation, ...], Field(max_length=64)] = ()
+    citations: Annotated[tuple[CoachProviderCitation, ...], Field(max_length=64)] = ()
     refusal_reason: str | None = Field(default=None, max_length=500)
 
     @field_validator("claims", "citations", mode="before")
@@ -538,6 +566,8 @@ class ValidatedCoachClaim(StrictModel):
 
 class CoachAnswer(CoachProviderOutput):
     """Validated answer plus bounded, non-secret execution metadata."""
+
+    citations: Annotated[tuple[CoachCitation, ...], Field(max_length=64)] = ()
 
     retrieval_trace: CoachRetrievalTrace
     token_usage: CoachTokenUsage = CoachTokenUsage()
