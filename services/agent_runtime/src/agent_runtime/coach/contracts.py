@@ -645,7 +645,7 @@ def _normalize_provider_compatibility(value: dict[str, object]) -> dict[str, obj
                 claims.append(raw_claim)
         normalized["claims"] = claims
 
-    raw_citations = normalized.get("citations")
+    raw_citations = normalized.get("citations", [])
     if isinstance(raw_citations, list):
         citations: list[object] = []
         for raw_citation in raw_citations:

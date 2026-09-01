@@ -456,7 +456,7 @@ def test_provider_json_parser_synthesizes_missing_live_citations() -> None:
         '"claims":[{"claim_type":"ERP_FACT",'
         '"claim":{"open_order_stock_qty":"2"},'
         '"fact_fields":["open_order_stock_qty"],"citation_refs":["live-1"]}],'
-        '"citations":[],"refusal_reason":""}'
+        '"refusal_reason":""}'
     )
     parsed = parse_coach_provider_output(raw)
     assert isinstance(parsed.citations[0], CoachProviderLiveCitation)
