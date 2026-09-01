@@ -21,6 +21,9 @@ from agent_runtime.providers import (
     PROVIDER_FALLBACK_PROXY_ENV,
     PROVIDER_FALLBACK_REASONING_EFFORT_ENV,
     PROVIDER_FALLBACK_THINKING_ENV,
+    PROVIDER_LOCAL_BASE_URL_ENV,
+    PROVIDER_LOCAL_LARGE_MODEL_ENV,
+    PROVIDER_LOCAL_SMALL_MODEL_ENV,
     PROVIDER_MAX_OUTPUT_TOKENS,
     PROVIDER_MAX_OUTPUT_TOKENS_ENV,
     PROVIDER_MODEL_ENV,
@@ -464,7 +467,6 @@ class TestOpenAICompatibleProvider:
         async def run() -> None:
             bodies: list[dict[str, object]] = [
                 {"choices": []},
-                {"choices": [{"message": {"role": "assistant", "content": "x", "extra": 1}}]},
                 {"unexpected": True},
             ]
             for body in bodies:
@@ -474,6 +476,32 @@ class TestOpenAICompatibleProvider:
                 ) as provider:
                     with pytest.raises(ProviderError):
                         await provider.complete(_messages())
+
+        asyncio.run(run())
+
+    def test_ignores_non_authoritative_wire_metadata(self) -> None:
+        async def run() -> None:
+            transport = _transport_that_returns(
+                {
+                    "system_fingerprint": "backend-version",
+                    "service_tier": "default",
+                    "choices": [
+                        {
+                            "logprobs": None,
+                            "message": {
+                                "role": "assistant",
+                                "content": "ok",
+                                "provider_metadata": {"route": "secondary"},
+                            },
+                        }
+                    ],
+                }
+            )
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434/v1", transport=transport
+            ) as provider:
+                response = await provider.complete(_messages())
+            assert response.text == "ok"
 
         asyncio.run(run())
 
@@ -657,7 +685,7 @@ class TestProviderFromEnvironment:
 
         asyncio.run(run())
 
-    def test_fallback_retries_transient_transport_failure_twice(
+    def test_provider_chain_uses_local_models_before_paid_fallback(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         async def run() -> None:
@@ -665,11 +693,14 @@ class TestProviderFromEnvironment:
             monkeypatch.setenv(PROVIDER_FALLBACK_API_KEY_ENV, "fallback-secret")
             monkeypatch.setenv(PROVIDER_FALLBACK_BASE_URL_ENV, "https://fallback.example/v1")
             monkeypatch.setenv(PROVIDER_FALLBACK_MODEL_ENV, "backup-model")
-            monkeypatch.setattr("agent_runtime.providers._FALLBACK_RETRY_DELAY_SECONDS", 0.0)
-            requests: list[str] = []
+            monkeypatch.setenv(PROVIDER_LOCAL_BASE_URL_ENV, "http://127.0.0.1:11434/v1")
+            monkeypatch.setenv(PROVIDER_LOCAL_SMALL_MODEL_ENV, "qwen3:8b")
+            monkeypatch.setenv(PROVIDER_LOCAL_LARGE_MODEL_ENV, "qwen3.8:27b")
+            requests: list[tuple[str, str]] = []
 
             def handler(request: httpx.Request) -> httpx.Response:
-                requests.append(request.url.host or "")
+                body = json.loads(request.content)
+                requests.append((request.url.host or "", body["model"]))
                 if len(requests) == 1:
                     return httpx.Response(429, json={"error": "rate limited"}, request=request)
                 if len(requests) in {2, 3}:
@@ -685,16 +716,16 @@ class TestProviderFromEnvironment:
             response = await provider.complete(_messages())
             assert response.text == "backup"
             assert requests == [
-                "primary.example",
-                "fallback.example",
-                "fallback.example",
-                "fallback.example",
+                ("primary.example", "glm-4.7-flash"),
+                ("127.0.0.1", "qwen3:8b"),
+                ("127.0.0.1", "qwen3.8:27b"),
+                ("fallback.example", "backup-model"),
             ]
             await provider.aclose()
 
         asyncio.run(run())
 
-    def test_fallback_retries_invalid_response_envelope(
+    def test_each_provider_is_called_once_on_invalid_envelopes(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         async def run() -> None:
@@ -702,7 +733,8 @@ class TestProviderFromEnvironment:
             monkeypatch.setenv(PROVIDER_FALLBACK_API_KEY_ENV, "fallback-secret")
             monkeypatch.setenv(PROVIDER_FALLBACK_BASE_URL_ENV, "https://fallback.example/v1")
             monkeypatch.setenv(PROVIDER_FALLBACK_MODEL_ENV, "backup-model")
-            monkeypatch.setattr("agent_runtime.providers._FALLBACK_RETRY_DELAY_SECONDS", 0.0)
+            monkeypatch.setenv(PROVIDER_LOCAL_BASE_URL_ENV, "http://127.0.0.1:11434/v1")
+            monkeypatch.setenv(PROVIDER_LOCAL_SMALL_MODEL_ENV, "qwen3:8b")
             requests: list[str] = []
 
             def handler(request: httpx.Request) -> httpx.Response:
@@ -723,7 +755,7 @@ class TestProviderFromEnvironment:
             assert response.text == "backup"
             assert requests == [
                 "primary.example",
-                "fallback.example",
+                "127.0.0.1",
                 "fallback.example",
             ]
             await provider.aclose()

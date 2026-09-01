@@ -11,9 +11,9 @@ API key 脱敏约定 (用户要求):
 - 构造对象后立即使用, 不在模块级保存明文。
 """
 
-import asyncio
 import math
 import os
+import ssl
 from collections.abc import Mapping, Sequence
 from typing import Literal, Protocol
 
@@ -36,20 +36,26 @@ PROVIDER_FALLBACK_MODEL_ENV = "SYNORA_PROVIDER_FALLBACK_MODEL"
 PROVIDER_FALLBACK_REASONING_EFFORT_ENV = "SYNORA_PROVIDER_FALLBACK_REASONING_EFFORT"
 PROVIDER_FALLBACK_THINKING_ENV = "SYNORA_PROVIDER_FALLBACK_THINKING"
 PROVIDER_FALLBACK_PROXY_ENV = "SYNORA_PROVIDER_FALLBACK_PROXY"
+PROVIDER_LOCAL_BASE_URL_ENV = "SYNORA_PROVIDER_LOCAL_BASE_URL"
+PROVIDER_LOCAL_SMALL_MODEL_ENV = "SYNORA_PROVIDER_LOCAL_SMALL_MODEL"
+PROVIDER_LOCAL_LARGE_MODEL_ENV = "SYNORA_PROVIDER_LOCAL_LARGE_MODEL"
 PROVIDER_MAX_OUTPUT_TOKENS = 1024
 PROVIDER_MAX_OUTPUT_TOKEN_LIMIT = 8192
 GLM_4_7_FLASH_MODEL = "glm-4.7-flash"
 DEFAULT_PROVIDER_MODEL = GLM_4_7_FLASH_MODEL
 GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS = 65_536
 GLM_4_7_FLASH_MAX_OUTPUT_TOKENS = 131_072
-_REASONING_EFFORTS = {"low", "medium", "high", "xhigh"}
+_REASONING_EFFORTS = {"none", "low", "medium", "high", "xhigh"}
 _THINKING_MODES = {"enabled", "disabled"}
 _FAILOVER_FAILURE_CODES = frozenset(
     {"RATE_LIMITED", "UPSTREAM_UNAVAILABLE", "TIMEOUT", "TRANSPORT_ERROR"}
 )
-_FALLBACK_RETRY_FAILURE_CODES = _FAILOVER_FAILURE_CODES | {"RESPONSE_SCHEMA"}
-_FALLBACK_MAX_RETRIES = 2
-_FALLBACK_RETRY_DELAY_SECONDS = 1.0
+_NEXT_PROVIDER_FAILURE_CODES = _FAILOVER_FAILURE_CODES | {
+    "RESPONSE_SCHEMA",
+    "RESPONSE_NO_CHOICES",
+    "RESPONSE_CONTENT_MISSING",
+    "USAGE_MISSING",
+}
 ProviderResponseFormat = Literal["json_object"]
 
 
@@ -415,7 +421,7 @@ class OpenAICompatibleProvider:
             body = response.content
         except httpx.TimeoutException as error:
             raise ProviderError("provider request timed out", failure_code="TIMEOUT") from error
-        except httpx.HTTPError as error:
+        except (httpx.HTTPError, ssl.SSLError) as error:
             raise ProviderError(
                 "provider transport failed", failure_code="TRANSPORT_ERROR"
             ) from error
@@ -516,16 +522,12 @@ class OpenAICompatibleProvider:
 
 
 class FailoverProvider:
-    """Try a configured backup only when the primary is unavailable.
+    """Try configured providers once each, in priority order."""
 
-    A backup never masks invalid requests, authentication failures, malformed
-    responses, or budget violations. The wrapper owns both clients and makes
-    at most two bounded retries when a backup transport is transiently unavailable.
-    """
-
-    def __init__(self, primary: Provider, fallback: Provider) -> None:
+    def __init__(self, primary: Provider, fallback: Provider, *others: Provider) -> None:
         self._primary = primary
         self._fallback = fallback
+        self._fallbacks = (fallback, *others)
 
     def __repr__(self) -> str:
         return f"FailoverProvider(fallback_configured={self._fallback is not None})"
@@ -549,53 +551,41 @@ class FailoverProvider:
         except ProviderError as primary_error:
             if primary_error.failure_code not in _FAILOVER_FAILURE_CODES:
                 raise
-            try:
-                # The fallback provider's factory-configured model is
-                # authoritative; it may intentionally differ from the primary.
+            errors = [primary_error]
+            for fallback in self._fallbacks:
                 fallback_max_tokens = max_tokens
-                if isinstance(self._fallback, OpenAICompatibleProvider) and max_tokens is not None:
+                if isinstance(fallback, OpenAICompatibleProvider) and max_tokens is not None:
                     fallback_max_tokens = min(
                         max_tokens,
-                        provider_max_output_token_limit(self._fallback._model),
+                        provider_max_output_token_limit(fallback._model),
                     )
-                return await self._fallback.complete(
-                    messages,
-                    tools=tools,
-                    model=None,
-                    max_tokens=fallback_max_tokens,
-                    response_format=response_format,
-                )
-            except ProviderError as fallback_error:
-                for _retry_index in range(_FALLBACK_MAX_RETRIES):
-                    if fallback_error.failure_code not in _FALLBACK_RETRY_FAILURE_CODES:
+                try:
+                    return await fallback.complete(
+                        messages,
+                        tools=tools,
+                        model=None,
+                        max_tokens=fallback_max_tokens,
+                        response_format=response_format,
+                    )
+                except ProviderError as error:
+                    errors.append(error)
+                    if error.failure_code not in _NEXT_PROVIDER_FAILURE_CODES:
                         break
-                    await asyncio.sleep(_FALLBACK_RETRY_DELAY_SECONDS)
-                    try:
-                        return await self._fallback.complete(
-                            messages,
-                            tools=tools,
-                            model=None,
-                            max_tokens=fallback_max_tokens,
-                            response_format=response_format,
-                        )
-                    except ProviderError as retry_error:
-                        fallback_error = retry_error
-                raise ProviderError(
-                    "primary provider unavailable and fallback provider failed",
-                    prompt_tokens=primary_error.prompt_tokens + fallback_error.prompt_tokens,
-                    completion_tokens=(
-                        primary_error.completion_tokens + fallback_error.completion_tokens
-                    ),
-                    reasoning_tokens=(
-                        primary_error.reasoning_tokens + fallback_error.reasoning_tokens
-                    ),
-                    budget_code=fallback_error.budget_code or primary_error.budget_code,
-                    failure_code=fallback_error.failure_code,
-                ) from fallback_error
+            last_error = errors[-1]
+            raise ProviderError(
+                "all configured providers failed",
+                prompt_tokens=sum(error.prompt_tokens for error in errors),
+                completion_tokens=sum(error.completion_tokens for error in errors),
+                reasoning_tokens=sum(error.reasoning_tokens for error in errors),
+                budget_code=next(
+                    (error.budget_code for error in reversed(errors) if error.budget_code), None
+                ),
+                failure_code=last_error.failure_code,
+            ) from last_error
 
     async def aclose(self) -> None:
         errors: list[Exception] = []
-        for provider in (self._primary, self._fallback):
+        for provider in (self._primary, *self._fallbacks):
             close = getattr(provider, "aclose", None)
             if not callable(close):
                 continue
@@ -618,7 +608,11 @@ class _ProviderToolCall(StrictModel):
     function: _ToolCallFunction
 
 
-class _AssistantMessage(StrictModel):
+class _WireModel(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True, hide_input_in_errors=True)
+
+
+class _AssistantMessage(_WireModel):
     role: Literal["assistant"]
     content: str | None = None
     reasoning_content: str | None = None
@@ -627,7 +621,7 @@ class _AssistantMessage(StrictModel):
     tool_calls: tuple[_ProviderToolCall, ...] = ()
 
 
-class _Choice(StrictModel):
+class _Choice(_WireModel):
     message: _AssistantMessage
     finish_reason: str = ""
     index: int = 0
@@ -650,7 +644,7 @@ class _Usage(BaseModel):
     completion_tokens_details: _CompletionTokenDetails | None = None
 
 
-class _CompletionEnvelope(StrictModel):
+class _CompletionEnvelope(_WireModel):
     # 标准 OpenAI chat.completion 元数据字段 (白名单), 缺失时容错默认。
     id: str = ""
     request_id: str = ""
@@ -688,6 +682,15 @@ def provider_from_environment(
         thinking_env=PROVIDER_THINKING_ENV,
     )
     fallback_api_key = os.environ.get(PROVIDER_FALLBACK_API_KEY_ENV, "")
+    local_base_url = os.environ.get(PROVIDER_LOCAL_BASE_URL_ENV, "").strip()
+    local_models = tuple(
+        value
+        for value in (
+            os.environ.get(PROVIDER_LOCAL_SMALL_MODEL_ENV, "").strip(),
+            os.environ.get(PROVIDER_LOCAL_LARGE_MODEL_ENV, "").strip(),
+        )
+        if value
+    )
     fallback_overrides = (
         PROVIDER_FALLBACK_BASE_URL_ENV,
         PROVIDER_FALLBACK_MODEL_ENV,
@@ -713,24 +716,47 @@ def provider_from_environment(
         proxy=proxy,
         transport=transport,
     )
-    if not fallback_api_key.strip():
+    if not fallback_api_key.strip() and not local_models:
         return primary
 
-    fallback_model = os.environ.get(PROVIDER_FALLBACK_MODEL_ENV, "").strip() or model
-    fallback_thinking = _provider_thinking_mode(
-        os.environ,
-        model=fallback_model,
-        thinking_env=PROVIDER_FALLBACK_THINKING_ENV,
-    )
-    if not os.environ.get(PROVIDER_FALLBACK_THINKING_ENV, "").strip() and fallback_model == model:
-        fallback_thinking = thinking
-    fallback = OpenAICompatibleProvider(
-        base_url=os.environ.get(PROVIDER_FALLBACK_BASE_URL_ENV, "").strip() or base_url,
-        api_key=SecretStr(fallback_api_key),
-        model=fallback_model,
-        reasoning_effort=os.environ.get(PROVIDER_FALLBACK_REASONING_EFFORT_ENV) or None,
-        thinking=fallback_thinking,
-        proxy=os.environ.get(PROVIDER_FALLBACK_PROXY_ENV) or proxy,
-        transport=transport,
-    )
-    return FailoverProvider(primary, fallback)
+    fallbacks: list[Provider] = []
+    if local_models:
+        if not local_base_url:
+            raise ProviderError(
+                f"{PROVIDER_LOCAL_BASE_URL_ENV} is required when local models are configured",
+                failure_code="INVALID_CONFIGURATION",
+            )
+        fallbacks.extend(
+            OpenAICompatibleProvider(
+                base_url=local_base_url,
+                model=local_model,
+                reasoning_effort="none",
+                transport=transport,
+            )
+            for local_model in local_models
+        )
+
+    if fallback_api_key.strip():
+        fallback_model = os.environ.get(PROVIDER_FALLBACK_MODEL_ENV, "").strip() or model
+        fallback_thinking = _provider_thinking_mode(
+            os.environ,
+            model=fallback_model,
+            thinking_env=PROVIDER_FALLBACK_THINKING_ENV,
+        )
+        if (
+            not os.environ.get(PROVIDER_FALLBACK_THINKING_ENV, "").strip()
+            and fallback_model == model
+        ):
+            fallback_thinking = thinking
+        fallbacks.append(
+            OpenAICompatibleProvider(
+                base_url=os.environ.get(PROVIDER_FALLBACK_BASE_URL_ENV, "").strip() or base_url,
+                api_key=SecretStr(fallback_api_key),
+                model=fallback_model,
+                reasoning_effort=os.environ.get(PROVIDER_FALLBACK_REASONING_EFFORT_ENV) or None,
+                thinking=fallback_thinking,
+                proxy=os.environ.get(PROVIDER_FALLBACK_PROXY_ENV) or proxy,
+                transport=transport,
+            )
+        )
+    return FailoverProvider(primary, fallbacks[0], *fallbacks[1:])
