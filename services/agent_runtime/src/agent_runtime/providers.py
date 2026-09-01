@@ -46,6 +46,7 @@ _THINKING_MODES = {"enabled", "disabled"}
 _FAILOVER_FAILURE_CODES = frozenset(
     {"RATE_LIMITED", "UPSTREAM_UNAVAILABLE", "TIMEOUT", "TRANSPORT_ERROR"}
 )
+_FALLBACK_RETRY_FAILURE_CODES = _FAILOVER_FAILURE_CODES
 ProviderResponseFormat = Literal["json_object"]
 
 
@@ -512,11 +513,11 @@ class OpenAICompatibleProvider:
 
 
 class FailoverProvider:
-    """Try one configured backup only when the primary is unavailable.
+    """Try a configured backup only when the primary is unavailable.
 
     A backup never masks invalid requests, authentication failures, malformed
     responses, or budget violations. The wrapper owns both clients and makes
-    at most one backup attempt for each logical completion.
+    at most one bounded retry when a backup transport is transiently unavailable.
     """
 
     def __init__(self, primary: Provider, fallback: Provider) -> None:
@@ -562,6 +563,17 @@ class FailoverProvider:
                     response_format=response_format,
                 )
             except ProviderError as fallback_error:
+                if fallback_error.failure_code in _FALLBACK_RETRY_FAILURE_CODES:
+                    try:
+                        return await self._fallback.complete(
+                            messages,
+                            tools=tools,
+                            model=None,
+                            max_tokens=fallback_max_tokens,
+                            response_format=response_format,
+                        )
+                    except ProviderError as retry_error:
+                        fallback_error = retry_error
                 raise ProviderError(
                     "primary provider unavailable and fallback provider failed",
                     prompt_tokens=primary_error.prompt_tokens + fallback_error.prompt_tokens,
