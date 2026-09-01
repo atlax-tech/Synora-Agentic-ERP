@@ -10,10 +10,17 @@ import json
 import httpx
 import pytest
 from agent_runtime.providers import (
+    DEFAULT_PROVIDER_MODEL,
     GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS,
     GLM_4_7_FLASH_MAX_OUTPUT_TOKENS,
     PROVIDER_API_KEY_ENV,
     PROVIDER_BASE_URL_ENV,
+    PROVIDER_FALLBACK_API_KEY_ENV,
+    PROVIDER_FALLBACK_BASE_URL_ENV,
+    PROVIDER_FALLBACK_MODEL_ENV,
+    PROVIDER_FALLBACK_PROXY_ENV,
+    PROVIDER_FALLBACK_REASONING_EFFORT_ENV,
+    PROVIDER_FALLBACK_THINKING_ENV,
     PROVIDER_MAX_OUTPUT_TOKENS,
     PROVIDER_MAX_OUTPUT_TOKENS_ENV,
     PROVIDER_MODEL_ENV,
@@ -21,6 +28,7 @@ from agent_runtime.providers import (
     PROVIDER_REASONING_EFFORT_ENV,
     PROVIDER_THINKING_ENV,
     DeterministicProvider,
+    FailoverProvider,
     OpenAICompatibleProvider,
     ProviderError,
     ProviderMessage,
@@ -446,8 +454,9 @@ class TestOpenAICompatibleProvider:
             async with OpenAICompatibleProvider(
                 base_url="http://127.0.0.1:11434/v1", transport=transport
             ) as provider:
-                with pytest.raises(ProviderError):
+                with pytest.raises(ProviderError) as caught:
                     await provider.complete(_messages())
+            assert caught.value.failure_code == "UPSTREAM_UNAVAILABLE"
 
         asyncio.run(run())
 
@@ -510,6 +519,18 @@ class TestOpenAICompatibleProvider:
 
 
 class TestProviderFromEnvironment:
+    @pytest.fixture(autouse=True)
+    def _without_fallback_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for name in (
+            PROVIDER_FALLBACK_API_KEY_ENV,
+            PROVIDER_FALLBACK_BASE_URL_ENV,
+            PROVIDER_FALLBACK_MODEL_ENV,
+            PROVIDER_FALLBACK_REASONING_EFFORT_ENV,
+            PROVIDER_FALLBACK_THINKING_ENV,
+            PROVIDER_FALLBACK_PROXY_ENV,
+        ):
+            monkeypatch.delenv(name, raising=False)
+
     def test_missing_base_url_fails_closed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(PROVIDER_BASE_URL_ENV, raising=False)
         monkeypatch.delenv(PROVIDER_API_KEY_ENV, raising=False)
@@ -533,6 +554,164 @@ class TestProviderFromEnvironment:
         assert provider._thinking == "disabled"
         assert provider._proxy == "http://127.0.0.1:7899"
         assert "sk-secret-123" not in repr(provider)
+
+    def test_defaults_primary_model_to_glm(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://open.bigmodel.cn/api/paas/v4")
+        monkeypatch.delenv(PROVIDER_MODEL_ENV, raising=False)
+        monkeypatch.delenv(PROVIDER_THINKING_ENV, raising=False)
+        provider = provider_from_environment(
+            transport=_transport_that_returns(
+                {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+            )
+        )
+        assert isinstance(provider, OpenAICompatibleProvider)
+        assert provider._model == DEFAULT_PROVIDER_MODEL
+        assert provider._thinking == "enabled"
+        asyncio.run(provider.aclose())
+
+    def test_fallback_key_enables_failover_after_rate_limit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def run() -> None:
+            monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://primary.example/v1")
+            monkeypatch.setenv(PROVIDER_API_KEY_ENV, "primary-secret")
+            monkeypatch.setenv(PROVIDER_MODEL_ENV, "glm-4.7-flash")
+            monkeypatch.setenv(PROVIDER_FALLBACK_API_KEY_ENV, "fallback-secret")
+            monkeypatch.setenv(PROVIDER_FALLBACK_BASE_URL_ENV, "https://fallback.example/v1")
+            monkeypatch.setenv(PROVIDER_FALLBACK_MODEL_ENV, "backup-model")
+            for name in (
+                PROVIDER_FALLBACK_PROXY_ENV,
+                PROVIDER_FALLBACK_REASONING_EFFORT_ENV,
+                PROVIDER_FALLBACK_THINKING_ENV,
+            ):
+                monkeypatch.delenv(name, raising=False)
+            hosts: list[str] = []
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                hosts.append(request.url.host or "")
+                if request.url.host == "primary.example":
+                    return httpx.Response(429, json={"error": "rate limited"}, request=request)
+                return httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"role": "assistant", "content": "backup"}}]},
+                    request=request,
+                )
+
+            provider = provider_from_environment(transport=httpx.MockTransport(handler))
+            assert isinstance(provider, FailoverProvider)
+            response = await provider.complete(_messages())
+            assert response.text == "backup"
+            assert hosts == ["primary.example", "fallback.example"]
+            assert "primary-secret" not in repr(provider)
+            assert "fallback-secret" not in repr(provider)
+            await provider.aclose()
+
+        asyncio.run(run())
+
+    def test_fallback_reuses_primary_settings_when_only_key_is_filled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def run() -> None:
+            monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://primary.example/v1")
+            monkeypatch.setenv(PROVIDER_API_KEY_ENV, "primary-secret")
+            monkeypatch.setenv(PROVIDER_MODEL_ENV, "glm-4.7-flash")
+            monkeypatch.setenv(PROVIDER_THINKING_ENV, "disabled")
+            monkeypatch.setenv(PROVIDER_FALLBACK_API_KEY_ENV, "fallback-secret")
+            for name in (
+                PROVIDER_FALLBACK_BASE_URL_ENV,
+                PROVIDER_FALLBACK_MODEL_ENV,
+                PROVIDER_FALLBACK_PROXY_ENV,
+                PROVIDER_FALLBACK_REASONING_EFFORT_ENV,
+                PROVIDER_FALLBACK_THINKING_ENV,
+            ):
+                monkeypatch.delenv(name, raising=False)
+            requests: list[tuple[str, str, object]] = []
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                body = json.loads(request.content)
+                requests.append(
+                    (
+                        request.url.host or "",
+                        request.headers.get("authorization", ""),
+                        body["model"],
+                    )
+                )
+                if len(requests) == 1:
+                    return httpx.Response(503, json={"error": "offline"}, request=request)
+                return httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"role": "assistant", "content": "backup"}}]},
+                    request=request,
+                )
+
+            provider = provider_from_environment(transport=httpx.MockTransport(handler))
+            assert isinstance(provider, FailoverProvider)
+            response = await provider.complete(_messages())
+            assert response.text == "backup"
+            assert requests == [
+                ("primary.example", "Bearer primary-secret", "glm-4.7-flash"),
+                ("primary.example", "Bearer fallback-secret", "glm-4.7-flash"),
+            ]
+            assert provider._fallback._thinking == "disabled"
+            await provider.aclose()
+
+        asyncio.run(run())
+
+    def test_fallback_does_not_mask_auth_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def run() -> None:
+            monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://primary.example/v1")
+            monkeypatch.setenv(PROVIDER_FALLBACK_API_KEY_ENV, "fallback-secret")
+            monkeypatch.setenv(PROVIDER_FALLBACK_BASE_URL_ENV, "https://fallback.example/v1")
+            hosts: list[str] = []
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                hosts.append(request.url.host or "")
+                return httpx.Response(401, json={"error": "unauthorized"}, request=request)
+
+            provider = provider_from_environment(transport=httpx.MockTransport(handler))
+            assert isinstance(provider, FailoverProvider)
+            with pytest.raises(ProviderError) as caught:
+                await provider.complete(_messages())
+            assert caught.value.failure_code == "HTTP_ERROR"
+            assert hosts == ["primary.example"]
+            await provider.aclose()
+
+        asyncio.run(run())
+
+    def test_fallback_does_not_mask_invalid_primary_response(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def run() -> None:
+            monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://primary.example/v1")
+            monkeypatch.setenv(PROVIDER_FALLBACK_API_KEY_ENV, "fallback-secret")
+            monkeypatch.setenv(PROVIDER_FALLBACK_BASE_URL_ENV, "https://fallback.example/v1")
+            hosts: list[str] = []
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                hosts.append(request.url.host or "")
+                return httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"role": "assistant", "content": None}}]},
+                    request=request,
+                )
+
+            provider = provider_from_environment(transport=httpx.MockTransport(handler))
+            assert isinstance(provider, FailoverProvider)
+            with pytest.raises(ProviderError) as caught:
+                await provider.complete(_messages())
+            assert caught.value.failure_code == "RESPONSE_CONTENT_MISSING"
+            assert hosts == ["primary.example"]
+            await provider.aclose()
+
+        asyncio.run(run())
+
+    def test_fallback_settings_require_a_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://primary.example/v1")
+        monkeypatch.setenv(PROVIDER_FALLBACK_BASE_URL_ENV, "https://fallback.example/v1")
+        monkeypatch.delenv(PROVIDER_FALLBACK_API_KEY_ENV, raising=False)
+        with pytest.raises(ProviderError, match="FALLBACK_API_KEY") as caught:
+            provider_from_environment()
+        assert caught.value.failure_code == "INVALID_CONFIGURATION"
 
     def test_glm_defaults_to_enabled_thinking(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://open.bigmodel.cn/api/paas/v4")

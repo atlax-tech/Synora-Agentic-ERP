@@ -29,13 +29,23 @@ PROVIDER_REASONING_EFFORT_ENV = "SYNORA_PROVIDER_REASONING_EFFORT"
 PROVIDER_THINKING_ENV = "SYNORA_PROVIDER_THINKING"
 PROVIDER_PROXY_ENV = "SYNORA_PROVIDER_PROXY"
 PROVIDER_MAX_OUTPUT_TOKENS_ENV = "SYNORA_PROVIDER_MAX_OUTPUT_TOKENS"
+PROVIDER_FALLBACK_BASE_URL_ENV = "SYNORA_PROVIDER_FALLBACK_BASE_URL"
+PROVIDER_FALLBACK_API_KEY_ENV = "SYNORA_PROVIDER_FALLBACK_API_KEY"
+PROVIDER_FALLBACK_MODEL_ENV = "SYNORA_PROVIDER_FALLBACK_MODEL"
+PROVIDER_FALLBACK_REASONING_EFFORT_ENV = "SYNORA_PROVIDER_FALLBACK_REASONING_EFFORT"
+PROVIDER_FALLBACK_THINKING_ENV = "SYNORA_PROVIDER_FALLBACK_THINKING"
+PROVIDER_FALLBACK_PROXY_ENV = "SYNORA_PROVIDER_FALLBACK_PROXY"
 PROVIDER_MAX_OUTPUT_TOKENS = 1024
 PROVIDER_MAX_OUTPUT_TOKEN_LIMIT = 8192
 GLM_4_7_FLASH_MODEL = "glm-4.7-flash"
+DEFAULT_PROVIDER_MODEL = GLM_4_7_FLASH_MODEL
 GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS = 65_536
 GLM_4_7_FLASH_MAX_OUTPUT_TOKENS = 131_072
 _REASONING_EFFORTS = {"low", "medium", "high", "xhigh"}
 _THINKING_MODES = {"enabled", "disabled"}
+_FAILOVER_FAILURE_CODES = frozenset(
+    {"RATE_LIMITED", "UPSTREAM_UNAVAILABLE", "TIMEOUT", "TRANSPORT_ERROR"}
+)
 ProviderResponseFormat = Literal["json_object"]
 
 
@@ -74,12 +84,22 @@ def provider_max_output_tokens(environ: Mapping[str, str] | None = None) -> int:
 def provider_thinking_mode(environ: Mapping[str, str] | None = None) -> str | None:
     """Resolve the vendor-neutral thinking mode for the configured model."""
     values = os.environ if environ is None else environ
-    raw = values.get(PROVIDER_THINKING_ENV, "").strip()
+    return _provider_thinking_mode(
+        values,
+        model=values.get(PROVIDER_MODEL_ENV, ""),
+        thinking_env=PROVIDER_THINKING_ENV,
+    )
+
+
+def _provider_thinking_mode(
+    values: Mapping[str, str], *, model: str, thinking_env: str
+) -> str | None:
+    raw = values.get(thinking_env, "").strip()
     if raw:
         if raw not in _THINKING_MODES:
             raise ValueError("provider thinking must be enabled or disabled")
         return raw
-    if (values.get(PROVIDER_MODEL_ENV, "").strip().lower()) == GLM_4_7_FLASH_MODEL:
+    if model.strip().lower() == GLM_4_7_FLASH_MODEL:
         return "enabled"
     return None
 
@@ -392,13 +412,22 @@ class OpenAICompatibleProvider:
         except httpx.TimeoutException as error:
             raise ProviderError("provider request timed out", failure_code="TIMEOUT") from error
         except httpx.HTTPError as error:
-            raise ProviderError("provider request failed", failure_code="HTTP_ERROR") from error
+            raise ProviderError(
+                "provider transport failed", failure_code="TRANSPORT_ERROR"
+            ) from error
         if len(body) > MAX_PROVIDER_RESPONSE_BYTES:
             raise ProviderError(
                 "provider response exceeded size limit", failure_code="RESPONSE_TOO_LARGE"
             )
         if not response.is_success:
-            failure_code = "RATE_LIMITED" if response.status_code == 429 else "HTTP_ERROR"
+            if response.status_code == 429:
+                failure_code = "RATE_LIMITED"
+            elif response.status_code == 408:
+                failure_code = "TIMEOUT"
+            elif 500 <= response.status_code <= 599:
+                failure_code = "UPSTREAM_UNAVAILABLE"
+            else:
+                failure_code = "HTTP_ERROR"
             raise ProviderError(
                 f"provider returned HTTP {response.status_code}", failure_code=failure_code
             )
@@ -482,6 +511,78 @@ class OpenAICompatibleProvider:
         )
 
 
+class FailoverProvider:
+    """Try one configured backup only when the primary is unavailable.
+
+    A backup never masks invalid requests, authentication failures, malformed
+    responses, or budget violations. The wrapper owns both clients and makes
+    at most one backup attempt for each logical completion.
+    """
+
+    def __init__(self, primary: Provider, fallback: Provider) -> None:
+        self._primary = primary
+        self._fallback = fallback
+
+    def __repr__(self) -> str:
+        return f"FailoverProvider(fallback_configured={self._fallback is not None})"
+
+    async def complete(
+        self,
+        messages: list[ProviderMessage],
+        tools: list[ProviderToolSpec] | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
+    ) -> ProviderResponse:
+        try:
+            return await self._primary.complete(
+                messages,
+                tools=tools,
+                model=model,
+                max_tokens=max_tokens,
+                response_format=response_format,
+            )
+        except ProviderError as primary_error:
+            if primary_error.failure_code not in _FAILOVER_FAILURE_CODES:
+                raise
+            try:
+                # The fallback provider's factory-configured model is
+                # authoritative; it may intentionally differ from the primary.
+                return await self._fallback.complete(
+                    messages,
+                    tools=tools,
+                    model=None,
+                    max_tokens=max_tokens,
+                    response_format=response_format,
+                )
+            except ProviderError as fallback_error:
+                raise ProviderError(
+                    "primary provider unavailable and fallback provider failed",
+                    prompt_tokens=primary_error.prompt_tokens + fallback_error.prompt_tokens,
+                    completion_tokens=(
+                        primary_error.completion_tokens + fallback_error.completion_tokens
+                    ),
+                    reasoning_tokens=(
+                        primary_error.reasoning_tokens + fallback_error.reasoning_tokens
+                    ),
+                    budget_code=fallback_error.budget_code or primary_error.budget_code,
+                    failure_code=fallback_error.failure_code,
+                ) from fallback_error
+
+    async def aclose(self) -> None:
+        errors: list[Exception] = []
+        for provider in (self._primary, self._fallback):
+            close = getattr(provider, "aclose", None)
+            if not callable(close):
+                continue
+            try:
+                await close()
+            except Exception as error:
+                errors.append(error)
+        if errors:
+            raise errors[0]
+
+
 class _ToolCallFunction(StrictModel):
     name: str
     arguments: str
@@ -538,27 +639,74 @@ class _CompletionEnvelope(StrictModel):
 
 def provider_from_environment(
     transport: httpx.AsyncBaseTransport | None = None,
-) -> OpenAICompatibleProvider:
+) -> Provider:
     """BYOK 工厂: 从环境变量读取配置构造 OpenAI 兼容 provider。
 
     - SYNORA_PROVIDER_BASE_URL: 必填, HTTP(S) origin 加路径段 (如 https://api.example.com/v1);
     - SYNORA_PROVIDER_API_KEY: 可选, 由用户填写, 仅以 SecretStr 传入 (脱敏);
-    - SYNORA_PROVIDER_MODEL: 可选, 默认模型名。
+    - SYNORA_PROVIDER_MODEL: 可选, 默认使用 ``glm-4.7-flash``;
     - SYNORA_PROVIDER_THINKING: 可选, enabled 或 disabled (智谱 GLM 可用);
     - SYNORA_PROVIDER_PROXY: 可选, 显式 HTTP(S) 代理; 不读取通用代理环境变量。
+    - SYNORA_PROVIDER_FALLBACK_API_KEY: 可选, 填写后启用一次性备用 provider;
+    - SYNORA_PROVIDER_FALLBACK_BASE_URL/MODEL/PROXY: 可选, 缺省时沿用主 provider;
+    - SYNORA_PROVIDER_FALLBACK_THINKING/REASONING_EFFORT: 可选, 备用 provider 专用设置。
 
     base_url 未配置时抛 ProviderError (fail closed, 不猜测默认地址)。
     """
     base_url = os.environ.get(PROVIDER_BASE_URL_ENV, "")
     if not base_url:
         raise ProviderError(f"{PROVIDER_BASE_URL_ENV} is not configured; set it in the environment")
+    model = os.environ.get(PROVIDER_MODEL_ENV, "").strip() or DEFAULT_PROVIDER_MODEL
+    proxy = os.environ.get(PROVIDER_PROXY_ENV) or None
+    thinking = _provider_thinking_mode(
+        os.environ,
+        model=model,
+        thinking_env=PROVIDER_THINKING_ENV,
+    )
+    fallback_api_key = os.environ.get(PROVIDER_FALLBACK_API_KEY_ENV, "")
+    fallback_overrides = (
+        PROVIDER_FALLBACK_BASE_URL_ENV,
+        PROVIDER_FALLBACK_MODEL_ENV,
+        PROVIDER_FALLBACK_REASONING_EFFORT_ENV,
+        PROVIDER_FALLBACK_THINKING_ENV,
+        PROVIDER_FALLBACK_PROXY_ENV,
+    )
+    fallback_overrides_configured = any(
+        os.environ.get(name, "").strip() for name in fallback_overrides
+    )
+    if not fallback_api_key.strip() and fallback_overrides_configured:
+        raise ProviderError(
+            f"{PROVIDER_FALLBACK_API_KEY_ENV} is required when fallback settings are configured",
+            failure_code="INVALID_CONFIGURATION",
+        )
     api_key = os.environ.get(PROVIDER_API_KEY_ENV, "")
-    return OpenAICompatibleProvider(
+    primary = OpenAICompatibleProvider(
         base_url=base_url,
         api_key=SecretStr(api_key) if api_key else None,
-        model=os.environ.get(PROVIDER_MODEL_ENV, ""),
+        model=model,
         reasoning_effort=os.environ.get(PROVIDER_REASONING_EFFORT_ENV) or None,
-        thinking=provider_thinking_mode(),
-        proxy=os.environ.get(PROVIDER_PROXY_ENV) or None,
+        thinking=thinking,
+        proxy=proxy,
         transport=transport,
     )
+    if not fallback_api_key.strip():
+        return primary
+
+    fallback_model = os.environ.get(PROVIDER_FALLBACK_MODEL_ENV, "").strip() or model
+    fallback_thinking = _provider_thinking_mode(
+        os.environ,
+        model=fallback_model,
+        thinking_env=PROVIDER_FALLBACK_THINKING_ENV,
+    )
+    if not os.environ.get(PROVIDER_FALLBACK_THINKING_ENV, "").strip() and fallback_model == model:
+        fallback_thinking = thinking
+    fallback = OpenAICompatibleProvider(
+        base_url=os.environ.get(PROVIDER_FALLBACK_BASE_URL_ENV, "").strip() or base_url,
+        api_key=SecretStr(fallback_api_key),
+        model=fallback_model,
+        reasoning_effort=os.environ.get(PROVIDER_FALLBACK_REASONING_EFFORT_ENV) or None,
+        thinking=fallback_thinking,
+        proxy=os.environ.get(PROVIDER_FALLBACK_PROXY_ENV) or proxy,
+        transport=transport,
+    )
+    return FailoverProvider(primary, fallback)
