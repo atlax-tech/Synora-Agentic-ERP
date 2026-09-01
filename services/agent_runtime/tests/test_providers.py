@@ -657,6 +657,46 @@ class TestProviderFromEnvironment:
 
         asyncio.run(run())
 
+    def test_fallback_caps_primary_budget_to_backup_model_limit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def run() -> None:
+            monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://primary.example/v1")
+            monkeypatch.setenv(PROVIDER_MODEL_ENV, "glm-4.7-flash")
+            monkeypatch.setenv(PROVIDER_FALLBACK_API_KEY_ENV, "fallback-secret")
+            monkeypatch.setenv(PROVIDER_FALLBACK_BASE_URL_ENV, "https://fallback.example/v1")
+            monkeypatch.setenv(PROVIDER_FALLBACK_MODEL_ENV, "backup-model")
+            request_budgets: list[int | None] = []
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                body = json.loads(request.content)
+                request_budgets.append(body.get("max_tokens"))
+                if len(request_budgets) == 1:
+                    return httpx.Response(429, json={"error": "rate limited"}, request=request)
+                return httpx.Response(
+                    200,
+                    json={
+                        "choices": [{"message": {"role": "assistant", "content": "backup"}}],
+                        "usage": {
+                            "prompt_tokens": 10,
+                            "completion_tokens": 1,
+                            "total_tokens": 11,
+                        },
+                    },
+                    request=request,
+                )
+
+            provider = provider_from_environment(transport=httpx.MockTransport(handler))
+            assert isinstance(provider, FailoverProvider)
+            response = await provider.complete(
+                _messages(), max_tokens=GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS
+            )
+            assert response.text == "backup"
+            assert request_budgets == [GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS, 8192]
+            await provider.aclose()
+
+        asyncio.run(run())
+
     def test_fallback_does_not_mask_auth_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def run() -> None:
             monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://primary.example/v1")

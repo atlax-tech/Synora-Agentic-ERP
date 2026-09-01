@@ -548,11 +548,17 @@ class FailoverProvider:
             try:
                 # The fallback provider's factory-configured model is
                 # authoritative; it may intentionally differ from the primary.
+                fallback_max_tokens = max_tokens
+                if isinstance(self._fallback, OpenAICompatibleProvider) and max_tokens is not None:
+                    fallback_max_tokens = min(
+                        max_tokens,
+                        provider_max_output_token_limit(self._fallback._model),
+                    )
                 return await self._fallback.complete(
                     messages,
                     tools=tools,
                     model=None,
-                    max_tokens=max_tokens,
+                    max_tokens=fallback_max_tokens,
                     response_format=response_format,
                 )
             except ProviderError as fallback_error:
