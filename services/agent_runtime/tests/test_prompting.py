@@ -128,7 +128,7 @@ def test_coach_output_contract_explains_bounded_citation_mapping() -> None:
         "never Markdown",
         "live-1",
         "retrieval-1",
-        "exact fact_digest",
+        "server owns",
         "return UNKNOWN",
     ):
         assert phrase in text

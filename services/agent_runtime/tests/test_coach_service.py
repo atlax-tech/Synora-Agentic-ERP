@@ -222,7 +222,7 @@ async def _test_coach_service_validates_live_and_retrieval_evidence_and_exposes_
     assert result.token_usage.prompt_tokens == 31
 
 
-async def _test_coach_service_rejects_invented_live_or_retrieval_citations() -> None:
+async def _test_coach_service_rebinds_live_metadata_and_rejects_invented_retrieval() -> None:
     hit = _hit()
     live = _response(live_digest="d" * 64, hit=hit)
     provider = RecordingProvider(live)
@@ -233,7 +233,8 @@ async def _test_coach_service_rejects_invented_live_or_retrieval_citations() -> 
         provider,
         environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
     )
-    assert result.answer_status in {"UNKNOWN", "CONFLICT", "REFUSED"}
+    assert result.answer_status == "ANSWERED"
+    assert result.citations[0].fact_digest == _live_digest()
 
     retrieval_response = ProviderResponse(
         text=(
@@ -517,12 +518,54 @@ async def _test_coach_service_rejects_stale_request_context_identity() -> None:
     assert result.answer_status == "UNKNOWN"
 
 
+async def _test_coach_service_rebinds_live_citation_metadata_to_current_snapshot() -> None:
+    provider = RecordingProvider(_response(live_digest="a" * 64, hit=_hit()))
+    result = await answer_coach(
+        _request(),
+        _context(),
+        (),
+        provider,
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+
+    assert result.answer_status == "ANSWERED"
+    citation = result.citations[0]
+    assert citation.citation_type == "LIVE_ERP"
+    assert citation.run_id == RUN_ID
+    assert citation.document_name == "MAT-MR-0001"
+    assert citation.fact_digest == _live_digest()
+    assert result.answer == 'open_order_stock_qty="2"'
+
+
+async def _test_coach_service_rejects_ambiguous_live_citation_field_selection() -> None:
+    context = build_current_document_context(
+        _request(),
+        _gateway(
+            data=[
+                _mr_row(item_code="ITEM-1"),
+                _mr_row(item_code="ITEM-2"),
+            ]
+        ),
+    )
+    provider = RecordingProvider(_response(live_digest="a" * 64, hit=_hit()))
+    result = await answer_coach(
+        _request(),
+        context,
+        (),
+        provider,
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+
+    assert result.answer_status == "UNKNOWN"
+    assert result.answer == ""
+
+
 def test_coach_service_validates_live_and_retrieval_evidence_and_exposes_no_tools() -> None:
     asyncio.run(_test_coach_service_validates_live_and_retrieval_evidence_and_exposes_no_tools())
 
 
-def test_coach_service_rejects_invented_live_or_retrieval_citations() -> None:
-    asyncio.run(_test_coach_service_rejects_invented_live_or_retrieval_citations())
+def test_coach_service_rebinds_live_metadata_and_rejects_invented_retrieval() -> None:
+    asyncio.run(_test_coach_service_rebinds_live_metadata_and_rejects_invented_retrieval())
 
 
 def test_coach_service_rejects_unsupported_numeric_claims_and_summary() -> None:
@@ -555,3 +598,11 @@ def test_coach_service_does_not_promote_poisoned_retrieval_to_controlled_context
 
 def test_coach_service_rejects_stale_request_context_identity() -> None:
     asyncio.run(_test_coach_service_rejects_stale_request_context_identity())
+
+
+def test_coach_service_rebinds_live_citation_metadata_to_current_snapshot() -> None:
+    asyncio.run(_test_coach_service_rebinds_live_citation_metadata_to_current_snapshot())
+
+
+def test_coach_service_rejects_ambiguous_live_citation_field_selection() -> None:
+    asyncio.run(_test_coach_service_rejects_ambiguous_live_citation_field_selection())

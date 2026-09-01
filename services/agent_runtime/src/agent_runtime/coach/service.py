@@ -313,6 +313,62 @@ def _normalize_grounded_claims(
         return None
 
 
+def _materialize_live_citations(
+    output: CoachProviderOutput,
+    request: CoachQuestionRequest,
+    context: CoachCurrentDocumentContext,
+) -> CoachProviderOutput | None:
+    """Rebind live citation metadata to the server-selected snapshot.
+
+    The model may identify the fact fields, but it is not a reliable transport
+    for long run/snapshot/digest strings. Those fields are therefore replaced
+    from the already-authorized context. A field selection that matches more
+    than one fact remains ambiguous and fails closed.
+    """
+    facts = tuple((current_fact_digest(fact), fact) for fact in context.facts)
+    materialized: list[CoachLiveCitation | CoachRetrievalCitation | CoachMemoryCitation] = []
+    for citation in output.citations:
+        if not isinstance(citation, CoachLiveCitation):
+            materialized.append(citation)
+            continue
+        candidates = []
+        for fact_digest, fact in facts:
+            values = fact.model_dump(mode="json")
+            if all(values.get(field_name) is not None for field_name in citation.fact_fields):
+                candidates.append((fact_digest, fact))
+        exact = next(
+            (
+                (fact_digest, fact)
+                for fact_digest, fact in candidates
+                if fact_digest == citation.fact_digest
+            ),
+            None,
+        )
+        selected = exact if exact is not None else (candidates[0] if len(candidates) == 1 else None)
+        if selected is None:
+            return None
+        fact_digest, _fact = selected
+        materialized.append(
+            citation.model_copy(
+                update={
+                    "run_id": request.run_id,
+                    "document_doctype": context.current_document.doctype,
+                    "document_name": context.current_document.name,
+                    "state_version": context.state_version,
+                    "captured_at": context.captured_at,
+                    "source_modified_at": context.source_modified_at,
+                    "frappe_revision": context.frappe_revision,
+                    "erpnext_revision": context.erpnext_revision,
+                    "fact_digest": fact_digest,
+                }
+            )
+        )
+    try:
+        return output.model_copy(update={"citations": tuple(materialized)})
+    except Exception:
+        return None
+
+
 def _validate_live_citation(
     citation: CoachLiveCitation,
     request: CoachQuestionRequest,
@@ -485,7 +541,10 @@ async def answer_coach(
             token_usage=_usage(response),
             latency_ms=_elapsed(started),
         )
-    if not _validate_citation_graph(parsed, request, current_context, selected_hits, fact_digests):
+    materialized = _materialize_live_citations(parsed, request, current_context)
+    if materialized is None or not _validate_citation_graph(
+        materialized, request, current_context, selected_hits, fact_digests
+    ):
         return _failed_answer(
             "UNKNOWN",
             _SAFE_REASONS["citation"],
@@ -493,7 +552,7 @@ async def answer_coach(
             latency_ms=_elapsed(started),
             trace=trace,
         )
-    normalized = _normalize_grounded_claims(parsed, current_context)
+    normalized = _normalize_grounded_claims(materialized, current_context)
     if normalized is None:
         return _failed_answer(
             "UNKNOWN",
