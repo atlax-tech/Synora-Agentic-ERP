@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from agent_runtime.agent.prompting import (
+    ERP_COACH_PROFILE_ID,
     LAYER_ORDER,
     NATIVE_AGENT_PROFILE_ID,
     PLAN_ENHANCEMENT_PROFILE_ID,
@@ -117,3 +118,17 @@ def test_registry_and_profile_fail_closed_for_unknown_or_incomplete_contracts() 
 def test_business_runtime_has_no_unregistered_native_system_prompt() -> None:
     source = Path(__file__).parents[1] / "src/agent_runtime/agent/native_tool_calling.py"
     assert "Use one read-only function call or return typed final JSON." not in source.read_text()
+
+
+def test_coach_output_contract_explains_bounded_citation_mapping() -> None:
+    text = PromptRegistry().resolve(ERP_COACH_PROFILE_ID).render()
+
+    for phrase in (
+        "exactly one JSON object",
+        "never Markdown",
+        "live-1",
+        "retrieval-1",
+        "exact fact_digest",
+        "return UNKNOWN",
+    ):
+        assert phrase in text

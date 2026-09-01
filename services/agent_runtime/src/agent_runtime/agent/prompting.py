@@ -149,13 +149,22 @@ _COACH_DECISION = (
     "insufficient or conflicts, report that explicitly instead of filling the gap."
 )
 _COACH_OUTPUT = (
-    "Return only one JSON object matching the CoachProviderOutput schema: schema_version, "
-    "answer_status, answer, claims, citations, refusal_reason. Every substantive claim must "
-    "have a citation_refs entry. Use only the supplied citation identifiers and exact metadata; "
-    "do not invent a fact, number, source, memory, citation, tool, permission, or write. "
-    "Every LIVE_ERP citation must name the exact current fact_fields it uses; Provider prose "
-    "is not authoritative and server validation may normalize it. For unknown or refused "
-    "answers return an empty answer, no claims/citations, and a bounded refusal_reason."
+    "Return exactly one JSON object, never Markdown or a code fence, matching the "
+    "CoachProviderOutput schema: schema_version, answer_status, answer, claims, "
+    "citations, refusal_reason. Every substantive claim must have citation_refs. "
+    "For an answer grounded in the supplied LIVE_ERP object, choose the local label "
+    "live-1 for its citation_id, copy that object's exact run_id, document, state_version, "
+    "captured_at, source_modified_at, frappe_revision, erpnext_revision, and the exact "
+    "fact_digest from the selected fact; set fact_fields to only the fields used by the "
+    'claim. Use claim_type ERP_FACT and citation_refs ["live-1"]. For a claim grounded '
+    "in a supplied retrieval object, choose retrieval-1, copy its exact chunk_id, "
+    "content_digest, ordinal, source_type, revision, erp_version, and permission_scope, "
+    'then use claim_type RETRIEVED_KNOWLEDGE and citation_refs ["retrieval-1"]. '
+    "These labels are only local references; never invent their metadata. If any requested "
+    "substantive fact is absent, unsupported, or conflicts, return UNKNOWN with an empty "
+    "answer, no claims, no citations, and a short refusal_reason. Do not invent a fact, "
+    "number, source, memory, citation, tool, permission, or write. Provider prose is not "
+    "authoritative and server validation may normalize it."
 )
 
 
