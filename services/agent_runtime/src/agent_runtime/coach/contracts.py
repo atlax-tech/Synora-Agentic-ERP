@@ -609,18 +609,32 @@ def _normalize_provider_compatibility(value: dict[str, object]) -> dict[str, obj
     }:
         normalized["refusal_reason"] = None
 
+    selector_by_citation: dict[str, object] = {}
     raw_claims = normalized.get("claims")
     if isinstance(raw_claims, list):
         claims: list[object] = []
         for ordinal, raw_claim in enumerate(raw_claims, start=1):
             if isinstance(raw_claim, dict) and raw_claim.get("claim_type") == "ERP_FACT":
-                claim = dict(raw_claim)
+                claim = {
+                    key: raw_claim[key]
+                    for key in ("claim_id", "ordinal", "claim_type", "text", "citation_refs")
+                    if key in raw_claim
+                }
                 claim.setdefault("claim_id", f"claim-{ordinal}")
                 claim.setdefault("ordinal", ordinal)
                 # The service replaces ERP claim prose with server-bound field
                 # atoms after citation resolution, so this placeholder carries
                 # no business meaning or model authority.
                 claim.setdefault("text", "server-bound ERP fact")
+                raw_fields = raw_claim.get("fact_fields")
+                if raw_fields is None and isinstance(raw_claim.get("claim"), dict):
+                    raw_fields = raw_claim["claim"]
+                if isinstance(raw_fields, dict):
+                    raw_fields = list(raw_fields)
+                if isinstance(raw_fields, list) and isinstance(claim.get("citation_refs"), list):
+                    for reference in claim["citation_refs"]:
+                        if isinstance(reference, str):
+                            selector_by_citation.setdefault(reference, raw_fields)
                 claims.append(claim)
             else:
                 claims.append(raw_claim)
@@ -630,16 +644,16 @@ def _normalize_provider_compatibility(value: dict[str, object]) -> dict[str, obj
     if isinstance(raw_citations, list):
         citations: list[object] = []
         for raw_citation in raw_citations:
-            if (
-                isinstance(raw_citation, dict)
-                and raw_citation.get("citation_type") == "LIVE_ERP"
-                and isinstance(raw_citation.get("fact_fields"), dict)
-            ):
+            if isinstance(raw_citation, dict) and raw_citation.get("citation_type") == "LIVE_ERP":
                 citation = dict(raw_citation)
+                citation_id = citation.get("citation_id")
+                if "fact_fields" not in citation and isinstance(citation_id, str):
+                    citation["fact_fields"] = selector_by_citation.get(citation_id)
                 # Some models encode field selection as {field: value}.  Only
                 # the keys can be considered a selector; all values are
                 # discarded and the server still validates every key.
-                citation["fact_fields"] = list(citation["fact_fields"])
+                if isinstance(citation.get("fact_fields"), dict):
+                    citation["fact_fields"] = list(citation["fact_fields"])
                 citations.append(citation)
             else:
                 citations.append(raw_citation)

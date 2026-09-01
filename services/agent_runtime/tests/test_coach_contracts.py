@@ -433,9 +433,11 @@ def test_provider_json_parser_normalizes_observed_success_shape() -> None:
     raw = (
         '{"schema_version":"1","answer_status":"SUCCESS",'
         '"answer":"open_order_stock_qty=2",'
-        '"claims":[{"claim_type":"ERP_FACT","citation_refs":["live-1"]}],'
-        '"citations":[{"citation_type":"LIVE_ERP","citation_id":"live-1",'
-        '"fact_fields":{"open_order_stock_qty":2}}],"refusal_reason":""}'
+        '"claims":[{"claim_type":"ERP_FACT",'
+        '"claim":{"open_order_stock_qty":"2"},'
+        '"fact_fields":["open_order_stock_qty"],"citation_refs":["live-1"]}],'
+        '"citations":[{"citation_type":"LIVE_ERP","citation_id":"live-1"}],'
+        '"refusal_reason":""}'
     )
     parsed = parse_coach_provider_output(raw)
     assert parsed.answer_status == "ANSWERED"
