@@ -56,6 +56,7 @@ from agent_runtime.evaluation.loader import (
 from agent_runtime.providers import (
     ProviderMessage,
     ProviderResponse,
+    ProviderResponseFormat,
     ProviderToolCall,
     ProviderToolSpec,
 )
@@ -200,8 +201,9 @@ class _RecordedProvider:
         tools: list[ProviderToolSpec] | None = None,
         model: str | None = None,
         max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
     ) -> ProviderResponse:
-        del model, max_tokens
+        del model, max_tokens, response_format
         self.calls += 1
         self.tool_schema_snapshots.append(tuple(tools or ()))
         return self.responses.pop(0)
