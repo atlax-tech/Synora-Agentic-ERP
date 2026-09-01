@@ -610,6 +610,7 @@ def _normalize_provider_compatibility(value: dict[str, object]) -> dict[str, obj
         normalized["refusal_reason"] = None
 
     selector_by_citation: dict[str, object] = {}
+    selector_conflicts: set[str] = set()
     raw_claims = normalized.get("claims")
     if isinstance(raw_claims, list):
         claims: list[object] = []
@@ -634,7 +635,11 @@ def _normalize_provider_compatibility(value: dict[str, object]) -> dict[str, obj
                 if isinstance(raw_fields, list) and isinstance(claim.get("citation_refs"), list):
                     for reference in claim["citation_refs"]:
                         if isinstance(reference, str):
-                            selector_by_citation.setdefault(reference, raw_fields)
+                            previous = selector_by_citation.get(reference)
+                            if previous is None:
+                                selector_by_citation[reference] = raw_fields
+                            elif previous != raw_fields:
+                                selector_conflicts.add(reference)
                 claims.append(claim)
             else:
                 claims.append(raw_claim)
@@ -657,6 +662,35 @@ def _normalize_provider_compatibility(value: dict[str, object]) -> dict[str, obj
                 citations.append(citation)
             else:
                 citations.append(raw_citation)
+        claim_references = {
+            reference
+            for claim in normalized.get("claims", [])
+            if isinstance(claim, dict)
+            for reference in claim.get("citation_refs", [])
+            if isinstance(reference, str)
+        }
+        all_erp_claims = bool(normalized.get("claims")) and all(
+            isinstance(claim, dict) and claim.get("claim_type") == "ERP_FACT"
+            for claim in normalized.get("claims", [])
+        )
+        if (
+            not citations
+            and all_erp_claims
+            and claim_references
+            and claim_references == set(selector_by_citation)
+            and not selector_conflicts.intersection(claim_references)
+        ):
+            # Some observed responses omit the entire citations array.  Create
+            # only local selector shells; the service binds all metadata and
+            # values to the authorized current snapshot before display.
+            citations = [
+                {
+                    "citation_type": "LIVE_ERP",
+                    "citation_id": reference,
+                    "fact_fields": selector_by_citation[reference],
+                }
+                for reference in sorted(claim_references)
+            ]
         normalized["citations"] = citations
     return normalized
 

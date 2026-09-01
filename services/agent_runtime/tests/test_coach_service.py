@@ -289,6 +289,25 @@ async def _test_coach_service_materializes_minimal_live_selector() -> None:
     assert result.citations[0].fact_digest == _live_digest()
 
 
+async def _test_coach_service_materializes_missing_live_citation() -> None:
+    hit = _hit()
+    payload = json.loads(_response(live_digest=_live_digest(), hit=hit).text)
+    payload["claims"][0]["fact_fields"] = ["open_order_stock_qty"]
+    payload["citations"] = []
+    result = await answer_coach(
+        _request(),
+        _context(),
+        (hit,),
+        RecordingProvider(ProviderResponse(text=json.dumps(payload))),
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+
+    assert result.answer_status == "ANSWERED"
+    assert result.answer == 'open_order_stock_qty="2"'
+    assert result.citations[0].citation_type == "LIVE_ERP"
+    assert result.citations[0].fact_digest == _live_digest()
+
+
 async def _test_coach_service_adds_controlled_context_for_explanatory_questions() -> None:
     hit = _hit()
     request = _request(
@@ -626,6 +645,10 @@ def test_coach_service_rebinds_live_metadata_and_rejects_invented_retrieval() ->
 
 def test_coach_service_materializes_minimal_live_selector() -> None:
     asyncio.run(_test_coach_service_materializes_minimal_live_selector())
+
+
+def test_coach_service_materializes_missing_live_citation() -> None:
+    asyncio.run(_test_coach_service_materializes_missing_live_citation())
 
 
 def test_coach_service_adds_controlled_context_for_explanatory_questions() -> None:
