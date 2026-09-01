@@ -23,6 +23,7 @@ from synora_agentic_erp.api import (
 )
 from synora_agentic_erp.coach import service as coach_service
 from synora_agentic_erp.gateway.contract import GatewayFault
+from synora_agentic_erp.gateway.security import resolve_run
 
 BUYER = "synora-p1-buyer@dev.localhost"
 VIEWER = "synora-p1-viewer@dev.localhost"
@@ -600,6 +601,16 @@ class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
         frappe.set_user(BUYER)
         events: list[str] = []
         original_commit = frappe.db.commit
+        current_db = frappe.local.db
+        independent_db = current_db.__class__(
+            socket=current_db.socket,
+            host=current_db.host,
+            user=current_db.user,
+            password=current_db.password,
+            port=current_db.port,
+            cur_db_name=current_db.cur_db_name,
+        )
+        independent_db.connect()
 
         def commit() -> None:
             events.append("commit")
@@ -607,21 +618,33 @@ class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
 
         def runtime(payload: dict[str, object], _capability: str) -> dict[str, object]:
             events.append("runtime")
-            self.assertTrue(frappe.db.exists("Synora Agent Run", payload["run_id"]))
+            original_db = frappe.local.db
+            frappe.local.db = independent_db
+            try:
+                resolved = resolve_run(str(payload["run_id"]), _capability)
+            finally:
+                frappe.local.db = original_db
+            self.assertEqual(resolved.run_id, payload["run_id"])
             return _unknown_answer("provider unavailable")
 
-        with (
-            patch.object(frappe.db, "commit", side_effect=commit),
-            patch("synora_agentic_erp.coach.service._call_coach_runtime", side_effect=runtime),
-        ):
-            response = start_erp_coach(
-                question="How many units remain open?",
-                company=COMPANY,
-                warehouse=WAREHOUSE,
-                current_doctype="Material Request",
-                current_name=_current_material_request(),
-                cmd="synora_agentic_erp.api.start_erp_coach",
-            )
+        try:
+            with (
+                patch.object(frappe.db, "commit", side_effect=commit),
+                patch(
+                    "synora_agentic_erp.coach.service._call_coach_runtime",
+                    side_effect=runtime,
+                ),
+            ):
+                response = start_erp_coach(
+                    question="How many units remain open?",
+                    company=COMPANY,
+                    warehouse=WAREHOUSE,
+                    current_doctype="Material Request",
+                    current_name=_current_material_request(),
+                    cmd="synora_agentic_erp.api.start_erp_coach",
+                )
+        finally:
+            independent_db.close()
 
         self.assertTrue(response["ok"])
         self.assertLess(events.index("commit"), events.index("runtime"))
