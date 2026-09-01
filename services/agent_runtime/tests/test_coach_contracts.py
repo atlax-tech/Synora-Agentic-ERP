@@ -343,6 +343,39 @@ def test_provider_output_accepts_server_bound_live_selector() -> None:
     assert isinstance(output.citations[0], CoachProviderLiveCitation)
     assert output.citations[0].fact_fields == ("open_order_stock_qty",)
 
+    noisy = CoachProviderOutput.model_validate(
+        {
+            "schema_version": "1",
+            "answer_status": "ANSWERED",
+            "answer": "The request has two open units.",
+            "claims": [
+                {
+                    "claim_id": "claim-1",
+                    "ordinal": 1,
+                    "claim_type": "ERP_FACT",
+                    "text": "Two units remain open.",
+                    "citation_refs": ["live-1"],
+                }
+            ],
+            "citations": [
+                {
+                    "citation_type": "LIVE_ERP",
+                    "citation_id": "live-1",
+                    "fact_fields": ["open_order_stock_qty"],
+                    "run_id": "model-guessed-metadata",
+                    "fact_digest": "not-a-server-digest",
+                }
+            ],
+            "refusal_reason": None,
+        }
+    )
+    assert isinstance(noisy.citations[0], CoachProviderLiveCitation)
+    assert noisy.citations[0].model_dump() == {
+        "citation_type": "LIVE_ERP",
+        "citation_id": "live-1",
+        "fact_fields": ("open_order_stock_qty",),
+    }
+
 
 def test_provider_json_parser_rejects_duplicate_keys_and_unknown_citation_types() -> None:
     valid = (

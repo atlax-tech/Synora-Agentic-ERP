@@ -14,7 +14,7 @@ import re
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from agent_runtime.agent.contracts import StrictModel, canonical_json
 
@@ -302,6 +302,11 @@ class CoachProviderLiveCitation(StrictModel):
     authorized current snapshot before any answer can be displayed.
     """
 
+    # The provider may copy server-owned citation metadata from its context.
+    # Those fields are deliberately ignored here and are never used for
+    # materialization; the final CoachLiveCitation remains strict.
+    model_config = ConfigDict(extra="ignore", strict=True, hide_input_in_errors=True)
+
     citation_type: Literal["LIVE_ERP"] = "LIVE_ERP"
     citation_id: str = Field(pattern=_ID_PATTERN, min_length=1, max_length=120)
     fact_fields: Annotated[tuple[CoachLiveFactField, ...], Field(min_length=1, max_length=16)]
@@ -354,7 +359,7 @@ CoachCitation = Annotated[
     Field(discriminator="citation_type"),
 ]
 CoachProviderCitation = (
-    CoachProviderLiveCitation | CoachLiveCitation | CoachRetrievalCitation | CoachMemoryCitation
+    CoachLiveCitation | CoachProviderLiveCitation | CoachRetrievalCitation | CoachMemoryCitation
 )
 
 
