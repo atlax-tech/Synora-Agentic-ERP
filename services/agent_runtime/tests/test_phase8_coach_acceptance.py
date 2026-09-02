@@ -76,6 +76,32 @@ def test_manifest_validation_rejects_case_order_drift(monkeypatch: pytest.Monkey
         runner.validate_manifest(manifest, spec)
 
 
+def test_manifest_allows_only_post_evaluation_evidence_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _runner()
+    spec, case_spec_sha = runner.load_case_spec(SPEC)
+    monkeypatch.setattr(runner, "git_status", lambda: "")
+    monkeypatch.setattr(
+        runner,
+        "current_git",
+        lambda: {"branch": "main", "head": "final-evidence"},
+    )
+    manifest = runner.build_manifest(spec, case_spec_sha, "c" * 64)
+    manifest["baseline"]["head"] = "evaluation-code"
+    monkeypatch.setattr(
+        runner,
+        "git_changed_paths",
+        lambda _base, _head: {"output/phase8/result.json", "docs/development-log/phase8.md"},
+    )
+
+    assert runner.validate_manifest(manifest, spec)
+
+    monkeypatch.setattr(runner, "git_changed_paths", lambda _base, _head: {"src/new.py"})
+    with pytest.raises(runner.Blocked, match="manifest_git_binding_mismatch"):
+        runner.validate_manifest(manifest, spec)
+
+
 def test_immutable_write_is_read_only_and_answer_is_redacted(tmp_path: Path) -> None:
     runner = _runner()
     output = tmp_path / "result.json"

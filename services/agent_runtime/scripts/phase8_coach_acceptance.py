@@ -57,6 +57,20 @@ ISSUE_PATH = "/api/method/synora_agentic_erp.api.issue_run"
 REVOKE_PATH = "/api/method/synora_agentic_erp.api.revoke_run"
 EXECUTE_PATH = "/api/method/synora_agentic_erp.api.execute"
 RUNTIME_COACH_PATH = "/coach/answer"
+POST_EVALUATION_PATHS = (
+    "output/phase8/",
+    "output/playwright/",
+    "docs/development-log/",
+    "docs/PLAN.md",
+    "docs/ARCHITECTURE.md",
+    "docs/DEVELOPMENT.md",
+    "docs/TESTING.md",
+    "docs/ACCEPTANCE.md",
+    "docs/ROADMAP.md",
+    "README.md",
+    "README.zh-CN.md",
+    ".harness/",
+)
 SECRET_ENV_NAMES = (
     "SYNORA_RUNTIME_TOKEN",
     "SYNORA_P2P_USER_PWD",
@@ -196,6 +210,19 @@ def current_git() -> dict[str, str]:
     return {"branch": branch, "head": head}
 
 
+def git_changed_paths(base: str, head: str) -> set[str]:
+    if base == head:
+        return set()
+    output = subprocess.check_output(
+        ["git", "diff", "--name-only", f"{base}..{head}"], cwd=ROOT, text=True
+    )
+    return {line.strip() for line in output.splitlines() if line.strip()}
+
+
+def _post_evaluation_path_allowed(path: str) -> bool:
+    return any(path == prefix or path.startswith(prefix) for prefix in POST_EVALUATION_PATHS)
+
+
 def case_spec_payload(spec: Mapping[str, Any]) -> dict[str, Any]:
     keys = ("suite", "case_order", "anchors", "s3_retrieval", "cases")
     return {key: spec[key] for key in keys}
@@ -262,6 +289,7 @@ def build_manifest(spec: Mapping[str, Any], case_spec_sha: str, parent_sha: str)
             "provider_tools": [],
             "selective_rerun": False,
         },
+        "post_evaluation_paths": list(POST_EVALUATION_PATHS),
     }
 
 
@@ -322,12 +350,21 @@ def validate_manifest(manifest: Mapping[str, Any], spec: Mapping[str, Any]) -> s
         "selective_rerun": False,
     }:
         raise Blocked("manifest_constraints_mismatch")
+    if tuple(manifest.get("post_evaluation_paths", ())) != POST_EVALUATION_PATHS:
+        raise Blocked("manifest_post_evaluation_paths_mismatch")
     baseline = manifest.get("baseline")
     if not isinstance(baseline, dict):
         raise Blocked("manifest_baseline_missing")
     git = current_git()
-    if baseline.get("branch") != git["branch"] or baseline.get("head") != git["head"]:
+    if baseline.get("branch") != git["branch"]:
         raise Blocked("manifest_git_binding_mismatch")
+    baseline_head = baseline.get("head")
+    if baseline_head != git["head"]:
+        if not isinstance(baseline_head, str):
+            raise Blocked("manifest_git_binding_mismatch")
+        changed_paths = git_changed_paths(baseline_head, git["head"])
+        if not changed_paths or not all(_post_evaluation_path_allowed(path) for path in changed_paths):
+            raise Blocked("manifest_git_binding_mismatch")
     if git["branch"] != "main":
         raise Blocked("formal_run_requires_main_branch")
     status = git_status()
