@@ -87,7 +87,7 @@ def test_coach_endpoint_returns_strict_coach_contract(
     monkeypatch.setenv("SYNORA_RUNTIME_TOKEN", "runtime-secret")
     seen: list[CoachRuntimeRequest] = []
 
-    async def fake_runtime(request: CoachRuntimeRequest) -> CoachAnswer:
+    async def fake_runtime(request: CoachRuntimeRequest, *, environ=None) -> CoachAnswer:
         seen.append(request)
         return _safe_answer()
 
@@ -115,7 +115,7 @@ def test_coach_disconnect_guard_cancels_inflight_runtime(
 ) -> None:
     cancelled = False
 
-    async def slow_runtime(_: CoachRuntimeRequest) -> CoachAnswer:
+    async def slow_runtime(_: CoachRuntimeRequest, *, environ=None) -> CoachAnswer:
         nonlocal cancelled
         try:
             await asyncio.sleep(60)

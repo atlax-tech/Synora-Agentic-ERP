@@ -755,7 +755,7 @@ async def _test_coach_service_rejects_ambiguous_live_citation_field_selection() 
     assert result.answer == ""
 
 
-async def _test_coach_service_escalates_one_unknown_local_answer() -> None:
+async def _test_coach_service_escalates_quality_insufficient_qwen_answer() -> None:
     unknown = ProviderResponse(
         text=(
             '{"schema_version":"1","answer_status":"UNKNOWN","answer":"",'
@@ -768,13 +768,15 @@ async def _test_coach_service_escalates_one_unknown_local_answer() -> None:
         text='{"not":"a coach response"}', prompt_tokens=10, completion_tokens=5
     )
     for small_response in (unknown, malformed):
-        large = RecordingProvider(_response(live_digest=_live_digest(), hit=_hit()))
-        paid = RecordingProvider(ProviderResponse(text="must not run"))
+        primary = RecordingProvider(small_response)
+        assist = RecordingProvider(_response(live_digest=_live_digest(), hit=_hit()))
+        grok = RecordingProvider(ProviderResponse(text="must not run"))
+        slow_local = RecordingProvider(ProviderResponse(text="must not run"))
         provider = FailoverProvider(
-            RecordingProvider(error=ProviderError("limited", failure_code="RATE_LIMITED")),
-            RecordingProvider(small_response),
-            large,
-            paid,
+            primary,
+            assist,
+            grok,
+            slow_local,
         )
         result = await answer_coach(
             _request(),
@@ -787,8 +789,69 @@ async def _test_coach_service_escalates_one_unknown_local_answer() -> None:
         assert result.answer_status == "ANSWERED"
         assert result.token_usage.prompt_tokens == 41
         assert result.token_usage.completion_tokens == 23
-        assert large.messages is not None
-        assert paid.messages is None
+        assert primary.messages is not None
+        assert assist.messages is not None
+        assert grok.messages is None
+        assert slow_local.messages is None
+
+
+async def _test_coach_service_escalates_each_quality_failure_in_priority_order() -> None:
+    unknown = ProviderResponse(
+        text=(
+            '{"schema_version":"1","answer_status":"UNKNOWN","answer":"",'
+            '"claims":[],"citations":[],"refusal_reason":"insufficient"}'
+        ),
+        prompt_tokens=10,
+        completion_tokens=5,
+    )
+    malformed = ProviderResponse(
+        text='{"not":"a coach response"}', prompt_tokens=11, completion_tokens=6
+    )
+    primary = RecordingProvider(unknown)
+    assist = RecordingProvider(malformed)
+    grok = RecordingProvider(unknown)
+    slow_local = RecordingProvider(_response(live_digest=_live_digest(), hit=_hit()))
+    provider = FailoverProvider(primary, assist, grok, slow_local)
+
+    result = await answer_coach(
+        _request(),
+        _context(),
+        (_hit(),),
+        provider,
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+
+    assert result.answer_status == "ANSWERED"
+    assert result.token_usage.prompt_tokens == 31 + 10 + 11 + 10
+    assert result.token_usage.completion_tokens == 18 + 5 + 6 + 5
+    assert all(candidate.messages is not None for candidate in (primary, assist, grok, slow_local))
+
+
+async def _test_coach_service_does_not_escalate_a_valid_refusal() -> None:
+    refused = ProviderResponse(
+        text=(
+            '{"schema_version":"1","answer_status":"REFUSED","answer":"",'
+            '"claims":[],"citations":[],"refusal_reason":"safety"}'
+        ),
+        prompt_tokens=10,
+        completion_tokens=5,
+    )
+    primary = RecordingProvider(refused)
+    assist = RecordingProvider(_response(live_digest=_live_digest(), hit=_hit()))
+    provider = FailoverProvider(primary, assist)
+
+    result = await answer_coach(
+        _request(),
+        _context(),
+        (_hit(),),
+        provider,
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+
+    assert result.answer_status == "REFUSED"
+    assert result.refusal_reason == "safety"
+    assert primary.messages is not None
+    assert assist.messages is None
 
 
 def test_coach_service_validates_live_and_retrieval_evidence_and_exposes_no_tools() -> None:
@@ -801,6 +864,18 @@ def test_coach_service_rebinds_live_metadata_and_rejects_invented_retrieval() ->
 
 def test_coach_service_materializes_minimal_live_selector() -> None:
     asyncio.run(_test_coach_service_materializes_minimal_live_selector())
+
+
+def test_coach_service_escalates_quality_insufficient_qwen_answer() -> None:
+    asyncio.run(_test_coach_service_escalates_quality_insufficient_qwen_answer())
+
+
+def test_coach_service_escalates_each_quality_failure_in_priority_order() -> None:
+    asyncio.run(_test_coach_service_escalates_each_quality_failure_in_priority_order())
+
+
+def test_coach_service_does_not_escalate_a_valid_refusal() -> None:
+    asyncio.run(_test_coach_service_does_not_escalate_a_valid_refusal())
 
 
 def test_coach_service_materializes_missing_live_citation() -> None:
@@ -861,7 +936,3 @@ def test_coach_service_rebinds_live_citation_metadata_to_current_snapshot() -> N
 
 def test_coach_service_rejects_ambiguous_live_citation_field_selection() -> None:
     asyncio.run(_test_coach_service_rejects_ambiguous_live_citation_field_selection())
-
-
-def test_coach_service_escalates_one_unknown_local_answer() -> None:
-    asyncio.run(_test_coach_service_escalates_one_unknown_local_answer())

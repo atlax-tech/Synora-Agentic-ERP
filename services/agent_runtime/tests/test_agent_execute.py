@@ -116,7 +116,7 @@ def test_agent_request_validates_and_hides_capability() -> None:
 def test_disconnect_guard_cancels_inflight_execution(monkeypatch) -> None:
     closed = False
 
-    async def slow_execution(_: AgentExecuteRequest) -> object:
+    async def slow_execution(_: AgentExecuteRequest, *, environ=None) -> object:
         nonlocal closed
         try:
             await asyncio.sleep(60)
@@ -225,8 +225,14 @@ def test_execute_agent_observation_drives_second_different_tool(
         output_microusd_per_million=Decimal("0"),
         reasoning_microusd_per_million=Decimal("0"),
     )
-    monkeypatch.setattr("agent_runtime.agent.execution.pricing_from_environment", lambda: pricing)
-    monkeypatch.setattr("agent_runtime.agent.execution.provider_from_environment", lambda: provider)
+    monkeypatch.setattr(
+        "agent_runtime.agent.execution.pricing_from_environment",
+        lambda environ=None: pricing,
+    )
+    monkeypatch.setattr(
+        "agent_runtime.agent.execution.provider_from_environment",
+        lambda *, environ=None: provider,
+    )
     monkeypatch.setattr("agent_runtime.agent.execution.GatewayClient", lambda: gateway)
 
     response = asyncio.run(execute_agent(AgentExecuteRequest.model_validate(_request_payload())))
@@ -255,9 +261,12 @@ def test_execute_agent_closes_gateway_when_provider_setup_fails(
         reasoning_microusd_per_million=Decimal("0"),
     )
 
-    monkeypatch.setattr("agent_runtime.agent.execution.pricing_from_environment", lambda: pricing)
+    monkeypatch.setattr(
+        "agent_runtime.agent.execution.pricing_from_environment",
+        lambda environ=None: pricing,
+    )
 
-    def fail_provider_setup() -> object:
+    def fail_provider_setup(*, environ=None) -> object:
         raise RuntimeError("provider configuration is invalid")
 
     monkeypatch.setattr(

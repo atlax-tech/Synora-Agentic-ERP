@@ -9,7 +9,6 @@ hits, provider configuration, or tool schemas.
 from __future__ import annotations
 
 import contextlib
-import os
 import time
 from collections.abc import Mapping
 
@@ -36,11 +35,11 @@ from agent_runtime.gateway import (
     ToolCall,
 )
 from agent_runtime.providers import (
-    PROVIDER_MODEL_ENV,
     Provider,
     ProviderError,
     provider_from_environment,
     provider_max_output_tokens,
+    provider_model,
 )
 from agent_runtime.retrieval.index import RetrievalIndex, SearchHit
 from agent_runtime.retrieval.sources import ERP_VERSION, load_curated_sources
@@ -167,7 +166,9 @@ async def answer_coach_runtime(
             retrieval_hits = ()
 
         try:
-            provider = provider_from_environment()
+            # Resolve every provider setting from the same immutable snapshot
+            # used for model and context-budget decisions.
+            provider = provider_from_environment(environ=environ)
             max_output_tokens = provider_max_output_tokens(environ)
         except ProviderError, ValueError:
             return _failed_answer("REFUSED", _SAFE_PROVIDER_REASON, latency_ms=_elapsed(started))
@@ -178,7 +179,7 @@ async def answer_coach_runtime(
             retrieval_hits,
             provider,
             environ=environ,
-            model=os.environ.get(PROVIDER_MODEL_ENV, "").strip() or None,
+            model=provider_model(environ),
             max_tokens=max_output_tokens,
         )
     except Exception:

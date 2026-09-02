@@ -21,7 +21,7 @@ from agent_runtime.coach.runtime import (
     CoachRuntimeRequest,
     answer_coach_runtime,
 )
-from agent_runtime.providers import PROVIDER_MODEL_ENV, ProviderError, provider_from_environment
+from agent_runtime.providers import ProviderError, provider_from_environment, provider_model
 from agent_runtime.workflow.checkpoint import (
     CheckpointConflict,
     CheckpointError,
@@ -94,10 +94,14 @@ async def recover_persisted_workflows() -> None:
 
 
 async def _execute_with_disconnect_guard(
-    request: AgentExecuteRequest, http_request: Request
+    request: AgentExecuteRequest,
+    http_request: Request,
+    *,
+    environ: dict[str, str] | None = None,
 ) -> AgentExecuteResponse:
     """Cancel the bounded kernel promptly when Frappe's request disappears."""
-    task = asyncio.create_task(execute_agent(request))
+    values = dict(os.environ) if environ is None else environ
+    task = asyncio.create_task(execute_agent(request, environ=values))
     try:
         while not task.done():
             if await http_request.is_disconnected():
@@ -116,10 +120,14 @@ async def _execute_with_disconnect_guard(
 
 
 async def _coach_with_disconnect_guard(
-    request: CoachRuntimeRequest, http_request: Request
+    request: CoachRuntimeRequest,
+    http_request: Request,
+    *,
+    environ: dict[str, str] | None = None,
 ) -> CoachAnswer:
     """Cancel the Coach transport promptly when its internal caller disappears."""
-    task = asyncio.create_task(answer_coach_runtime(request))
+    values = dict(os.environ) if environ is None else environ
+    task = asyncio.create_task(answer_coach_runtime(request, environ=values))
     try:
         while not task.done():
             if await http_request.is_disconnected():
@@ -150,14 +158,15 @@ async def enhance(request: EnhanceRequest, http_request: Request) -> EnhanceResp
     本端点只让模型改写解释文本, 输出经严格校验, 失败回退确定性摘要。
     provider 未配置/调用失败 -> enhance_plan 内部回退, 本端点不抛 5xx。
     """
-    expected_token = os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
+    environ = dict(os.environ)
+    expected_token = environ.get(_RUNTIME_TOKEN_ENV, "").strip()
     if expected_token and not hmac.compare_digest(
         http_request.headers.get(_RUNTIME_TOKEN_HEADER, ""), expected_token
     ):
         raise HTTPException(status_code=401, detail="runtime authentication required")
-    provider_label = os.environ.get(PROVIDER_MODEL_ENV, "").strip() or request.provider_name
+    provider_label = provider_model(environ) or request.provider_name
     try:
-        provider = provider_from_environment()
+        provider = provider_from_environment(environ=environ)
     except (ProviderError, ValueError) as error:
         # 未配置 BYOK: 回退确定性摘要并记录证据 (与 enhance_plan 回退语义一致)。
         return EnhanceResponse(
@@ -174,7 +183,10 @@ async def enhance(request: EnhanceRequest, http_request: Request) -> EnhanceResp
         )
     try:
         explanation, evidence = await enhance_plan(
-            request.plan, provider, provider_name=provider_label
+            request.plan,
+            provider,
+            provider_name=provider_label,
+            context_environ=environ,
         )
     finally:
         close = getattr(provider, "aclose", None)
@@ -190,7 +202,7 @@ async def execute_agent_run(
 ) -> AgentExecuteResponse:
     """Internal Frappe-to-Runtime read-only Agent execution endpoint."""
     _require_runtime_token(http_request)
-    return await _execute_with_disconnect_guard(request, http_request)
+    return await _execute_with_disconnect_guard(request, http_request, environ=dict(os.environ))
 
 
 @app.post("/coach/answer", response_model=CoachAnswer)
@@ -200,7 +212,7 @@ async def answer_coach_run(
 ) -> CoachAnswer:
     """Internal Frappe-to-Runtime read-only contextual Coach endpoint."""
     _require_runtime_token(http_request)
-    return await _coach_with_disconnect_guard(request, http_request)
+    return await _coach_with_disconnect_guard(request, http_request, environ=dict(os.environ))
 
 
 @app.post("/workflow/start", response_model=WorkflowResponse)

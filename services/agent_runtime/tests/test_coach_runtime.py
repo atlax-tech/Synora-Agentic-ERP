@@ -231,7 +231,10 @@ def _patch_dependencies(
     provider: _RecordingProvider,
 ) -> None:
     monkeypatch.setattr("agent_runtime.coach.runtime.GatewayClient", lambda: gateway)
-    monkeypatch.setattr("agent_runtime.coach.runtime.provider_from_environment", lambda: provider)
+    monkeypatch.setattr(
+        "agent_runtime.coach.runtime.provider_from_environment",
+        lambda *, environ=None: provider,
+    )
     monkeypatch.setattr("agent_runtime.coach.runtime._retrieve_curated_sources", lambda _: ())
     monkeypatch.setenv("SYNORA_CONTEXT_INPUT_TOKEN_BUDGET", "50000")
 
@@ -432,7 +435,7 @@ def test_runtime_provider_setup_and_transport_fail_closed_without_secret_leak(
     gateway = _FakeGateway(gateway_response)
     monkeypatch.setattr(
         "agent_runtime.coach.runtime.provider_from_environment",
-        lambda: (_ for _ in ()).throw(ProviderError(f"invalid {CAPABILITY}")),
+        lambda *, environ=None: (_ for _ in ()).throw(ProviderError(f"invalid {CAPABILITY}")),
     )
     monkeypatch.setattr("agent_runtime.coach.runtime.GatewayClient", lambda: gateway)
     result = asyncio.run(answer_coach_runtime(_request()))

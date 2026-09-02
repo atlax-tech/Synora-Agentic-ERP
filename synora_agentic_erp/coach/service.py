@@ -17,7 +17,6 @@ import frappe
 
 from synora_agentic_erp.agent.service import (
     _RUNTIME_RESPONSE_BYTES,
-    _RUNTIME_TIMEOUT_SECONDS,
     _NoRedirectHandler,
     _runtime_url,
 )
@@ -35,6 +34,10 @@ from synora_agentic_erp.synora_agentic_erp.doctype.synora_coach_result.synora_co
 MAX_CLAIM_LENGTH = 4_000
 MAX_REVISION_LENGTH = 140
 _RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
+# Coach may invoke the final local 27B candidate, whose runtime is deliberately
+# unbounded.  Other Runtime endpoints keep the bounded service timeout in
+# ``agent.service``.
+_COACH_RUNTIME_TIMEOUT_SECONDS: float | None = None
 _CLAIM_HMAC_DOMAIN = b"synora-coach-claim-v1"
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$")
 _DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -661,7 +664,7 @@ def _call_coach_runtime(payload: dict[str, object], capability: str) -> dict[str
             method="POST",
         )
         opener = urllib.request.build_opener(_NoRedirectHandler())
-        with opener.open(request, timeout=_RUNTIME_TIMEOUT_SECONDS) as response:
+        with opener.open(request, timeout=_COACH_RUNTIME_TIMEOUT_SECONDS) as response:
             raw = response.read(_RUNTIME_RESPONSE_BYTES + 1)
         sensitive_values = (capability.encode("utf-8"), runtime_token.encode("utf-8"))
         if len(raw) > _RUNTIME_RESPONSE_BYTES or any(value in raw for value in sensitive_values):

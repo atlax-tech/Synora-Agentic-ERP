@@ -6,14 +6,27 @@ CI 使用确定性 provider; OpenAI 兼容 provider 通过 MockTransport 验证
 
 import asyncio
 import json
+import math
 
 import httpx
 import pytest
 from agent_runtime.providers import (
+    ASSIST_API_KEY_ENV,
+    ASSIST_BASE_URL_ENV,
+    ASSIST_MODEL_ENV,
+    BACKUP_API_KEY_ENV,
+    BACKUP_BASE_URL_ENV,
+    BACKUP_MODEL_ENV,
+    BACKUP_OLLAMA_API_KEY_ENV,
+    BACKUP_OLLAMA_BASE_URL_ENV,
+    BACKUP_OLLAMA_MODEL_ENV,
     DEFAULT_PROVIDER_MODEL,
     GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS,
     GLM_4_7_FLASH_MAX_OUTPUT_TOKENS,
     LOCAL_PROVIDER_TIMEOUT_SECONDS,
+    OLLAMA_API_KEY_ENV,
+    OLLAMA_BASE_URL_ENV,
+    OLLAMA_MODEL_ENV,
     PROVIDER_API_KEY_ENV,
     PROVIDER_BASE_URL_ENV,
     PROVIDER_FALLBACK_API_KEY_ENV,
@@ -42,6 +55,7 @@ from agent_runtime.providers import (
     provider_from_environment,
     provider_max_output_token_limit,
     provider_max_output_tokens,
+    provider_model,
     provider_thinking_mode,
 )
 from pydantic import SecretStr, ValidationError
@@ -65,8 +79,49 @@ def _messages(*, text: str = "user input") -> list[ProviderMessage]:
     return [ProviderMessage(role="user", content=text)]
 
 
+def _new_provider_environment() -> dict[str, str]:
+    return {
+        OLLAMA_BASE_URL_ENV: "http://127.0.0.1:11434/v1",
+        OLLAMA_API_KEY_ENV: "ollama",
+        OLLAMA_MODEL_ENV: "qwen3:8b",
+        ASSIST_BASE_URL_ENV: "https://assist.example/v1",
+        ASSIST_API_KEY_ENV: "assist-secret",
+        ASSIST_MODEL_ENV: "glm-5.3-flash",
+        BACKUP_BASE_URL_ENV: "https://backup.example/v1",
+        BACKUP_API_KEY_ENV: "backup-secret",
+        BACKUP_MODEL_ENV: "grok-4.5",
+        BACKUP_OLLAMA_BASE_URL_ENV: "http://localhost:11434/v1",
+        BACKUP_OLLAMA_API_KEY_ENV: "ollama",
+        BACKUP_OLLAMA_MODEL_ENV: "qwen3.8:27b",
+    }
+
+
+class _ScriptedProvider:
+    def __init__(self, name: str, *outcomes: ProviderResponse | ProviderError) -> None:
+        self.name = name
+        self._outcomes = list(outcomes)
+        self.calls = 0
+
+    async def complete(
+        self,
+        messages: list[ProviderMessage],
+        tools: list[ProviderToolSpec] | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        response_format: object | None = None,
+    ) -> ProviderResponse:
+        await asyncio.sleep(0)
+        del messages, tools, model, max_tokens, response_format
+        self.calls += 1
+        outcome = self._outcomes.pop(0)
+        if isinstance(outcome, ProviderError):
+            raise outcome
+        return outcome
+
+
 def test_provider_max_output_tokens_defaults_to_phase_cap() -> None:
     assert provider_max_output_tokens({}) == PROVIDER_MAX_OUTPUT_TOKENS == 1024
+    assert provider_model({}) == ""
 
 
 def test_glm_output_policy_prefers_quality_default_and_model_limit() -> None:
@@ -215,9 +270,18 @@ class TestOpenAICompatibleProvider:
             with pytest.raises(ValueError):
                 OpenAICompatibleProvider(base_url=bad)
 
-    def test_rejects_non_positive_timeout(self) -> None:
+    @pytest.mark.parametrize("timeout", [0, -1, math.nan, math.inf, -math.inf])
+    def test_rejects_invalid_timeout(self, timeout: float) -> None:
         with pytest.raises(ValueError):
-            OpenAICompatibleProvider(base_url="http://127.0.0.1:11434/v1", timeout_seconds=0)
+            OpenAICompatibleProvider(base_url="http://127.0.0.1:11434/v1", timeout_seconds=timeout)
+
+    def test_allows_true_no_timeout_for_slow_local_provider(self) -> None:
+        provider = OpenAICompatibleProvider(
+            base_url="http://127.0.0.1:11434/v1", timeout_seconds=None
+        )
+        assert provider._client.timeout.connect is None
+        assert provider._client.timeout.read is None
+        asyncio.run(provider.aclose())
 
     def test_rejects_unknown_reasoning_effort(self) -> None:
         with pytest.raises(ValueError):
@@ -582,10 +646,194 @@ class TestOpenAICompatibleProvider:
         asyncio.run(run())
 
 
+class TestFailoverProvider:
+    def test_primary_success_does_not_call_any_fallback(self) -> None:
+        async def run() -> None:
+            providers = [
+                _ScriptedProvider("qwen8", ProviderResponse(text="primary")),
+                _ScriptedProvider("glm", ProviderResponse(text="assist")),
+                _ScriptedProvider("grok", ProviderResponse(text="backup")),
+                _ScriptedProvider("qwen27", ProviderResponse(text="slow")),
+            ]
+            chain = FailoverProvider(*providers)
+            response = await chain.complete(_messages())
+            assert response.text == "primary"
+            assert [provider.name for provider in providers if provider.calls] == ["qwen8"]
+
+        asyncio.run(run())
+
+    @pytest.mark.parametrize(
+        ("outcomes", "expected_calls", "expected_text"),
+        [
+            (
+                (
+                    ProviderError("qwen8 unavailable", failure_code="TIMEOUT"),
+                    ProviderResponse(text="glm"),
+                    ProviderResponse(text="grok"),
+                    ProviderResponse(text="qwen27"),
+                ),
+                ["qwen8", "glm"],
+                "glm",
+            ),
+            (
+                (
+                    ProviderError("qwen8 unavailable", failure_code="TRANSPORT_ERROR"),
+                    ProviderError("glm unavailable", failure_code="UPSTREAM_UNAVAILABLE"),
+                    ProviderResponse(text="grok"),
+                    ProviderResponse(text="qwen27"),
+                ),
+                ["qwen8", "glm", "grok"],
+                "grok",
+            ),
+            (
+                (
+                    ProviderError("qwen8 unavailable", failure_code="RATE_LIMITED"),
+                    ProviderError("glm unavailable", failure_code="RESPONSE_SCHEMA"),
+                    ProviderError("grok unavailable", failure_code="TIMEOUT"),
+                    ProviderResponse(text="qwen27"),
+                ),
+                ["qwen8", "glm", "grok", "qwen27"],
+                "qwen27",
+            ),
+        ],
+    )
+    def test_provider_failures_follow_the_conditional_priority_chain(
+        self,
+        outcomes: tuple[ProviderResponse | ProviderError, ...],
+        expected_calls: list[str],
+        expected_text: str,
+    ) -> None:
+        async def run() -> None:
+            providers = [
+                _ScriptedProvider(name, outcome)
+                for name, outcome in zip(("qwen8", "glm", "grok", "qwen27"), outcomes, strict=True)
+            ]
+            chain = FailoverProvider(*providers)
+            response = await chain.complete(_messages())
+            assert response.text == expected_text
+            assert [provider.name for provider in providers if provider.calls] == expected_calls
+
+        asyncio.run(run())
+
+    @pytest.mark.parametrize(
+        "failure_code",
+        [
+            "INVALID_CONFIGURATION",
+            "HTTP_ERROR",
+            "BUDGET_EXCEEDED",
+            "USAGE_MISSING",
+            "TOOL_CALL",
+            "CONTEXT_BUDGET",
+        ],
+    )
+    def test_terminal_provider_failure_does_not_trigger_fallback(self, failure_code: str) -> None:
+        async def run() -> None:
+            providers = [
+                _ScriptedProvider("qwen8", ProviderError("terminal", failure_code=failure_code)),
+                _ScriptedProvider("glm", ProviderResponse(text="must not run")),
+                _ScriptedProvider("grok", ProviderResponse(text="must not run")),
+                _ScriptedProvider("qwen27", ProviderResponse(text="must not run")),
+            ]
+            chain = FailoverProvider(*providers)
+            with pytest.raises(ProviderError) as caught:
+                await chain.complete(_messages())
+            assert caught.value.failure_code == failure_code
+            assert [provider.name for provider in providers if provider.calls] == ["qwen8"]
+
+        asyncio.run(run())
+
+    def test_candidate_iterator_advances_after_malformed_or_unknown_response(self) -> None:
+        async def run() -> None:
+            providers = [
+                _ScriptedProvider("qwen8", ProviderResponse(text='{"answer_status":"UNKNOWN"}')),
+                _ScriptedProvider("glm", ProviderResponse(text='{"not":"coach"}')),
+                _ScriptedProvider("grok", ProviderResponse(text="production")),
+                _ScriptedProvider("qwen27", ProviderResponse(text="must not run")),
+            ]
+            chain = FailoverProvider(*providers)
+            iterator = chain.iter_candidates(
+                _messages(), tools=[], model=None, max_tokens=None, response_format=None
+            )
+            first = await anext(iterator)
+            second = await anext(iterator)
+            third = await anext(iterator)
+            assert [first.text, second.text, third.text] == [
+                '{"answer_status":"UNKNOWN"}',
+                '{"not":"coach"}',
+                "production",
+            ]
+            await iterator.aclose()
+            assert [provider.name for provider in providers if provider.calls] == [
+                "qwen8",
+                "glm",
+                "grok",
+            ]
+
+        asyncio.run(run())
+
+    def test_candidate_iterator_skips_transport_failure_once(self) -> None:
+        async def run() -> None:
+            providers = [
+                _ScriptedProvider("qwen8", ProviderError("down", failure_code="TIMEOUT")),
+                _ScriptedProvider("glm", ProviderError("glm unavailable", failure_code="TIMEOUT")),
+                _ScriptedProvider("grok", ProviderResponse(text="production")),
+                _ScriptedProvider("qwen27", ProviderResponse(text="must not run")),
+            ]
+            chain = FailoverProvider(*providers)
+            iterator = chain.iter_candidates(
+                _messages(), tools=[], model=None, max_tokens=None, response_format=None
+            )
+            response = await anext(iterator)
+            assert response.text == "production"
+            assert [provider.name for provider in providers if provider.calls] == [
+                "qwen8",
+                "glm",
+                "grok",
+            ]
+            await iterator.aclose()
+
+        asyncio.run(run())
+
+    def test_concurrent_requests_do_not_share_attempt_state(self) -> None:
+        async def run() -> None:
+            primary = _ScriptedProvider(
+                "qwen8",
+                ProviderError("first down", failure_code="TIMEOUT"),
+                ProviderError("second down", failure_code="TIMEOUT"),
+            )
+            fallback = _ScriptedProvider(
+                "glm",
+                ProviderResponse(text="fallback-1"),
+                ProviderResponse(text="fallback-2"),
+            )
+            chain = FailoverProvider(primary, fallback)
+            responses = await asyncio.gather(
+                chain.complete(_messages(text="one")),
+                chain.complete(_messages(text="two")),
+            )
+            assert {response.text for response in responses} == {"fallback-1", "fallback-2"}
+            assert primary.calls == 2
+            assert fallback.calls == 2
+
+        asyncio.run(run())
+
+
 class TestProviderFromEnvironment:
     @pytest.fixture(autouse=True)
     def _without_fallback_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for name in (
+            OLLAMA_BASE_URL_ENV,
+            OLLAMA_API_KEY_ENV,
+            OLLAMA_MODEL_ENV,
+            ASSIST_BASE_URL_ENV,
+            ASSIST_API_KEY_ENV,
+            ASSIST_MODEL_ENV,
+            BACKUP_BASE_URL_ENV,
+            BACKUP_API_KEY_ENV,
+            BACKUP_MODEL_ENV,
+            BACKUP_OLLAMA_BASE_URL_ENV,
+            BACKUP_OLLAMA_API_KEY_ENV,
+            BACKUP_OLLAMA_MODEL_ENV,
             PROVIDER_FALLBACK_API_KEY_ENV,
             PROVIDER_FALLBACK_BASE_URL_ENV,
             PROVIDER_FALLBACK_MODEL_ENV,
@@ -618,6 +866,55 @@ class TestProviderFromEnvironment:
         assert provider._thinking == "disabled"
         assert provider._proxy == "http://127.0.0.1:7899"
         assert "sk-secret-123" not in repr(provider)
+
+    def test_named_environment_builds_the_new_priority_chain(self) -> None:
+        values = _new_provider_environment()
+        provider = provider_from_environment(
+            environ=values,
+            transport=_transport_that_returns(
+                {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+            ),
+        )
+        assert isinstance(provider, FailoverProvider)
+        assert [candidate._model for candidate in provider._providers] == [
+            "qwen3:8b",
+            "glm-5.3-flash",
+            "grok-4.5",
+            "qwen3.8:27b",
+        ]
+        assert provider._providers[0]._client.timeout.read == LOCAL_PROVIDER_TIMEOUT_SECONDS
+        assert provider._providers[3]._client.timeout.read is None
+        assert provider_model(values) == "qwen3:8b"
+        assert provider_max_output_tokens(values) == PROVIDER_MAX_OUTPUT_TOKENS
+        assert provider_thinking_mode(values) is None
+        assert "assist-secret" not in repr(provider)
+        assert "backup-secret" not in repr(provider)
+        asyncio.run(provider.aclose())
+
+    @pytest.mark.parametrize(
+        "missing",
+        [ASSIST_API_KEY_ENV, BACKUP_MODEL_ENV, BACKUP_OLLAMA_BASE_URL_ENV],
+    )
+    def test_named_environment_requires_each_provider_slot(self, missing: str) -> None:
+        values = _new_provider_environment()
+        values.pop(missing)
+        with pytest.raises(ProviderError) as caught:
+            provider_from_environment(environ=values)
+        assert caught.value.failure_code == "INVALID_CONFIGURATION"
+
+    def test_named_environment_rejects_wrong_role_model(self) -> None:
+        values = _new_provider_environment()
+        values[ASSIST_MODEL_ENV] = "glm-4.7-flash"
+        with pytest.raises(ProviderError) as caught:
+            provider_from_environment(environ=values)
+        assert caught.value.failure_code == "INVALID_CONFIGURATION"
+
+    def test_named_environment_does_not_merge_with_legacy_selection(self) -> None:
+        values = _new_provider_environment()
+        values[PROVIDER_BASE_URL_ENV] = "https://legacy.example/v1"
+        with pytest.raises(ProviderError) as caught:
+            provider_from_environment(environ=values)
+        assert caught.value.failure_code == "INVALID_CONFIGURATION"
 
     def test_defaults_primary_model_to_glm(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://open.bigmodel.cn/api/paas/v4")
@@ -716,7 +1013,7 @@ class TestProviderFromEnvironment:
                 ("primary.example", "Bearer primary-secret", "glm-4.7-flash"),
                 ("primary.example", "Bearer fallback-secret", "glm-4.7-flash"),
             ]
-            assert provider._fallback._thinking == "disabled"
+            assert provider._providers[1]._thinking == "disabled"
             await provider.aclose()
 
         asyncio.run(run())
@@ -757,10 +1054,10 @@ class TestProviderFromEnvironment:
                 ("127.0.0.1", "qwen3.8:27b"),
                 ("fallback.example", "backup-model"),
             ]
-            assert provider._fallback._thinking == "disabled"
-            assert provider._fallbacks[1]._thinking == "disabled"
-            assert provider._fallback._supports_json_schema is True
-            assert provider._fallback._client.timeout.read == LOCAL_PROVIDER_TIMEOUT_SECONDS
+            assert provider._providers[1]._thinking == "disabled"
+            assert provider._providers[2]._thinking == "disabled"
+            assert provider._providers[1]._supports_json_schema is True
+            assert provider._providers[2]._client.timeout.read == LOCAL_PROVIDER_TIMEOUT_SECONDS
             await provider.aclose()
 
         asyncio.run(run())

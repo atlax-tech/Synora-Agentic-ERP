@@ -85,7 +85,10 @@ def test_enhance_context_budget_failure_is_a_deterministic_200_fallback(monkeypa
     provider = _UnexpectedProvider()
     monkeypatch.setenv("SYNORA_PROVIDER_MODEL", "recorded")
     monkeypatch.delenv("SYNORA_CONTEXT_INPUT_TOKEN_BUDGET", raising=False)
-    monkeypatch.setattr("agent_runtime.app.provider_from_environment", lambda: provider)
+    monkeypatch.setattr(
+        "agent_runtime.app.provider_from_environment",
+        lambda *, environ=None: provider,
+    )
 
     response = asyncio.run(_post_enhance({"plan": PLAN, "provider_name": "ci-test"}))
 

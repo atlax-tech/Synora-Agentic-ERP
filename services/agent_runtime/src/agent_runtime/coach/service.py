@@ -12,7 +12,7 @@ import hashlib
 import hmac
 import os
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any
 
 from agent_runtime.agent.context import (
@@ -49,7 +49,13 @@ from agent_runtime.coach.contracts import (
     coach_provider_output_json_schema,
     parse_coach_provider_output,
 )
-from agent_runtime.providers import FailoverProvider, Provider, ProviderError, ProviderResponse
+from agent_runtime.providers import (
+    FailoverProvider,
+    Provider,
+    ProviderError,
+    ProviderMessage,
+    ProviderResponse,
+)
 from agent_runtime.retrieval.context import search_hits_to_context_fragments
 from agent_runtime.retrieval.index import SearchHit
 
@@ -592,6 +598,33 @@ def _valid_selected_hits(hits: Sequence[SearchHit]) -> tuple[SearchHit, ...]:
     return tuple(hit for hit in hits if hit.chunk_id in selected_ids)
 
 
+async def _provider_candidates(
+    provider: Provider,
+    messages: list[ProviderMessage],
+    *,
+    model: str | None,
+    max_tokens: int | None,
+) -> AsyncIterator[ProviderResponse]:
+    """Yield the bounded response stream used by one Coach request."""
+    if isinstance(provider, FailoverProvider):
+        async for candidate in provider.iter_candidates(
+            messages,
+            tools=[],
+            model=model,
+            max_tokens=max_tokens,
+            response_format=_COACH_RESPONSE_FORMAT,
+        ):
+            yield candidate
+        return
+    yield await provider.complete(
+        messages,
+        tools=[],
+        model=model,
+        max_tokens=max_tokens,
+        response_format=_COACH_RESPONSE_FORMAT,
+    )
+
+
 async def answer_coach(
     request: CoachQuestionRequest,
     current_context: CoachCurrentDocumentContext,
@@ -634,70 +667,53 @@ async def answer_coach(
         context_fragment_ids=context_result.selected_fragment_ids,
     )
     response: ProviderResponse | None = None
+    parsed: CoachProviderOutput | None = None
     try:
         # Explicit [] is part of the security contract: current ERP tools are
         # server-selected and never appear in the provider's tool schema.
-        response = await provider.complete(
+        for_candidate = _provider_candidates(
+            provider,
             list(context_result.messages),
-            tools=[],
             model=model,
             max_tokens=max_tokens,
-            response_format=_COACH_RESPONSE_FORMAT,
         )
-        context_result = record_provider_prompt_tokens(context_result, response.prompt_tokens)
-        if response.tool_calls:
-            return _failed_answer(
-                "REFUSED",
-                _SAFE_REASONS["tools"],
-                usage=_usage(response),
-                latency_ms=_elapsed(started),
-                trace=trace,
-            )
-        if _requires_unavailable_quantity(request.question):
-            return _failed_answer(
-                "UNKNOWN",
-                _SAFE_REASONS["citation"],
-                usage=_usage(response),
-                latency_ms=_elapsed(started),
-                trace=trace,
-            )
-        quality_escalated = False
-        try:
-            parsed = parse_coach_provider_output(response.text)
-        except ValueError, TypeError:
-            if not isinstance(provider, FailoverProvider):
-                raise
-            upgraded = await provider.complete_next(
-                list(context_result.messages),
-                tools=[],
-                max_tokens=max_tokens,
-                response_format=_COACH_RESPONSE_FORMAT,
-            )
-            if upgraded.tool_calls:
-                raise ProviderError(
-                    "quality fallback returned tools", failure_code="TOOL_CALL"
-                ) from None
-            response = _combined_usage(response, upgraded)
-            parsed = parse_coach_provider_output(upgraded.text)
-            quality_escalated = True
-        if (
-            parsed.answer_status == "UNKNOWN"
-            and isinstance(provider, FailoverProvider)
-            and not quality_escalated
-        ):
-            try:
-                upgraded = await provider.complete_next(
-                    list(context_result.messages),
-                    tools=[],
-                    max_tokens=max_tokens,
-                    response_format=_COACH_RESPONSE_FORMAT,
+        async for candidate in for_candidate:
+            response = candidate if response is None else _combined_usage(response, candidate)
+            context_result = record_provider_prompt_tokens(context_result, candidate.prompt_tokens)
+            if candidate.tool_calls:
+                return _failed_answer(
+                    "REFUSED",
+                    _SAFE_REASONS["tools"],
+                    usage=_usage(response),
+                    latency_ms=_elapsed(started),
+                    trace=trace,
                 )
-                if not upgraded.tool_calls:
-                    upgraded_parsed = parse_coach_provider_output(upgraded.text)
-                    response = _combined_usage(response, upgraded)
-                    parsed = upgraded_parsed
-            except ProviderError, ValueError, TypeError:
-                pass
+            if _requires_unavailable_quantity(request.question):
+                return _failed_answer(
+                    "UNKNOWN",
+                    _SAFE_REASONS["citation"],
+                    usage=_usage(response),
+                    latency_ms=_elapsed(started),
+                    trace=trace,
+                )
+            try:
+                candidate_parsed = parse_coach_provider_output(candidate.text)
+            except ValueError, TypeError:
+                if not isinstance(provider, FailoverProvider):
+                    raise
+                # A malformed response is a quality failure, not permission to
+                # retry the same provider.  The iterator advances exactly once
+                # to the next configured role.
+                continue
+            if candidate_parsed.answer_status == "UNKNOWN" and isinstance(
+                provider, FailoverProvider
+            ):
+                # UNKNOWN is a strict model refusal to assert grounding.  Try
+                # the next role, but never reinterpret a valid REFUSED as a
+                # quality failure.
+                continue
+            parsed = candidate_parsed
+            break
     except ProviderError as error:
         return _failed_answer(
             "REFUSED",
@@ -718,6 +734,15 @@ async def answer_coach(
             trace=trace,
         )
     except Exception:
+        return _failed_answer(
+            "UNKNOWN",
+            _SAFE_REASONS["provider"],
+            usage=_usage(response),
+            latency_ms=_elapsed(started),
+            trace=trace,
+        )
+
+    if parsed is None:
         return _failed_answer(
             "UNKNOWN",
             _SAFE_REASONS["provider"],

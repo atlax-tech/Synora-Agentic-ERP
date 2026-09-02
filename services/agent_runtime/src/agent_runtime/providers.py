@@ -14,7 +14,7 @@ API key 脱敏约定 (用户要求):
 import math
 import os
 import ssl
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Literal, Protocol
 
 import httpx
@@ -39,9 +39,28 @@ PROVIDER_FALLBACK_PROXY_ENV = "SYNORA_PROVIDER_FALLBACK_PROXY"
 PROVIDER_LOCAL_BASE_URL_ENV = "SYNORA_PROVIDER_LOCAL_BASE_URL"
 PROVIDER_LOCAL_SMALL_MODEL_ENV = "SYNORA_PROVIDER_LOCAL_SMALL_MODEL"
 PROVIDER_LOCAL_LARGE_MODEL_ENV = "SYNORA_PROVIDER_LOCAL_LARGE_MODEL"
+# Named provider configuration. These names select roles; runtime events decide
+# whether a candidate is actually called.
+OLLAMA_BASE_URL_ENV = "OLLAMA_BASE_URL"
+OLLAMA_API_KEY_ENV = "OLLAMA_API_KEY"
+OLLAMA_MODEL_ENV = "OLLAMA_MODEL"
+ASSIST_BASE_URL_ENV = "ASSIST_BASE_URL"
+ASSIST_API_KEY_ENV = "ASSIST_API_KEY"
+ASSIST_MODEL_ENV = "ASSIST_MODEL"
+BACKUP_BASE_URL_ENV = "BACKUP_BASE_URL"
+BACKUP_API_KEY_ENV = "BACKUP_API_KEY"
+BACKUP_MODEL_ENV = "BACKUP_MODEL"
+BACKUP_OLLAMA_BASE_URL_ENV = "BACKUP_OLLAMA_BASE_URL"
+BACKUP_OLLAMA_API_KEY_ENV = "BACKUP_OLLAMA_API_KEY"
+BACKUP_OLLAMA_MODEL_ENV = "BACKUP_OLLAMA_MODEL"
 PROVIDER_MAX_OUTPUT_TOKENS = 1024
 PROVIDER_MAX_OUTPUT_TOKEN_LIMIT = 8192
 LOCAL_PROVIDER_TIMEOUT_SECONDS = 180.0
+SLOW_LOCAL_PROVIDER_TIMEOUT_SECONDS: float | None = None
+QWEN3_8B_MODEL = "qwen3:8b"
+GLM_5_3_FLASH_MODEL = "glm-5.3-flash"
+GROK_4_5_MODEL = "grok-4.5"
+QWEN3_8_27B_MODEL = "qwen3.8:27b"
 GLM_4_7_FLASH_MODEL = "glm-4.7-flash"
 DEFAULT_PROVIDER_MODEL = GLM_4_7_FLASH_MODEL
 GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS = 65_536
@@ -60,16 +79,54 @@ _FAILOVER_FAILURE_CODES = frozenset(
         "RESPONSE_SCHEMA",
         "RESPONSE_NO_CHOICES",
         "RESPONSE_CONTENT_MISSING",
-        "USAGE_MISSING",
     }
 )
-_NEXT_PROVIDER_FAILURE_CODES = _FAILOVER_FAILURE_CODES | {
-    "RESPONSE_SCHEMA",
-    "RESPONSE_NO_CHOICES",
-    "RESPONSE_CONTENT_MISSING",
-    "USAGE_MISSING",
-}
+_NEW_PROVIDER_ENV_NAMES = frozenset(
+    {
+        OLLAMA_BASE_URL_ENV,
+        OLLAMA_API_KEY_ENV,
+        OLLAMA_MODEL_ENV,
+        ASSIST_BASE_URL_ENV,
+        ASSIST_API_KEY_ENV,
+        ASSIST_MODEL_ENV,
+        BACKUP_BASE_URL_ENV,
+        BACKUP_API_KEY_ENV,
+        BACKUP_MODEL_ENV,
+        BACKUP_OLLAMA_BASE_URL_ENV,
+        BACKUP_OLLAMA_API_KEY_ENV,
+        BACKUP_OLLAMA_MODEL_ENV,
+    }
+)
+_LEGACY_PROVIDER_SELECTION_ENV_NAMES = frozenset(
+    {
+        PROVIDER_BASE_URL_ENV,
+        PROVIDER_API_KEY_ENV,
+        PROVIDER_MODEL_ENV,
+        PROVIDER_FALLBACK_BASE_URL_ENV,
+        PROVIDER_FALLBACK_API_KEY_ENV,
+        PROVIDER_FALLBACK_MODEL_ENV,
+        PROVIDER_LOCAL_BASE_URL_ENV,
+        PROVIDER_LOCAL_SMALL_MODEL_ENV,
+        PROVIDER_LOCAL_LARGE_MODEL_ENV,
+    }
+)
 ProviderResponseFormat = Literal["json_object"] | Mapping[str, object]
+
+
+def _new_provider_configuration_present(values: Mapping[str, str]) -> bool:
+    return any(values.get(name, "").strip() for name in _NEW_PROVIDER_ENV_NAMES)
+
+
+def _primary_model(values: Mapping[str, str]) -> str:
+    if _new_provider_configuration_present(values):
+        return values.get(OLLAMA_MODEL_ENV, "").strip()
+    return values.get(PROVIDER_MODEL_ENV, "").strip()
+
+
+def provider_model(environ: Mapping[str, str] | None = None) -> str:
+    """Return the configured primary model without exposing provider secrets."""
+    values = os.environ if environ is None else environ
+    return _primary_model(values)
 
 
 def _output_token_limits(model: str | None) -> tuple[int, int]:
@@ -91,7 +148,7 @@ def provider_max_output_tokens(environ: Mapping[str, str] | None = None) -> int:
     model-specific hard ceiling.
     """
     values = os.environ if environ is None else environ
-    default, hard_limit = _output_token_limits(values.get(PROVIDER_MODEL_ENV))
+    default, hard_limit = _output_token_limits(_primary_model(values))
     raw = values.get(PROVIDER_MAX_OUTPUT_TOKENS_ENV, "")
     if not raw.strip():
         return default
@@ -109,7 +166,7 @@ def provider_thinking_mode(environ: Mapping[str, str] | None = None) -> str | No
     values = os.environ if environ is None else environ
     return _provider_thinking_mode(
         values,
-        model=values.get(PROVIDER_MODEL_ENV, ""),
+        model=_primary_model(values),
         thinking_env=PROVIDER_THINKING_ENV,
     )
 
@@ -315,7 +372,7 @@ class OpenAICompatibleProvider:
         reasoning_effort: str | None = None,
         thinking: str | None = None,
         proxy: str | None = None,
-        timeout_seconds: float = 60.0,
+        timeout_seconds: float | None = 60.0,
         supports_json_schema: bool = False,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -333,8 +390,10 @@ class OpenAICompatibleProvider:
                 "provider base_url must be an HTTP(S) origin plus a path segment, "
                 "e.g. https://api.example.com/v1"
             )
-        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
-            raise ValueError("provider timeout must be positive")
+        if timeout_seconds is not None and (
+            not math.isfinite(timeout_seconds) or timeout_seconds <= 0
+        ):
+            raise ValueError("provider timeout must be positive or None")
         if reasoning_effort is not None and reasoning_effort not in _REASONING_EFFORTS:
             raise ValueError("provider reasoning_effort must be low, medium, high, or xhigh")
         if thinking is not None and thinking not in _THINKING_MODES:
@@ -544,16 +603,100 @@ class OpenAICompatibleProvider:
 
 
 class FailoverProvider:
-    """Try configured providers once each, in priority order."""
+    """Try configured providers once each, in priority order.
 
-    def __init__(self, primary: Provider, fallback: Provider, *others: Provider) -> None:
-        self._primary = primary
-        self._fallback = fallback
-        self._fallbacks = (fallback, *others)
-        self._last_successful_index = -1
+    The iterator owns all request progress.  The provider chain itself is
+    immutable, so concurrent Coach requests cannot reset or reuse another
+    request's attempt state.
+    """
+
+    def __init__(self, *providers: Provider) -> None:
+        if not providers:
+            raise ValueError("at least one provider is required")
+        self._providers = tuple(providers)
 
     def __repr__(self) -> str:
-        return f"FailoverProvider(fallback_configured={self._fallback is not None})"
+        return f"FailoverProvider(provider_count={len(self._providers)})"
+
+    def _effective_max_tokens(self, index: int, max_tokens: int | None) -> int | None:
+        if index == 0 or max_tokens is None:
+            return max_tokens
+        provider = self._providers[index]
+        if isinstance(provider, OpenAICompatibleProvider):
+            return min(max_tokens, provider_max_output_token_limit(provider._model))
+        return max_tokens
+
+    async def _call_provider(
+        self,
+        index: int,
+        messages: list[ProviderMessage],
+        tools: list[ProviderToolSpec] | None,
+        model: str | None,
+        max_tokens: int | None,
+        response_format: ProviderResponseFormat | None,
+    ) -> ProviderResponse:
+        provider = self._providers[index]
+        return await provider.complete(
+            messages,
+            tools=tools,
+            model=model if index == 0 else None,
+            max_tokens=self._effective_max_tokens(index, max_tokens),
+            response_format=response_format,
+        )
+
+    @staticmethod
+    def _aggregate_errors(errors: Sequence[ProviderError]) -> ProviderError:
+        last_error = errors[-1]
+        return ProviderError(
+            "all configured providers failed",
+            prompt_tokens=sum(error.prompt_tokens for error in errors),
+            completion_tokens=sum(error.completion_tokens for error in errors),
+            reasoning_tokens=sum(error.reasoning_tokens for error in errors),
+            budget_code=next(
+                (error.budget_code for error in reversed(errors) if error.budget_code), None
+            ),
+            failure_code=last_error.failure_code,
+        )
+
+    async def iter_candidates(
+        self,
+        messages: list[ProviderMessage],
+        tools: list[ProviderToolSpec] | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
+    ) -> AsyncIterator[ProviderResponse]:
+        """Yield one successful response per configured provider at most once.
+
+        Transport, rate-limit, timeout, and unusable response-envelope failures
+        advance to the next provider. Authentication, request, context, and
+        budget failures are raised immediately and remain fail-closed. A caller
+        may stop consuming after a valid answer or refusal; no hidden request is
+        made after the iterator is closed.
+        """
+        errors: list[ProviderError] = []
+        yielded = False
+        for index in range(len(self._providers)):
+            try:
+                response = await self._call_provider(
+                    index,
+                    messages,
+                    tools,
+                    model if index == 0 else None,
+                    max_tokens,
+                    response_format,
+                )
+            except ProviderError as error:
+                if error.failure_code not in _FAILOVER_FAILURE_CODES:
+                    raise
+                errors.append(error)
+                continue
+            yielded = True
+            yield response
+        if not yielded and errors:
+            raise self._aggregate_errors(errors) from errors[-1]
+        if not yielded:
+            raise ProviderError("no provider is configured", failure_code="NO_PROVIDER")
 
     async def complete(
         self,
@@ -563,82 +706,19 @@ class FailoverProvider:
         max_tokens: int | None = None,
         response_format: ProviderResponseFormat | None = None,
     ) -> ProviderResponse:
-        self._last_successful_index = -1
-        try:
-            response = await self._primary.complete(
-                messages,
-                tools=tools,
-                model=model,
-                max_tokens=max_tokens,
-                response_format=response_format,
-            )
-            self._last_successful_index = 0
-            return response
-        except ProviderError as primary_error:
-            if primary_error.failure_code not in _FAILOVER_FAILURE_CODES:
-                raise
-            errors = [primary_error]
-            for index, fallback in enumerate(self._fallbacks, start=1):
-                fallback_max_tokens = max_tokens
-                if isinstance(fallback, OpenAICompatibleProvider) and max_tokens is not None:
-                    fallback_max_tokens = min(
-                        max_tokens,
-                        provider_max_output_token_limit(fallback._model),
-                    )
-                try:
-                    response = await fallback.complete(
-                        messages,
-                        tools=tools,
-                        model=None,
-                        max_tokens=fallback_max_tokens,
-                        response_format=response_format,
-                    )
-                    self._last_successful_index = index
-                    return response
-                except ProviderError as error:
-                    errors.append(error)
-                    if error.failure_code not in _NEXT_PROVIDER_FAILURE_CODES:
-                        break
-            last_error = errors[-1]
-            raise ProviderError(
-                "all configured providers failed",
-                prompt_tokens=sum(error.prompt_tokens for error in errors),
-                completion_tokens=sum(error.completion_tokens for error in errors),
-                reasoning_tokens=sum(error.reasoning_tokens for error in errors),
-                budget_code=next(
-                    (error.budget_code for error in reversed(errors) if error.budget_code), None
-                ),
-                failure_code=last_error.failure_code,
-            ) from last_error
-
-    async def complete_next(
-        self,
-        messages: list[ProviderMessage],
-        tools: list[ProviderToolSpec] | None = None,
-        max_tokens: int | None = None,
-        response_format: ProviderResponseFormat | None = None,
-    ) -> ProviderResponse:
-        """Try exactly the next provider after a valid but insufficient response."""
-        next_index = self._last_successful_index + 1
-        if next_index < 1 or next_index > len(self._fallbacks):
-            raise ProviderError("no larger provider is available", failure_code="NO_FALLBACK")
-        provider = self._fallbacks[next_index - 1]
-        effective_max_tokens = max_tokens
-        if isinstance(provider, OpenAICompatibleProvider) and max_tokens is not None:
-            effective_max_tokens = min(max_tokens, provider_max_output_token_limit(provider._model))
-        response = await provider.complete(
+        async for response in self.iter_candidates(
             messages,
-            tools=tools,
-            model=None,
-            max_tokens=effective_max_tokens,
-            response_format=response_format,
-        )
-        self._last_successful_index = next_index
-        return response
+            tools,
+            model,
+            max_tokens,
+            response_format,
+        ):
+            return response
+        raise ProviderError("no usable provider response", failure_code="NO_PROVIDER")
 
     async def aclose(self) -> None:
         errors: list[Exception] = []
-        for provider in (self._primary, *self._fallbacks):
+        for provider in self._providers:
             close = getattr(provider, "aclose", None)
             if not callable(close):
                 continue
@@ -708,39 +788,111 @@ class _CompletionEnvelope(_WireModel):
     choices: tuple[_Choice, ...] = ()
 
 
-def provider_from_environment(
-    transport: httpx.AsyncBaseTransport | None = None,
+def _required_new_provider_value(values: Mapping[str, str], name: str) -> str:
+    value = values.get(name, "").strip()
+    if not value:
+        raise ProviderError(f"{name} is required", failure_code="INVALID_CONFIGURATION")
+    return value
+
+
+def _validate_new_provider_model(values: Mapping[str, str], name: str, expected: str) -> str:
+    value = _required_new_provider_value(values, name)
+    if value != expected:
+        raise ProviderError(
+            f"{name} must select the configured provider role", failure_code="INVALID_CONFIGURATION"
+        )
+    return value
+
+
+def _new_provider_from_environment(
+    values: Mapping[str, str], transport: httpx.AsyncBaseTransport | None
 ) -> Provider:
-    """BYOK 工厂: 从环境变量读取配置构造 OpenAI 兼容 provider。
+    primary_base_url = _required_new_provider_value(values, OLLAMA_BASE_URL_ENV)
+    primary_api_key = _required_new_provider_value(values, OLLAMA_API_KEY_ENV)
+    primary_model = _validate_new_provider_model(values, OLLAMA_MODEL_ENV, QWEN3_8B_MODEL)
+    assist_base_url = _required_new_provider_value(values, ASSIST_BASE_URL_ENV)
+    assist_api_key = _required_new_provider_value(values, ASSIST_API_KEY_ENV)
+    assist_model = _validate_new_provider_model(values, ASSIST_MODEL_ENV, GLM_5_3_FLASH_MODEL)
+    backup_base_url = _required_new_provider_value(values, BACKUP_BASE_URL_ENV)
+    backup_api_key = _required_new_provider_value(values, BACKUP_API_KEY_ENV)
+    backup_model = _validate_new_provider_model(values, BACKUP_MODEL_ENV, GROK_4_5_MODEL)
+    slow_local_base_url = _required_new_provider_value(values, BACKUP_OLLAMA_BASE_URL_ENV)
+    slow_local_api_key = _required_new_provider_value(values, BACKUP_OLLAMA_API_KEY_ENV)
+    slow_local_model = _validate_new_provider_model(
+        values, BACKUP_OLLAMA_MODEL_ENV, QWEN3_8_27B_MODEL
+    )
+    reasoning_effort = values.get(PROVIDER_REASONING_EFFORT_ENV, "").strip() or None
+    proxy = values.get(PROVIDER_PROXY_ENV, "").strip() or None
+    try:
+        primary = OpenAICompatibleProvider(
+            base_url=primary_base_url,
+            api_key=SecretStr(primary_api_key),
+            model=primary_model,
+            timeout_seconds=LOCAL_PROVIDER_TIMEOUT_SECONDS,
+            supports_json_schema=True,
+            # Keep Qwen output answer-only; Coach expects its own JSON contract.
+            thinking="disabled",
+            transport=transport,
+        )
+        assist = OpenAICompatibleProvider(
+            base_url=assist_base_url,
+            api_key=SecretStr(assist_api_key),
+            model=assist_model,
+            reasoning_effort=reasoning_effort,
+            thinking=_provider_thinking_mode(
+                values, model=assist_model, thinking_env=PROVIDER_THINKING_ENV
+            ),
+            proxy=proxy,
+            transport=transport,
+        )
+        backup = OpenAICompatibleProvider(
+            base_url=backup_base_url,
+            api_key=SecretStr(backup_api_key),
+            model=backup_model,
+            reasoning_effort=reasoning_effort,
+            thinking=_provider_thinking_mode(
+                values, model=backup_model, thinking_env=PROVIDER_THINKING_ENV
+            ),
+            proxy=proxy,
+            transport=transport,
+        )
+        slow_local = OpenAICompatibleProvider(
+            base_url=slow_local_base_url,
+            api_key=SecretStr(slow_local_api_key),
+            model=slow_local_model,
+            timeout_seconds=SLOW_LOCAL_PROVIDER_TIMEOUT_SECONDS,
+            supports_json_schema=True,
+            thinking="disabled",
+            transport=transport,
+        )
+    except ValueError as error:
+        # Do not leak a configured URL, proxy, or secret through configuration errors.
+        raise ProviderError(
+            "invalid provider configuration", failure_code="INVALID_CONFIGURATION"
+        ) from error
+    return FailoverProvider(primary, assist, backup, slow_local)
 
-    - SYNORA_PROVIDER_BASE_URL: 必填, HTTP(S) origin 加路径段 (如 https://api.example.com/v1);
-    - SYNORA_PROVIDER_API_KEY: 可选, 由用户填写, 仅以 SecretStr 传入 (脱敏);
-    - SYNORA_PROVIDER_MODEL: 可选, 默认使用 ``glm-4.7-flash``;
-    - SYNORA_PROVIDER_THINKING: 可选, enabled 或 disabled (智谱 GLM 可用);
-    - SYNORA_PROVIDER_PROXY: 可选, 显式 HTTP(S) 代理; 不读取通用代理环境变量。
-    - SYNORA_PROVIDER_FALLBACK_API_KEY: 可选, 填写后启用一次性备用 provider;
-    - SYNORA_PROVIDER_FALLBACK_BASE_URL/MODEL/PROXY: 可选, 缺省时沿用主 provider;
-    - SYNORA_PROVIDER_FALLBACK_THINKING/REASONING_EFFORT: 可选, 备用 provider 专用设置。
 
-    base_url 未配置时抛 ProviderError (fail closed, 不猜测默认地址)。
-    """
-    base_url = os.environ.get(PROVIDER_BASE_URL_ENV, "")
+def _legacy_provider_from_environment(
+    values: Mapping[str, str], transport: httpx.AsyncBaseTransport | None
+) -> Provider:
+    base_url = values.get(PROVIDER_BASE_URL_ENV, "")
     if not base_url:
         raise ProviderError(f"{PROVIDER_BASE_URL_ENV} is not configured; set it in the environment")
-    model = os.environ.get(PROVIDER_MODEL_ENV, "").strip() or DEFAULT_PROVIDER_MODEL
-    proxy = os.environ.get(PROVIDER_PROXY_ENV) or None
+    model = values.get(PROVIDER_MODEL_ENV, "").strip() or DEFAULT_PROVIDER_MODEL
+    proxy = values.get(PROVIDER_PROXY_ENV) or None
     thinking = _provider_thinking_mode(
-        os.environ,
+        values,
         model=model,
         thinking_env=PROVIDER_THINKING_ENV,
     )
-    fallback_api_key = os.environ.get(PROVIDER_FALLBACK_API_KEY_ENV, "")
-    local_base_url = os.environ.get(PROVIDER_LOCAL_BASE_URL_ENV, "").strip()
+    fallback_api_key = values.get(PROVIDER_FALLBACK_API_KEY_ENV, "")
+    local_base_url = values.get(PROVIDER_LOCAL_BASE_URL_ENV, "").strip()
     local_models = tuple(
         value
         for value in (
-            os.environ.get(PROVIDER_LOCAL_SMALL_MODEL_ENV, "").strip(),
-            os.environ.get(PROVIDER_LOCAL_LARGE_MODEL_ENV, "").strip(),
+            values.get(PROVIDER_LOCAL_SMALL_MODEL_ENV, "").strip(),
+            values.get(PROVIDER_LOCAL_LARGE_MODEL_ENV, "").strip(),
         )
         if value
     )
@@ -751,20 +903,18 @@ def provider_from_environment(
         PROVIDER_FALLBACK_THINKING_ENV,
         PROVIDER_FALLBACK_PROXY_ENV,
     )
-    fallback_overrides_configured = any(
-        os.environ.get(name, "").strip() for name in fallback_overrides
-    )
+    fallback_overrides_configured = any(values.get(name, "").strip() for name in fallback_overrides)
     if not fallback_api_key.strip() and fallback_overrides_configured:
         raise ProviderError(
             f"{PROVIDER_FALLBACK_API_KEY_ENV} is required when fallback settings are configured",
             failure_code="INVALID_CONFIGURATION",
         )
-    api_key = os.environ.get(PROVIDER_API_KEY_ENV, "")
+    api_key = values.get(PROVIDER_API_KEY_ENV, "")
     primary = OpenAICompatibleProvider(
         base_url=base_url,
         api_key=SecretStr(api_key) if api_key else None,
         model=model,
-        reasoning_effort=os.environ.get(PROVIDER_REASONING_EFFORT_ENV) or None,
+        reasoning_effort=values.get(PROVIDER_REASONING_EFFORT_ENV) or None,
         thinking=thinking,
         proxy=proxy,
         transport=transport,
@@ -795,26 +945,45 @@ def provider_from_environment(
         )
 
     if fallback_api_key.strip():
-        fallback_model = os.environ.get(PROVIDER_FALLBACK_MODEL_ENV, "").strip() or model
+        fallback_model = values.get(PROVIDER_FALLBACK_MODEL_ENV, "").strip() or model
         fallback_thinking = _provider_thinking_mode(
-            os.environ,
+            values,
             model=fallback_model,
             thinking_env=PROVIDER_FALLBACK_THINKING_ENV,
         )
-        if (
-            not os.environ.get(PROVIDER_FALLBACK_THINKING_ENV, "").strip()
-            and fallback_model == model
-        ):
+        if not values.get(PROVIDER_FALLBACK_THINKING_ENV, "").strip() and fallback_model == model:
             fallback_thinking = thinking
         fallbacks.append(
             OpenAICompatibleProvider(
-                base_url=os.environ.get(PROVIDER_FALLBACK_BASE_URL_ENV, "").strip() or base_url,
+                base_url=values.get(PROVIDER_FALLBACK_BASE_URL_ENV, "").strip() or base_url,
                 api_key=SecretStr(fallback_api_key),
                 model=fallback_model,
-                reasoning_effort=os.environ.get(PROVIDER_FALLBACK_REASONING_EFFORT_ENV) or None,
+                reasoning_effort=values.get(PROVIDER_FALLBACK_REASONING_EFFORT_ENV) or None,
                 thinking=fallback_thinking,
-                proxy=os.environ.get(PROVIDER_FALLBACK_PROXY_ENV) or proxy,
+                proxy=values.get(PROVIDER_FALLBACK_PROXY_ENV) or proxy,
                 transport=transport,
             )
         )
     return FailoverProvider(primary, fallbacks[0], *fallbacks[1:])
+
+
+def provider_from_environment(
+    transport: httpx.AsyncBaseTransport | None = None,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> Provider:
+    """Construct the configured provider chain without guessing missing roles.
+
+    The current named four-slot environment is authoritative whenever any of
+    its fields is present.  The old SYNORA_PROVIDER_* family remains isolated
+    for compatibility with existing tests and older local deployments.
+    """
+    values = os.environ if environ is None else environ
+    if _new_provider_configuration_present(values):
+        if any(values.get(name, "").strip() for name in _LEGACY_PROVIDER_SELECTION_ENV_NAMES):
+            raise ProviderError(
+                "new and legacy provider selections cannot be combined",
+                failure_code="INVALID_CONFIGURATION",
+            )
+        return _new_provider_from_environment(values, transport)
+    return _legacy_provider_from_environment(values, transport)

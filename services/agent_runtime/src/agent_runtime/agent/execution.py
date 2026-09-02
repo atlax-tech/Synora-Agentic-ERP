@@ -35,9 +35,9 @@ from agent_runtime.gateway import (
     ToolCall,
 )
 from agent_runtime.providers import (
-    PROVIDER_MODEL_ENV,
     Provider,
     provider_from_environment,
+    provider_model,
 )
 
 SCHEMA_VERSION: Literal["1"] = "1"
@@ -227,12 +227,17 @@ class GatewayToolAdapter(ToolAdapter):
             await client.aclose()
 
 
-async def execute_agent(request: AgentExecuteRequest) -> AgentExecuteResponse:
+async def execute_agent(
+    request: AgentExecuteRequest,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> AgentExecuteResponse:
     """Run native Tool Calling and return a redacted, deterministic contract."""
+    values = dict(os.environ) if environ is None else environ
     provider_name = "byok-runtime"
-    model_name = os.environ.get(PROVIDER_MODEL_ENV, "").strip()
+    model_name = provider_model(values)
     try:
-        pricing = pricing_from_environment()
+        pricing = pricing_from_environment(values)
     except PricingConfigurationError:
         result = _failure_result(
             request,
@@ -253,7 +258,7 @@ async def execute_agent(request: AgentExecuteRequest) -> AgentExecuteResponse:
         # Acquire the Gateway client first. If provider construction then fails,
         # the already-owned client is closed before returning the safe failure.
         client = GatewayClient()
-        provider = provider_from_environment()
+        provider = provider_from_environment(environ=values)
     except Exception:
         if client is not None:
             try:
