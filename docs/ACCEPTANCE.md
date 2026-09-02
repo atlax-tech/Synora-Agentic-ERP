@@ -1,6 +1,8 @@
 # Acceptance
 
-Status: `CONFIRMED` product-level acceptance direction; milestone-specific thresholds remain partially `UNRESOLVED`.
+Status: `CONFIRMED` product-level acceptance direction. Phase 8 is
+`COMPLETED / PASS / READY FOR THE NEXT PHASE` as of 2026-09-03; Phase 9 has
+not started. The evidence below is the milestone-specific acceptance record.
 
 ## Product Acceptance Principles
 
@@ -56,6 +58,26 @@ Receipt, Invoice, Payment, and PO submission are staged requirements, not remove
 - No documentation or README claim exceeds current evidence.
 - Manual acceptance steps are repeatable.
 - Required phase learning evidence is runnable and no lab or planned capability is presented as production adoption.
+
+## Phase 8 final acceptance (2026-09-03)
+
+- The final immutable Coach instance is bound to source HEAD
+  `562fc42671004e12c3f3b6ee9266d0385e03b04a` and manifest
+  `output/phase8/phase8-manifest-562fc42.json` (SHA-256
+  `1c3e88b23aa410afb2eb70f21de1f67df518a3071de58ae1e4a014246a884e39`).
+- The fixed order `G1,G2,G3,G4,C1,C2,C3,S1,S2,S3,U1,U2` passed once per case:
+  `12/12`; grounding `4/4`, citation `3/3` (positive `2/2` and safe refusal
+  `1/1`), refusal/security `3/3`, usefulness `2/2`. Ten eligible cases have
+  real Provider usage; S1/S2 are security bypasses.
+- The result records no mock substitution, ERP business write, Provider tool,
+  Secret leak, selective rerun, or repository/ERP anchor drift.
+- `output/playwright/phase8-role-acceptance-562fc42.json` is a sanitized
+  binding artifact for Buyer, System Manager, and Viewer observations. It
+  retains the historical browser capture HEAD and explicitly does not claim a
+  fresh capture; current backend Coach, permission, and zero-write evidence
+  are separately bound.
+- Independent read-only review completed with `PASS` before this status was
+  written. Phase 9 remains planned and not started.
 
 ## Sources
 

@@ -12,7 +12,7 @@
       "path": "AGENTS.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "1f721f356fc94e375217ccf954b56cfa961b49298308683f15f75d0fe212ff0b"
+      "sha256": "08191a2ed2ebc17574ee8c14b0b6652f07b81ed8c41f468ec2d2426a509c5d66"
     },
     {
       "path": "docs/PRD.md",
@@ -24,7 +24,7 @@
       "path": "docs/ARCHITECTURE.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "d876dc3ca8093b6a0e9550663f5e80395fbfc437b02489d313953b74cae93a99"
+      "sha256": "ccdcacbab1c6bdb3546a453d2cb368e16ea971a2eeb2d2771e3c416b5d7b9ab1"
     },
     {
       "path": "docs/DESIGN.md",
@@ -36,25 +36,25 @@
       "path": "docs/DEVELOPMENT.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "3f0f60442248e2add68a6013047457635675b3d0e5f3abe13183ae1a29830159"
+      "sha256": "ad1a9d81476d78d66cdcc3b5dc0763492ce823c2b15f1f4100135b183c73f3df"
     },
     {
       "path": "docs/TESTING.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "de686677a52c297bfd63dce3e55de6ebe2a827c7df96e0ac2f9b1428b45e594f"
+      "sha256": "49898737d8a26bfb4a311f05eb35e21aa96ae73c3f5c2c0ad10f89fba2ba832d"
     },
     {
       "path": "docs/ACCEPTANCE.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "b15181d21456722735bbca248ffb539c92ced35a12cfee529c3c40a24d2341a0"
+      "sha256": "847f5b952a40761fc12231226f4f521f51796690fde4ebd32eac4ed927a7b2bb"
     },
     {
       "path": "docs/ROADMAP.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "9044c9a37e650362495c3b5be5bbec55f4ef3d7e0a0f163b153c1218db533ca7"
+      "sha256": "3cff3652730e3fe2ec1ffb7faa7a5b912ed94b8bf3aab3e7da9468cfd8d71e78"
     },
     {
       "path": "docs/SPEC.md",
@@ -66,7 +66,7 @@
       "path": "docs/PLAN.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "81039ccc6a8b554b26310c47e6030c6db143a98b2749a4e59465e1a67e945227"
+      "sha256": "a2fd4202b71735c392fb6179d348303ba2d0dd0002d8ede377e475a66a190867"
     },
     {
       "path": "docs/decisions/README.md",
@@ -120,7 +120,7 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "c8d8f44b9530f0a7c1434dd9262956a5f67b717c2e1c0a9dd476da27a5303538"
+      "sha256": "beddbfe6cc0e7b44bc6a14ad302b355dcb8592bdb3c6a5f33aff02e378afd7e6"
     },
     {
       "path": ".harness/unresolved.json",
@@ -132,13 +132,13 @@
       "path": "README.md",
       "owner": "user",
       "mode": "user",
-      "sha256": "aa4d5cf8285b7131ec6636b52b288d27e95c73e9058d7b54e6e078dd8647f05d"
+      "sha256": "8e71ae44f7abffa5168567cffdbaf4369e7b33cec14c84825a528d92e2b8b1ff"
     },
     {
       "path": "README.zh-CN.md",
       "owner": "user",
       "mode": "user",
-      "sha256": "305fff7e1ba628a11d61e29805c2a9b7e518b739b38ce0d9150ba2dfc5cbbd00"
+      "sha256": "c2ce2d80e3dce7d2a3a7fd97f2330fde3622f0149bb9efd02f0062970cb2ed71"
     },
     {
       "path": "LICENSE",
@@ -258,10 +258,10 @@
       "path": "docs/development-log/20260830-Phase-8-开发日志.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "23b1c3eeae852b792f178f25d8bb7973ea9bec26effbead60625170e2c36c354"
+      "sha256": "69b2e21cf7e4afeef4f3ff4c0ce612f0f18ab3f68f7e791290f2f7f948b82aeb"
     }
   ],
   "source_index": ".harness/source-index.json",
   "unresolved_index": ".harness/unresolved.json",
-  "last_updated": "2026-08-31T00:00:00Z"
+  "last_updated": "2026-09-02T15:45:13Z"
 }

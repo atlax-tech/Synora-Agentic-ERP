@@ -15,7 +15,7 @@
       "path": "docs/ARCHITECTURE.md",
       "kind": "architecture",
       "status": "CONFIRMED",
-      "sha256": "d876dc3ca8093b6a0e9550663f5e80395fbfc437b02489d313953b74cae93a99",
+      "sha256": "ccdcacbab1c6bdb3546a453d2cb368e16ea971a2eeb2d2771e3c416b5d7b9ab1",
       "locator": "approved target architecture; open implementation decisions remain explicit"
     },
     {
@@ -31,7 +31,7 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "81039ccc6a8b554b26310c47e6030c6db143a98b2749a4e59465e1a67e945227",
+      "sha256": "a2fd4202b71735c392fb6179d348303ba2d0dd0002d8ede377e475a66a190867",
       "locator": "automatic phase trigger, ChatGPT atomic-task decisions, Codex-only execution, risk-tiered gates, independent adversarial review, and Phase 0 through Phase 13 order"
     },
     {
@@ -71,7 +71,7 @@
       "path": "AGENTS.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "1f721f356fc94e375217ccf954b56cfa961b49298308683f15f75d0fe212ff0b",
+      "sha256": "08191a2ed2ebc17574ee8c14b0b6652f07b81ed8c41f468ec2d2426a509c5d66",
       "locator": "repository boundaries, automatic C2C phase workflow, ChatGPT decision and Codex execution split, independent review gate, and mentor-led Assignment workflow"
     },
     {
@@ -87,7 +87,7 @@
       "path": "docs/DEVELOPMENT.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "3f0f60442248e2add68a6013047457635675b3d0e5f3abe13183ae1a29830159",
+      "sha256": "ad1a9d81476d78d66cdcc3b5dc0763492ce823c2b15f1f4100135b183c73f3df",
       "locator": "implementation evidence protocol, mentor-led Assignment requirement, verbatim blocker recording, and phase/release PASS gate"
     },
     {
@@ -95,7 +95,7 @@
       "path": "README.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "aa4d5cf8285b7131ec6636b52b288d27e95c73e9058d7b54e6e078dd8647f05d",
+      "sha256": "8e71ae44f7abffa5168567cffdbaf4369e7b33cec14c84825a528d92e2b8b1ff",
       "locator": "English repository positioning, evidence status, mentor-led learning workflow, phase gates, architecture summary, and roadmap"
     },
     {
@@ -151,7 +151,7 @@
       "path": "services/agent_runtime/src/agent_runtime/gateway.py",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "d1948b857a8fbc53710f03033130ec754052c455680b3291e29ccd6915110591",
+      "sha256": "c3df0d2d2d0d034e2e962d1662effbb26b782946e77326a6f2b9a28181668c84",
       "locator": "P2.5 runtime typed gateway HTTPX client implementation"
     },
     {
@@ -216,7 +216,7 @@
       "kind": "code",
       "locator": "Provider 接口：Deterministic(CI)/OpenAI 兼容(BYOK)，SecretStr 脱敏、请求级 max_tokens + usage/reasoning token 校验、fail-closed 解析",
       "status": "CONFIRMED",
-      "sha256": "97b1fdae98a7e05d4b8c94d395c1e57d8465190ccd129ae7ee87887aeb28bb4d"
+      "sha256": "c7f846d7aea48b4a6d7fadf7a23f9d2b6181a9bd054d3868734e58062f0bb9c5"
     },
     {
       "id": "p36-retrieval-module",
@@ -224,7 +224,7 @@
       "kind": "code",
       "locator": "SQLite FTS5/BM25 检索基线 + CJK 子串补充；查询按 permission_scope 过滤，Coach 接入仍需调用方 scope 映射",
       "status": "CONFIRMED",
-      "sha256": "5c1f55791fd2a89b3b3b587d7ec2c181890da452574f2ec8edaf03ec478ad905"
+      "sha256": "8fdcda53bb42c75a151ed5a881473327b5ea0f23b4e6cfc55203b1c65dbd7569"
     },
     {
       "id": "p33-analysis-module",
@@ -288,7 +288,7 @@
       "kind": "code",
       "locator": "P3.5 plan/analyze 编排、Run capability/state/CAS、失败恢复、Runtime tokenized HTTP boundary",
       "status": "CONFIRMED",
-      "sha256": "929573c7f03104e3fcc3063d367b63fd22807fa66cb07e75f4a77b89c3af969c"
+      "sha256": "0ab0e281b946b3296a5499a5cd0fbd4ba3b381f4df5d3157ce99a12e372499f3"
     },
     {
       "id": "p35-runtime-app",
@@ -296,7 +296,7 @@
       "kind": "code",
       "locator": "Runtime /enhance：内部令牌校验、BYOK provider label、确定性回退和 evidence 返回",
       "status": "CONFIRMED",
-      "sha256": "fa65460bce06e6da8dab15f8825f9daf0d47b3f75a0c3432988ac94e29424740"
+      "sha256": "9482699ce9e8a02f4307ad884decde26361e8e2d7cd9ab1084bb04837b1abadd"
     },
     {
       "id": "p35-api-evidence",
@@ -304,7 +304,7 @@
       "kind": "code",
       "locator": "Run Plan evidence API 与 T03 Memory review queue/detail/review wrappers；provider/token/权限边界保持受控",
       "status": "CONFIRMED",
-      "sha256": "c86741f245b03cd0b6f742df0bc9670fd8ac95c331ce5eb69a1efb030746eda8"
+      "sha256": "a397c1e51869ce8fe9ed38cc6a3dc7c2fd1bdd7eb75180be6335f11576791a31"
     },
     {
       "id": "p35-run-plan-doctype",
@@ -320,7 +320,7 @@
       "kind": "testing",
       "locator": "Run 状态/CAS/失败恢复/Runtime URL 与 host-gateway 令牌边界测试",
       "status": "CONFIRMED",
-      "sha256": "6ad6808bb45358048438cd6f9f3ad50b0e132d1e106ee4dae1a75a47b5b58974"
+      "sha256": "39105e1dbe741714463d96aee45aa9ad73976c6d27a6b7b76e5df3bbca65c2eb"
     },
     {
       "id": "p35-provider-tests",
@@ -328,7 +328,7 @@
       "kind": "testing",
       "locator": "Provider MockTransport 契约：usage 缺失、completion/reasoning token 超预算、重试和 BYOK 配置",
       "status": "CONFIRMED",
-      "sha256": "0c7798ac64a41a9e47fa055b7d2bbb336675201033954f697bcc109d8a28bb28"
+      "sha256": "717e3655ea09faec12e1e58f7cc3335ef38de79bcb08b041000412e85ffbf097"
     },
     {
       "id": "p35-real-http-script",
@@ -527,7 +527,7 @@
       "path": "docs/development-log/20260830-Phase-8-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "23b1c3eeae852b792f178f25d8bb7973ea9bec26effbead60625170e2c36c354",
+      "sha256": "69b2e21cf7e4afeef4f3ff4c0ce612f0f18ab3f68f7e791290f2f7f948b82aeb",
       "locator": "Phase 8 T01 correction, T03 Frappe Memory review slice, Memory foundation/retrieval prerequisite mapping, validation evidence, and current phase boundary"
     },
     {
@@ -535,7 +535,7 @@
       "path": "services/agent_runtime/src/agent_runtime/agent/prompting.py",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "8bfdaf1c306c7eff4394ce97a7b35b0d945c8eecf1d25eeb221bab5540489c94",
+      "sha256": "9d4361184368d59c7d083e02b37617f51013bb88f45ae5d8b3b9e0d31e9b3b70",
       "locator": "Prompt schema v2 registry, four immutable layers, canonical profile hash, and single-variable decision profile"
     },
     {
@@ -559,7 +559,7 @@
       "path": "services/agent_runtime/src/agent_runtime/evaluation/phase7.py",
       "kind": "testing",
       "status": "CONFIRMED",
-      "sha256": "d05e9b5ff216b115b8290533baaf9ff10176f2b1758bbd681b7c730dcadd0d4b",
+      "sha256": "605f91620b43d866a6da2bdedd59ae9b921ad468962ec2034f2256905eeb4b52",
       "locator": "Phase 7 fixed-task recorded comparison for Prompt A/B, Context compression, Skill on/off, malicious Skill, and budget failure"
     },
     {
@@ -599,7 +599,7 @@
       "path": "synora_agentic_erp/synora_agentic_erp/page/runs/runs.js",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "45c96febf85ae26ddf5176f134a9a0fa0176365af79b759482b65adf829f2966",
+      "sha256": "d574a6418852fa1e9bd258cf905ef9bc776db5df947810b9ecd77ad1ff05a566",
       "locator": "Runs Trace metadata rendering, escaping, status announcements, keyboard controls, pagination, and permission-filtered details"
     },
     {
@@ -607,7 +607,7 @@
       "path": "synora_agentic_erp/synora_agentic_erp/doctype/synora_memory_record/synora_memory_record.json",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "15410aa99c86d8153567127addce34bc341610448ece87b34c7854261c78a164",
+      "sha256": "ed11257fa4835626165057d8f3ca132b6d9e7fae19f4fe31c1208e6f944c0211",
       "locator": "T03 Frappe-authoritative Memory DocType fields, durable kinds, candidate/review states, and restricted generic permissions"
     },
     {
@@ -615,7 +615,7 @@
       "path": "synora_agentic_erp/synora_agentic_erp/doctype/synora_memory_record/synora_memory_record.py",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "56e92a38eec6666de3f3c8ced6bc7fe85055017428eaf6631d7a413b4e2d4d3b",
+      "sha256": "b14a365dfd9f84a2df411ddf8913910596b545d9703fb07c36bbc1d64fb694d9",
       "locator": "T03 service-flagged candidate invariants, digest/content trust label, immutable fields, review state transition, and direct-delete rejection"
     },
     {
@@ -623,7 +623,7 @@
       "path": "synora_agentic_erp/memory/service.py",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "d0bb5d794b29ca7f1a2ee46e05c6a349d325cfe950ba1dd69a1b1975120e8477",
+      "sha256": "445c60191a8c09ff4cb69470cb0e5a6dc5a6470ef3f617f1f34104e39467ebcc",
       "locator": "T03 scoped review queue/detail/decision service with current Frappe permissions, opaque lookup, row-lock CAS, and timestamp conflict handling"
     },
     {
@@ -639,7 +639,7 @@
       "path": "synora_agentic_erp/tests/test_memory_review.py",
       "kind": "testing",
       "status": "CONFIRMED",
-      "sha256": "8a8747b4e461808da7361f583c13cc1dcf9895ae0ef5a990b240bf49bbf2cb6e",
+      "sha256": "2d086e1af2d14842124cb4e461f6d1c000a0b1d1210ff63ac8c2153ac6283820",
       "locator": "T03 real Frappe persistence, permission scope, opaque lookup, expiry/correction, server review stamping, CAS and API tests"
     },
     {
@@ -647,7 +647,7 @@
       "path": "tests/test_memory_authority_contract.py",
       "kind": "testing",
       "status": "CONFIRMED",
-      "sha256": "22db6df067b269599a3b1a8092601d03831f113ec5c3d712e1ba412f141e6274",
+      "sha256": "1f159e45ea09c34a44b78f34c1efb12baa27fef806f49926ee1bb84fe30b7d19",
       "locator": "T03 pure contract checks for Frappe authority, durable kind/state metadata, restricted DocPerm, no Runtime/provider/tool dependency, and safe Desk rendering"
     },
     {
@@ -655,7 +655,7 @@
       "path": "synora_agentic_erp/hooks.py",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "9945f5e660c84c567b25d3ae6fad186b9e49b29cfedcfb3dc72e5ee41a4ac24d",
+      "sha256": "a81c3a5e053f160820897778360f494b064bd2d920f7ea5889da40a3f818b67b",
       "locator": "T03 server permission_query_conditions and has_permission hooks for scoped native Memory review"
     },
     {
@@ -663,7 +663,7 @@
       "path": "synora_agentic_erp/synora_agentic_erp/doctype/synora_memory_record/synora_memory_record.js",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "e6a017ef23f8c341d77d5a682e66121e8e23b10f7d5d348fed9405378e5ad415",
+      "sha256": "b0502f5ef8e52fbb04243f84e807ed8b59ca9a3a785fdf549717881ddaa98595",
       "locator": "T03 native Memory Form UNTRUSTED review warning and controlled approve/reject actions"
     },
     {

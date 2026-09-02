@@ -160,7 +160,7 @@ bash env/dev/scripts/dev/env.sh bash \
 
 ```bash
 uv run --python 3.14 pytest services/agent_runtime/tests/test_providers.py -v
-# 期望：18 passed（含 base_url 校验、fail-closed、secret 防泄漏用例）
+# 当前基线：67 passed（含 base_url 校验、命名角色路由、有限 deadline、fail-closed、secret 防泄漏用例）
 ```
 
 ### 连通性测试（填好 .env 后）
@@ -205,6 +205,48 @@ real provider request was made, but the returned output exceeded the combined
 completion/reasoning-token budget and was safely replaced by the deterministic
 summary. This is a successful fail-closed chain, not a claim that model prose
 was accepted.
+
+## Phase 8 Coach closure evidence (2026-09-03)
+
+The current Coach route is frozen to the four named roles above. It uses a
+request-scoped iterator, tries each candidate at most once, and only escalates
+on malformed/strict `UNKNOWN` or transient unavailability. Authentication,
+configuration, budget, context, and safety refusals remain fail-closed. The
+last local `qwen3.8:27b` role and the Frappe-to-Runtime Coach call use a fixed
+900-second deadline: this is deliberately long enough for the slow local model
+while still preventing a permanently hung socket or Run. It is not an
+invitation to proactively call paid fallbacks.
+
+The final real evidence is bound to source HEAD
+`562fc42671004e12c3f3b6ee9266d0385e03b04a`:
+
+- representative `G1`: `PASS`, HTTP 200 `ANSWERED`, non-empty server-rebuilt
+  answer, `ERP_FACT` and `LIVE_ERP` citation, `tools=[]`, positive prompt
+  usage, unchanged ERP anchors, and no Secret;
+- fixed order `G1,G2,G3,G4,C1,C2,C3,S1,S2,S3,U1,U2`: `12/12 PASS`, grounding
+  `4/4`, citation `3/3` (positive `2/2`, safe refusal `1/1`), refusal/security
+  `3/3`, usefulness `2/2`; each case ran once and the ten eligible cases have
+  real usage;
+- `mock_substitution=false`, `erp_business_zero_write=true`,
+  `provider_tools_empty=true`, `repo_status_unchanged=true`,
+  `secret_leak=false`, `selective_rerun=false`;
+- immutable files are
+  `output/phase8/phase8-manifest-562fc42.json` (SHA-256
+  `1c3e88b23aa410afb2eb70f21de1f67df518a3071de58ae1e4a014246a884e39`),
+  `output/phase8/phase8-representative-562fc42.json`, and
+  `output/phase8/phase8-real-coach-acceptance-562fc42.json`; the sanitized
+  role artifact is
+  `output/playwright/phase8-role-acceptance-562fc42.json`, explicitly bound to
+  the current backend evidence while retaining its historical browser-capture
+  HEAD rather than claiming a fresh screenshot.
+
+The GLM/Grok connectivity diagnosis is recorded separately in
+`output/phase8/provider-connectivity-20260902.json`. GLM's billed HTTP 200
+request once returned an empty final content envelope; the same configured
+role then returned `OK` with `reasoning_effort=low`. Grok's initial 403 came
+from the old gateway mapping; the corrected `cf.api.fan/v1` endpoint was
+verified with the Grok Responses protocol (HTTP 200) and its key/model were
+therefore not re-tested during final Coach acceptance.
 
 ## Sources
 

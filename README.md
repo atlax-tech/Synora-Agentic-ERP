@@ -8,7 +8,9 @@
 
 Synora has completed **Phase 0 through Phase 3** for its read-only scope: the governed engineering baseline, the pinned Frappe/ERPNext v16 pair, the typed read-only ERP Gateway (server-side Run/capability model, verified read tools, Agent Runtime HTTPX client), and the read-only procurement Agent (deterministic risk analysis, explainable plans, BYOK model provider, FTS5 retrieval, and fail-closed explanation enhancement) are implemented. The P3.5 Buyer → Frappe → Runtime → BYOK path has been exercised over real HTTP; unsafe, over-budget, or unverified model output is deliberately replaced by the deterministic summary.
 
-Phase 3 exit review **passed**: the independent adversarial review initially returned `CHANGES_REQUIRED` with eight blocking findings; the fixes were re-verified across three review rounds, and the final cleanup also closed the CAS-loser recovery race, Docker sidecar configuration/authentication, redirect handling, reasoning-token accounting, and stale evidence wording. The model guard is accurately described as a request output budget plus provider usage verification—not a provider-side hard cost cap. Phase 4 has not started; approval/workflow mapping remains an explicit gate, and all write operations remain staged.
+Phase 3 exit review **passed**: the independent adversarial review initially returned `CHANGES_REQUIRED` with eight blocking findings; the fixes were re-verified across three review rounds, and the final cleanup also closed the CAS-loser recovery race, Docker sidecar configuration/authentication, redirect handling, reasoning-token accounting, and stale evidence wording. The model guard is accurately described as a request output budget plus provider usage verification—not a provider-side hard cost cap. Phases 4–7 are complete. Phase 8 is now **`COMPLETED / PASS / READY FOR THE NEXT PHASE`** (2026-09-03), backed by a real grounded Coach representative, one immutable 12-case run, three-role permission evidence, zero-write checks, and independent read-only review. Phase 9 has not started; later ERP writes remain separately staged.
+
+Phase 8's Coach route uses named BYOK roles (`qwen3:8b` → `glm-5.3-flash` → `grok-4.5` → `qwen3.8:27b`) with request-scoped, bounded escalation, `tools=[]`, `trust_env=False`, and finite deadlines. The result proves the implemented read-only path and its safety boundaries; it does not claim production deployment, customer adoption, or a general model-quality benchmark.
 
 The approved repository position is **Agent-development job learning repository + real ERP practice vehicle**. It uses one repository and one development line with two code purposes: the business application layer proves Agent techniques against real ERP constraints; the teaching lab builds minimal, runnable comparisons before those techniques are adopted or rejected. This is not two repositories or two long-lived branches, and commercial-minimum scope is not the learning goal.
 
@@ -246,7 +248,7 @@ Before a release or version update, an independent adversarial sub-agent must re
 - [x] Phase 5: durable workflow, Plan-and-Execute, checkpoint, HITL, and recovery
 - [x] Phase 6: governed MR/PO Draft actions, approval, idempotency, receipt, and reconciliation
 - [x] Phase 7: Prompt, Context Engineering, and Skills
-- [ ] Phase 8: Memory, RAG, and Contextual ERP Coach
+- [x] Phase 8: Memory, RAG, and Contextual ERP Coach
 - [ ] Phase 9: Multi-Agent, MCP, and A2A experiments with evidence-gated adoption
 - [ ] Phase 10: complete P2P operating Agent
 - [ ] Phase 11: Web/GUI Agents and multimodal observation
@@ -257,7 +259,7 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for milestone entry and exit conditions
 
 ## Contributing
 
-The governed read-only gateway and Phase 3 procurement Agent are implemented; later phases remain staged. Before proposing a change, read `AGENTS.md` and the affected requirement, architecture, testing, and acceptance documents. Follow the Assignment/mentor workflow, keep commits small, record the change and verbatim questions in `docs/development-log/`, and report commands that actually ran.
+The governed read-only gateway, Phase 3 procurement Agent, and Phase 8 contextual Coach closure are implemented; Phase 9 and later phases remain staged. Before proposing a change, read `AGENTS.md` and the affected requirement, architecture, testing, and acceptance documents. Follow the Assignment/mentor workflow, keep commits small, record the change and verbatim questions in `docs/development-log/`, and report commands that actually ran.
 
 ## FAQ
 
@@ -275,7 +277,7 @@ FTS5 is local, inspectable, inexpensive, and provides a clear baseline. The comp
 
 ### Can I run Synora today?
 
-The Phase 3 read-only Gateway and procurement Agent are runnable against the pinned Bench environment: see `docs/DEVELOPMENT.md` and the `env/dev/p26`/`env/dev/p35` real-HTTP checks. Phase 4–13 remain planned; the first governed writes are Phase 6, and `approval-workflow-mapping` must be resolved before they are enabled.
+The Phase 3 read-only Gateway and procurement Agent are runnable against the pinned Bench environment: see `docs/DEVELOPMENT.md` and the `env/dev/p26`/`env/dev/p35` real-HTTP checks. Phase 8's real Coach evidence and rerunnable commands are recorded in `docs/TESTING.md` and `output/phase8/`. Phase 9 has not started; `approval-workflow-mapping` and later governed writes remain separately staged.
 
 ## License
 

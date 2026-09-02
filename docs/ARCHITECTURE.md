@@ -1,6 +1,6 @@
 # Architecture
 
-Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is complete and its exit is `COMPLETED / PASS` after real ERP, fault, browser, Harness, independent Test, and adversarial Review evidence. Phase 7 Prompt/Context/Skills implementation and exit evidence are complete with status `COMPLETED / PASS`; its Prompt/Context/Skill metadata remains non-authorizing, Frappe remains authoritative, and no ERP write capability was added. Phase 8 Memory/RAG/Contextual ERP Coach is `IN_PROGRESS`; the Frappe-authoritative Memory lifecycle, deterministic chunk/FTS5 retrieval, T05 local retrieval comparison, T06 provider-neutral current MR/PO read boundary, and T07 grounded Coach claim/provenance boundary are implemented, while Desk UI, BYOK/browser acceptance, independent final review, and phase-exit evidence remain pending. Phase 9–13 remain planned and are not started.
+Status: `CONFIRMED` target architecture; Phase 0–4 components are implemented. Phase 5 durable workflow is implemented and its exit is `PASS` after the evidence recorded in ADR-0006 and the Harness baseline synchronization. Phase 6 governed MR/PO Draft implementation is complete and its exit is `COMPLETED / PASS` after real ERP, fault, browser, Harness, independent Test, and adversarial Review evidence. Phase 7 Prompt/Context/Skills implementation and exit evidence are complete with status `COMPLETED / PASS`; its Prompt/Context/Skill metadata remains non-authorizing, Frappe remains authoritative, and no ERP write capability was added. Phase 8 Memory/RAG/Contextual ERP Coach is `COMPLETED / PASS / READY FOR THE NEXT PHASE` (2026-09-03): Frappe-authoritative Memory lifecycle, deterministic FTS5 retrieval, provider-neutral current MR/PO boundary, grounded Coach claims, named BYOK fallback roles, real 12-case Coach evidence, browser-role evidence, zero-write checks, and independent read-only review are complete. Phase 9–13 remain planned and are not started.
 
 ## Architectural Style
 
@@ -65,6 +65,10 @@ The separation isolates fast-changing model orchestration from the deterministic
 - Agent checkpoints own recoverable orchestration state only; they are not business facts.
 - Repository documents own product intent, architecture decisions, verified ERP knowledge, testing evidence, and development history.
 - Retrieval indexes are rebuildable chunk caches with source/revision/scope metadata and never become a source of truth.
+
+### Phase 8 Coach provider boundary
+
+The Coach uses a request-scoped, bounded candidate iterator with no shared attempt state: `qwen3:8b` (local Responses + JSON Schema), `glm-5.3-flash` (remote Chat + `json_object`), `grok-4.5` (remote Responses + `json_object`), then `qwen3.8:27b` (local Responses + JSON Schema). A candidate is tried at most once and escalation is limited to malformed/strict `UNKNOWN` or transient unavailability; authentication, invalid configuration/request, budget, context, and safety refusals fail closed. Every Coach request sets `tools=[]`, every HTTP client uses `trust_env=False`, and all runtime/provider calls have finite deadlines, including the fixed 900-second last-local/Coach deadline. The real `.env` remains user-managed and is never an architectural source file.
 
 ## Dependency Direction
 

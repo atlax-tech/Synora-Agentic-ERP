@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: `CONFIRMED` staged learning and delivery plan. Synora is an Agent-development learning repository and a real ERP practice vehicle. The business application layer and teaching lab live in one repository and one development line; staging does not remove complete business requirements.
+Status: `CONFIRMED` staged learning and delivery plan. Synora is an Agent-development learning repository and a real ERP practice vehicle. The business application layer and teaching lab live in one repository and one development line; staging does not remove complete business requirements. Phase 8 is `COMPLETED / PASS / READY FOR THE NEXT PHASE` (2026-09-03); Phase 9 has not started.
 
 ## Phase 0 — Governance Bootstrap
 
@@ -66,13 +66,13 @@ Exit: Buyer goal -> Agent investigation -> proposal -> human decision -> one ver
 
 Exit: Prompt/Context/Skill versions are reproducible; compression preserves safety; Skills cannot expand the active capability allowlist.
 
-## Phase 8 — Memory, RAG, and Contextual ERP Coach
+## Phase 8 — Memory, RAG, and Contextual ERP Coach — COMPLETED / PASS
 
 - Implement scoped working, episodic, semantic, and procedural memory with candidate review, expiry, correction, and deletion.
 - Compare FTS5/BM25, vector, hybrid, and reranking on a fixed dataset.
 - Add a cited Contextual ERP Coach that re-queries live ERP facts rather than trusting memory.
 
-Exit: authorized experience and SOP knowledge can be recalled with provenance; stale, cross-user, and injected memory or retrieval content fails safely.
+Exit: authorized experience and SOP knowledge can be recalled with provenance; stale, cross-user, and injected memory or retrieval content fails safely. Final evidence is recorded in `docs/PLAN.md`, `docs/TESTING.md`, `docs/ACCEPTANCE.md`, and `output/phase8/`; Phase 9 is the next planned phase and has not started.
 
 ## Phase 9 — Multi-Agent, MCP, and A2A
 

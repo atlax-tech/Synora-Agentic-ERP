@@ -1,6 +1,6 @@
 # Testing
 
-Status: `CONFIRMED` strategy; the root format, lint, type, unit, integration, and runtime commands are verified and recorded in `docs/DEVELOPMENT.md`. Phase-specific evaluation and acceptance commands remain evidence-gated until their implementation exists.
+Status: `CONFIRMED` strategy; the root format, lint, type, unit, integration, and runtime commands are verified and recorded in `docs/DEVELOPMENT.md`. Phase 8's implementation-specific evaluation and acceptance commands are now backed by the final evidence below; Phase 9 has not started.
 
 ## Test Layers
 
@@ -42,6 +42,45 @@ Finite safety suites require 100% pass. Other thresholds must be set only after 
 ## Independent Verification
 
 The test and review roles do not trust the executor's self-report. Before release/version updates, an adversarial sub-agent examines the original requirement, diff, test evidence, architecture boundaries, regression risk, data handling, and security failure modes.
+
+## Phase 8 final evidence (2026-09-03)
+
+The immutable Coach instance is bound to source HEAD
+`562fc42671004e12c3f3b6ee9266d0385e03b04a` and case-spec SHA
+`264e42eeaf7a663cab9886d2b8ec05df3f55c7368502cff8647a607290d097a3`.
+The manifest is
+`output/phase8/phase8-manifest-562fc42.json` (SHA-256
+`1c3e88b23aa410afb2eb70f21de1f67df518a3071de58ae1e4a014246a884e39`); the
+representative and formal result files are the matching `562fc42` files in
+`output/phase8/`.
+
+- Fixed order: `G1,G2,G3,G4,C1,C2,C3,S1,S2,S3,U1,U2`; every case ran once,
+  `12/12 PASS`.
+- Scores: grounding `4/4`; citation `3/3` (positive `2/2`, safe refusal
+  `1/1`); refusal/security `3/3`; usefulness `2/2`.
+- Ten Provider-eligible cases have real usage (`provider_request_count=10`);
+  S1/S2 are security bypasses and did not invoke a Provider.
+- `mock_substitution=false`, `provider_tools_empty=true`,
+  `erp_business_zero_write=true`, `repo_status_unchanged=true`,
+  `secret_leak=false`, and `selective_rerun=false`; MR/PO/stock anchors are
+  equal before and after.
+- The Playwright role artifact
+  `output/playwright/phase8-role-acceptance-562fc42.json` is sanitized and
+  bound to the current manifest/backend evidence. Its binding mode explicitly
+  preserves the historical capture HEAD and does not claim a fresh screenshot.
+
+The final local checks were: `make format-check` (277 files), `make lint`,
+`make type` (109 source files), and `make unit` (`676 passed, 2 warnings`),
+all exit `0`; `compileall`, `git diff --check`, fixed Frappe/ERPNext SHA
+cleanliness, manifest validation, reference validation, and Harness structure
+validation also passed. The real Bench app-test ran directly and returned
+`210 tests ... OK`. `make integration` was not run in this instance because
+the user's unrelated dirty `env/dev/scripts/dev/env.sh` was preserved; the
+direct Bench app-test is recorded as the executed equivalent, not as a claim
+that the Make target ran.
+
+The independent read-only Phase 8 review is an exit gate: only its final
+`PASS` is accepted. Phase 9 is explicitly not started.
 
 ## Sources
 
