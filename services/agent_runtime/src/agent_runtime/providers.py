@@ -773,7 +773,10 @@ def provider_from_environment(
             OpenAICompatibleProvider(
                 base_url=local_base_url,
                 model=local_model,
-                reasoning_effort="none",
+                # Qwen3's OpenAI-compatible template otherwise may emit its
+                # internal <think> block in message.content, which is not the
+                # Coach JSON contract. Keep local fallback output answer-only.
+                thinking="disabled",
                 transport=transport,
             )
             for local_model in local_models

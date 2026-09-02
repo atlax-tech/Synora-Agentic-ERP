@@ -721,6 +721,8 @@ class TestProviderFromEnvironment:
                 ("127.0.0.1", "qwen3.8:27b"),
                 ("fallback.example", "backup-model"),
             ]
+            assert provider._fallback._thinking == "disabled"
+            assert provider._fallbacks[1]._thinking == "disabled"
             await provider.aclose()
 
         asyncio.run(run())
