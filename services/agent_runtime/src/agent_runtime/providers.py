@@ -559,7 +559,14 @@ class OpenAICompatibleProvider:
             else:
                 payload["response_format"] = format_value
         if self._thinking is not None and self._wire_api == "chat_completions":
-            payload["thinking"] = {"type": self._thinking}
+            if self._supports_json_schema:
+                # Ollama's OpenAI-compatible endpoint controls Qwen3 thinking
+                # with the native ``think`` boolean.  Sending the remote GLM
+                # ``thinking`` object is accepted as an unknown field but can
+                # consume the complete output budget before final content.
+                payload["think"] = self._thinking == "enabled"
+            else:
+                payload["thinking"] = {"type": self._thinking}
         if self._temperature is not None:
             payload["temperature"] = self._temperature
         if self._reasoning_effort is not None and self._thinking != "disabled":

@@ -415,6 +415,36 @@ class TestOpenAICompatibleProvider:
 
         asyncio.run(run())
 
+    def test_local_request_uses_ollama_think_flag(self) -> None:
+        async def run() -> None:
+            captured: dict[str, object] = {}
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                captured["json"] = json.loads(request.content)
+                return httpx.Response(
+                    200,
+                    json={
+                        "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+                        "usage": {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3},
+                    },
+                    request=request,
+                )
+
+            async with OpenAICompatibleProvider(
+                base_url="http://127.0.0.1:11434/v1",
+                model="qwen3:8b",
+                supports_json_schema=True,
+                thinking="disabled",
+                transport=httpx.MockTransport(handler),
+            ) as provider:
+                await provider.complete(_messages(), max_tokens=32)
+            body = captured["json"]
+            assert isinstance(body, dict)
+            assert body["think"] is False
+            assert "thinking" not in body
+
+        asyncio.run(run())
+
     def test_glm_request_uses_thinking_and_large_quality_cap(self) -> None:
         async def run() -> None:
             captured: dict[str, object] = {}
