@@ -48,7 +48,19 @@ GLM_4_7_FLASH_MAX_OUTPUT_TOKENS = 131_072
 _REASONING_EFFORTS = {"none", "low", "medium", "high", "xhigh"}
 _THINKING_MODES = {"enabled", "disabled"}
 _FAILOVER_FAILURE_CODES = frozenset(
-    {"RATE_LIMITED", "UPSTREAM_UNAVAILABLE", "TIMEOUT", "TRANSPORT_ERROR"}
+    {
+        "RATE_LIMITED",
+        "UPSTREAM_UNAVAILABLE",
+        "TIMEOUT",
+        "TRANSPORT_ERROR",
+        # A 2xx response without a usable completion is unavailable for this
+        # request. Move to the next configured provider once; never retry the
+        # same paid endpoint with the same malformed response.
+        "RESPONSE_SCHEMA",
+        "RESPONSE_NO_CHOICES",
+        "RESPONSE_CONTENT_MISSING",
+        "USAGE_MISSING",
+    }
 )
 _NEXT_PROVIDER_FAILURE_CODES = _FAILOVER_FAILURE_CODES | {
     "RESPONSE_SCHEMA",

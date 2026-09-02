@@ -823,7 +823,7 @@ class TestProviderFromEnvironment:
 
         asyncio.run(run())
 
-    def test_fallback_does_not_mask_invalid_primary_response(
+    def test_fallback_moves_past_unusable_primary_response(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         async def run() -> None:
@@ -834,18 +834,23 @@ class TestProviderFromEnvironment:
 
             def handler(request: httpx.Request) -> httpx.Response:
                 hosts.append(request.url.host or "")
+                if len(hosts) == 1:
+                    return httpx.Response(
+                        200,
+                        json={"choices": [{"message": {"role": "assistant", "content": None}}]},
+                        request=request,
+                    )
                 return httpx.Response(
                     200,
-                    json={"choices": [{"message": {"role": "assistant", "content": None}}]},
+                    json={"choices": [{"message": {"role": "assistant", "content": "backup"}}]},
                     request=request,
                 )
 
             provider = provider_from_environment(transport=httpx.MockTransport(handler))
             assert isinstance(provider, FailoverProvider)
-            with pytest.raises(ProviderError) as caught:
-                await provider.complete(_messages())
-            assert caught.value.failure_code == "RESPONSE_CONTENT_MISSING"
-            assert hosts == ["primary.example"]
+            response = await provider.complete(_messages())
+            assert response.text == "backup"
+            assert hosts == ["primary.example", "fallback.example"]
             await provider.aclose()
 
         asyncio.run(run())
