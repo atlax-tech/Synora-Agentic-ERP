@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "test_mode": "single_provider_no_fallback",
+  "executed_at": "2026-09-02",
+  "secret_values_logged": false,
+  "fallback_invoked": false,
+  "tests": [
+    {
+      "role": "assist",
+      "model": "glm-5.3-flash",
+      "base_url_host": "www.packyapi.ai",
+      "endpoint": "/v1/chat/completions",
+      "request": "minimal tools=[] max_tokens=32 without explicit reasoning_effort",
+      "http_status": 200,
+      "provider_result": "RESPONSE_CONTENT_MISSING",
+      "usage": {
+        "prompt_tokens": 13,
+        "completion_tokens": 256,
+        "reasoning_tokens": null
+      },
+      "interpretation": "The gateway accepted and billed the request but returned no final content; billing does not prove a usable Coach response."
+    },
+    {
+      "role": "assist",
+      "model": "glm-5.3-flash",
+      "base_url_host": "www.packyapi.ai",
+      "endpoint": "/v1/chat/completions",
+      "request": "minimal tools=[] max_tokens=32 reasoning_effort=low",
+      "http_status": 200,
+      "provider_result": "PROVIDER_OK",
+      "content": "OK",
+      "usage": {
+        "prompt_tokens": 20,
+        "completion_tokens": 3,
+        "reasoning_tokens": 0
+      },
+      "interpretation": "The same GLM credential and host returned final content when the model-specific low reasoning setting was explicit."
+    },
+    {
+      "role": "backup",
+      "model": "grok-4.5",
+      "base_url_host": "www.packyapi.ai",
+      "endpoint": "/v1/chat/completions",
+      "request": "minimal tools=[] max_tokens=32",
+      "http_status": 403,
+      "provider_result": "HTTP_403",
+      "model_catalog_count": 0,
+      "interpretation": "The same Grok credential was accepted by the corrected host below, while this host exposed no Grok model. The evidence supports a wrong gateway/host for this role, not a key syntax failure."
+    },
+    {
+      "role": "backup",
+      "model": "grok-4.5",
+      "base_url_host": "cf.api.fan",
+      "endpoint": "/v1/chat/completions",
+      "request": "minimal tools=[] max_tokens=32",
+      "http_status": 400,
+      "provider_result": "protocol_not_supported",
+      "provider_message": "grok-4.5 不支持 chat completions 协议",
+      "model_catalog_count": 2,
+      "interpretation": "The credential and model are authorized on the corrected host; the remaining failure is the wire protocol, not authentication."
+    },
+    {
+      "role": "backup",
+      "model": "grok-4.5",
+      "base_url_host": "cf.api.fan",
+      "endpoint": "/v1/responses",
+      "request": "minimal input max_output_tokens=32 store=false reasoning.effort=low",
+      "http_status": 200,
+      "provider_result": "PROVIDER_OK",
+      "content": "OK",
+      "usage": {
+        "input_tokens": 4634,
+        "output_tokens": 16,
+        "total_tokens": 4650,
+        "reasoning_tokens": 15
+      },
+      "interpretation": "The corrected Grok role works through Responses; reasoning metadata is retained as usage and never exposed as the Coach answer."
+    }
+  ],
+  "conclusion": {
+    "glm": "HTTP 200 plus billing was an unusable-content response, not a successful Coach result; reasoning_effort=low produced usable final content without fallback.",
+    "grok": "The original 403 came from the wrong host/model catalog. After the non-secret host correction, Chat was rejected as an unsupported protocol and Responses returned content. The Key was not replaced.",
+    "production_policy": "Connectivity checks call only the named role once. Failover is reserved for request-scoped transient or unusable-content failures; authentication, invalid-request, and budget failures remain fail-closed."
+  }
+}
