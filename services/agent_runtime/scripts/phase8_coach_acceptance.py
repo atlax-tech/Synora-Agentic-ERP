@@ -214,9 +214,9 @@ def git_changed_paths(base: str, head: str) -> set[str]:
     if base == head:
         return set()
     output = subprocess.check_output(
-        ["git", "diff", "--name-only", f"{base}..{head}"], cwd=ROOT, text=True
+        ["git", "diff", "--name-only", "-z", f"{base}..{head}"], cwd=ROOT
     )
-    return {line.strip() for line in output.splitlines() if line.strip()}
+    return {path.decode("utf-8") for path in output.split(b"\0") if path}
 
 
 def _post_evaluation_path_allowed(path: str) -> bool:
