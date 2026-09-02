@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-02T12:22:55Z",
+  "scope": "Phase 8 real browser role acceptance; sanitized observations only",
+  "evidence_binding": {
+    "browser_capture_head": "20ecff4134a66fb0b995d671da95b2f06741b8a8",
+    "bound_current_head": "b92abb4439fddd1ec29b5118821c36af3e48f0a6",
+    "bound_manifest": "output/phase8/phase8-manifest-b92abb4.json",
+    "bound_manifest_sha256": "191dabcb3a6f3522f4b94556f98f05535435b66fb27c140806436f1c2c87ba2e",
+    "current_backend_evidence": "output/phase8/phase8-real-coach-acceptance-b92abb4.json",
+    "binding_mode": "BIND_EXISTING_BROWSER_CAPTURE",
+    "replay_note": "Browser capture predates provider-only cleanup; current formal Coach run revalidated the same backend path, anchors, tools=[], permissions and zero-write boundary. No browser claim is presented as a fresh capture."
+  },
+  "buyer": {
+    "identity": "synora-p1-buyer@dev.localhost",
+    "new_run_path": "/desk/new-run",
+    "runs_path": "/desk/runs",
+    "coach_fields_visible": true,
+    "material_request": {
+      "run_id": "051ba0dd-2ff3-4d8a-b245-c883fe3921e8",
+      "context": "Material Request / MAT-MR-2026-00020",
+      "answer_status": "ANSWERED",
+      "answer": "open_order_stock_qty=\"2.0\"",
+      "claim_type": "ERP_FACT",
+      "citation_type": "LIVE_ERP",
+      "provider_tools_empty": true,
+      "sensitive_fields_absent": true,
+      "screenshot": "output/playwright/phase8-buyer-coach-answer.png"
+    },
+    "purchase_order": {
+      "run_id": "b745519f-6344-4b39-9802-95d72e7146b5",
+      "context": "Purchase Order / PUR-ORD-2026-00030",
+      "answer_status": "ANSWERED",
+      "answer": "open_receipt_stock_qty=\"2.00\"",
+      "claim_type": "ERP_FACT",
+      "citation_type": "LIVE_ERP",
+      "provider_tools_empty": true,
+      "sensitive_fields_absent": true,
+      "screenshot": "output/playwright/phase8-buyer-po-coach-answer.png"
+    },
+    "safety_refusal": {
+      "run_id": "1f5e6acc",
+      "context": "Material Request / MAT-MR-2026-00020",
+      "observed": "UNKNOWN safe refusal for an underspecified natural-language question",
+      "not_counted_as_grounded_success": true
+    },
+    "console": {
+      "errors": 0,
+      "warnings": 6,
+      "error_messages": []
+    }
+  },
+  "system_manager": {
+    "identity": "Administrator (System Manager)",
+    "can_list_buyer_run": true,
+    "can_open_buyer_run_detail": true,
+    "safe_history_fields_visible": [
+      "answer_status",
+      "answer",
+      "claim_type",
+      "citation_type",
+      "context",
+      "live_erp_version"
+    ],
+    "capability_and_raw_provider_response_visible": false,
+    "secret_visible": false,
+    "provider_tools_visible": [],
+    "screenshot": "output/playwright/phase8-system-manager-history.png",
+    "console": {
+      "errors": 0,
+      "warnings": 2
+    }
+  },
+  "viewer": {
+    "identity": "synora-p1-viewer@dev.localhost",
+    "runs_page_http_status": 403,
+    "new_run_http_status": 403,
+    "detail_get": {
+      "http_status": 404,
+      "error_code": "COACH_RESULT_NOT_AVAILABLE",
+      "target_existence_leaked": false
+    },
+    "coach_post": {
+      "http_status": 503,
+      "error_code": "ERP_ERROR",
+      "permission_gate": "Insufficient Permission for Company",
+      "provider_call_triggered": false,
+      "business_write_observed": false
+    },
+    "can_view_buyer_run": false,
+    "can_trigger_coach": false,
+    "screenshot": "output/playwright/phase8-viewer-denied.png",
+    "expected_http_errors_only": true
+  },
+  "safety": {
+    "erp_business_write_observed": false,
+    "formal_before_after_anchors_equal": true,
+    "formal_provider_tools_empty": true,
+    "secret_or_cookie_in_artifact": false,
+    "passwords_or_api_keys_recorded": false
+  }
+}
