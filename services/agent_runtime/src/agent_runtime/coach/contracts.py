@@ -646,6 +646,22 @@ def _normalize_provider_compatibility(value: dict[str, object]) -> dict[str, obj
         normalized["claims"] = claims
 
     raw_citations = normalized.get("citations", [])
+    if isinstance(raw_citations, dict):
+        # Qwen/Ollama may emit the same local citation graph as an object keyed
+        # by citation id.  Convert only a structurally valid map; the embedded
+        # server-owned metadata remains untrusted and is discarded by the
+        # provider citation contract before service materialization.
+        mapped_citations: list[object] = []
+        for citation_id, raw_citation in raw_citations.items():
+            if not isinstance(citation_id, str) or not isinstance(raw_citation, dict):
+                raise ValueError("provider citation map is invalid")
+            citation = dict(raw_citation)
+            embedded_id = citation.get("citation_id")
+            if embedded_id is not None and embedded_id != citation_id:
+                raise ValueError("provider citation map key does not match citation id")
+            citation["citation_id"] = citation_id
+            mapped_citations.append(citation)
+        raw_citations = mapped_citations
     if isinstance(raw_citations, list):
         citations: list[object] = []
         for raw_citation in raw_citations:

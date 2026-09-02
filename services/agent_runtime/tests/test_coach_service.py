@@ -16,6 +16,7 @@ from agent_runtime.coach.context import current_fact_digest
 from agent_runtime.coach.service import answer_coach
 from agent_runtime.gateway import GatewaySuccess
 from agent_runtime.providers import (
+    FailoverProvider,
     ProviderError,
     ProviderMessage,
     ProviderResponse,
@@ -269,12 +270,13 @@ async def _test_coach_service_materializes_minimal_live_selector() -> None:
             "citation_refs": ["live-1"],
         }
     ]
-    payload["citations"] = [
-        {
+    payload["citations"] = {
+        "live-1": {
             "citation_type": "LIVE_ERP",
-            "citation_id": "live-1",
+            "fact_digest": "e" * 64,
+            "state_version": 3,
         }
-    ]
+    }
     payload["refusal_reason"] = ""
     result = await answer_coach(
         _request(),
@@ -476,8 +478,7 @@ async def _test_coach_service_compacts_repeated_claims_to_requested_fields() -> 
     payload["claims"].append(duplicate)
     request = _request(
         question=(
-            "In one short answer, give the current open_order_stock_qty value "
-            "and why it matters."
+            "In one short answer, give the current open_order_stock_qty value and why it matters."
         )
     )
 
@@ -711,6 +712,42 @@ async def _test_coach_service_rejects_ambiguous_live_citation_field_selection() 
     assert result.answer == ""
 
 
+async def _test_coach_service_escalates_one_unknown_local_answer() -> None:
+    unknown = ProviderResponse(
+        text=(
+            '{"schema_version":"1","answer_status":"UNKNOWN","answer":"",'
+            '"claims":[],"citations":[],"refusal_reason":"insufficient"}'
+        ),
+        prompt_tokens=10,
+        completion_tokens=5,
+    )
+    malformed = ProviderResponse(
+        text='{"not":"a coach response"}', prompt_tokens=10, completion_tokens=5
+    )
+    for small_response in (unknown, malformed):
+        large = RecordingProvider(_response(live_digest=_live_digest(), hit=_hit()))
+        paid = RecordingProvider(ProviderResponse(text="must not run"))
+        provider = FailoverProvider(
+            RecordingProvider(error=ProviderError("limited", failure_code="RATE_LIMITED")),
+            RecordingProvider(small_response),
+            large,
+            paid,
+        )
+        result = await answer_coach(
+            _request(),
+            _context(),
+            (_hit(),),
+            provider,
+            environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+        )
+
+        assert result.answer_status == "ANSWERED"
+        assert result.token_usage.prompt_tokens == 41
+        assert result.token_usage.completion_tokens == 23
+        assert large.messages is not None
+        assert paid.messages is None
+
+
 def test_coach_service_validates_live_and_retrieval_evidence_and_exposes_no_tools() -> None:
     asyncio.run(_test_coach_service_validates_live_and_retrieval_evidence_and_exposes_no_tools())
 
@@ -777,3 +814,7 @@ def test_coach_service_rebinds_live_citation_metadata_to_current_snapshot() -> N
 
 def test_coach_service_rejects_ambiguous_live_citation_field_selection() -> None:
     asyncio.run(_test_coach_service_rejects_ambiguous_live_citation_field_selection())
+
+
+def test_coach_service_escalates_one_unknown_local_answer() -> None:
+    asyncio.run(_test_coach_service_escalates_one_unknown_local_answer())

@@ -528,6 +528,7 @@ class FailoverProvider:
         self._primary = primary
         self._fallback = fallback
         self._fallbacks = (fallback, *others)
+        self._last_successful_index = -1
 
     def __repr__(self) -> str:
         return f"FailoverProvider(fallback_configured={self._fallback is not None})"
@@ -540,19 +541,22 @@ class FailoverProvider:
         max_tokens: int | None = None,
         response_format: ProviderResponseFormat | None = None,
     ) -> ProviderResponse:
+        self._last_successful_index = -1
         try:
-            return await self._primary.complete(
+            response = await self._primary.complete(
                 messages,
                 tools=tools,
                 model=model,
                 max_tokens=max_tokens,
                 response_format=response_format,
             )
+            self._last_successful_index = 0
+            return response
         except ProviderError as primary_error:
             if primary_error.failure_code not in _FAILOVER_FAILURE_CODES:
                 raise
             errors = [primary_error]
-            for fallback in self._fallbacks:
+            for index, fallback in enumerate(self._fallbacks, start=1):
                 fallback_max_tokens = max_tokens
                 if isinstance(fallback, OpenAICompatibleProvider) and max_tokens is not None:
                     fallback_max_tokens = min(
@@ -560,13 +564,15 @@ class FailoverProvider:
                         provider_max_output_token_limit(fallback._model),
                     )
                 try:
-                    return await fallback.complete(
+                    response = await fallback.complete(
                         messages,
                         tools=tools,
                         model=None,
                         max_tokens=fallback_max_tokens,
                         response_format=response_format,
                     )
+                    self._last_successful_index = index
+                    return response
                 except ProviderError as error:
                     errors.append(error)
                     if error.failure_code not in _NEXT_PROVIDER_FAILURE_CODES:
@@ -582,6 +588,31 @@ class FailoverProvider:
                 ),
                 failure_code=last_error.failure_code,
             ) from last_error
+
+    async def complete_next(
+        self,
+        messages: list[ProviderMessage],
+        tools: list[ProviderToolSpec] | None = None,
+        max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
+    ) -> ProviderResponse:
+        """Try exactly the next provider after a valid but insufficient response."""
+        next_index = self._last_successful_index + 1
+        if next_index < 1 or next_index > len(self._fallbacks):
+            raise ProviderError("no larger provider is available", failure_code="NO_FALLBACK")
+        provider = self._fallbacks[next_index - 1]
+        effective_max_tokens = max_tokens
+        if isinstance(provider, OpenAICompatibleProvider) and max_tokens is not None:
+            effective_max_tokens = min(max_tokens, provider_max_output_token_limit(provider._model))
+        response = await provider.complete(
+            messages,
+            tools=tools,
+            model=None,
+            max_tokens=effective_max_tokens,
+            response_format=response_format,
+        )
+        self._last_successful_index = next_index
+        return response
 
     async def aclose(self) -> None:
         errors: list[Exception] = []

@@ -48,7 +48,7 @@ from agent_runtime.coach.contracts import (
     ValidatedCoachClaim,
     parse_coach_provider_output,
 )
-from agent_runtime.providers import Provider, ProviderError, ProviderResponse
+from agent_runtime.providers import FailoverProvider, Provider, ProviderError, ProviderResponse
 from agent_runtime.retrieval.context import search_hits_to_context_fragments
 from agent_runtime.retrieval.index import SearchHit
 
@@ -131,6 +131,19 @@ def _usage(
         prompt_tokens=max(0, int(getattr(source, "prompt_tokens", 0))),
         completion_tokens=max(0, int(getattr(source, "completion_tokens", 0))),
         reasoning_tokens=max(0, int(getattr(source, "reasoning_tokens", 0))),
+    )
+
+
+def _combined_usage(first: ProviderResponse, second: ProviderResponse) -> ProviderResponse:
+    return second.model_copy(
+        update={
+            "prompt_tokens": first.prompt_tokens + second.prompt_tokens,
+            "completion_tokens": first.completion_tokens + second.completion_tokens,
+            "reasoning_tokens": first.reasoning_tokens + second.reasoning_tokens,
+            "reasoning_content_present": (
+                first.reasoning_content_present or second.reasoning_content_present
+            ),
+        }
     )
 
 
@@ -289,9 +302,7 @@ def _requested_live_fields(
 ) -> frozenset[str]:
     normalized_question = question.casefold()
     return frozenset(
-        field_name
-        for field_name in allowed_fields
-        if field_name.casefold() in normalized_question
+        field_name for field_name in allowed_fields if field_name.casefold() in normalized_question
     )
 
 
@@ -632,7 +643,43 @@ async def answer_coach(
                 latency_ms=_elapsed(started),
                 trace=trace,
             )
-        parsed = parse_coach_provider_output(response.text)
+        quality_escalated = False
+        try:
+            parsed = parse_coach_provider_output(response.text)
+        except ValueError, TypeError:
+            if not isinstance(provider, FailoverProvider):
+                raise
+            upgraded = await provider.complete_next(
+                list(context_result.messages),
+                tools=[],
+                max_tokens=max_tokens,
+                response_format="json_object",
+            )
+            if upgraded.tool_calls:
+                raise ProviderError(
+                    "quality fallback returned tools", failure_code="TOOL_CALL"
+                ) from None
+            response = _combined_usage(response, upgraded)
+            parsed = parse_coach_provider_output(upgraded.text)
+            quality_escalated = True
+        if (
+            parsed.answer_status == "UNKNOWN"
+            and isinstance(provider, FailoverProvider)
+            and not quality_escalated
+        ):
+            try:
+                upgraded = await provider.complete_next(
+                    list(context_result.messages),
+                    tools=[],
+                    max_tokens=max_tokens,
+                    response_format="json_object",
+                )
+                if not upgraded.tool_calls:
+                    upgraded_parsed = parse_coach_provider_output(upgraded.text)
+                    response = _combined_usage(response, upgraded)
+                    parsed = upgraded_parsed
+            except ProviderError, ValueError, TypeError:
+                pass
     except ProviderError as error:
         return _failed_answer(
             "REFUSED",

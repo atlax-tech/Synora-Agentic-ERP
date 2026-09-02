@@ -449,6 +449,35 @@ def test_provider_json_parser_normalizes_observed_success_shape() -> None:
     assert parsed.citations[0].fact_fields == ("open_order_stock_qty",)
 
 
+def test_provider_json_parser_normalizes_citation_map_shape() -> None:
+    raw = (
+        '{"schema_version":"1","answer_status":"ANSWERED",'
+        '"answer":"The current requested quantity is 3 units.",'
+        '"claims":[{"claim_type":"ERP_FACT",'
+        '"fact_fields":{"requested_stock_qty":"3"},'
+        '"citation_refs":["live-1"]}],'
+        '"citations":{"live-1":{"citation_type":"LIVE_ERP",'
+        '"fact_digest":"' + "e" * 64 + '","state_version":3}},'
+        '"refusal_reason":null}'
+    )
+    parsed = parse_coach_provider_output(raw)
+    assert parsed.claims[0].text == "server-bound ERP fact"
+    assert isinstance(parsed.citations[0], CoachProviderLiveCitation)
+    assert parsed.citations[0].citation_id == "live-1"
+    assert parsed.citations[0].fact_fields == ("requested_stock_qty",)
+    assert parsed.citations[0].model_dump() == {
+        "citation_type": "LIVE_ERP",
+        "citation_id": "live-1",
+        "fact_fields": ("requested_stock_qty",),
+    }
+
+    mismatched = raw.replace(
+        '"fact_digest":"' + "e" * 64, '"citation_id":"other","fact_digest":"' + "e" * 64
+    )
+    with pytest.raises(ValueError, match="does not match"):
+        parse_coach_provider_output(mismatched)
+
+
 def test_provider_json_parser_synthesizes_missing_live_citations() -> None:
     raw = (
         '{"schema_version":"1","answer_status":"SUCCESS",'
