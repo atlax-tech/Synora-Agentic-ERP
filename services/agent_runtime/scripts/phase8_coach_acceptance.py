@@ -64,15 +64,12 @@ SECRET_ENV_NAMES = (
     "ASSIST_API_KEY",
     "BACKUP_API_KEY",
     "BACKUP_OLLAMA_API_KEY",
-    "SYNORA_PROVIDER_API_KEY",
-    "SYNORA_PROVIDER_FALLBACK_API_KEY",
 )
 MODEL_ENV_NAMES = (
     "OLLAMA_MODEL",
     "ASSIST_MODEL",
     "BACKUP_MODEL",
     "BACKUP_OLLAMA_MODEL",
-    "SYNORA_PROVIDER_MODEL",
 )
 URL_ENV_NAMES = (
     "OLLAMA_BASE_URL",
@@ -131,7 +128,7 @@ def load_env_file(path: Path) -> None:
     """Load only process-local values needed by this runner, without printing."""
     allowed = set(SECRET_ENV_NAMES) | set(MODEL_ENV_NAMES) | set(URL_ENV_NAMES)
     allowed.update({name for role in ROLE_ENV.values() for name in role})
-    allowed.update({"SYNORA_PROVIDER_PROXY", "SYNORA_PROVIDER_MAX_OUTPUT_TOKENS"})
+    allowed.add("SYNORA_MODEL_PROXY")
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as error:
@@ -178,15 +175,6 @@ def environment_snapshot() -> dict[str, object]:
             "runtime_url": _redacted_url(os.environ.get("SYNORA_RUNTIME_URL")),
             "runtime_token_present": bool(os.environ.get("SYNORA_RUNTIME_TOKEN", "").strip()),
         },
-        "legacy_selection_present": any(
-            os.environ.get(name, "").strip()
-            for name in (
-                "SYNORA_PROVIDER_BASE_URL",
-                "SYNORA_PROVIDER_MODEL",
-                "SYNORA_PROVIDER_FALLBACK_BASE_URL",
-                "SYNORA_PROVIDER_LOCAL_BASE_URL",
-            )
-        ),
     }
 
 
@@ -822,11 +810,7 @@ def score_case(
 
 
 def _configured_primary_model() -> str | None:
-    return (
-        os.environ.get("OLLAMA_MODEL", "").strip()
-        or os.environ.get("SYNORA_PROVIDER_MODEL", "").strip()
-        or None
-    )
+    return os.environ.get("OLLAMA_MODEL", "").strip() or None
 
 
 def _case_failure(

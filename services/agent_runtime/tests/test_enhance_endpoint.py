@@ -35,8 +35,6 @@ async def _post_enhance(
 
 
 def test_enhance_returns_fallback_when_provider_not_configured(monkeypatch) -> None:
-    monkeypatch.delenv("SYNORA_PROVIDER_BASE_URL", raising=False)
-    monkeypatch.delenv("SYNORA_PROVIDER_API_KEY", raising=False)
     response = asyncio.run(_post_enhance({"plan": PLAN, "provider_name": "ci-test"}))
     assert response.status_code == 200  # 回退不是 5xx
     body = response.json()
@@ -59,8 +57,6 @@ def test_enhance_requires_configured_runtime_token(monkeypatch) -> None:
 
 def test_enhance_accepts_configured_runtime_token(monkeypatch) -> None:
     monkeypatch.setenv("SYNORA_RUNTIME_TOKEN", "test-runtime-token")
-    monkeypatch.delenv("SYNORA_PROVIDER_BASE_URL", raising=False)
-    monkeypatch.delenv("SYNORA_PROVIDER_API_KEY", raising=False)
     response = asyncio.run(
         _post_enhance(
             {"plan": PLAN, "provider_name": "ci-test"},
@@ -83,7 +79,6 @@ def test_enhance_context_budget_failure_is_a_deterministic_200_fallback(monkeypa
             return None
 
     provider = _UnexpectedProvider()
-    monkeypatch.setenv("SYNORA_PROVIDER_MODEL", "recorded")
     monkeypatch.delenv("SYNORA_CONTEXT_INPUT_TOKEN_BUDGET", raising=False)
     monkeypatch.setattr(
         "agent_runtime.app.provider_from_environment",

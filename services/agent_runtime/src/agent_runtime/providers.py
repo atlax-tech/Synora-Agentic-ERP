@@ -22,25 +22,9 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 MAX_PROVIDER_RESPONSE_BYTES = 2_000_000
 
-# BYOK 环境变量 (用户自行填写, 不进入代码/Git)。
-PROVIDER_BASE_URL_ENV = "SYNORA_PROVIDER_BASE_URL"
-PROVIDER_API_KEY_ENV = "SYNORA_PROVIDER_API_KEY"
-PROVIDER_MODEL_ENV = "SYNORA_PROVIDER_MODEL"
-PROVIDER_REASONING_EFFORT_ENV = "SYNORA_PROVIDER_REASONING_EFFORT"
-PROVIDER_THINKING_ENV = "SYNORA_PROVIDER_THINKING"
-PROVIDER_PROXY_ENV = "SYNORA_PROVIDER_PROXY"
-PROVIDER_MAX_OUTPUT_TOKENS_ENV = "SYNORA_PROVIDER_MAX_OUTPUT_TOKENS"
-PROVIDER_FALLBACK_BASE_URL_ENV = "SYNORA_PROVIDER_FALLBACK_BASE_URL"
-PROVIDER_FALLBACK_API_KEY_ENV = "SYNORA_PROVIDER_FALLBACK_API_KEY"
-PROVIDER_FALLBACK_MODEL_ENV = "SYNORA_PROVIDER_FALLBACK_MODEL"
-PROVIDER_FALLBACK_REASONING_EFFORT_ENV = "SYNORA_PROVIDER_FALLBACK_REASONING_EFFORT"
-PROVIDER_FALLBACK_THINKING_ENV = "SYNORA_PROVIDER_FALLBACK_THINKING"
-PROVIDER_FALLBACK_PROXY_ENV = "SYNORA_PROVIDER_FALLBACK_PROXY"
-PROVIDER_LOCAL_BASE_URL_ENV = "SYNORA_PROVIDER_LOCAL_BASE_URL"
-PROVIDER_LOCAL_SMALL_MODEL_ENV = "SYNORA_PROVIDER_LOCAL_SMALL_MODEL"
-PROVIDER_LOCAL_LARGE_MODEL_ENV = "SYNORA_PROVIDER_LOCAL_LARGE_MODEL"
 # Named provider configuration. These names select roles; runtime events decide
-# whether a candidate is actually called.
+# whether a candidate is actually called. There is deliberately no legacy
+# single-provider or ad-hoc fallback configuration surface.
 OLLAMA_BASE_URL_ENV = "OLLAMA_BASE_URL"
 OLLAMA_API_KEY_ENV = "OLLAMA_API_KEY"
 OLLAMA_MODEL_ENV = "OLLAMA_MODEL"
@@ -53,6 +37,7 @@ BACKUP_MODEL_ENV = "BACKUP_MODEL"
 BACKUP_OLLAMA_BASE_URL_ENV = "BACKUP_OLLAMA_BASE_URL"
 BACKUP_OLLAMA_API_KEY_ENV = "BACKUP_OLLAMA_API_KEY"
 BACKUP_OLLAMA_MODEL_ENV = "BACKUP_OLLAMA_MODEL"
+MODEL_PROXY_ENV = "SYNORA_MODEL_PROXY"
 PROVIDER_MAX_OUTPUT_TOKENS = 1024
 PROVIDER_MAX_OUTPUT_TOKEN_LIMIT = 8192
 LOCAL_PROVIDER_TIMEOUT_SECONDS = 180.0
@@ -63,12 +48,7 @@ GROK_4_5_MODEL = "grok-4.5"
 QWEN3_8_27B_MODEL = "qwen3.8:27b"
 GLM_5_3_FLASH_DEFAULT_REASONING_EFFORT = "low"
 GROK_4_5_DEFAULT_REASONING_EFFORT = "low"
-GLM_4_7_FLASH_MODEL = "glm-4.7-flash"
-DEFAULT_PROVIDER_MODEL = GLM_4_7_FLASH_MODEL
-GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS = 65_536
-GLM_4_7_FLASH_MAX_OUTPUT_TOKENS = 131_072
 _REASONING_EFFORTS = {"none", "low", "medium", "high", "xhigh"}
-_THINKING_MODES = {"enabled", "disabled"}
 _FAILOVER_FAILURE_CODES = frozenset(
     {
         "RATE_LIMITED",
@@ -83,7 +63,7 @@ _FAILOVER_FAILURE_CODES = frozenset(
         "RESPONSE_CONTENT_MISSING",
     }
 )
-_NEW_PROVIDER_ENV_NAMES = frozenset(
+_NAMED_PROVIDER_ENV_NAMES = frozenset(
     {
         OLLAMA_BASE_URL_ENV,
         OLLAMA_API_KEY_ENV,
@@ -97,32 +77,7 @@ _NEW_PROVIDER_ENV_NAMES = frozenset(
         BACKUP_OLLAMA_BASE_URL_ENV,
         BACKUP_OLLAMA_API_KEY_ENV,
         BACKUP_OLLAMA_MODEL_ENV,
-    }
-)
-_LEGACY_PROVIDER_SELECTION_ENV_NAMES = frozenset(
-    {
-        PROVIDER_BASE_URL_ENV,
-        PROVIDER_API_KEY_ENV,
-        PROVIDER_MODEL_ENV,
-        PROVIDER_FALLBACK_BASE_URL_ENV,
-        PROVIDER_FALLBACK_API_KEY_ENV,
-        PROVIDER_FALLBACK_MODEL_ENV,
-        PROVIDER_LOCAL_BASE_URL_ENV,
-        PROVIDER_LOCAL_SMALL_MODEL_ENV,
-        PROVIDER_LOCAL_LARGE_MODEL_ENV,
-    }
-)
-_LEGACY_FALLBACK_SELECTION_ENV_NAMES = frozenset(
-    {
-        PROVIDER_FALLBACK_BASE_URL_ENV,
-        PROVIDER_FALLBACK_API_KEY_ENV,
-        PROVIDER_FALLBACK_MODEL_ENV,
-        PROVIDER_FALLBACK_REASONING_EFFORT_ENV,
-        PROVIDER_FALLBACK_THINKING_ENV,
-        PROVIDER_FALLBACK_PROXY_ENV,
-        PROVIDER_LOCAL_BASE_URL_ENV,
-        PROVIDER_LOCAL_SMALL_MODEL_ENV,
-        PROVIDER_LOCAL_LARGE_MODEL_ENV,
+        MODEL_PROXY_ENV,
     }
 )
 ProviderResponseFormat = Literal["json_object"] | Mapping[str, object]
@@ -136,14 +91,8 @@ _NAMED_PROVIDER_ROLES: tuple[ProviderRole, ...] = (
 )
 
 
-def _new_provider_configuration_present(values: Mapping[str, str]) -> bool:
-    return any(values.get(name, "").strip() for name in _NEW_PROVIDER_ENV_NAMES)
-
-
 def _primary_model(values: Mapping[str, str]) -> str:
-    if _new_provider_configuration_present(values):
-        return values.get(OLLAMA_MODEL_ENV, "").strip()
-    return values.get(PROVIDER_MODEL_ENV, "").strip()
+    return values.get(OLLAMA_MODEL_ENV, "").strip()
 
 
 def provider_model(environ: Mapping[str, str] | None = None) -> str:
@@ -152,9 +101,7 @@ def provider_model(environ: Mapping[str, str] | None = None) -> str:
     return _primary_model(values)
 
 
-def _output_token_limits(model: str | None) -> tuple[int, int]:
-    if (model or "").strip().lower() == GLM_4_7_FLASH_MODEL:
-        return GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS, GLM_4_7_FLASH_MAX_OUTPUT_TOKENS
+def _output_token_limits(_model: str | None) -> tuple[int, int]:
     return PROVIDER_MAX_OUTPUT_TOKENS, PROVIDER_MAX_OUTPUT_TOKEN_LIMIT
 
 
@@ -163,70 +110,14 @@ def provider_max_output_token_limit(model: str | None = None) -> int:
     return _output_token_limits(model)[1]
 
 
-def provider_max_output_tokens(environ: Mapping[str, str] | None = None) -> int:
-    """Return the bounded output cap shared by real provider call sites.
+def provider_max_output_tokens(_environ: Mapping[str, str] | None = None) -> int:
+    """Return the fixed Coach generation cap.
 
-    The default follows the configured model's quality policy. One environment
-    key can tune the effective value in either direction, but never above the
-    model-specific hard ceiling.
+    The cap is a code-level safety boundary, not a provider-selection setting;
+    keeping it out of the environment prevents an old deployment variable from
+    silently changing request cost or acceptance semantics.
     """
-    values = os.environ if environ is None else environ
-    default, hard_limit = _output_token_limits(_primary_model(values))
-    raw = values.get(PROVIDER_MAX_OUTPUT_TOKENS_ENV, "")
-    if not raw.strip():
-        return default
-    try:
-        value = int(raw)
-    except (TypeError, ValueError) as error:
-        raise ValueError("provider max output tokens must be an integer") from error
-    if not 1 <= value <= hard_limit:
-        raise ValueError(f"provider max output tokens must be within 1..{hard_limit}")
-    return value
-
-
-def provider_thinking_mode(environ: Mapping[str, str] | None = None) -> str | None:
-    """Resolve the vendor-neutral thinking mode for the configured model."""
-    values = os.environ if environ is None else environ
-    return _provider_thinking_mode(
-        values,
-        model=_primary_model(values),
-        thinking_env=PROVIDER_THINKING_ENV,
-    )
-
-
-def _provider_thinking_mode(
-    values: Mapping[str, str], *, model: str, thinking_env: str
-) -> str | None:
-    raw = values.get(thinking_env, "").strip()
-    if raw:
-        if raw not in _THINKING_MODES:
-            raise ValueError("provider thinking must be enabled or disabled")
-        return raw
-    if model.strip().lower() == GLM_4_7_FLASH_MODEL:
-        return "enabled"
-    return None
-
-
-def _provider_reasoning_effort(
-    values: Mapping[str, str], *, model: str, reasoning_effort_env: str
-) -> str | None:
-    """Resolve a model's bounded reasoning depth without disabling GLM 5.3.
-
-    GLM-5.3-Flash is a thinking-only model on the configured compatible
-    endpoint: sending ``thinking=disabled`` is rejected, while omitting a
-    depth lets its default reasoning consume a small Coach output budget before
-    any final content is emitted.  Keep an explicit environment override, but
-    use the documented low depth by default for this short structured task.
-    """
-    raw = values.get(reasoning_effort_env, "").strip()
-    if raw:
-        return raw
-    normalized_model = model.strip().lower()
-    if normalized_model == GLM_5_3_FLASH_MODEL:
-        return GLM_5_3_FLASH_DEFAULT_REASONING_EFFORT
-    if normalized_model == GROK_4_5_MODEL:
-        return GROK_4_5_DEFAULT_REASONING_EFFORT
-    return None
+    return PROVIDER_MAX_OUTPUT_TOKENS
 
 
 class StrictModel(BaseModel):
@@ -425,7 +316,6 @@ class OpenAICompatibleProvider:
         api_key: SecretStr | None = None,
         model: str = "",
         reasoning_effort: str | None = None,
-        thinking: str | None = None,
         proxy: str | None = None,
         timeout_seconds: float | None = 60.0,
         supports_json_schema: bool = False,
@@ -456,9 +346,7 @@ class OpenAICompatibleProvider:
         if wire_api not in {"chat_completions", "responses"}:
             raise ValueError("provider wire_api must be chat_completions or responses")
         if reasoning_effort is not None and reasoning_effort not in _REASONING_EFFORTS:
-            raise ValueError("provider reasoning_effort must be low, medium, high, or xhigh")
-        if thinking is not None and thinking not in _THINKING_MODES:
-            raise ValueError("provider thinking must be enabled or disabled")
+            raise ValueError("provider reasoning_effort must be none, low, medium, high, or xhigh")
         proxy_url = httpx.URL(proxy) if proxy else None
         if proxy_url is not None and (
             proxy_url.scheme not in {"http", "https"}
@@ -483,7 +371,6 @@ class OpenAICompatibleProvider:
         self._api_key = api_key
         self._model = model
         self._reasoning_effort = reasoning_effort
-        self._thinking = thinking
         self._proxy = str(proxy_url).rstrip("/") if proxy_url else None
         self._supports_json_schema = supports_json_schema
         self._temperature = temperature
@@ -558,18 +445,9 @@ class OpenAICompatibleProvider:
                 payload["text"] = {"format": format_value}
             else:
                 payload["response_format"] = format_value
-        if self._thinking is not None and self._wire_api == "chat_completions":
-            if self._supports_json_schema:
-                # Ollama's OpenAI-compatible endpoint controls Qwen3 thinking
-                # with the native ``think`` boolean.  Sending the remote GLM
-                # ``thinking`` object is accepted as an unknown field but can
-                # consume the complete output budget before final content.
-                payload["think"] = self._thinking == "enabled"
-            else:
-                payload["thinking"] = {"type": self._thinking}
         if self._temperature is not None:
             payload["temperature"] = self._temperature
-        if self._reasoning_effort is not None and self._thinking != "disabled":
+        if self._reasoning_effort is not None:
             # xAI Responses uses an object; OpenAI-compatible chat endpoints
             # use the flat field. Neither value is treated as answer content.
             if self._wire_api == "responses":
@@ -1026,7 +904,7 @@ def _validated_named_provider_values(
             _validate_new_provider_model(values, BACKUP_OLLAMA_MODEL_ENV, QWEN3_8_27B_MODEL),
         ),
     }
-    return named_values, values.get(PROVIDER_PROXY_ENV, "").strip() or None
+    return named_values, values.get(MODEL_PROXY_ENV, "").strip() or None
 
 
 def _build_named_provider(
@@ -1045,8 +923,11 @@ def _build_named_provider(
             timeout_seconds=LOCAL_PROVIDER_TIMEOUT_SECONDS,
             supports_json_schema=True,
             temperature=0.0,
-            # Keep Qwen output answer-only; Coach expects its own JSON contract.
-            thinking="disabled",
+            # Ollama's OpenAI-compatible Responses endpoint honors JSON Schema
+            # and avoids the chat-compatibility layer's hidden Qwen thinking
+            # budget.  Coach expects answer-only structured output.
+            reasoning_effort="none",
+            wire_api="responses",
             transport=transport,
         )
     if role == "assist":
@@ -1054,14 +935,7 @@ def _build_named_provider(
             base_url=base_url,
             api_key=SecretStr(api_key),
             model=model,
-            reasoning_effort=_provider_reasoning_effort(
-                values,
-                model=model,
-                reasoning_effort_env=PROVIDER_REASONING_EFFORT_ENV,
-            ),
-            thinking=_provider_thinking_mode(
-                values, model=model, thinking_env=PROVIDER_THINKING_ENV
-            ),
+            reasoning_effort=GLM_5_3_FLASH_DEFAULT_REASONING_EFFORT,
             proxy=proxy,
             transport=transport,
         )
@@ -1070,14 +944,7 @@ def _build_named_provider(
             base_url=base_url,
             api_key=SecretStr(api_key),
             model=model,
-            reasoning_effort=_provider_reasoning_effort(
-                values,
-                model=model,
-                reasoning_effort_env=PROVIDER_REASONING_EFFORT_ENV,
-            ),
-            thinking=_provider_thinking_mode(
-                values, model=model, thinking_env=PROVIDER_THINKING_ENV
-            ),
+            reasoning_effort=GROK_4_5_DEFAULT_REASONING_EFFORT,
             proxy=proxy,
             wire_api="responses",
             transport=transport,
@@ -1089,7 +956,8 @@ def _build_named_provider(
         timeout_seconds=SLOW_LOCAL_PROVIDER_TIMEOUT_SECONDS,
         supports_json_schema=True,
         temperature=0.0,
-        thinking="disabled",
+        reasoning_effort="none",
+        wire_api="responses",
         transport=transport,
     )
 
@@ -1111,132 +979,6 @@ def _new_provider_from_environment(
     return FailoverProvider(*providers)
 
 
-def _legacy_primary_from_environment(
-    values: Mapping[str, str], transport: httpx.AsyncBaseTransport | None
-) -> OpenAICompatibleProvider:
-    base_url = values.get(PROVIDER_BASE_URL_ENV, "")
-    if not base_url:
-        raise ProviderError(f"{PROVIDER_BASE_URL_ENV} is not configured; set it in the environment")
-    model = values.get(PROVIDER_MODEL_ENV, "").strip() or DEFAULT_PROVIDER_MODEL
-    proxy = values.get(PROVIDER_PROXY_ENV) or None
-    thinking = _provider_thinking_mode(
-        values,
-        model=model,
-        thinking_env=PROVIDER_THINKING_ENV,
-    )
-    return OpenAICompatibleProvider(
-        base_url=base_url,
-        api_key=SecretStr(values.get(PROVIDER_API_KEY_ENV, ""))
-        if values.get(PROVIDER_API_KEY_ENV, "")
-        else None,
-        model=model,
-        reasoning_effort=_provider_reasoning_effort(
-            values,
-            model=model,
-            reasoning_effort_env=PROVIDER_REASONING_EFFORT_ENV,
-        ),
-        thinking=thinking,
-        proxy=proxy,
-        wire_api="responses" if model.strip().lower() == GROK_4_5_MODEL else "chat_completions",
-        transport=transport,
-    )
-
-
-def _legacy_provider_from_environment(
-    values: Mapping[str, str], transport: httpx.AsyncBaseTransport | None
-) -> Provider:
-    base_url = values.get(PROVIDER_BASE_URL_ENV, "")
-    if not base_url:
-        raise ProviderError(f"{PROVIDER_BASE_URL_ENV} is not configured; set it in the environment")
-    model = values.get(PROVIDER_MODEL_ENV, "").strip() or DEFAULT_PROVIDER_MODEL
-    proxy = values.get(PROVIDER_PROXY_ENV) or None
-    thinking = _provider_thinking_mode(
-        values,
-        model=model,
-        thinking_env=PROVIDER_THINKING_ENV,
-    )
-    fallback_api_key = values.get(PROVIDER_FALLBACK_API_KEY_ENV, "")
-    local_base_url = values.get(PROVIDER_LOCAL_BASE_URL_ENV, "").strip()
-    local_models = tuple(
-        value
-        for value in (
-            values.get(PROVIDER_LOCAL_SMALL_MODEL_ENV, "").strip(),
-            values.get(PROVIDER_LOCAL_LARGE_MODEL_ENV, "").strip(),
-        )
-        if value
-    )
-    fallback_overrides = (
-        PROVIDER_FALLBACK_BASE_URL_ENV,
-        PROVIDER_FALLBACK_MODEL_ENV,
-        PROVIDER_FALLBACK_REASONING_EFFORT_ENV,
-        PROVIDER_FALLBACK_THINKING_ENV,
-        PROVIDER_FALLBACK_PROXY_ENV,
-    )
-    fallback_overrides_configured = any(values.get(name, "").strip() for name in fallback_overrides)
-    if not fallback_api_key.strip() and fallback_overrides_configured:
-        raise ProviderError(
-            f"{PROVIDER_FALLBACK_API_KEY_ENV} is required when fallback settings are configured",
-            failure_code="INVALID_CONFIGURATION",
-        )
-    primary = _legacy_primary_from_environment(values, transport)
-    if not fallback_api_key.strip() and not local_models:
-        return primary
-
-    fallbacks: list[Provider] = []
-    if local_models:
-        if not local_base_url:
-            raise ProviderError(
-                f"{PROVIDER_LOCAL_BASE_URL_ENV} is required when local models are configured",
-                failure_code="INVALID_CONFIGURATION",
-            )
-        fallbacks.extend(
-            OpenAICompatibleProvider(
-                base_url=local_base_url,
-                model=local_model,
-                timeout_seconds=LOCAL_PROVIDER_TIMEOUT_SECONDS,
-                supports_json_schema=True,
-                temperature=0.0,
-                # Qwen3's OpenAI-compatible template otherwise may emit its
-                # internal <think> block in message.content, which is not the
-                # Coach JSON contract. Keep local fallback output answer-only.
-                thinking="disabled",
-                transport=transport,
-            )
-            for local_model in local_models
-        )
-
-    if fallback_api_key.strip():
-        fallback_model = values.get(PROVIDER_FALLBACK_MODEL_ENV, "").strip() or model
-        fallback_thinking = _provider_thinking_mode(
-            values,
-            model=fallback_model,
-            thinking_env=PROVIDER_FALLBACK_THINKING_ENV,
-        )
-        if not values.get(PROVIDER_FALLBACK_THINKING_ENV, "").strip() and fallback_model == model:
-            fallback_thinking = thinking
-        fallbacks.append(
-            OpenAICompatibleProvider(
-                base_url=values.get(PROVIDER_FALLBACK_BASE_URL_ENV, "").strip() or base_url,
-                api_key=SecretStr(fallback_api_key),
-                model=fallback_model,
-                reasoning_effort=_provider_reasoning_effort(
-                    values,
-                    model=fallback_model,
-                    reasoning_effort_env=PROVIDER_FALLBACK_REASONING_EFFORT_ENV,
-                ),
-                thinking=fallback_thinking,
-                proxy=values.get(PROVIDER_FALLBACK_PROXY_ENV) or proxy,
-                wire_api=(
-                    "responses"
-                    if fallback_model.strip().lower() == GROK_4_5_MODEL
-                    else "chat_completions"
-                ),
-                transport=transport,
-            )
-        )
-    return FailoverProvider(primary, fallbacks[0], *fallbacks[1:])
-
-
 def provider_for_role(
     role: ProviderRole,
     transport: httpx.AsyncBaseTransport | None = None,
@@ -1253,30 +995,13 @@ def provider_for_role(
     values = os.environ if environ is None else environ
     if role not in _NAMED_PROVIDER_ROLES:
         raise ProviderError("unknown provider role", failure_code="INVALID_CONFIGURATION")
-    if _new_provider_configuration_present(values):
-        if any(values.get(name, "").strip() for name in _LEGACY_PROVIDER_SELECTION_ENV_NAMES):
-            raise ProviderError(
-                "new and legacy provider selections cannot be combined",
-                failure_code="INVALID_CONFIGURATION",
-            )
-        named_values, proxy = _validated_named_provider_values(values)
-        try:
-            return _build_named_provider(role, values, named_values, proxy, transport)
-        except ValueError as error:
-            raise ProviderError(
-                "invalid provider configuration", failure_code="INVALID_CONFIGURATION"
-            ) from error
-    if role != "primary":
+    named_values, proxy = _validated_named_provider_values(values)
+    try:
+        return _build_named_provider(role, values, named_values, proxy, transport)
+    except ValueError as error:
         raise ProviderError(
-            "named provider roles require the named provider configuration",
-            failure_code="INVALID_CONFIGURATION",
-        )
-    if any(values.get(name, "").strip() for name in _LEGACY_FALLBACK_SELECTION_ENV_NAMES):
-        raise ProviderError(
-            "single-role connectivity check cannot use legacy fallback settings",
-            failure_code="INVALID_CONFIGURATION",
-        )
-    return _legacy_primary_from_environment(values, transport)
+            "invalid provider configuration", failure_code="INVALID_CONFIGURATION"
+        ) from error
 
 
 def provider_from_environment(
@@ -1284,18 +1009,11 @@ def provider_from_environment(
     *,
     environ: Mapping[str, str] | None = None,
 ) -> Provider:
-    """Construct the configured provider chain without guessing missing roles.
+    """Construct the configured four-role provider chain.
 
-    The current named four-slot environment is authoritative whenever any of
-    its fields is present.  The old SYNORA_PROVIDER_* family remains isolated
-    for compatibility with existing tests and older local deployments.
+    All role slots are validated before any network client is created. This
+    keeps configuration deterministic and removes the former single-provider
+    compatibility path that could silently select a deprecated model.
     """
     values = os.environ if environ is None else environ
-    if _new_provider_configuration_present(values):
-        if any(values.get(name, "").strip() for name in _LEGACY_PROVIDER_SELECTION_ENV_NAMES):
-            raise ProviderError(
-                "new and legacy provider selections cannot be combined",
-                failure_code="INVALID_CONFIGURATION",
-            )
-        return _new_provider_from_environment(values, transport)
-    return _legacy_provider_from_environment(values, transport)
+    return _new_provider_from_environment(values, transport)

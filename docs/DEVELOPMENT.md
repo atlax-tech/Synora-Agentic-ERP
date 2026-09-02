@@ -140,18 +140,20 @@ bash env/dev/scripts/dev/env.sh bash \
 ### 配置方式
 
 1. 复制 `env/dev/.env.example` 为 `env/dev/.env`（已被 gitignore，不会进入 Git）；
-2. 在 `.env` 中填写三项（真实值只存在于本机 `.env`）：
-   - `SYNORA_PROVIDER_BASE_URL`：OpenAI 兼容 API 根地址，**通常带 `/v1`**，如 `https://api.example.com/v1`、`https://api.x.ai/v1`（纯域名不带路径段也会被拒绝，如 `https://api.example.com`）；
-   - `SYNORA_PROVIDER_API_KEY`：你的 API Key；
-   - `SYNORA_PROVIDER_MODEL`：模型 ID，如 `gpt-4o`、`grok-4.5`；
-3. Runtime 通过 `agent_runtime.providers.provider_from_environment()` 读取并构造 provider。
+2. 在 `.env` 中按角色成组填写（真实值只存在于本机 `.env`）：
+   - 主模型：`OLLAMA_BASE_URL`、`OLLAMA_API_KEY`、`OLLAMA_MODEL=qwen3:8b`；
+   - 辅助模型：`ASSIST_BASE_URL`、`ASSIST_API_KEY`、`ASSIST_MODEL=glm-5.3-flash`；
+   - 收费备用：`BACKUP_BASE_URL`、`BACKUP_API_KEY`、`BACKUP_MODEL=grok-4.5`；
+   - 本地最后备用：`BACKUP_OLLAMA_BASE_URL`、`BACKUP_OLLAMA_API_KEY`、`BACKUP_OLLAMA_MODEL=qwen3.8:27b`；
+   - 如需显式远端代理，再设置 `SYNORA_MODEL_PROXY`。代码固定 `trust_env=False`，不会读取系统代理。
+3. Runtime 通过 `agent_runtime.providers.provider_from_environment()` 读取四个命名角色并构造有界回退链；旧 `SYNORA_PROVIDER_*` 配置不再支持。
 
 ### 代码中的脱敏保证
 
 - **入口唯一**：Key 只从环境变量进入，`SecretStr` 保存；不写进代码、Git、日志、数据库或证据文档；
 - **输出面**：`SecretStr` 的 repr/str 一律显示 `**********`；异常消息、HTTP 错误、测试断言均不含明文（有测试 `test_secret_never_appears_in_error` 守护）；
 - **传输面**：`trust_env=False` 防止环境代理改写目标地址；base_url 必须是纯 origin，禁止 userinfo/query/fragment，防 Key 被拼进 URL；
-- **未配置即失败**：`SYNORA_PROVIDER_BASE_URL` 未设置时 `provider_from_environment()` 抛错（fail closed），不猜测默认地址；
+- **未配置即失败**：任一命名角色槽位缺失或模型名不匹配时 `provider_from_environment()` 抛 `INVALID_CONFIGURATION`，不猜测默认地址或旧模型；
 - **使用后即弃**：构造出的 provider 只存在进程内，不持久化。
 
 ### 验证
@@ -164,9 +166,9 @@ uv run --python 3.14 pytest services/agent_runtime/tests/test_providers.py -v
 ### 连通性测试（填好 .env 后）
 
 ```bash
-# 一行命令 (脚本自动加载 env/dev/.env 中的 SYNORA_PROVIDER_* 项, 不覆盖已设置的环境变量):
-uv run --python 3.14 python services/agent_runtime/scripts/check_provider.py --env env/dev/.env
-# PROVIDER-OK: <响应文本前 80 字符> | tokens: in=X out=Y = 链接生效
+# 每次只检查指定角色一次，不遍历回退链：
+uv run --python 3.14 python services/agent_runtime/scripts/check_provider.py --env env/dev/.env --role primary
+# 也可指定 --role assist|backup|last_local；成功必须有 content_present=YES。
 # PROVIDER-FAIL / PROVIDER-CONFIG-FAIL = 失败原因; 任何输出都不包含 API Key
 ```
 
@@ -190,7 +192,6 @@ bash env/dev/scripts/dev/env.sh start
 # In a separate host terminal, use the same token and the local .env key.
 set -a; . env/dev/.env; set +a
 SYNORA_RUNTIME_TOKEN=<ephemeral-local-token> \
-SYNORA_PROVIDER_REASONING_EFFORT=low \
 UV_CACHE_DIR=/private/tmp/synora-uv-cache \
 uv run --python 3.14 uvicorn agent_runtime.app:app --host 127.0.0.1 --port 8001
 

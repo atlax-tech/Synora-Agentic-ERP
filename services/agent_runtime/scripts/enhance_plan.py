@@ -19,13 +19,37 @@ sys.path.insert(0, "services/agent_runtime/src")
 
 from agent_runtime.agent.enhance import enhance_plan
 from agent_runtime.providers import (
-    PROVIDER_API_KEY_ENV,
-    PROVIDER_BASE_URL_ENV,
-    PROVIDER_MODEL_ENV,
+    ASSIST_API_KEY_ENV,
+    ASSIST_BASE_URL_ENV,
+    ASSIST_MODEL_ENV,
+    BACKUP_API_KEY_ENV,
+    BACKUP_BASE_URL_ENV,
+    BACKUP_MODEL_ENV,
+    BACKUP_OLLAMA_API_KEY_ENV,
+    BACKUP_OLLAMA_BASE_URL_ENV,
+    BACKUP_OLLAMA_MODEL_ENV,
+    MODEL_PROXY_ENV,
+    OLLAMA_API_KEY_ENV,
+    OLLAMA_BASE_URL_ENV,
+    OLLAMA_MODEL_ENV,
     provider_from_environment,
 )
 
-_PROVIDER_ENV_NAMES = (PROVIDER_BASE_URL_ENV, PROVIDER_API_KEY_ENV, PROVIDER_MODEL_ENV)
+_PROVIDER_ENV_NAMES = (
+    OLLAMA_BASE_URL_ENV,
+    OLLAMA_API_KEY_ENV,
+    OLLAMA_MODEL_ENV,
+    ASSIST_BASE_URL_ENV,
+    ASSIST_API_KEY_ENV,
+    ASSIST_MODEL_ENV,
+    BACKUP_BASE_URL_ENV,
+    BACKUP_API_KEY_ENV,
+    BACKUP_MODEL_ENV,
+    BACKUP_OLLAMA_BASE_URL_ENV,
+    BACKUP_OLLAMA_API_KEY_ENV,
+    BACKUP_OLLAMA_MODEL_ENV,
+    MODEL_PROXY_ENV,
+)
 
 
 def _load_env_file(path: str) -> None:
@@ -40,7 +64,7 @@ def _load_env_file(path: str) -> None:
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Synora plan enhancement self-check")
-    parser.add_argument("--env", help="load SYNORA_PROVIDER_* from this file")
+    parser.add_argument("--env", help="load named provider roles from this file")
     parser.add_argument(
         "--plan", required=True, help="path to plan JSON (Synora Run Plan.plan_json)"
     )
