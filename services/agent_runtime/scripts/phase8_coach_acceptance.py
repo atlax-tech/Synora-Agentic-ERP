@@ -1199,8 +1199,7 @@ def formal_run(
                     result = run_coach_case(client, case, spec)
                     if result.get("run_id"):
                         revoke_run(client, str(result["run_id"]))
-                    anchor = spec["anchors"][case["anchor"]]
-                    assert isinstance(anchor, dict)
+                    anchor = before[str(case["anchor"])]
                     score_case(result, anchor, case, spec)
             except Blocked, httpx.HTTPError, OSError:
                 result = _case_failure(case_id, started)
