@@ -41,7 +41,10 @@ MODEL_PROXY_ENV = "SYNORA_MODEL_PROXY"
 PROVIDER_MAX_OUTPUT_TOKENS = 1024
 PROVIDER_MAX_OUTPUT_TOKEN_LIMIT = 8192
 LOCAL_PROVIDER_TIMEOUT_SECONDS = 180.0
-SLOW_LOCAL_PROVIDER_TIMEOUT_SECONDS: float | None = None
+# The 27B fallback is slow, but an unbounded socket can pin a Coach Run
+# forever. Keep a long, explicit deadline rather than allowing an infinite
+# provider request; normal Runtime endpoints retain their shorter limits.
+SLOW_LOCAL_PROVIDER_TIMEOUT_SECONDS = 900.0
 QWEN3_8B_MODEL = "qwen3:8b"
 GLM_5_3_FLASH_MODEL = "glm-5.3-flash"
 GROK_4_5_MODEL = "grok-4.5"

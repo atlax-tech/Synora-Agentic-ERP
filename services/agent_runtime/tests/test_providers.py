@@ -215,12 +215,12 @@ class TestOpenAICompatibleProvider:
         with pytest.raises(ValueError):
             OpenAICompatibleProvider(base_url="http://127.0.0.1:11434/v1", timeout_seconds=timeout)
 
-    def test_allows_true_no_timeout_for_slow_local_provider(self) -> None:
+    def test_slow_local_provider_has_finite_timeout(self) -> None:
         provider = OpenAICompatibleProvider(
-            base_url="http://127.0.0.1:11434/v1", timeout_seconds=None
+            base_url="http://127.0.0.1:11434/v1", timeout_seconds=900.0
         )
-        assert provider._client.timeout.connect is None
-        assert provider._client.timeout.read is None
+        assert provider._client.timeout.connect == 900.0
+        assert provider._client.timeout.read == 900.0
         asyncio.run(provider.aclose())
 
     def test_rejects_unknown_reasoning_effort(self) -> None:
@@ -861,7 +861,7 @@ class TestProviderFromEnvironment:
         assert backup._reasoning_effort == "low"
         assert provider._providers[3]._temperature == 0.0
         assert provider._providers[3]._wire_api == "responses"
-        assert provider._providers[3]._client.timeout.read is None
+        assert provider._providers[3]._client.timeout.read == 900.0
         assert provider_model(values) == "qwen3:8b"
         assert provider_max_output_tokens(values) == PROVIDER_MAX_OUTPUT_TOKENS
         assert "assist-secret" not in repr(provider)
@@ -874,7 +874,7 @@ class TestProviderFromEnvironment:
             ("primary", "qwen3:8b", "responses", LOCAL_PROVIDER_TIMEOUT_SECONDS),
             ("assist", "glm-5.3-flash", "chat_completions", 60.0),
             ("backup", "grok-4.5", "responses", 60.0),
-            ("last_local", "qwen3.8:27b", "responses", None),
+            ("last_local", "qwen3.8:27b", "responses", 900.0),
         ],
     )
     def test_role_connectivity_probe_builds_one_provider_without_fallback(

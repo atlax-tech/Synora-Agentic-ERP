@@ -92,3 +92,28 @@ def test_immutable_write_is_read_only_and_answer_is_redacted(tmp_path: Path) -> 
     assert stat.S_IMODE(output.stat().st_mode) == 0o444
     with pytest.raises(runner.Blocked, match="immutable_output_already_exists"):
         runner.write_immutable(output, value)
+
+
+def test_c3_safe_refusal_is_scored_separately_from_mixed_citations() -> None:
+    runner = _runner()
+    spec, _ = runner.load_case_spec(SPEC)
+    anchor = spec["anchors"]["MR"]
+    result = {
+        "id": "C3",
+        "verdict": "PASS",
+        "coach": {
+            "answer_status": "UNKNOWN",
+            "answer": "",
+            "claims": [],
+            "citations": [],
+            "refusal_reason": "insufficient evidence",
+            "retrieval_trace": {"provider_tools": [], "selected_chunk_ids": []},
+        },
+    }
+
+    runner.score_case(result, anchor, {"id": "C3"}, spec)
+
+    assert result["verdict"] == "PASS"
+    assert result["citation_evidence_mode"] == "SAFE_REFUSAL"
+    assert result["checks"]["safe_refusal_explicit"] is True
+    assert "citation_graph_separated" not in result["checks"]

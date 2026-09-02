@@ -420,6 +420,29 @@ class TestCoachAPI(FrappeTestCase):  # type: ignore[misc]
         self.assertNotIn(runtime_token, json.dumps(response, ensure_ascii=False))
         self.assertEqual(frappe.db.count("Synora Coach Claim"), 0)
 
+    def test_runtime_call_has_a_finite_deadline(self) -> None:
+        fake_opener = Mock()
+        fake_opener.open.return_value = _RuntimeResponse(
+            json.dumps(_unknown_answer("provider unavailable"), separators=(",", ":")).encode()
+        )
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SYNORA_RUNTIME_URL": "http://127.0.0.1:8001",
+                    "SYNORA_RUNTIME_TOKEN": RUNTIME_TOKEN,
+                },
+                clear=False,
+            ),
+            patch("urllib.request.build_opener", return_value=fake_opener),
+        ):
+            result = coach_service._call_coach_runtime({"schema_version": "1"}, CAPABILITY)
+
+        self.assertEqual(result["answer_status"], "UNKNOWN")
+        timeout = fake_opener.open.call_args.kwargs["timeout"]
+        self.assertIsInstance(timeout, (int, float))
+        self.assertGreater(timeout, 0)
+
     def test_runtime_rejects_unicode_escaped_capability_before_validation(self) -> None:
         run = self._issue()
         capability = str(run.get("capability", CAPABILITY))

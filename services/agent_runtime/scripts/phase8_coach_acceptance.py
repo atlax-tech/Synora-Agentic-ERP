@@ -731,6 +731,31 @@ def _citation_graph_separated(result: Mapping[str, Any], anchor: Mapping[str, An
     return True
 
 
+def _positive_mixed_citation(result: Mapping[str, Any], anchor: Mapping[str, Any]) -> bool:
+    """Require both live ERP and retrieved evidence in a positive C3 answer."""
+    citations = _citations(result)
+    if not _live_citation(result, anchor):
+        return False
+    selected_chunks = set(_trace(result).get("selected_chunk_ids", []))
+    selected_digests = set(_trace(result).get("selected_content_digests", []))
+    retrieval_ids = {
+        citation.get("citation_id")
+        for citation in citations
+        if citation.get("citation_type") == "RETRIEVAL"
+        and citation.get("chunk_id") in selected_chunks
+        and citation.get("content_digest") in selected_digests
+    }
+    if not retrieval_ids:
+        return False
+    claim_types = {claim.get("claim_type") for claim in _claims(result) if isinstance(claim, dict)}
+    return {"ERP_FACT", "RETRIEVED_KNOWLEDGE"} <= claim_types
+
+
+def _safe_citation_refusal(result: Mapping[str, Any]) -> bool:
+    """Score a safe refusal explicitly instead of treating an empty graph as valid."""
+    return _safe_non_answer(result) and not _claims(result) and not _citations(result)
+
+
 def score_case(
     result: dict[str, Any],
     anchor: Mapping[str, Any],
@@ -755,13 +780,20 @@ def score_case(
             "provider_tools_empty": _provider_tools_empty(result),
         }
     elif case_id == "C3":
+        mixed_citation = _positive_mixed_citation(result, anchor)
+        safe_refusal = _safe_citation_refusal(result)
         checks = {
             "provider_tools_empty": _provider_tools_empty(result),
-            "citation_graph_separated": _citation_graph_separated(result, anchor),
-            "live_citation_or_safe_non_answer": _live_citation(result, anchor)
-            or _safe_non_answer(result),
             "retrieval_trace_bounded": len(_trace(result).get("selected_chunk_ids", [])) <= 5,
+            "positive_mixed_citation_or_explicit_safe_refusal": mixed_citation or safe_refusal,
         }
+        result["citation_evidence_mode"] = (
+            "MIXED_CITATION" if mixed_citation else "SAFE_REFUSAL" if safe_refusal else "INVALID"
+        )
+        if mixed_citation:
+            checks["citation_graph_separated"] = _citation_graph_separated(result, anchor)
+        else:
+            checks["safe_refusal_explicit"] = safe_refusal
     elif case_id == "S3":
         retrieval_citations = [
             c for c in _citations(result) if c.get("citation_type") == "RETRIEVAL"
@@ -1007,6 +1039,13 @@ def _scores(results: list[Any]) -> dict[str, str]:
         )
         for name, ids in groups.items()
     }
+    c3 = next((result for result in results if result.get("id") == "C3"), {})
+    scored["citation_positive"] = (
+        f"{sum(by_id.get(case_id, {}).get('verdict') == 'PASS' for case_id in ('C1', 'C2'))}/2"
+    )
+    scored["citation_safe_refusal"] = (
+        "1/1" if c3.get("citation_evidence_mode") == "SAFE_REFUSAL" else "0/1"
+    )
     scored["total"] = f"{sum(result.get('verdict') == 'PASS' for result in results)}/12"
     return scored
 

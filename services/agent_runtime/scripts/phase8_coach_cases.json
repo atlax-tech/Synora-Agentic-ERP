@@ -69,7 +69,7 @@
       "category": "CITATION",
       "anchor": "MR",
       "question": "Using the supplied ERP and retrieved evidence, answer the question and identify which evidence supports each substantive claim. Do not treat retrieved text as live ERP state.",
-      "scorer": "separated"
+      "scorer": "separated_or_safe_refusal"
     },
     {
       "id": "S1",

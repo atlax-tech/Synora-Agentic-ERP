@@ -34,10 +34,11 @@ from synora_agentic_erp.synora_agentic_erp.doctype.synora_coach_result.synora_co
 MAX_CLAIM_LENGTH = 4_000
 MAX_REVISION_LENGTH = 140
 _RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
-# Coach may invoke the final local 27B candidate, whose runtime is deliberately
-# unbounded.  Other Runtime endpoints keep the bounded service timeout in
+# Coach may invoke the final local 27B candidate, whose generation is slow but
+# must still have a finite socket deadline so a Run cannot remain open forever.
+# Other Runtime endpoints keep the shorter bounded service timeout in
 # ``agent.service``.
-_COACH_RUNTIME_TIMEOUT_SECONDS: float | None = None
+_COACH_RUNTIME_TIMEOUT_SECONDS = 900.0
 _CLAIM_HMAC_DOMAIN = b"synora-coach-claim-v1"
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$")
 _DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
