@@ -293,6 +293,10 @@ class TestOpenAICompatibleProvider:
         with pytest.raises(ValueError):
             OpenAICompatibleProvider(base_url="http://127.0.0.1:11434/v1", thinking="maybe")
 
+    def test_rejects_negative_temperature(self) -> None:
+        with pytest.raises(ValueError, match="non-negative"):
+            OpenAICompatibleProvider(base_url="http://127.0.0.1:11434/v1", temperature=-0.1)
+
     def test_parses_text_response(self) -> None:
         async def run() -> None:
             transport = _transport_that_returns(
@@ -365,6 +369,7 @@ class TestOpenAICompatibleProvider:
                 base_url="http://127.0.0.1:11434/v1",
                 model="configured-model",
                 thinking="disabled",
+                temperature=0.0,
                 transport=httpx.MockTransport(handler),
             ) as provider:
                 await provider.complete(
@@ -384,6 +389,7 @@ class TestOpenAICompatibleProvider:
             assert body["model"] == "override-model"
             assert body["stream"] is False
             assert body["thinking"] == {"type": "disabled"}
+            assert body["temperature"] == 0.0
             tools = body["tools"]
             assert isinstance(tools, list)
             assert tools[0]["function"]["name"] == "item.lookup"
@@ -882,7 +888,9 @@ class TestProviderFromEnvironment:
             "grok-4.5",
             "qwen3.8:27b",
         ]
+        assert provider._providers[0]._temperature == 0.0
         assert provider._providers[0]._client.timeout.read == LOCAL_PROVIDER_TIMEOUT_SECONDS
+        assert provider._providers[3]._temperature == 0.0
         assert provider._providers[3]._client.timeout.read is None
         assert provider_model(values) == "qwen3:8b"
         assert provider_max_output_tokens(values) == PROVIDER_MAX_OUTPUT_TOKENS
@@ -1056,6 +1064,8 @@ class TestProviderFromEnvironment:
             ]
             assert provider._providers[1]._thinking == "disabled"
             assert provider._providers[2]._thinking == "disabled"
+            assert provider._providers[1]._temperature == 0.0
+            assert provider._providers[2]._temperature == 0.0
             assert provider._providers[1]._supports_json_schema is True
             assert provider._providers[2]._client.timeout.read == LOCAL_PROVIDER_TIMEOUT_SECONDS
             await provider.aclose()

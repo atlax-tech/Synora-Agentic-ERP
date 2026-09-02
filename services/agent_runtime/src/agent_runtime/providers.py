@@ -374,6 +374,7 @@ class OpenAICompatibleProvider:
         proxy: str | None = None,
         timeout_seconds: float | None = 60.0,
         supports_json_schema: bool = False,
+        temperature: float | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         url = httpx.URL(base_url)
@@ -394,6 +395,8 @@ class OpenAICompatibleProvider:
             not math.isfinite(timeout_seconds) or timeout_seconds <= 0
         ):
             raise ValueError("provider timeout must be positive or None")
+        if temperature is not None and (not math.isfinite(temperature) or temperature < 0):
+            raise ValueError("provider temperature must be non-negative or None")
         if reasoning_effort is not None and reasoning_effort not in _REASONING_EFFORTS:
             raise ValueError("provider reasoning_effort must be low, medium, high, or xhigh")
         if thinking is not None and thinking not in _THINKING_MODES:
@@ -423,6 +426,7 @@ class OpenAICompatibleProvider:
         self._thinking = thinking
         self._proxy = str(proxy_url).rstrip("/") if proxy_url else None
         self._supports_json_schema = supports_json_schema
+        self._temperature = temperature
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         if api_key is not None:
             headers["Authorization"] = f"Bearer {api_key.get_secret_value()}"
@@ -481,6 +485,8 @@ class OpenAICompatibleProvider:
                 payload["response_format"] = {"type": response_format}
         if self._thinking is not None:
             payload["thinking"] = {"type": self._thinking}
+        if self._temperature is not None:
+            payload["temperature"] = self._temperature
         if self._reasoning_effort is not None and self._thinking != "disabled":
             # Grok reasoning models default to high effort; simple plan explanations
             # opt in to a lower, explicit effort without weakening output validation.
@@ -830,6 +836,7 @@ def _new_provider_from_environment(
             model=primary_model,
             timeout_seconds=LOCAL_PROVIDER_TIMEOUT_SECONDS,
             supports_json_schema=True,
+            temperature=0.0,
             # Keep Qwen output answer-only; Coach expects its own JSON contract.
             thinking="disabled",
             transport=transport,
@@ -862,6 +869,7 @@ def _new_provider_from_environment(
             model=slow_local_model,
             timeout_seconds=SLOW_LOCAL_PROVIDER_TIMEOUT_SECONDS,
             supports_json_schema=True,
+            temperature=0.0,
             thinking="disabled",
             transport=transport,
         )
@@ -935,6 +943,7 @@ def _legacy_provider_from_environment(
                 model=local_model,
                 timeout_seconds=LOCAL_PROVIDER_TIMEOUT_SECONDS,
                 supports_json_schema=True,
+                temperature=0.0,
                 # Qwen3's OpenAI-compatible template otherwise may emit its
                 # internal <think> block in message.content, which is not the
                 # Coach JSON contract. Keep local fallback output answer-only.
