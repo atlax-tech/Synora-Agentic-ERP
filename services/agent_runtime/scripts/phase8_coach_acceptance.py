@@ -285,7 +285,11 @@ def write_immutable(path: Path, value: Mapping[str, object]) -> None:
     path.chmod(0o444)
 
 
-def emit_manifest(case_spec_path: Path, parent_path: Path, output_path: Path) -> int:
+def emit_manifest(
+    case_spec_path: Path, parent_path: Path, output_path: Path, env_path: Path | None = None
+) -> int:
+    if env_path is not None:
+        load_env_file(env_path)
     spec, case_spec_sha = load_case_spec(case_spec_path)
     manifest = build_manifest(spec, case_spec_sha, _parent_manifest_hash(parent_path))
     write_immutable(output_path, manifest)
@@ -1241,6 +1245,7 @@ def main() -> int:
     emit.add_argument("--case-spec", type=Path, default=CASE_SPEC_PATH)
     emit.add_argument("--parent-manifest", type=Path, required=True)
     emit.add_argument("--output", type=Path, required=True)
+    emit.add_argument("--env", type=Path)
     for name in ("representative", "run"):
         command = subparsers.add_parser(name)
         command.add_argument("--manifest", type=Path, required=True)
@@ -1250,7 +1255,7 @@ def main() -> int:
         command.add_argument("--runtime-url", default="http://127.0.0.1:8001")
     args = parser.parse_args()
     if args.command == "emit-manifest":
-        return emit_manifest(args.case_spec, args.parent_manifest, args.output)
+        return emit_manifest(args.case_spec, args.parent_manifest, args.output, args.env)
     if args.command == "representative":
         return representative(args.manifest, args.result, args.env, args.base_url, args.runtime_url)
     return formal_run(args.manifest, args.result, args.env, args.base_url, args.runtime_url)
