@@ -336,6 +336,47 @@ async def _test_coach_service_refuses_unavailable_quantity_requests() -> None:
     assert provider.tools == []
 
 
+async def _test_coach_service_refuses_unanchored_erp_summary() -> None:
+    request = _request(
+        question=(
+            "Using the supplied ERP and retrieved evidence, answer the question and identify "
+            "which evidence supports each substantive claim. Do not treat retrieved text as "
+            "live ERP state."
+        )
+    )
+    provider = RecordingProvider(
+        _response(
+            live_digest=_live_digest(),
+            hit=_hit(),
+            fact_fields=[
+                "company",
+                "docstatus",
+                "item_code",
+                "material_request_type",
+                "requested_stock_qty",
+                "schedule_date",
+                "status",
+                "stock_uom",
+                "warehouse",
+            ],
+        )
+    )
+
+    result = await answer_coach(
+        request,
+        _context(),
+        (),
+        provider,
+        environ={"SYNORA_CONTEXT_INPUT_TOKEN_BUDGET": "50000"},
+    )
+
+    assert result.answer_status == "UNKNOWN"
+    assert result.answer == ""
+    assert result.claims == ()
+    assert result.citations == ()
+    assert result.refusal_reason == "the answer could not be grounded in supplied evidence"
+
+
 async def _test_coach_service_adds_controlled_context_for_explanatory_questions() -> None:
     hit = _hit()
     request = _request(
@@ -766,6 +807,10 @@ def test_coach_service_materializes_missing_live_citation() -> None:
 
 def test_coach_service_refuses_unavailable_quantity_requests() -> None:
     asyncio.run(_test_coach_service_refuses_unavailable_quantity_requests())
+
+
+def test_coach_service_refuses_unanchored_erp_summary() -> None:
+    asyncio.run(_test_coach_service_refuses_unanchored_erp_summary())
 
 
 def test_coach_service_adds_controlled_context_for_explanatory_questions() -> None:

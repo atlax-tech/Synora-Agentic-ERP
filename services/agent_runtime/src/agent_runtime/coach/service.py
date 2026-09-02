@@ -317,6 +317,15 @@ def _normalize_erp_claim(
 ) -> str | None:
     """Render an ERP claim only from the exact fields named by its citations."""
     allowed_fields = _LIVE_FACT_FIELDS[context.current_document.doctype]
+    if not requested_fields and any(
+        len(citation.fact_fields) > 1
+        for citation in citations_by_id.values()
+        if isinstance(citation, CoachLiveCitation)
+    ):
+        # A question without a live-field anchor cannot authorize a whole-row
+        # ERP summary.  Keep natural-language single-fact questions compatible,
+        # but refuse the unbounded claim shape instead of guessing its intent.
+        return None
     atoms: list[tuple[str, object]] = []
     used_fields: set[str] = set()
     for reference in claim.citation_refs:
