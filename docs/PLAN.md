@@ -51,27 +51,14 @@
 
 ## 3. 用户阶段指令的机械解释
 
-### 新 Codex 对话的首轮启动契约
-
-“新对话”是新的 Codex 对话，不是新的 ChatGPT 对话。只要当前对话绑定本仓库工作区，首轮处理任何项目任务前必须先读取根目录 `AGENTS.md` 和本文，并按全局 `codex-with-chatgpt` 官方流程查询本工作区的已保存会话和连接状态：
-
-1. 已存在长期会话和有效连接时，直接复用它们；不得新建 ChatGPT 会话、连接器或项目级替代协议，也不得要求用户再次批准同一连接。
-2. 已保存会话或连接不可用时，先执行官方 doctor/reconnect 恢复流程；只有官方流程明确需要登录、验证码、双重验证、配对或外部授权时，才向用户提出一次性动作请求。有效连接不重复索要配对码。
-3. 当前消息匹配下一节的阶段指令且处于计划模式时，首轮直接生成阶段细化计划；计划获准切换执行模式后，在同一阶段任务中启动官方 C2C `INIT`，等待 ChatGPT 的 `PLAN` 后才执行第一条原子任务。不得把“没有看到用户再次提示 Skill”当作跳过条件。
-4. 若新 Codex 对话没有绑定本仓库工作区，不能假定本契约已加载；先按宿主的项目工作区选择完成绑定，再重新处理阶段指令。不得在未加载本项目规则时修改代码或伪造阶段进度。
-
 ### “开始推进 Phase X”或“开始完成阶段 X”
 
-Codex 必须把两种说法机械解释为同一流程，用户无需再提示 Skill、拆解方式或协作步骤：
+Codex 必须把两种说法机械解释为同一流程：
 
 1. 核对 Phase X 的前置阶段、当前 Git 状态、最近日志和出口证据，从最早缺少证据的步骤开始；
 2. 读取 Phase X 指定的 PRD、SPEC、架构、设计和上阶段证据；
 3. 在计划模式生成阶段细化计划，明确目标与禁止范围、PLAN 步骤、顺序与依赖、输入输出、风险等级、停止条件，以及出口所需测试、真实集成和审查证据；
-4. 在阶段计划中明确：计划获准并进入执行模式后必须自动调用全局 `codex-with-chatgpt`；
-5. 进入执行模式后自动启动官方 C2C 流程，不再询问用户是否调用 Skill；由 ChatGPT 拆解并逐条签发原子任务 Prompt，Codex 顺序执行到阶段出口或停止条件；
-6. 阶段出口通过后提交阶段报告并停止，不得自动进入 Phase X+1。
-
-用户不需要再说“使用 codex-with-chatgpt”“把步骤拆成原子任务”“让 GPT 决策”“为 Codex 生成执行 Prompt”“执行后回传 GPT”或“让 GPT 生成独立审查方案”；这些都是阶段推进的默认义务。计划模式只授权制定计划，切换到执行模式后自动启动 C2C 和实施，不把模式限制转化为新的流程确认问题。
+4. 阶段出口通过后提交阶段报告并停止，不得自动进入 Phase X+1。
 
 ### “开始完成下个阶段”
 
@@ -81,9 +68,9 @@ Codex 必须把两种说法机械解释为同一流程，用户无需再提示 S
 
 ### “继续工作”
 
-- 重新检查工作区、输入文件哈希、最近开发日志、未提交 diff、已有测试证据、已有 C2C 任务/长期会话和用户刚批准的决定；
+- 重新检查工作区、输入文件哈希、最近开发日志、未提交 diff、已有测试证据和用户刚批准的决定；
 - 以前次阻塞点为候选断点，但不得盲信旧状态；
-- 证据未变化且批准范围清晰时从最近安全断点继续，不新建重复会话也不要求用户重述流程；证据变化时重新生成 Context Receipt，并把变化交 ChatGPT 决定新的执行边界。
+- 证据未变化且批准范围清晰时从最近安全断点继续；证据变化时重新生成 Context Receipt 和执行边界。
 
 ## 4. 精简增量闭环
 
@@ -169,34 +156,6 @@ Codex 必须把两种说法机械解释为同一流程，用户无需再提示 S
 4. 审查 `PASS`：更新阶段日志、Harness/README（若事实变化），提交阶段报告并停止。审查 `CHANGES_REQUIRED`：Execute 修复、重跑受影响检查，再进行最多两轮复查。审查 `BLOCKED` 或第三轮仍失败：阶段状态为 `BLOCKED`，交用户决定，不得进入下一阶段。
 5. 导师交付阶段问答：至少覆盖本阶段 5 个真实追问（业务、代码入口、信任边界、失败恢复、取舍/面试追问），先让用户作答，再给逐题提示和参考答案；未作答项保留为 `待练习`。
 
-### 4.8 Codex with ChatGPT 阶段决策闭环
-
-阶段计划获准并进入执行模式后，Codex 按全局 Skill 的官方协议发送 `INIT`。ChatGPT 读取阶段细化计划和工作区证据，把每个阶段步骤拆成单一目的、可验证、可回滚的原子任务，建立有序队列并识别依赖；每次只签发当前任务的完整 Prompt，根据上一任务的真实结果决定下一条指令，不让 Codex 自行选择。
-
-每条执行 Prompt 必须包含：当前步骤与原子任务编号、业务目的与完成结果、已确认事实与代码入口、精确实现要求、禁止修改边界、输入输出/接口/状态变化、Ponytail 最小实现约束、测试/手工验收/证据要求、失败与停止条件，以及完成后必须回报的结果。Prompt 保留在长期 C2C 会话中，默认不生成仓库内持久 Prompt 文件。
-
-Codex 只执行当前 Prompt，不重新规划阶段、不提前实现下一任务，也不擅自改变技术方案、接口、范围或验收标准。所有编辑、命令、测试、Git、恢复和独立角色调度仍由 Codex 完成。发现问题时，Codex 必须停止受影响操作并回传：问题、观察证据、失效假设、已完成与未执行动作、继续风险和需要决定的准确问题；只使用官方 `EXECUTED → REVIEW → PLAN/BLOCKED`，不新增协议状态，也不复制文件、diff 或日志。取得新 `PLAN` 前不得自行改走替代路线。
-
-只有 ChatGPT 返回 `BLOCKED` 且需要改变用户批准的产品范围或权限、权威文档冲突无法用证据消解、需要新的外部写入/推送/发布/破坏性操作授权、需要用户登录/验证码/明确确认，或官方最大迭代数耗尽时，才询问用户。
-
-#### 独立 Review 边界
-
-- C2C 的 `REVIEW` 只是 ChatGPT 读取执行结果并决定下一条指令，不是项目独立对抗审查。
-- 阶段实现完成后，ChatGPT 生成独立 Review 执行 Prompt，包含审查范围、攻击面、验证证据、负面场景和判定标准；Codex 用它启动独立只读 Review 角色，角色返回 `PASS / CHANGES_REQUIRED / BLOCKED`，不得修改代码。
-- Codex 把正式 Review 结论交回 ChatGPT：`PASS` 时由 GPT 签发收口 Prompt，`CHANGES_REQUIRED` 时签发修复 Prompt，`BLOCKED` 时整理需要用户决定的问题。ChatGPT 不得亲自承担独立 Review，也不得覆盖其结论。
-- L2/L3 所需独立 Test、真实 ERP、安全验证和 Harness 检查仍由 Codex 执行或调度。
-
-#### 可选 GitHub Review
-
-项目默认不推送。只有用户明确授权且 Codex 已完成推送后，ChatGPT 才可对其能够访问的 GitHub 仓库或 PR 做补充性只读 Review；不得评论、Approve、Request changes、提交、推送、修改、合并或关闭任何远端对象。C2C 只保证读取本地工作区，GitHub 可见性取决于仓库权限；远端 Review 不替代本地独立对抗审查，也不是默认阶段出口条件。
-
-#### 成本控制
-
-- 一个工作区复用一个长期 ChatGPT 会话；ChatGPT 维护任务队列，Codex 每次只加载当前 Prompt 所需上下文。
-- Codex 不重复生成方案、技术比较、调试策略或 Review 判断；控制消息保持简短，具体证据由 ChatGPT 从工作区读取，C2C 结果检查不再复制成另一轮同类 Review。
-- 开发日志记录宿主可见的 Codex Token、C2C 迭代数、返工次数和耗时；不可见项明确标记不可见。
-- 连续两个可比较增量未降低 Codex 消耗时，暂停下一任务，由 ChatGPT 重新决定任务粒度和 Prompt 质量；不得以成本为由降低测试、真实集成、安全或阶段出口质量。
-
 ## 5. Skill 调用表
 
 | 触发点 | 必须调用 | 调用方式与边界 |
@@ -209,7 +168,6 @@ Codex 只执行当前 Prompt，不重新规划阶段、不提前实现下一任�
 | README 公开事实发生变化 | `readme-writer` | 修改前完整读取 Skill；只写已有证据，同时保持 `README.md` 与 `README.zh-CN.md` 语义一致。 |
 | 用户明确批准产品需求变化 | `prd-writer` | 使用模式 C 增量融合；不覆盖既有 PRD，不用 Skill 自由补齐 `[待确认]`。 |
 | 用户明确要求生成持久任务包 | `harness-prompt` | 以本文中的具体阶段/步骤为来源生成 execute/test/review 文件；默认工作流使用本文内置角色契约，不生成 `docs/prompts/`。 |
-| 阶段计划获准并进入执行模式；或执行问题需要决策 | 全局 `codex-with-chatgpt` | 自动启动并复用本工作区的长期连接器和会话；ChatGPT 只负责决策、原子任务 Prompt 与 Review 方案，Codex 负责所有行动。严格使用官方状态流，不创建项目级 Skill、`.c2c.json`、自定义状态或持久 Prompt 包。 |
 
 纯文档任务不因形式需要调用 Ponytail；代码相关任务不能跳过 Ponytail。
 
@@ -387,8 +345,6 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 
 当前出口状态（2026-09-03）：`COMPLETED / PASS / READY FOR THE NEXT PHASE`。T08/P8.5、T09 阶段证据和 T10 独立只读审查均已完成；Phase 9 尚未开始。以下收口证据是当前权威口径，后面的逐任务描述保留为历史执行快照，不得覆盖本状态。
 
-本次收口执行例外（2026-09-02）：用户明确授权由 Codex 全权规划、执行并修复 Phase 8 剩余步骤；本轮不调用 `codex-with-chatgpt`，不检查、不操作连接器。该例外只适用于本次 Phase 8 收口，不改变后续阶段的默认治理规则、独立审查和权限边界。
-
 ### Phase 8 当前收口证据（2026-09-03）
 
 - 固定不可变实例绑定代码 HEAD `562fc42671004e12c3f3b6ee9266d0385e03b04a`；manifest `output/phase8/phase8-manifest-562fc42.json`，SHA-256 `1c3e88b23aa410afb2eb70f21de1f67df518a3071de58ae1e4a014246a884e39`；case-spec SHA `264e42eeaf7a663cab9886d2b8ec05df3f55c7368502cff8647a607290d097a3`。
@@ -404,9 +360,9 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 - **T01 / P8.0**：已完成 PRD、PLAN、Architecture 与 Harness 状态对齐；F-013 是 Phase 8 的有限、只读、带引用 Coach，完整 P2P 写闭环仍在 Phase 10。
 - **T02 / P8.1（领域基础）**：已提交的 M1、M1F、M2、M3、M3F、M4、M4F，以及 M5/M5F 的 Runtime 开发适配器，均属于 Memory 领域基础；这些早期子任务本身未完成 Frappe 生命周期、候选来源解析、删除 tombstone、纠正和统一召回，后续由 T03/P8.1 生命周期切片关闭。
 - **T03 / P8.1**：已交付 Frappe-authoritative `Synora Memory Record` DocType、服务端范围/公司/仓库权限重检、候选来源的真实 Run 解析、数据库唯一键去重、候选详情与审核 API、双 CAS 原子纠正、tombstone 删除、权限安全的可见召回、原生 Desk List/Form 审核入口及真实 Frappe 权限/CAS/无写入测试；无权/未知原生 Form/API 记录统一为空响应，避免 Memory ID 存在性侧信道。`source_claim_id` 仍仅是 provenance metadata，Coach claim authority 解析是 T07 的硬门禁；本切片未增加 RAG、Provider、Agent/model 或 ERP 写工具。
-- **T04 / P8.2**：已实现确定性 heading-aware chunk、稳定 chunk/content digest（不依赖摄取时间）、chunk-level FTS5/BM25、权限/来源/修订/ERP 版本过滤、可重建索引以及 `SearchHit` 引用元数据；检索到 ContextBuilder 的适配器明确标记 `UNTRUSTED`，最多接收 5 个合法、去重且保留输入 BM25 顺序的命中，引用超预算时保持原有 fail-closed，不自动删除 triggered retrieval refs。固定网络无关评测产物覆盖英文/CJK、权限/版本隔离、正确与错误 revision/ERP version、恶意文本和重建一致性；该切片已取得 C2C `REVIEW: PASS`。
+- **T04 / P8.2**：已实现确定性 heading-aware chunk、稳定 chunk/content digest（不依赖摄取时间）、chunk-level FTS5/BM25、权限/来源/修订/ERP 版本过滤、可重建索引以及 `SearchHit` 引用元数据；检索到 ContextBuilder 的适配器明确标记 `UNTRUSTED`，最多接收 5 个合法、去重且保留输入 BM25 顺序的命中，引用超预算时保持原有 fail-closed，不自动删除 triggered retrieval refs。固定网络无关评测产物覆盖英文/CJK、权限/版本隔离、正确与错误 revision/ERP version、恶意文本和重建一致性。
 - **T05 / P8.3**：已完成同一固定 T04 语料上的 FTS5/BM25、真实本地 vector、RRF hybrid 和 bounded cross-encoder rerank 对照；Python 3.14 本地模型加载、9 cases、四路重复指纹、负例策略、scope/version/injection 边界均有证据，四路 `PASS` 且无安全违规。固定数据未产生相对 FTS5 的质量提升，Adoption Card 决策为 `KEEP_FTS5`；vector/hybrid/rerank 仍为 `LAB_ONLY / EVALUATED`，未改变业务路径。
-- **T06 / P8.4**：已交付 Provider-neutral Coach 请求/当前上下文严格契约，以及按 Run 发起人、公司、仓库和 Frappe 权限重检的 `material_request.current@1`、`purchase_order.current@1` 只读 Gateway 工具；覆盖实时 MR/PO 状态、草稿/取消单据、仓库范围、数量公式、来源时间戳、分页完整性和不透明无权/不存在响应。current 工具仍不进入 Provider 工具 schema 或模型 allowlist，也没有增加任何 ERP 写能力。C2C iteration 6 的 `CHANGES_REQUIRED` 已以 `7289d46` 修复并关闭。
+- **T06 / P8.4**：已交付 Provider-neutral Coach 请求/当前上下文严格契约，以及按 Run 发起人、公司、仓库和 Frappe 权限重检的 `material_request.current@1`、`purchase_order.current@1` 只读 Gateway 工具；覆盖实时 MR/PO 状态、草稿/取消单据、仓库范围、数量公式、来源时间戳、分页完整性和不透明无权/不存在响应。current 工具仍不进入 Provider 工具 schema 或模型 allowlist，也没有增加任何 ERP 写能力；审查发现的问题已以 `7289d46` 修复并关闭。
 - **T07 / P8.4（历史快照，现已关闭）**：已实现 Provider-neutral Coach 回答契约、严格 Claim/Citation 图校验、服务端确定性实时 MR/PO 读取、Provider `tools=[]`、字段绑定的 ERP grounding、Runtime `ValidatedCoachClaim` 及域隔离 HMAC 签名；Frappe `Synora Coach Claim` 是持久 provenance 权威，服务端重新校验 Run/correlation/company/warehouse、来源版本和 live citation 后才幂等保存，Memory `source_claim_id` 只能解析到同一权威 Claim。当前 `answer_coach` 只编排本次新鲜、服务端选定的 MR/PO ERP context 与有界 FTS5 检索，不注入已审核 Frappe Memory；`MEMORY` citation 在此边界故意拒绝并 fail closed，Claim→Memory 仅是持久 provenance，不等于 Memory-backed Coach answer retrieval。针对历史独立复核 P1 的用户授权窄修复已执行：保留 `UNKNOWN` 类型定义，但契约拒绝其进入 `ANSWERED/CONFLICT`，服务层统一的可签名 Claim allowlist 对非签名类型再次 fail closed；独立安全复核已对 `UNKNOWN`/`MEMORY` 负例、三类合法 Claim、畸形输入、ERP 字段绑定和零写入边界返回 `PASS`。
 - **T08 / P8.5（历史快照，现已关闭）**：T08.1 内部 Runtime transport foundation 已在 `d6ab39c` 实现，并已通过正式独立只读安全/diff Review（`PASS`）；新增 token 保护的 `POST /coach/answer`，Runtime 自己绑定当前 MR/PO Gateway、固定内部 curated FTS5（最多 5 条），并保持 Provider `tools=[]`。T08.2 Frappe adapter 原始实现已在 `7a35eaa` 提交，完成 actor/Run/capability 绑定、服务端派生 correlation/company/warehouse、严格 Coach 回执图校验及原子签名 Claim 持久化；首次正式独立 Review 曾因 JSON 转义 secret 反射和共享 Runtime URL 的 origin/path 歧义返回 `CHANGES_REQUIRED`。窄修复已在 `25e9507` 完成：在 Coach 校验/持久化前扫描解码后的 Runtime JSON 中的 capability/Runtime-token 子串，并将 `SYNORA_RUNTIME_URL` 限制为已批准的裸 origin、由服务端构造固定 endpoint path；修复后的正式独立只读安全/diff Review 为 `PASS`，原 P1/P2 均不可复现。后续通过 named fallback、有限 deadline、grounded Coach 代表题/固定 12 案及角色证据完成 T08/P8.5，详见本节当前收口证据。
 - **T09 / 阶段出口证据（历史快照，现已关闭）**：真实 BYOK、固定 ERP 零写入统计、12 案 Rubric、三角色浏览器绑定和 L3 门禁均已记录于当前收口证据。

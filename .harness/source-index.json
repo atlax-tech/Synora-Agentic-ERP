@@ -31,8 +31,8 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "a2fd4202b71735c392fb6179d348303ba2d0dd0002d8ede377e475a66a190867",
-      "locator": "automatic phase trigger, ChatGPT atomic-task decisions, Codex-only execution, risk-tiered gates, independent adversarial review, and Phase 0 through Phase 13 order"
+      "sha256": "10247684c2930a880fc4467d2953e40cb44cadc77ea4d90b63e1ef6d3c7f8bee",
+      "locator": "phase selection and execution order, risk-tiered gates, independent adversarial review, and Phase 0 through Phase 13 status"
     },
     {
       "id": "approved-project-direction-correction",
@@ -71,8 +71,8 @@
       "path": "AGENTS.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "08191a2ed2ebc17574ee8c14b0b6652f07b81ed8c41f468ec2d2426a509c5d66",
-      "locator": "repository boundaries, automatic C2C phase workflow, ChatGPT decision and Codex execution split, independent review gate, and mentor-led Assignment workflow"
+      "sha256": "2168221d1b3880a4ae058176f8d64c81bb00802c5c4f2e5ba08a220d455adc35",
+      "locator": "repository boundaries, validation and independent review gates, commit discipline, and mentor-led Assignment workflow"
     },
     {
       "id": "development-log-protocol",
@@ -111,8 +111,8 @@
       "path": "docs/development-log/20260824-Phase-0-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "8baf1b703eaf34d968603570176159839e176bf4b5766e809b431bc9ba4279ce",
-      "locator": "reverse-ordered Phase 0 governance history including automatic GPT-decision and Codex-execution workflow maintenance; original files remain in Git history"
+      "sha256": "5ddddd548d59bb57a1c0d4d4ae7e493db55427cdc13cef44326ae4ff3dcf33e4",
+      "locator": "reverse-ordered Phase 0 governance history; original files remain in Git history"
     },
     {
       "id": "phase1-development-log",
@@ -527,7 +527,7 @@
       "path": "docs/development-log/20260830-Phase-8-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "69b2e21cf7e4afeef4f3ff4c0ce612f0f18ab3f68f7e791290f2f7f948b82aeb",
+      "sha256": "1dbc3ca58b6cce408c5cf13ca2725d2616141957221d2cf9e4b28d001473fed1",
       "locator": "Phase 8 T01 correction, T03 Frappe Memory review slice, Memory foundation/retrieval prerequisite mapping, validation evidence, and current phase boundary"
     },
     {
