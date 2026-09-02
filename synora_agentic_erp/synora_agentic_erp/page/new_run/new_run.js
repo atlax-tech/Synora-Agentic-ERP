@@ -112,7 +112,10 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 	set_purpose_mode();
 
 	function set_field_visible(field, visible) {
-		field.$wrapper.toggle(Boolean(visible));
+		// Frappe adds `hide-control` from the field's `df.hidden` state. Toggling
+		// only the wrapper leaves that class in place, so Coach inputs stay hidden
+		// after switching purpose even though their wrapper has display:block.
+		field.toggle(Boolean(visible));
 	}
 
 	function refresh_coach_context_name() {
