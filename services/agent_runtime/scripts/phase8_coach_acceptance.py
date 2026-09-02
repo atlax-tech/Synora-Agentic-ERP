@@ -363,7 +363,9 @@ def validate_manifest(manifest: Mapping[str, Any], spec: Mapping[str, Any]) -> s
         if not isinstance(baseline_head, str):
             raise Blocked("manifest_git_binding_mismatch")
         changed_paths = git_changed_paths(baseline_head, git["head"])
-        if not changed_paths or not all(_post_evaluation_path_allowed(path) for path in changed_paths):
+        if not changed_paths or not all(
+            _post_evaluation_path_allowed(path) for path in changed_paths
+        ):
             raise Blocked("manifest_git_binding_mismatch")
     if git["branch"] != "main":
         raise Blocked("formal_run_requires_main_branch")
