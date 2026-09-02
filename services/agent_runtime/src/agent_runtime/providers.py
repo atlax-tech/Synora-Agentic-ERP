@@ -218,11 +218,6 @@ class ProviderToolCall(StrictModel):
     name: str
     arguments: str
 
-    @property
-    def provider_tool_call_id(self) -> str:
-        """Descriptive alias for the provider's wire-level ``id`` field."""
-        return self.id
-
 
 class ProviderMessage(StrictModel):
     role: Literal["system", "user", "assistant", "tool"]
