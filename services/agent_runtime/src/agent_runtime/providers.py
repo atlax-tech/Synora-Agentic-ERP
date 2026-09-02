@@ -41,6 +41,7 @@ PROVIDER_LOCAL_SMALL_MODEL_ENV = "SYNORA_PROVIDER_LOCAL_SMALL_MODEL"
 PROVIDER_LOCAL_LARGE_MODEL_ENV = "SYNORA_PROVIDER_LOCAL_LARGE_MODEL"
 PROVIDER_MAX_OUTPUT_TOKENS = 1024
 PROVIDER_MAX_OUTPUT_TOKEN_LIMIT = 8192
+LOCAL_PROVIDER_TIMEOUT_SECONDS = 180.0
 GLM_4_7_FLASH_MODEL = "glm-4.7-flash"
 DEFAULT_PROVIDER_MODEL = GLM_4_7_FLASH_MODEL
 GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS = 65_536
@@ -68,7 +69,7 @@ _NEXT_PROVIDER_FAILURE_CODES = _FAILOVER_FAILURE_CODES | {
     "RESPONSE_CONTENT_MISSING",
     "USAGE_MISSING",
 }
-ProviderResponseFormat = Literal["json_object"]
+ProviderResponseFormat = Literal["json_object"] | Mapping[str, object]
 
 
 def _output_token_limits(model: str | None) -> tuple[int, int]:
@@ -315,6 +316,7 @@ class OpenAICompatibleProvider:
         thinking: str | None = None,
         proxy: str | None = None,
         timeout_seconds: float = 60.0,
+        supports_json_schema: bool = False,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         url = httpx.URL(base_url)
@@ -361,6 +363,7 @@ class OpenAICompatibleProvider:
         self._reasoning_effort = reasoning_effort
         self._thinking = thinking
         self._proxy = str(proxy_url).rstrip("/") if proxy_url else None
+        self._supports_json_schema = supports_json_schema
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         if api_key is not None:
             headers["Authorization"] = f"Bearer {api_key.get_secret_value()}"
@@ -409,7 +412,14 @@ class OpenAICompatibleProvider:
                 raise ValueError(f"provider max_tokens must be within 1..{hard_limit}")
             payload["max_tokens"] = max_tokens
         if response_format is not None:
-            payload["response_format"] = {"type": response_format}
+            if isinstance(response_format, Mapping):
+                payload["response_format"] = (
+                    dict(response_format)
+                    if response_format.get("type") == "json_schema" and self._supports_json_schema
+                    else {"type": "json_object"}
+                )
+            else:
+                payload["response_format"] = {"type": response_format}
         if self._thinking is not None:
             payload["thinking"] = {"type": self._thinking}
         if self._reasoning_effort is not None and self._thinking != "disabled":
@@ -773,6 +783,8 @@ def provider_from_environment(
             OpenAICompatibleProvider(
                 base_url=local_base_url,
                 model=local_model,
+                timeout_seconds=LOCAL_PROVIDER_TIMEOUT_SECONDS,
+                supports_json_schema=True,
                 # Qwen3's OpenAI-compatible template otherwise may emit its
                 # internal <think> block in message.content, which is not the
                 # Coach JSON contract. Keep local fallback output answer-only.

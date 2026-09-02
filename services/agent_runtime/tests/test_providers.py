@@ -13,6 +13,7 @@ from agent_runtime.providers import (
     DEFAULT_PROVIDER_MODEL,
     GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS,
     GLM_4_7_FLASH_MAX_OUTPUT_TOKENS,
+    LOCAL_PROVIDER_TIMEOUT_SECONDS,
     PROVIDER_API_KEY_ENV,
     PROVIDER_BASE_URL_ENV,
     PROVIDER_FALLBACK_API_KEY_ENV,
@@ -376,6 +377,41 @@ class TestOpenAICompatibleProvider:
 
         asyncio.run(run())
 
+    def test_structured_response_format_is_scoped_to_capable_provider(self) -> None:
+        async def run() -> None:
+            requests: list[dict[str, object]] = []
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                requests.append(json.loads(request.content))
+                return httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"role": "assistant", "content": "{}"}}]},
+                    request=request,
+                )
+
+            response_format = {
+                "type": "json_schema",
+                "json_schema": {"name": "coach_provider_output", "strict": True, "schema": {}},
+            }
+            async with (
+                OpenAICompatibleProvider(
+                    base_url="https://remote.example/v1",
+                    transport=httpx.MockTransport(handler),
+                ) as remote,
+                OpenAICompatibleProvider(
+                    base_url="http://127.0.0.1:11434/v1",
+                    supports_json_schema=True,
+                    transport=httpx.MockTransport(handler),
+                ) as local,
+            ):
+                await remote.complete(_messages(), response_format=response_format)
+                await local.complete(_messages(), response_format=response_format)
+
+            assert requests[0]["response_format"] == {"type": "json_object"}
+            assert requests[1]["response_format"] == response_format
+
+        asyncio.run(run())
+
     def test_glm_request_rejects_cap_above_model_limit(self) -> None:
         provider = OpenAICompatibleProvider(
             base_url="https://open.bigmodel.cn/api/paas/v4",
@@ -723,6 +759,8 @@ class TestProviderFromEnvironment:
             ]
             assert provider._fallback._thinking == "disabled"
             assert provider._fallbacks[1]._thinking == "disabled"
+            assert provider._fallback._supports_json_schema is True
+            assert provider._fallback._client.timeout.read == LOCAL_PROVIDER_TIMEOUT_SECONDS
             await provider.aclose()
 
         asyncio.run(run())

@@ -46,6 +46,7 @@ from agent_runtime.coach.contracts import (
     MaterialRequestCurrentFact,
     PurchaseOrderCurrentFact,
     ValidatedCoachClaim,
+    coach_provider_output_json_schema,
     parse_coach_provider_output,
 )
 from agent_runtime.providers import FailoverProvider, Provider, ProviderError, ProviderResponse
@@ -61,6 +62,14 @@ _SAFE_REASONS = {
 }
 _RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
 _CLAIM_HMAC_DOMAIN = b"synora-coach-claim-v1"
+_COACH_RESPONSE_FORMAT: dict[str, object] = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "coach_provider_output",
+        "strict": True,
+        "schema": coach_provider_output_json_schema(),
+    },
+}
 _LIVE_FACT_FIELDS: dict[str, frozenset[str]] = {
     "Material Request": frozenset(
         {
@@ -633,7 +642,7 @@ async def answer_coach(
             tools=[],
             model=model,
             max_tokens=max_tokens,
-            response_format="json_object",
+            response_format=_COACH_RESPONSE_FORMAT,
         )
         context_result = record_provider_prompt_tokens(context_result, response.prompt_tokens)
         if response.tool_calls:
@@ -662,7 +671,7 @@ async def answer_coach(
                 list(context_result.messages),
                 tools=[],
                 max_tokens=max_tokens,
-                response_format="json_object",
+                response_format=_COACH_RESPONSE_FORMAT,
             )
             if upgraded.tool_calls:
                 raise ProviderError(
@@ -681,7 +690,7 @@ async def answer_coach(
                     list(context_result.messages),
                     tools=[],
                     max_tokens=max_tokens,
-                    response_format="json_object",
+                    response_format=_COACH_RESPONSE_FORMAT,
                 )
                 if not upgraded.tool_calls:
                     upgraded_parsed = parse_coach_provider_output(upgraded.text)

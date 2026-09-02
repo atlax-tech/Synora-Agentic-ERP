@@ -716,6 +716,40 @@ def _normalize_provider_compatibility(value: dict[str, object]) -> dict[str, obj
     return normalized
 
 
+def coach_provider_output_json_schema() -> dict[str, object]:
+    """Return the current Coach wire schema for providers with native support."""
+    schema = CoachProviderOutput.model_json_schema()
+    schema["required"] = [
+        "schema_version",
+        "answer_status",
+        "answer",
+        "claims",
+        "citations",
+        "refusal_reason",
+    ]
+    definitions = schema["$defs"]
+    assert isinstance(definitions, dict)
+    claim_schema = definitions["CoachClaim"]
+    assert isinstance(claim_schema, dict)
+    claim_schema["required"] = ["claim_id", "ordinal", "claim_type", "text", "citation_refs"]
+    live_schema = definitions["CoachProviderLiveCitation"]
+    assert isinstance(live_schema, dict)
+    live_schema["additionalProperties"] = False
+    citations_schema = schema["properties"]["citations"]
+    assert isinstance(citations_schema, dict)
+    citations_schema["items"] = {
+        "anyOf": [
+            {"$ref": "#/$defs/CoachProviderLiveCitation"},
+            {"$ref": "#/$defs/CoachRetrievalCitation"},
+        ]
+    }
+    schema["$defs"] = {
+        name: definitions[name]
+        for name in ("CoachClaim", "CoachProviderLiveCitation", "CoachRetrievalCitation")
+    }
+    return schema
+
+
 def parse_coach_provider_output(raw: object) -> CoachProviderOutput:
     """Parse provider JSON with bounded, explicit wire compatibility.
 
@@ -763,5 +797,6 @@ __all__ = [
     "MaterialRequestCurrentFact",
     "PurchaseOrderCurrentFact",
     "ValidatedCoachClaim",
+    "coach_provider_output_json_schema",
     "parse_coach_provider_output",
 ]

@@ -27,6 +27,7 @@ from agent_runtime.coach.contracts import (
     MaterialRequestCurrentFact,
     PurchaseOrderCurrentFact,
     ValidatedCoachClaim,
+    coach_provider_output_json_schema,
     parse_coach_provider_output,
 )
 
@@ -53,6 +54,7 @@ __all__ = [
     "PurchaseOrderCurrentFact",
     "ValidatedCoachClaim",
     "build_current_document_context",
+    "coach_provider_output_json_schema",
     "current_context_to_fragment",
     "current_fact_digest",
     "parse_coach_provider_output",

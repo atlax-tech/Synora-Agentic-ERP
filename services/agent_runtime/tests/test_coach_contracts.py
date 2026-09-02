@@ -19,6 +19,7 @@ from agent_runtime.coach import (
     MaterialRequestCurrentFact,
     PurchaseOrderCurrentFact,
     build_current_document_context,
+    coach_provider_output_json_schema,
     parse_coach_provider_output,
 )
 from agent_runtime.gateway import GatewaySuccess
@@ -26,6 +27,36 @@ from pydantic import ValidationError
 
 RUN_ID = UUID("37e1d8a5-1730-4ad0-bffd-217774ed9fab")
 CORRELATION_ID = UUID("1687c82a-4b61-4e6e-855a-a10ec3578b96")
+
+
+def test_coach_provider_schema_requires_complete_current_wire_shape() -> None:
+    schema = coach_provider_output_json_schema()
+    assert schema["required"] == [
+        "schema_version",
+        "answer_status",
+        "answer",
+        "claims",
+        "citations",
+        "refusal_reason",
+    ]
+    definitions = schema["$defs"]
+    assert isinstance(definitions, dict)
+    assert set(definitions) == {
+        "CoachClaim",
+        "CoachProviderLiveCitation",
+        "CoachRetrievalCitation",
+    }
+    claim_schema = definitions["CoachClaim"]
+    assert isinstance(claim_schema, dict)
+    assert "citation_refs" in claim_schema["required"]
+    citations_schema = schema["properties"]["citations"]
+    assert isinstance(citations_schema, dict)
+    assert citations_schema["items"] == {
+        "anyOf": [
+            {"$ref": "#/$defs/CoachProviderLiveCitation"},
+            {"$ref": "#/$defs/CoachRetrievalCitation"},
+        ]
+    }
 
 
 def _request(**overrides: object) -> CoachQuestionRequest:
