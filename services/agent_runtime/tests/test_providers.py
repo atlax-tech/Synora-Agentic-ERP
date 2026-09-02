@@ -50,8 +50,10 @@ from agent_runtime.providers import (
     ProviderError,
     ProviderMessage,
     ProviderResponse,
+    ProviderRole,
     ProviderToolCall,
     ProviderToolSpec,
+    provider_for_role,
     provider_from_environment,
     provider_max_output_token_limit,
     provider_max_output_tokens,
@@ -982,6 +984,76 @@ class TestProviderFromEnvironment:
         assert "assist-secret" not in repr(provider)
         assert "backup-secret" not in repr(provider)
         asyncio.run(provider.aclose())
+
+    @pytest.mark.parametrize(
+        ("role", "expected_model", "expected_wire_api", "expected_read_timeout"),
+        [
+            ("primary", "qwen3:8b", "chat_completions", LOCAL_PROVIDER_TIMEOUT_SECONDS),
+            ("assist", "glm-5.3-flash", "chat_completions", 60.0),
+            ("backup", "grok-4.5", "responses", 60.0),
+            ("last_local", "qwen3.8:27b", "chat_completions", None),
+        ],
+    )
+    def test_role_connectivity_probe_builds_one_provider_without_fallback(
+        self,
+        role: ProviderRole,
+        expected_model: str,
+        expected_wire_api: str,
+        expected_read_timeout: float | None,
+    ) -> None:
+        async def run() -> None:
+            calls = 0
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                nonlocal calls
+                calls += 1
+                if expected_wire_api == "responses":
+                    body: dict[str, object] = {
+                        "output": [
+                            {
+                                "type": "message",
+                                "role": "assistant",
+                                "content": [{"type": "output_text", "text": "OK"}],
+                            }
+                        ],
+                        "usage": {
+                            "input_tokens": 2,
+                            "output_tokens": 1,
+                            "total_tokens": 3,
+                        },
+                    }
+                else:
+                    body = {
+                        "choices": [{"message": {"role": "assistant", "content": "OK"}}],
+                        "usage": {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3},
+                    }
+                return httpx.Response(200, json=body, request=request)
+
+            provider = provider_for_role(
+                role,
+                environ=_new_provider_environment(),
+                transport=httpx.MockTransport(handler),
+            )
+            assert isinstance(provider, OpenAICompatibleProvider)
+            assert not isinstance(provider, FailoverProvider)
+            assert provider._model == expected_model
+            assert provider._wire_api == expected_wire_api
+            assert provider._client.timeout.read == expected_read_timeout
+            response = await provider.complete(_messages(), tools=[], max_tokens=32)
+            assert response.text == "OK"
+            assert calls == 1
+            await provider.aclose()
+
+        asyncio.run(run())
+
+    def test_legacy_role_connectivity_probe_rejects_fallback_settings(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://primary.example/v1")
+        monkeypatch.setenv(PROVIDER_FALLBACK_API_KEY_ENV, "fallback-secret")
+        with pytest.raises(ProviderError, match="single-role connectivity") as caught:
+            provider_for_role("primary")
+        assert caught.value.failure_code == "INVALID_CONFIGURATION"
 
     @pytest.mark.parametrize(
         "missing",

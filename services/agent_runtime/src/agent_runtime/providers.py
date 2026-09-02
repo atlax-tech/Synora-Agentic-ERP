@@ -112,8 +112,28 @@ _LEGACY_PROVIDER_SELECTION_ENV_NAMES = frozenset(
         PROVIDER_LOCAL_LARGE_MODEL_ENV,
     }
 )
+_LEGACY_FALLBACK_SELECTION_ENV_NAMES = frozenset(
+    {
+        PROVIDER_FALLBACK_BASE_URL_ENV,
+        PROVIDER_FALLBACK_API_KEY_ENV,
+        PROVIDER_FALLBACK_MODEL_ENV,
+        PROVIDER_FALLBACK_REASONING_EFFORT_ENV,
+        PROVIDER_FALLBACK_THINKING_ENV,
+        PROVIDER_FALLBACK_PROXY_ENV,
+        PROVIDER_LOCAL_BASE_URL_ENV,
+        PROVIDER_LOCAL_SMALL_MODEL_ENV,
+        PROVIDER_LOCAL_LARGE_MODEL_ENV,
+    }
+)
 ProviderResponseFormat = Literal["json_object"] | Mapping[str, object]
 ProviderWireAPI = Literal["chat_completions", "responses"]
+ProviderRole = Literal["primary", "assist", "backup", "last_local"]
+_NAMED_PROVIDER_ROLES: tuple[ProviderRole, ...] = (
+    "primary",
+    "assist",
+    "backup",
+    "last_local",
+)
 
 
 def _new_provider_configuration_present(values: Mapping[str, str]) -> bool:
@@ -973,29 +993,48 @@ def _validate_new_provider_model(values: Mapping[str, str], name: str, expected:
     return value
 
 
-def _new_provider_from_environment(
-    values: Mapping[str, str], transport: httpx.AsyncBaseTransport | None
-) -> Provider:
-    primary_base_url = _required_new_provider_value(values, OLLAMA_BASE_URL_ENV)
-    primary_api_key = _required_new_provider_value(values, OLLAMA_API_KEY_ENV)
-    primary_model = _validate_new_provider_model(values, OLLAMA_MODEL_ENV, QWEN3_8B_MODEL)
-    assist_base_url = _required_new_provider_value(values, ASSIST_BASE_URL_ENV)
-    assist_api_key = _required_new_provider_value(values, ASSIST_API_KEY_ENV)
-    assist_model = _validate_new_provider_model(values, ASSIST_MODEL_ENV, GLM_5_3_FLASH_MODEL)
-    backup_base_url = _required_new_provider_value(values, BACKUP_BASE_URL_ENV)
-    backup_api_key = _required_new_provider_value(values, BACKUP_API_KEY_ENV)
-    backup_model = _validate_new_provider_model(values, BACKUP_MODEL_ENV, GROK_4_5_MODEL)
-    slow_local_base_url = _required_new_provider_value(values, BACKUP_OLLAMA_BASE_URL_ENV)
-    slow_local_api_key = _required_new_provider_value(values, BACKUP_OLLAMA_API_KEY_ENV)
-    slow_local_model = _validate_new_provider_model(
-        values, BACKUP_OLLAMA_MODEL_ENV, QWEN3_8_27B_MODEL
-    )
-    proxy = values.get(PROVIDER_PROXY_ENV, "").strip() or None
-    try:
-        primary = OpenAICompatibleProvider(
-            base_url=primary_base_url,
-            api_key=SecretStr(primary_api_key),
-            model=primary_model,
+def _validated_named_provider_values(
+    values: Mapping[str, str],
+) -> tuple[dict[ProviderRole, tuple[str, str, str]], str | None]:
+    """Validate all named role slots without constructing network clients."""
+    named_values: dict[ProviderRole, tuple[str, str, str]] = {
+        "primary": (
+            _required_new_provider_value(values, OLLAMA_BASE_URL_ENV),
+            _required_new_provider_value(values, OLLAMA_API_KEY_ENV),
+            _validate_new_provider_model(values, OLLAMA_MODEL_ENV, QWEN3_8B_MODEL),
+        ),
+        "assist": (
+            _required_new_provider_value(values, ASSIST_BASE_URL_ENV),
+            _required_new_provider_value(values, ASSIST_API_KEY_ENV),
+            _validate_new_provider_model(values, ASSIST_MODEL_ENV, GLM_5_3_FLASH_MODEL),
+        ),
+        "backup": (
+            _required_new_provider_value(values, BACKUP_BASE_URL_ENV),
+            _required_new_provider_value(values, BACKUP_API_KEY_ENV),
+            _validate_new_provider_model(values, BACKUP_MODEL_ENV, GROK_4_5_MODEL),
+        ),
+        "last_local": (
+            _required_new_provider_value(values, BACKUP_OLLAMA_BASE_URL_ENV),
+            _required_new_provider_value(values, BACKUP_OLLAMA_API_KEY_ENV),
+            _validate_new_provider_model(values, BACKUP_OLLAMA_MODEL_ENV, QWEN3_8_27B_MODEL),
+        ),
+    }
+    return named_values, values.get(PROVIDER_PROXY_ENV, "").strip() or None
+
+
+def _build_named_provider(
+    role: ProviderRole,
+    values: Mapping[str, str],
+    named_values: Mapping[ProviderRole, tuple[str, str, str]],
+    proxy: str | None,
+    transport: httpx.AsyncBaseTransport | None,
+) -> OpenAICompatibleProvider:
+    base_url, api_key, model = named_values[role]
+    if role == "primary":
+        return OpenAICompatibleProvider(
+            base_url=base_url,
+            api_key=SecretStr(api_key),
+            model=model,
             timeout_seconds=LOCAL_PROVIDER_TIMEOUT_SECONDS,
             supports_json_schema=True,
             temperature=0.0,
@@ -1003,53 +1042,97 @@ def _new_provider_from_environment(
             thinking="disabled",
             transport=transport,
         )
-        assist = OpenAICompatibleProvider(
-            base_url=assist_base_url,
-            api_key=SecretStr(assist_api_key),
-            model=assist_model,
+    if role == "assist":
+        return OpenAICompatibleProvider(
+            base_url=base_url,
+            api_key=SecretStr(api_key),
+            model=model,
             reasoning_effort=_provider_reasoning_effort(
                 values,
-                model=assist_model,
+                model=model,
                 reasoning_effort_env=PROVIDER_REASONING_EFFORT_ENV,
             ),
             thinking=_provider_thinking_mode(
-                values, model=assist_model, thinking_env=PROVIDER_THINKING_ENV
+                values, model=model, thinking_env=PROVIDER_THINKING_ENV
             ),
             proxy=proxy,
             transport=transport,
         )
-        backup = OpenAICompatibleProvider(
-            base_url=backup_base_url,
-            api_key=SecretStr(backup_api_key),
-            model=backup_model,
+    if role == "backup":
+        return OpenAICompatibleProvider(
+            base_url=base_url,
+            api_key=SecretStr(api_key),
+            model=model,
             reasoning_effort=_provider_reasoning_effort(
                 values,
-                model=backup_model,
+                model=model,
                 reasoning_effort_env=PROVIDER_REASONING_EFFORT_ENV,
             ),
             thinking=_provider_thinking_mode(
-                values, model=backup_model, thinking_env=PROVIDER_THINKING_ENV
+                values, model=model, thinking_env=PROVIDER_THINKING_ENV
             ),
             proxy=proxy,
             wire_api="responses",
             transport=transport,
         )
-        slow_local = OpenAICompatibleProvider(
-            base_url=slow_local_base_url,
-            api_key=SecretStr(slow_local_api_key),
-            model=slow_local_model,
-            timeout_seconds=SLOW_LOCAL_PROVIDER_TIMEOUT_SECONDS,
-            supports_json_schema=True,
-            temperature=0.0,
-            thinking="disabled",
-            transport=transport,
+    return OpenAICompatibleProvider(
+        base_url=base_url,
+        api_key=SecretStr(api_key),
+        model=model,
+        timeout_seconds=SLOW_LOCAL_PROVIDER_TIMEOUT_SECONDS,
+        supports_json_schema=True,
+        temperature=0.0,
+        thinking="disabled",
+        transport=transport,
+    )
+
+
+def _new_provider_from_environment(
+    values: Mapping[str, str], transport: httpx.AsyncBaseTransport | None
+) -> Provider:
+    named_values, proxy = _validated_named_provider_values(values)
+    try:
+        providers = tuple(
+            _build_named_provider(role, values, named_values, proxy, transport)
+            for role in _NAMED_PROVIDER_ROLES
         )
     except ValueError as error:
         # Do not leak a configured URL, proxy, or secret through configuration errors.
         raise ProviderError(
             "invalid provider configuration", failure_code="INVALID_CONFIGURATION"
         ) from error
-    return FailoverProvider(primary, assist, backup, slow_local)
+    return FailoverProvider(*providers)
+
+
+def _legacy_primary_from_environment(
+    values: Mapping[str, str], transport: httpx.AsyncBaseTransport | None
+) -> OpenAICompatibleProvider:
+    base_url = values.get(PROVIDER_BASE_URL_ENV, "")
+    if not base_url:
+        raise ProviderError(f"{PROVIDER_BASE_URL_ENV} is not configured; set it in the environment")
+    model = values.get(PROVIDER_MODEL_ENV, "").strip() or DEFAULT_PROVIDER_MODEL
+    proxy = values.get(PROVIDER_PROXY_ENV) or None
+    thinking = _provider_thinking_mode(
+        values,
+        model=model,
+        thinking_env=PROVIDER_THINKING_ENV,
+    )
+    return OpenAICompatibleProvider(
+        base_url=base_url,
+        api_key=SecretStr(values.get(PROVIDER_API_KEY_ENV, ""))
+        if values.get(PROVIDER_API_KEY_ENV, "")
+        else None,
+        model=model,
+        reasoning_effort=_provider_reasoning_effort(
+            values,
+            model=model,
+            reasoning_effort_env=PROVIDER_REASONING_EFFORT_ENV,
+        ),
+        thinking=thinking,
+        proxy=proxy,
+        wire_api="responses" if model.strip().lower() == GROK_4_5_MODEL else "chat_completions",
+        transport=transport,
+    )
 
 
 def _legacy_provider_from_environment(
@@ -1088,21 +1171,7 @@ def _legacy_provider_from_environment(
             f"{PROVIDER_FALLBACK_API_KEY_ENV} is required when fallback settings are configured",
             failure_code="INVALID_CONFIGURATION",
         )
-    api_key = values.get(PROVIDER_API_KEY_ENV, "")
-    primary = OpenAICompatibleProvider(
-        base_url=base_url,
-        api_key=SecretStr(api_key) if api_key else None,
-        model=model,
-        reasoning_effort=_provider_reasoning_effort(
-            values,
-            model=model,
-            reasoning_effort_env=PROVIDER_REASONING_EFFORT_ENV,
-        ),
-        thinking=thinking,
-        proxy=proxy,
-        wire_api="responses" if model.strip().lower() == GROK_4_5_MODEL else "chat_completions",
-        transport=transport,
-    )
+    primary = _legacy_primary_from_environment(values, transport)
     if not fallback_api_key.strip() and not local_models:
         return primary
 
@@ -1159,6 +1228,48 @@ def _legacy_provider_from_environment(
             )
         )
     return FailoverProvider(primary, fallbacks[0], *fallbacks[1:])
+
+
+def provider_for_role(
+    role: ProviderRole,
+    transport: httpx.AsyncBaseTransport | None = None,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> OpenAICompatibleProvider:
+    """Construct exactly one configured role for a no-fallback connectivity check.
+
+    This is intentionally separate from :func:`provider_from_environment`:
+    the runtime may use its bounded failover chain, while an operator's
+    connectivity probe must never spend money on another role merely because
+    the selected role returned an unusable response.
+    """
+    values = os.environ if environ is None else environ
+    if role not in _NAMED_PROVIDER_ROLES:
+        raise ProviderError("unknown provider role", failure_code="INVALID_CONFIGURATION")
+    if _new_provider_configuration_present(values):
+        if any(values.get(name, "").strip() for name in _LEGACY_PROVIDER_SELECTION_ENV_NAMES):
+            raise ProviderError(
+                "new and legacy provider selections cannot be combined",
+                failure_code="INVALID_CONFIGURATION",
+            )
+        named_values, proxy = _validated_named_provider_values(values)
+        try:
+            return _build_named_provider(role, values, named_values, proxy, transport)
+        except ValueError as error:
+            raise ProviderError(
+                "invalid provider configuration", failure_code="INVALID_CONFIGURATION"
+            ) from error
+    if role != "primary":
+        raise ProviderError(
+            "named provider roles require the named provider configuration",
+            failure_code="INVALID_CONFIGURATION",
+        )
+    if any(values.get(name, "").strip() for name in _LEGACY_FALLBACK_SELECTION_ENV_NAMES):
+        raise ProviderError(
+            "single-role connectivity check cannot use legacy fallback settings",
+            failure_code="INVALID_CONFIGURATION",
+        )
+    return _legacy_primary_from_environment(values, transport)
 
 
 def provider_from_environment(
