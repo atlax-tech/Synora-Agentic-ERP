@@ -173,6 +173,23 @@ def test_thinking_policy_defaults_only_for_glm() -> None:
     )
 
 
+def test_glm53_defaults_to_low_reasoning_effort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(PROVIDER_BASE_URL_ENV, "https://api.example.com/v1")
+    monkeypatch.setenv(PROVIDER_API_KEY_ENV, "glm-secret")
+    monkeypatch.setenv(PROVIDER_MODEL_ENV, "glm-5.3-flash")
+    monkeypatch.delenv(PROVIDER_REASONING_EFFORT_ENV, raising=False)
+    provider = provider_from_environment(
+        transport=_transport_that_returns(
+            {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+        )
+    )
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider._reasoning_effort == "low"
+    asyncio.run(provider.aclose())
+
+
 class TestDeterministicProvider:
     def test_returns_fixed_response_for_mapped_input(self) -> None:
         async def run() -> None:
@@ -444,6 +461,66 @@ class TestOpenAICompatibleProvider:
             body = captured["json"]
             assert isinstance(body, dict)
             assert body["response_format"] == {"type": "json_object"}
+
+        asyncio.run(run())
+
+    def test_responses_wire_payload_and_output_are_normalized(self) -> None:
+        async def run() -> None:
+            captured: dict[str, object] = {}
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                captured["json"] = json.loads(request.content)
+                captured["path"] = request.url.path
+                return httpx.Response(
+                    200,
+                    json={
+                        "object": "response",
+                        "output": [
+                            {
+                                "type": "message",
+                                "role": "assistant",
+                                "content": [{"type": "output_text", "text": "ok"}],
+                            }
+                        ],
+                        "usage": {
+                            "input_tokens": 4,
+                            "output_tokens": 2,
+                            "total_tokens": 6,
+                            "output_tokens_details": {"reasoning_tokens": 0},
+                        },
+                    },
+                    request=request,
+                )
+
+            response_format = {
+                "type": "json_schema",
+                "json_schema": {"name": "coach", "strict": True, "schema": {}},
+            }
+            async with OpenAICompatibleProvider(
+                base_url="https://backup.example/v1",
+                model="grok-4.5",
+                reasoning_effort="low",
+                wire_api="responses",
+                transport=httpx.MockTransport(handler),
+            ) as provider:
+                response = await provider.complete(
+                    _messages(),
+                    tools=[],
+                    max_tokens=32,
+                    response_format=response_format,
+                )
+            body = captured["json"]
+            assert captured["path"] == "/v1/responses"
+            assert isinstance(body, dict)
+            assert body["input"] == [{"role": "user", "content": "user input"}]
+            assert body["max_output_tokens"] == 32
+            assert body["store"] is False
+            assert body["text"] == {"format": {"type": "json_object"}}
+            assert body["reasoning"] == {"effort": "low"}
+            assert response.text == "ok"
+            assert response.prompt_tokens == 4
+            assert response.completion_tokens == 2
+            assert response.reasoning_tokens == 0
 
         asyncio.run(run())
 
@@ -890,6 +967,13 @@ class TestProviderFromEnvironment:
         ]
         assert provider._providers[0]._temperature == 0.0
         assert provider._providers[0]._client.timeout.read == LOCAL_PROVIDER_TIMEOUT_SECONDS
+        assist = provider._providers[1]
+        assert isinstance(assist, OpenAICompatibleProvider)
+        assert assist._reasoning_effort == "low"
+        backup = provider._providers[2]
+        assert isinstance(backup, OpenAICompatibleProvider)
+        assert backup._wire_api == "responses"
+        assert backup._reasoning_effort == "low"
         assert provider._providers[3]._temperature == 0.0
         assert provider._providers[3]._client.timeout.read is None
         assert provider_model(values) == "qwen3:8b"

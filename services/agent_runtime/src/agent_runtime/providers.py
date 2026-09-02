@@ -61,6 +61,8 @@ QWEN3_8B_MODEL = "qwen3:8b"
 GLM_5_3_FLASH_MODEL = "glm-5.3-flash"
 GROK_4_5_MODEL = "grok-4.5"
 QWEN3_8_27B_MODEL = "qwen3.8:27b"
+GLM_5_3_FLASH_DEFAULT_REASONING_EFFORT = "low"
+GROK_4_5_DEFAULT_REASONING_EFFORT = "low"
 GLM_4_7_FLASH_MODEL = "glm-4.7-flash"
 DEFAULT_PROVIDER_MODEL = GLM_4_7_FLASH_MODEL
 GLM_4_7_FLASH_DEFAULT_MAX_OUTPUT_TOKENS = 65_536
@@ -111,6 +113,7 @@ _LEGACY_PROVIDER_SELECTION_ENV_NAMES = frozenset(
     }
 )
 ProviderResponseFormat = Literal["json_object"] | Mapping[str, object]
+ProviderWireAPI = Literal["chat_completions", "responses"]
 
 
 def _new_provider_configuration_present(values: Mapping[str, str]) -> bool:
@@ -181,6 +184,28 @@ def _provider_thinking_mode(
         return raw
     if model.strip().lower() == GLM_4_7_FLASH_MODEL:
         return "enabled"
+    return None
+
+
+def _provider_reasoning_effort(
+    values: Mapping[str, str], *, model: str, reasoning_effort_env: str
+) -> str | None:
+    """Resolve a model's bounded reasoning depth without disabling GLM 5.3.
+
+    GLM-5.3-Flash is a thinking-only model on the configured compatible
+    endpoint: sending ``thinking=disabled`` is rejected, while omitting a
+    depth lets its default reasoning consume a small Coach output budget before
+    any final content is emitted.  Keep an explicit environment override, but
+    use the documented low depth by default for this short structured task.
+    """
+    raw = values.get(reasoning_effort_env, "").strip()
+    if raw:
+        return raw
+    normalized_model = model.strip().lower()
+    if normalized_model == GLM_5_3_FLASH_MODEL:
+        return GLM_5_3_FLASH_DEFAULT_REASONING_EFFORT
+    if normalized_model == GROK_4_5_MODEL:
+        return GROK_4_5_DEFAULT_REASONING_EFFORT
     return None
 
 
@@ -300,6 +325,21 @@ def _serialize_message(message: ProviderMessage) -> dict[str, object]:
     return payload
 
 
+def _serialize_responses_message(message: ProviderMessage) -> dict[str, object]:
+    """Serialize a plain message for the OpenAI Responses input contract.
+
+    Coach requests never contain tool messages or assistant tool calls.  Do
+    not silently reinterpret those messages for a different wire protocol;
+    callers that need tools must use a provider with a matching chat contract.
+    """
+    if message.role == "tool" or message.tool_calls:
+        raise ProviderError(
+            "responses provider does not accept tool messages in this request",
+            failure_code="INVALID_REQUEST",
+        )
+    return {"role": message.role, "content": message.content}
+
+
 class DeterministicProvider:
     """CI/测试 provider: 从固定映射返回确定性响应, 无网络、无成本、可复跑。
 
@@ -375,6 +415,7 @@ class OpenAICompatibleProvider:
         timeout_seconds: float | None = 60.0,
         supports_json_schema: bool = False,
         temperature: float | None = None,
+        wire_api: ProviderWireAPI = "chat_completions",
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         url = httpx.URL(base_url)
@@ -397,6 +438,8 @@ class OpenAICompatibleProvider:
             raise ValueError("provider timeout must be positive or None")
         if temperature is not None and (not math.isfinite(temperature) or temperature < 0):
             raise ValueError("provider temperature must be non-negative or None")
+        if wire_api not in {"chat_completions", "responses"}:
+            raise ValueError("provider wire_api must be chat_completions or responses")
         if reasoning_effort is not None and reasoning_effort not in _REASONING_EFFORTS:
             raise ValueError("provider reasoning_effort must be low, medium, high, or xhigh")
         if thinking is not None and thinking not in _THINKING_MODES:
@@ -415,11 +458,13 @@ class OpenAICompatibleProvider:
                 "query, or fragment"
             )
         self._base_url = str(url).rstrip("/")
-        # 兼容两种填法: 根地址 (https://host/v1) 或完整端点 (https://host/v1/chat/completions)。
-        if self._base_url.endswith("/chat/completions"):
+        self._wire_api = wire_api
+        endpoint = "/responses" if wire_api == "responses" else "/chat/completions"
+        # 兼容两种填法: 根地址 (https://host/v1) 或该协议的完整端点。
+        if self._base_url.endswith(endpoint):
             self._chat_url = self._base_url
         else:
-            self._chat_url = f"{self._base_url}/chat/completions"
+            self._chat_url = f"{self._base_url}{endpoint}"
         self._api_key = api_key
         self._model = model
         self._reasoning_effort = reasoning_effort
@@ -463,46 +508,76 @@ class OpenAICompatibleProvider:
                 "provider requires at least one message", failure_code="INVALID_REQUEST"
             )
         requested_model = model or self._model
-        payload: dict[str, object] = {
-            "model": requested_model,
-            "messages": [_serialize_message(message) for message in messages],
-            "stream": False,
-        }
-        # max_tokens 是生成侧上限, 不是包含 prompt 的 total_tokens 上限。
+        if self._wire_api == "responses":
+            payload: dict[str, object] = {
+                "model": requested_model,
+                "input": [_serialize_responses_message(message) for message in messages],
+                # Responses are not needed after this bounded request and must
+                # not be retained by a third-party gateway by default.
+                "store": False,
+            }
+        else:
+            payload = {
+                "model": requested_model,
+                "messages": [_serialize_message(message) for message in messages],
+                "stream": False,
+            }
+        # max_tokens/max_output_tokens is the generation-side cap, not a total
+        # input-plus-output budget.
         if max_tokens is not None:
             hard_limit = provider_max_output_token_limit(requested_model)
             if max_tokens < 1 or max_tokens > hard_limit:
                 raise ValueError(f"provider max_tokens must be within 1..{hard_limit}")
-            payload["max_tokens"] = max_tokens
+            payload["max_output_tokens" if self._wire_api == "responses" else "max_tokens"] = (
+                max_tokens
+            )
         if response_format is not None:
             if isinstance(response_format, Mapping):
-                payload["response_format"] = (
-                    dict(response_format)
-                    if response_format.get("type") == "json_schema" and self._supports_json_schema
-                    else {"type": "json_object"}
-                )
+                if response_format.get("type") == "json_schema" and self._supports_json_schema:
+                    format_value: object = dict(response_format)
+                else:
+                    format_value = {"type": "json_object"}
             else:
-                payload["response_format"] = {"type": response_format}
-        if self._thinking is not None:
+                format_value = {"type": response_format}
+            if self._wire_api == "responses":
+                payload["text"] = {"format": format_value}
+            else:
+                payload["response_format"] = format_value
+        if self._thinking is not None and self._wire_api == "chat_completions":
             payload["thinking"] = {"type": self._thinking}
         if self._temperature is not None:
             payload["temperature"] = self._temperature
         if self._reasoning_effort is not None and self._thinking != "disabled":
-            # Grok reasoning models default to high effort; simple plan explanations
-            # opt in to a lower, explicit effort without weakening output validation.
-            payload["reasoning_effort"] = self._reasoning_effort
+            # xAI Responses uses an object; OpenAI-compatible chat endpoints
+            # use the flat field. Neither value is treated as answer content.
+            if self._wire_api == "responses":
+                payload["reasoning"] = {"effort": self._reasoning_effort}
+            else:
+                payload["reasoning_effort"] = self._reasoning_effort
         if tools:
-            payload["tools"] = [
-                {
-                    "type": "function",
-                    "function": {
+            if self._wire_api == "responses":
+                payload["tools"] = [
+                    {
+                        "type": "function",
                         "name": tool.name,
                         "description": tool.description,
                         "parameters": tool.parameters,
-                    },
-                }
-                for tool in tools
-            ]
+                        "strict": True,
+                    }
+                    for tool in tools
+                ]
+            else:
+                payload["tools"] = [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.parameters,
+                        },
+                    }
+                    for tool in tools
+                ]
         try:
             response = await self._client.post(self._chat_url, json=payload)
             body = response.content
@@ -529,15 +604,62 @@ class OpenAICompatibleProvider:
                 f"provider returned HTTP {response.status_code}", failure_code=failure_code
             )
 
-        try:
-            completion = _CompletionEnvelope.model_validate_json(body)
-        except (ValueError, TypeError, RecursionError) as error:
-            raise ProviderError(
-                "provider returned an invalid response", failure_code="RESPONSE_SCHEMA"
-            ) from error
-        if not completion.choices:
-            raise ProviderError("provider returned no choices", failure_code="RESPONSE_NO_CHOICES")
-        if max_tokens is not None and completion.usage is None:
+        response_text = ""
+        tool_calls: tuple[ProviderToolCall, ...] = ()
+        reasoning_content_present = False
+        prompt_tokens = completion_tokens = reasoning_tokens = total_tokens = 0
+        usage_present = False
+        if self._wire_api == "responses":
+            try:
+                completion_responses = _ResponsesEnvelope.model_validate_json(body)
+            except (ValueError, TypeError, RecursionError) as error:
+                raise ProviderError(
+                    "provider returned an invalid response", failure_code="RESPONSE_SCHEMA"
+                ) from error
+            if not completion_responses.output:
+                raise ProviderError(
+                    "provider returned no output", failure_code="RESPONSE_NO_CHOICES"
+                )
+            response_text, tool_calls, reasoning_content_present = _responses_output_values(
+                completion_responses
+            )
+            if completion_responses.usage is not None:
+                usage_present = True
+                prompt_tokens = completion_responses.usage.input_tokens
+                completion_tokens = completion_responses.usage.output_tokens
+                total_tokens = completion_responses.usage.total_tokens
+                responses_details = completion_responses.usage.output_tokens_details
+                reasoning_tokens = responses_details.reasoning_tokens if responses_details else 0
+        else:
+            try:
+                completion = _CompletionEnvelope.model_validate_json(body)
+            except (ValueError, TypeError, RecursionError) as error:
+                raise ProviderError(
+                    "provider returned an invalid response", failure_code="RESPONSE_SCHEMA"
+                ) from error
+            if not completion.choices:
+                raise ProviderError(
+                    "provider returned no choices", failure_code="RESPONSE_NO_CHOICES"
+                )
+            message = completion.choices[0].message
+            tool_calls = tuple(
+                ProviderToolCall(
+                    id=call.id,
+                    name=call.function.name,
+                    arguments=call.function.arguments,
+                )
+                for call in message.tool_calls or ()
+            )
+            response_text = message.content or ""
+            reasoning_content_present = message.reasoning_content is not None
+            if completion.usage is not None:
+                usage_present = True
+                prompt_tokens = completion.usage.prompt_tokens
+                completion_tokens = completion.usage.completion_tokens
+                total_tokens = completion.usage.total_tokens
+                chat_details = completion.usage.completion_tokens_details
+                reasoning_tokens = chat_details.reasoning_tokens if chat_details else 0
+        if max_tokens is not None and not usage_present:
             # 没有 usage 就无法证明服务商遵守输出预算; 宁可回退, 也不接受
             # 未验证的真实模型结果。请求参数仍是服务商侧的首要成本护栏。
             raise ProviderError(
@@ -545,19 +667,12 @@ class OpenAICompatibleProvider:
                 budget_code="TOKEN_BUDGET",
                 failure_code="USAGE_MISSING",
             )
-        usage = completion.usage
-        reasoning_tokens = (
-            usage.completion_tokens_details.reasoning_tokens
-            if usage and usage.completion_tokens_details
-            else 0
-        )
-        completion_tokens = usage.completion_tokens if usage else 0
-        if usage is not None:
+        if usage_present:
             if (
-                usage.prompt_tokens < 0
+                prompt_tokens < 0
                 or completion_tokens < 0
                 or reasoning_tokens < 0
-                or usage.total_tokens < 0
+                or total_tokens < 0
             ):
                 raise ProviderError(
                     "provider returned invalid token usage",
@@ -567,7 +682,7 @@ class OpenAICompatibleProvider:
             # Some providers report reasoning_tokens as a subset of completion_tokens
             # (e.g. GLM), while others report it separately. total - prompt is the
             # provider-neutral billed output count and avoids double-counting either form.
-            billed_output_tokens = usage.total_tokens - usage.prompt_tokens
+            billed_output_tokens = total_tokens - prompt_tokens
             if billed_output_tokens < 0:
                 raise ProviderError(
                     "provider returned invalid token usage",
@@ -579,32 +694,23 @@ class OpenAICompatibleProvider:
                 # 在不同服务商的 completion_tokens 中采用同一种统计方式。
                 raise ProviderError(
                     f"provider exceeded max_tokens budget ({billed_output_tokens} > {max_tokens})",
-                    prompt_tokens=usage.prompt_tokens,
+                    prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
                     reasoning_tokens=reasoning_tokens,
                     budget_code="TOKEN_BUDGET",
                     failure_code="BUDGET_EXCEEDED",
                 )
-        message = completion.choices[0].message
-        tool_calls = tuple(
-            ProviderToolCall(
-                id=call.id,
-                name=call.function.name,
-                arguments=call.function.arguments,
-            )
-            for call in message.tool_calls or ()
-        )
-        if not message.content and not tool_calls:
+        if not response_text and not tool_calls:
             raise ProviderError(
                 "provider returned no final content", failure_code="RESPONSE_CONTENT_MISSING"
             )
         return ProviderResponse(
-            text=message.content or "",
+            text=response_text,
             tool_calls=tool_calls,
-            prompt_tokens=usage.prompt_tokens if usage else 0,
+            prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             reasoning_tokens=reasoning_tokens,
-            reasoning_content_present=message.reasoning_content is not None,
+            reasoning_content_present=reasoning_content_present,
         )
 
 
@@ -794,6 +900,68 @@ class _CompletionEnvelope(_WireModel):
     choices: tuple[_Choice, ...] = ()
 
 
+class _ResponsesOutputContent(_WireModel):
+    type: str = ""
+    text: str | None = None
+
+
+class _ResponsesOutputItem(_WireModel):
+    type: str = ""
+    role: str | None = None
+    content: tuple[_ResponsesOutputContent, ...] = ()
+    id: str = ""
+    call_id: str | None = None
+    name: str | None = None
+    arguments: str | None = None
+
+
+class _ResponsesUsageOutputDetails(_WireModel):
+    reasoning_tokens: int = 0
+
+
+class _ResponsesUsage(_WireModel):
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    output_tokens_details: _ResponsesUsageOutputDetails | None = None
+
+
+class _ResponsesEnvelope(_WireModel):
+    output: tuple[_ResponsesOutputItem, ...] = ()
+    usage: _ResponsesUsage | None = None
+
+
+def _responses_output_values(
+    completion: _ResponsesEnvelope,
+) -> tuple[str, tuple[ProviderToolCall, ...], bool]:
+    text_parts: list[str] = []
+    tool_calls: list[ProviderToolCall] = []
+    reasoning_present = False
+    for item in completion.output:
+        if item.type == "reasoning":
+            reasoning_present = True
+            continue
+        if item.type == "message":
+            for content in item.content:
+                if content.type == "output_text" and content.text:
+                    text_parts.append(content.text)
+            continue
+        if item.type == "function_call":
+            if not item.name or item.arguments is None:
+                raise ProviderError(
+                    "provider returned an invalid function call",
+                    failure_code="RESPONSE_SCHEMA",
+                )
+            tool_calls.append(
+                ProviderToolCall(
+                    id=item.call_id or item.id,
+                    name=item.name,
+                    arguments=item.arguments,
+                )
+            )
+    return "".join(text_parts), tuple(tool_calls), reasoning_present
+
+
 def _required_new_provider_value(values: Mapping[str, str], name: str) -> str:
     value = values.get(name, "").strip()
     if not value:
@@ -827,7 +995,6 @@ def _new_provider_from_environment(
     slow_local_model = _validate_new_provider_model(
         values, BACKUP_OLLAMA_MODEL_ENV, QWEN3_8_27B_MODEL
     )
-    reasoning_effort = values.get(PROVIDER_REASONING_EFFORT_ENV, "").strip() or None
     proxy = values.get(PROVIDER_PROXY_ENV, "").strip() or None
     try:
         primary = OpenAICompatibleProvider(
@@ -845,7 +1012,11 @@ def _new_provider_from_environment(
             base_url=assist_base_url,
             api_key=SecretStr(assist_api_key),
             model=assist_model,
-            reasoning_effort=reasoning_effort,
+            reasoning_effort=_provider_reasoning_effort(
+                values,
+                model=assist_model,
+                reasoning_effort_env=PROVIDER_REASONING_EFFORT_ENV,
+            ),
             thinking=_provider_thinking_mode(
                 values, model=assist_model, thinking_env=PROVIDER_THINKING_ENV
             ),
@@ -856,11 +1027,16 @@ def _new_provider_from_environment(
             base_url=backup_base_url,
             api_key=SecretStr(backup_api_key),
             model=backup_model,
-            reasoning_effort=reasoning_effort,
+            reasoning_effort=_provider_reasoning_effort(
+                values,
+                model=backup_model,
+                reasoning_effort_env=PROVIDER_REASONING_EFFORT_ENV,
+            ),
             thinking=_provider_thinking_mode(
                 values, model=backup_model, thinking_env=PROVIDER_THINKING_ENV
             ),
             proxy=proxy,
+            wire_api="responses",
             transport=transport,
         )
         slow_local = OpenAICompatibleProvider(
@@ -922,9 +1098,14 @@ def _legacy_provider_from_environment(
         base_url=base_url,
         api_key=SecretStr(api_key) if api_key else None,
         model=model,
-        reasoning_effort=values.get(PROVIDER_REASONING_EFFORT_ENV) or None,
+        reasoning_effort=_provider_reasoning_effort(
+            values,
+            model=model,
+            reasoning_effort_env=PROVIDER_REASONING_EFFORT_ENV,
+        ),
         thinking=thinking,
         proxy=proxy,
+        wire_api="responses" if model.strip().lower() == GROK_4_5_MODEL else "chat_completions",
         transport=transport,
     )
     if not fallback_api_key.strip() and not local_models:
@@ -967,9 +1148,18 @@ def _legacy_provider_from_environment(
                 base_url=values.get(PROVIDER_FALLBACK_BASE_URL_ENV, "").strip() or base_url,
                 api_key=SecretStr(fallback_api_key),
                 model=fallback_model,
-                reasoning_effort=values.get(PROVIDER_FALLBACK_REASONING_EFFORT_ENV) or None,
+                reasoning_effort=_provider_reasoning_effort(
+                    values,
+                    model=fallback_model,
+                    reasoning_effort_env=PROVIDER_FALLBACK_REASONING_EFFORT_ENV,
+                ),
                 thinking=fallback_thinking,
                 proxy=values.get(PROVIDER_FALLBACK_PROXY_ENV) or proxy,
+                wire_api=(
+                    "responses"
+                    if fallback_model.strip().lower() == GROK_4_5_MODEL
+                    else "chat_completions"
+                ),
                 transport=transport,
             )
         )
