@@ -108,7 +108,7 @@ def _evidence(row: AnalysisRow) -> tuple[str, ...]:
     return (
         f"risk={row.risk}",
         f"net = actual {row.actual_qty} + incoming {row.incoming_qty} - demand {row.demand_qty}",
-        f"open_mr={row.open_mr_qty}, shortage={row.shortage_qty}",
+        f"未结需求={row.open_mr_qty}, shortage={row.shortage_qty}",
     )
 
 

@@ -198,6 +198,37 @@ _CONTEXT_EVIDENCE_FIELDS = frozenset(
         "skill_refs",
     }
 )
+_ORCHESTRATION_STOP_CODES = frozenset(
+    {
+        "ACCEPTED",
+        "REVISED_ACCEPTED",
+        "DETERMINISTIC_FALLBACK",
+        "REVIEW_REJECTED",
+        "REVIEW_ESCALATED",
+        "MODEL_ERROR",
+        "INVALID_OUTPUT",
+        "TIMEOUT",
+        "CANCELLED",
+        "BUDGET_EXCEEDED",
+        "DIGEST_MISMATCH",
+        "SCOPE_MISMATCH",
+        "LOOP_BLOCKED",
+    }
+)
+_ORCHESTRATION_ROLE_IDS = frozenset({"procurement_planner", "policy_risk_reviewer"})
+_ORCHESTRATION_TRACE_TYPES = frozenset(
+    {
+        "run.started",
+        "model.requested",
+        "model.completed",
+        "model.failed",
+        "handoff",
+        "review.decision",
+        "review.skipped",
+        "deterministic.check",
+        "stop",
+    }
+)
 
 
 def _validate_context_event_payload(
@@ -369,6 +400,126 @@ def _safe_context_evidence(raw: object, *, status: str | None = None) -> dict[st
         field: list(raw[field]) if isinstance(raw[field], list) else raw[field]
         for field in _CONTEXT_EVIDENCE_FIELDS
     }
+
+
+def _safe_orchestration_evidence(raw: object) -> dict[str, Any]:
+    """Validate the bounded Planner/Reviewer summary without storing model text."""
+    if raw in (None, {}):
+        return {}
+    if not isinstance(raw, dict) or set(raw) != {
+        "mode",
+        "model_calls",
+        "handoff_count",
+        "revision_count",
+        "stop_reason",
+        "deterministic_validated",
+        "role_usage",
+        "trace",
+    }:
+        raise ValueError("orchestration evidence shape is invalid")
+    if raw["mode"] != "planner_reviewer":
+        raise ValueError("orchestration mode is invalid")
+    model_calls = raw["model_calls"]
+    handoff_count = raw["handoff_count"]
+    revision_count = raw["revision_count"]
+    if (
+        not isinstance(model_calls, int)
+        or isinstance(model_calls, bool)
+        or not 0 <= model_calls <= 3
+        or not isinstance(handoff_count, int)
+        or isinstance(handoff_count, bool)
+        or not 0 <= handoff_count <= 4
+        or not isinstance(revision_count, int)
+        or isinstance(revision_count, bool)
+        or not 0 <= revision_count <= 1
+        or raw["stop_reason"] not in _ORCHESTRATION_STOP_CODES
+        or not isinstance(raw["deterministic_validated"], bool)
+    ):
+        raise ValueError("orchestration summary values are invalid")
+    role_usage = raw["role_usage"]
+    if not isinstance(role_usage, list) or len(role_usage) != 2:
+        raise ValueError("orchestration role usage is invalid")
+    normalized_roles: list[dict[str, Any]] = []
+    seen_roles: set[str] = set()
+    usage_fields = {
+        "role_id",
+        "calls",
+        "prompt_tokens",
+        "completion_tokens",
+        "reasoning_tokens",
+        "elapsed_ms",
+    }
+    for item in role_usage:
+        if not isinstance(item, dict) or set(item) != usage_fields:
+            raise ValueError("orchestration role usage shape is invalid")
+        role_id = item["role_id"]
+        if role_id not in _ORCHESTRATION_ROLE_IDS or role_id in seen_roles:
+            raise ValueError("orchestration role id is invalid")
+        seen_roles.add(role_id)
+        values: dict[str, Any] = {"role_id": role_id}
+        for field in usage_fields - {"role_id"}:
+            value = item[field]
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError("orchestration usage value is invalid")
+            values[field] = value
+        if values["calls"] > 3:
+            raise ValueError("orchestration role call count is invalid")
+        normalized_roles.append(values)
+    if sum(item["calls"] for item in normalized_roles) != model_calls:
+        raise ValueError("orchestration call count does not match role usage")
+    trace = raw["trace"]
+    trace_fields = {"event_count", "event_types", "digest", "unauthorized_tool_calls"}
+    if not isinstance(trace, dict) or set(trace) != trace_fields:
+        raise ValueError("orchestration trace shape is invalid")
+    event_types = trace["event_types"]
+    if (
+        not isinstance(trace["event_count"], int)
+        or isinstance(trace["event_count"], bool)
+        or not 0 <= trace["event_count"] <= 64
+        or not isinstance(event_types, list)
+        or len(event_types) != trace["event_count"]
+        or any(item not in _ORCHESTRATION_TRACE_TYPES for item in event_types)
+        or not isinstance(trace["digest"], str)
+        or not _CONTEXT_HASH.fullmatch(trace["digest"])
+        or not isinstance(trace["unauthorized_tool_calls"], int)
+        or isinstance(trace["unauthorized_tool_calls"], bool)
+        or not 0 <= trace["unauthorized_tool_calls"] <= 3
+    ):
+        raise ValueError("orchestration trace values are invalid")
+    return {
+        "mode": "planner_reviewer",
+        "model_calls": model_calls,
+        "handoff_count": handoff_count,
+        "revision_count": revision_count,
+        "stop_reason": raw["stop_reason"],
+        "deterministic_validated": raw["deterministic_validated"],
+        "role_usage": normalized_roles,
+        "trace": {
+            "event_count": trace["event_count"],
+            "event_types": list(event_types),
+            "digest": trace["digest"],
+            "unauthorized_tool_calls": trace["unauthorized_tool_calls"],
+        },
+    }
+
+
+def _enhancement_evidence_for_storage(evidence: dict[str, Any]) -> dict[str, Any]:
+    """Keep only the bounded enhancement facts required by the Phase 9 contract."""
+    orchestration = evidence.get("orchestration")
+    safe_orchestration = _safe_orchestration_evidence(orchestration)
+    stored: dict[str, Any] = {
+        "mode": safe_orchestration.get("mode", "single_agent"),
+        "provider": str(evidence.get("provider", ""))[:100],
+        "status": str(evidence.get("status", ""))[:100],
+        "prompt_tokens": int(evidence.get("prompt_tokens", 0) or 0),
+        "completion_tokens": int(evidence.get("completion_tokens", 0) or 0),
+        "reasoning_tokens": int(evidence.get("reasoning_tokens", 0) or 0),
+        "elapsed_ms": int(evidence.get("elapsed_ms", 0) or 0),
+        "fallback_reason": str(evidence.get("fallback_reason") or "")[:200],
+    }
+    if safe_orchestration:
+        stored["orchestration"] = safe_orchestration
+    return stored
 
 
 def _validate_trace_semantics(
@@ -1201,7 +1352,7 @@ def _enhance_plan_via_runtime(
 
     def fallback(reason: str, status: str = "fallback_error") -> tuple[str, dict[str, Any]]:
         elapsed = int((monotonic() - started) * 1000)
-        return str(plan.get("summary", "")), {
+        result: dict[str, Any] = {
             "provider": "runtime",
             "status": status,
             "prompt_tokens": 0,
@@ -1211,6 +1362,33 @@ def _enhance_plan_via_runtime(
             "fallback_reason": reason[:200],
             "context_evidence": {},
         }
+        if all(value is not None for value in (run_id, correlation_id, principal, company)):
+            result["orchestration"] = {
+                "mode": "planner_reviewer",
+                "model_calls": 0,
+                "handoff_count": 0,
+                "revision_count": 0,
+                "stop_reason": "MODEL_ERROR",
+                "deterministic_validated": False,
+                "role_usage": [
+                    {
+                        "role_id": role_id,
+                        "calls": 0,
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "reasoning_tokens": 0,
+                        "elapsed_ms": 0,
+                    }
+                    for role_id in ("procurement_planner", "policy_risk_reviewer")
+                ],
+                "trace": {
+                    "event_count": 0,
+                    "event_types": [],
+                    "digest": hashlib.sha256(b"").hexdigest(),
+                    "unauthorized_tool_calls": 0,
+                },
+            }
+        return str(plan.get("summary", "")), result
 
     try:
         url = _runtime_enhance_url()
@@ -1278,6 +1456,10 @@ def _enhance_plan_via_runtime(
         )
     except ValueError:
         return fallback("runtime returned malformed context evidence")
+    try:
+        orchestration = _safe_orchestration_evidence(evidence.get("orchestration"))
+    except ValueError:
+        return fallback("runtime returned malformed orchestration evidence")
     explanation = body.get("explanation")
     if not isinstance(explanation, str) or not explanation.strip():
         return fallback(
@@ -1291,7 +1473,7 @@ def _enhance_plan_via_runtime(
     except Exception:
         # Runtime 返回异常类型: 证据解析失败回退确定性, 不抛 500。
         return fallback("runtime returned malformed evidence")
-    return explanation, {
+    result = {
         "provider": str(evidence.get("provider", "runtime"))[:100],
         "status": str(evidence.get("status", "ok"))[:100],
         "prompt_tokens": prompt_tokens,
@@ -1301,6 +1483,9 @@ def _enhance_plan_via_runtime(
         "fallback_reason": str(evidence.get("fallback_reason") or "")[:200],
         "context_evidence": context_evidence,
     }
+    if orchestration:
+        result["orchestration"] = orchestration
+    return explanation, result
 
 
 def _reject_json_constant(value: str) -> None:
@@ -2394,6 +2579,13 @@ def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
                 "reasoning_tokens": evidence.get("reasoning_tokens", 0),
                 "elapsed_ms": evidence.get("elapsed_ms", 0),
                 "fallback_reason": evidence.get("fallback_reason"),
+                "enhancement_evidence_json": json.dumps(
+                    _enhancement_evidence_for_storage(evidence),
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
                 "context_evidence_json": json.dumps(
                     evidence.get("context_evidence", {}),
                     ensure_ascii=False,

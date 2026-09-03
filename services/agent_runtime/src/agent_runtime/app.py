@@ -315,6 +315,7 @@ async def enhance(request: EnhanceRequest, http_request: Request) -> EnhanceResp
                 provider,
                 provider_name=provider_label,
                 scope=request.orchestration_scope,
+                require_reviewer=True,
             )
         finally:
             close = getattr(provider, "aclose", None)

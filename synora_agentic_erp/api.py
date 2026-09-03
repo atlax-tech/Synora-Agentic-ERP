@@ -10,6 +10,7 @@ from synora_agentic_erp.agent.invocation import complete_invocation, reserve_inv
 from synora_agentic_erp.agent.service import (
     _AGENT_EVENT_TYPES,
     _safe_context_evidence,
+    _safe_orchestration_evidence,
     _safe_trace_value,
     _validate_trace_semantics,
     cancel_workflow_runtime,
@@ -915,6 +916,7 @@ def get_run(run_id: str) -> dict[str, Any]:
             "reasoning_tokens",
             "elapsed_ms",
             "fallback_reason",
+            "enhancement_evidence_json",
             "context_evidence_json",
             "creation",
         ],
@@ -936,7 +938,7 @@ def get_run(run_id: str) -> dict[str, Any]:
                 )
             except (TypeError, ValueError):  # fmt: skip
                 context_evidence = {}
-            plan["evidence"] = {
+            evidence = {
                 "provider": plans[0].provider,
                 "prompt_tokens": plans[0].prompt_tokens,
                 "completion_tokens": plans[0].completion_tokens,
@@ -945,6 +947,22 @@ def get_run(run_id: str) -> dict[str, Any]:
                 "fallback_reason": plans[0].fallback_reason,
                 "context_evidence": context_evidence,
             }
+            try:
+                stored_evidence = frappe.parse_json(plans[0].enhancement_evidence_json or "{}")
+                if not isinstance(stored_evidence, dict):
+                    raise ValueError("enhancement evidence is not an object")
+                orchestration = _safe_orchestration_evidence(stored_evidence.get("orchestration"))
+                if orchestration:
+                    evidence["orchestration"] = orchestration
+                mode = stored_evidence.get("mode")
+                status = stored_evidence.get("status")
+                if isinstance(mode, str) and mode in {"single_agent", "planner_reviewer"}:
+                    evidence["mode"] = mode
+                if isinstance(status, str) and len(status) <= 100:
+                    evidence["status"] = status
+            except (TypeError, ValueError):  # fmt: skip
+                pass
+            plan["evidence"] = evidence
     governed = []
     action_rows = frappe.get_all(
         "Synora Proposed Action",

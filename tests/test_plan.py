@@ -1,5 +1,7 @@
 """P3.5 可解释只读计划纯函数测试 (确定性骨架, 无 frappe 依赖)。"""
 
+from agent_runtime.multi_agent.contracts import plan_view_from_mapping
+
 from synora_agentic_erp.agent.plan import (
     AnalysisRow,
     build_plan,
@@ -108,3 +110,18 @@ def test_needs_input_finding_explains_missing_data() -> None:
     assert "输入不足" in finding.recommendation
     assert "actual_qty" in finding.recommendation
     assert "不估算" in finding.recommendation or "无法判定" in finding.recommendation
+
+
+def test_plan_projection_accepts_read_only_open_request_fact() -> None:
+    plan = build_plan(
+        goal="check X-1",
+        horizon_days=90,
+        company="C",
+        warehouse="WH",
+        analyses=(_row("X-1", "DUPLICATE_RISK", net="5"),),
+        generated_at="2026-08-25T20:00:00+08:00",
+    )
+
+    view = plan_view_from_mapping(plan.to_dict())
+
+    assert view.findings[0].evidence[-1].startswith("未结需求=")

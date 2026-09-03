@@ -393,6 +393,7 @@ async def run_planner_reviewer(
     cancellation_event: asyncio.Event | None = None,
     clock: Callable[[], float] = monotonic,
     max_completion_tokens: int = MAX_COMPLETION_TOKENS_PER_CALL,
+    require_reviewer: bool = False,
 ) -> MultiAgentResult:
     """Run at most Planner, Reviewer and one Planner revision model calls.
 
@@ -661,7 +662,7 @@ async def run_planner_reviewer(
         # an additional Reviewer call cannot add safety or quality.  Keep the
         # bounded Reviewer path for any changed candidate, where review is
         # actually needed and remains visible in the trace.
-        if candidate.candidate_explanation == view.summary:
+        if not require_reviewer and candidate.candidate_explanation == view.summary:
             final_text = validate_explanation(
                 candidate.candidate_explanation,
                 _final_plan_dict(view),

@@ -84,12 +84,13 @@ class TestPlanRun(FrappeTestCase):
     def test_plan_persists_enhancement_evidence(self) -> None:
         """验收修复(阻断2): 增强证据持久化。
 
-        该测试固定验证 Runtime fallback 的持久化契约；真实 Runtime 成功路径
-        在 Phase 9 P9.9 验收中单独验证，避免把 app-test 环境状态当作断言。
+        该测试固定验证 Runtime fallback 的持久化契约; 真实 Runtime 成功路径
+        在 Phase 9 P9.9 验收中单独验证, 避免把 app-test 环境状态当作断言。
         """
         run = self._analyzed_run()
         frappe.set_user(BUYER)
-        def fallback(plan: dict[str, object]) -> tuple[str, dict[str, object]]:
+
+        def fallback(plan: dict[str, object], **_: object) -> tuple[str, dict[str, object]]:
             return str(plan["summary"]), {
                 "provider": "runtime",
                 "status": "fallback_error",

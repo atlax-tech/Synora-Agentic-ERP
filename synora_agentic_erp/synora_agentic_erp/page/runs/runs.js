@@ -1115,6 +1115,15 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					if (typeof ev.prompt_tokens === "number") { ev_bits.push("in:" + ev.prompt_tokens + " out:" + ev.completion_tokens + " reasoning:" + (ev.reasoning_tokens || 0)); }
 					if (typeof ev.elapsed_ms === "number") { ev_bits.push(ev.elapsed_ms + "ms"); }
 					if (ev.fallback_reason) { ev_bits.push('<span class="text-danger">' + __("已回退") + ": " + esc(ev.fallback_reason) + "</span>"); }
+					const orchestration = ev.orchestration || {};
+					if (orchestration.mode) { ev_bits.push(__("模式") + ": " + esc(orchestration.mode)); }
+					if (typeof orchestration.model_calls === "number") {
+						ev_bits.push(__("模型调用") + ": " + esc(orchestration.model_calls));
+					}
+					if (typeof orchestration.handoff_count === "number" || typeof orchestration.revision_count === "number") {
+						ev_bits.push(__("handoff/revision") + ": " + esc(orchestration.handoff_count || 0) + "/" + esc(orchestration.revision_count || 0));
+					}
+					if (orchestration.stop_reason) { ev_bits.push(__("停止") + ": " + esc(orchestration.stop_reason)); }
 					const context_evidence = ev.context_evidence || {};
 					if (context_evidence.prompt_profile_id) {
 						ev_bits.push(__("Prompt Profile") + ": " + esc(context_evidence.prompt_profile_id));
