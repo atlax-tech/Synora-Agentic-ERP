@@ -58,6 +58,10 @@ _RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
 _RUNTIME_TOKEN_HEADER = "X-Synora-Runtime-Token"
 _SAFE_PROVIDER_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$")
 _ADOPTED_ORCHESTRATION_PROVIDER_ROLE: ProviderRole = "assist"
+# The adopted GLM profile was preflighted with a 512-token completion cap;
+# keeping the business path on that same cap prevents truncated JSON while
+# leaving the evaluator's explicit per-run cap independent.
+_ADOPTED_ORCHESTRATION_COMPLETION_CAP = 512
 
 
 class HealthResponse(BaseModel):
@@ -315,6 +319,7 @@ async def enhance(request: EnhanceRequest, http_request: Request) -> EnhanceResp
                 provider,
                 provider_name=provider_label,
                 scope=request.orchestration_scope,
+                max_completion_tokens=_ADOPTED_ORCHESTRATION_COMPLETION_CAP,
                 require_reviewer=True,
             )
         finally:
