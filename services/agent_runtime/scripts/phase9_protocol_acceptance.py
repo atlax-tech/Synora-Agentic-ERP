@@ -14,6 +14,7 @@ import os
 import socket
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,7 @@ from a2a.helpers import get_artifact_text, new_text_message
 from a2a.types.a2a_pb2 import (
     CancelTaskRequest,
     GetTaskRequest,
+    ListTasksRequest,
     Role,
     SendMessageConfiguration,
     SendMessageRequest,
@@ -37,7 +39,10 @@ from a2a.types.a2a_pb2 import (
 from mcp.client import Client, ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
-from labs.protocols.phase9_a2a import PolicyRiskReviewRequest
+from labs.protocols.phase9_a2a import (
+    HANDLER_EXCEPTION_SENTINEL,
+    PolicyRiskReviewRequest,
+)
 from labs.protocols.phase9_anp import (
     FIXED_DESCRIPTOR_SET,
     AgentDescriptor,
@@ -158,10 +163,12 @@ async def _mcp_acceptance() -> dict[str, object]:
     }
 
 
-def _a2a_payload() -> dict[str, object]:
+def _a2a_payload(*, candidate_explanation: str | None = None) -> dict[str, object]:
     return PolicyRiskReviewRequest(
         plan_digest="a" * 64,
-        candidate_explanation="The typed procurement snapshot is sufficient for review.",
+        candidate_explanation=(
+            candidate_explanation or "The typed procurement snapshot is sufficient for review."
+        ),
         unknowns=[],
     ).model_dump(mode="json")
 
@@ -317,7 +324,27 @@ async def _a2a_acceptance() -> dict[str, object]:
             except Exception:
                 malformed_error = True
 
-            handler_exception_error = malformed_error
+            handler_probe = _a2a_payload(candidate_explanation=HANDLER_EXCEPTION_SENTINEL)
+            handler_exception_error = False
+            try:
+                result = await anext(
+                    client.send_message(
+                        SendMessageRequest(
+                            message=new_text_message(
+                                json.dumps(handler_probe),
+                                media_type="application/json",
+                                role=Role.ROLE_USER,
+                            ),
+                            configuration=SendMessageConfiguration(return_immediately=False),
+                        )
+                    )
+                )
+                handler_exception_error = (
+                    result.task.status.state == TaskState.TASK_STATE_FAILED
+                    and not result.task.artifacts
+                )
+            except Exception:
+                handler_exception_error = True
 
             oversized = _a2a_payload()
             oversized["candidate_explanation"] = "x" * 4_001
@@ -340,6 +367,7 @@ async def _a2a_acceptance() -> dict[str, object]:
                 oversized_error = True
 
             timeout_error = False
+            timeout_context_id = f"phase9-timeout-context-{uuid.uuid4().hex}"
             timeout_http_client = httpx.AsyncClient(
                 transport=httpx.AsyncHTTPTransport(), base_url=base_url, timeout=0.05
             )
@@ -351,6 +379,7 @@ async def _a2a_acceptance() -> dict[str, object]:
                     message=new_text_message(
                         json.dumps(_a2a_payload()),
                         media_type="application/json",
+                        context_id=timeout_context_id,
                         role=Role.ROLE_USER,
                     ),
                     configuration=SendMessageConfiguration(return_immediately=False),
@@ -361,6 +390,22 @@ async def _a2a_acceptance() -> dict[str, object]:
             finally:
                 await timeout_client.close()
                 await timeout_http_client.aclose()
+            await asyncio.sleep(0.35)
+            timeout_tasks = (
+                await client.list_tasks(
+                    ListTasksRequest(
+                        context_id=timeout_context_id,
+                        include_artifacts=True,
+                    )
+                )
+            ).tasks
+            if len(timeout_tasks) != 1:
+                raise RuntimeError("A2A timeout task was not retained")
+            timeout_after = timeout_tasks[0]
+            timeout_server_completed = (
+                timeout_after.status.state == TaskState.TASK_STATE_COMPLETED
+                and len(timeout_after.artifacts) == 1
+            )
 
             unknown_task_error = False
             try:
@@ -394,6 +439,7 @@ async def _a2a_acceptance() -> dict[str, object]:
         and cancel_completed_race_no_completed
         and handler_exception_error
         and timeout_error
+        and timeout_server_completed
     ):
         raise RuntimeError("A2A terminal/error boundaries did not fail closed")
     return {
@@ -412,6 +458,7 @@ async def _a2a_acceptance() -> dict[str, object]:
         "oversized_payload_error": oversized_error,
         "handler_exception_error": handler_exception_error,
         "timeout_error": timeout_error,
+        "timeout_server_completed": timeout_server_completed,
         "invalid_state_transition_error": invalid_state_transition_error,
         "unknown_task_error": unknown_task_error,
         "completed_cancel_error": completed_cancel_error,

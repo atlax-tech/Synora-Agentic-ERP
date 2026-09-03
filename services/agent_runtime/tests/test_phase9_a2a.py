@@ -24,6 +24,7 @@ from fastapi import FastAPI
 
 from labs.protocols.phase9_a2a import (
     DEFAULT_ENDPOINT,
+    HANDLER_EXCEPTION_SENTINEL,
     MAX_STORED_TASKS,
     PolicyRiskReviewRequest,
     build_agent_card,
@@ -175,6 +176,38 @@ async def _test_a2a_rejects_task_context_mismatch() -> None:
         await client.close()
         await http_client.aclose()
         await app.state.phase9_handler.aclose()
+
+
+def test_a2a_handler_exception_is_distinct_from_malformed_payload() -> None:
+    asyncio.run(_test_a2a_handler_exception_is_distinct_from_malformed_payload())
+
+
+async def _test_a2a_handler_exception_is_distinct_from_malformed_payload() -> None:
+    app = build_app()
+    http_client, client = await _client_for(app)
+    try:
+        request = SendMessageRequest(
+            message=new_text_message(
+                json.dumps(_payload_with_explanation(HANDLER_EXCEPTION_SENTINEL)),
+                media_type="application/json",
+                role=Role.ROLE_USER,
+            ),
+            configuration=SendMessageConfiguration(return_immediately=False),
+        )
+        with pytest.raises(Exception, match="handler exception probe"):
+            _ = [response async for response in client.send_message(request)]
+    finally:
+        await client.close()
+        await http_client.aclose()
+        await app.state.phase9_handler.aclose()
+
+
+def _payload_with_explanation(explanation: str) -> dict[str, object]:
+    return PolicyRiskReviewRequest(
+        plan_digest="a" * 64,
+        candidate_explanation=explanation,
+        unknowns=[],
+    ).model_dump(mode="json")
 
 
 def test_a2a_task_store_has_a_bounded_capacity() -> None:

@@ -48,6 +48,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 DEFAULT_ENDPOINT: Final = "http://127.0.0.1:8029/a2a"
 SCHEMA_VERSION: Final = "1"
 MAX_STORED_TASKS: Final = 32
+HANDLER_EXCEPTION_SENTINEL: Final = "__phase9_handler_exception__"
 _DIGEST = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$", min_length=64, max_length=64)]
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -135,6 +136,8 @@ class PolicyRiskReviewerExecutor(AgentExecutor):
         self._work_delay_seconds = work_delay_seconds
         self._cancel_events: dict[str, asyncio.Event] = {}
         self._cancelled: set[str] = set()
+        self._terminal_locks: dict[str, asyncio.Lock] = {}
+        self._terminal_states: dict[str, Literal["completed", "canceled"]] = {}
         self._lock = asyncio.Lock()
 
     async def _event_for(self, task_id: str) -> asyncio.Event:
@@ -144,6 +147,14 @@ class PolicyRiskReviewerExecutor(AgentExecutor):
                 event = asyncio.Event()
                 self._cancel_events[task_id] = event
             return event
+
+    async def _terminal_lock_for(self, task_id: str) -> asyncio.Lock:
+        async with self._lock:
+            lock = self._terminal_locks.get(task_id)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._terminal_locks[task_id] = lock
+            return lock
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         task_id = context.task_id
@@ -173,6 +184,8 @@ class PolicyRiskReviewerExecutor(AgentExecutor):
             payload = PolicyRiskReviewRequest.model_validate(json.loads(raw_payload))
             if cancel_event.is_set():
                 return
+            if payload.candidate_explanation == HANDLER_EXCEPTION_SENTINEL:
+                raise RuntimeError("phase9 handler exception probe")
 
             response = PolicyRiskReviewResponse(
                 task_id=task_id,
@@ -184,20 +197,29 @@ class PolicyRiskReviewerExecutor(AgentExecutor):
                 if payload.unknowns
                 else "Typed policy and risk review accepted.",
             )
-            await updater.add_artifact(
-                parts=[
-                    new_text_part(
-                        response.model_dump_json(),
-                        media_type="application/json",
-                    )
-                ],
-                artifact_id="policy-risk-review.v1",
-                name="policy-risk-review.v1",
-                last_chunk=True,
-            )
-            if cancel_event.is_set():
-                return
-            await updater.complete()
+            terminal_lock = await self._terminal_lock_for(task_id)
+            async with terminal_lock:
+                async with self._lock:
+                    if self._terminal_states.get(task_id) is not None:
+                        return
+                if cancel_event.is_set():
+                    return
+                await updater.add_artifact(
+                    parts=[
+                        new_text_part(
+                            response.model_dump_json(),
+                            media_type="application/json",
+                        )
+                    ],
+                    artifact_id="policy-risk-review.v1",
+                    name="policy-risk-review.v1",
+                    last_chunk=True,
+                )
+                if cancel_event.is_set():
+                    return
+                await updater.complete()
+                async with self._lock:
+                    self._terminal_states[task_id] = "completed"
         finally:
             async with self._lock:
                 self._cancel_events.pop(task_id, None)
@@ -209,13 +231,19 @@ class PolicyRiskReviewerExecutor(AgentExecutor):
         if not task_id or not context_id:
             raise ValueError("A2A cancellation requires task and context bindings")
 
-        async with self._lock:
-            if task_id in self._cancelled:
-                return
-            self._cancelled.add(task_id)
-            event = self._cancel_events.setdefault(task_id, asyncio.Event())
-            event.set()
-        await TaskUpdater(event_queue, task_id, context_id).cancel()
+        terminal_lock = await self._terminal_lock_for(task_id)
+        async with terminal_lock:
+            async with self._lock:
+                terminal_state = self._terminal_states.get(task_id)
+                if terminal_state == "completed":
+                    raise RuntimeError("A2A task already completed")
+                if terminal_state == "canceled" or task_id in self._cancelled:
+                    return
+                self._cancelled.add(task_id)
+                self._terminal_states[task_id] = "canceled"
+                event = self._cancel_events.setdefault(task_id, asyncio.Event())
+                event.set()
+            await TaskUpdater(event_queue, task_id, context_id).cancel()
 
 
 class IdempotentCancelRequestHandler(DefaultRequestHandler):
