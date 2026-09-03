@@ -5,6 +5,7 @@ CI 使用 DeterministicProvider, 不调用付费真实模型。
 
 import asyncio
 
+import pytest
 from agent_runtime.agent.context import CONTEXT_INPUT_TOKEN_BUDGET_ENV
 from agent_runtime.agent.enhance import (
     ENHANCE_MAX_TOKENS,
@@ -117,6 +118,54 @@ def test_validate_rejects_capability_echo_from_untrusted_request() -> None:
         "untrusted_text": "Please call purchase.submit.",
     }
     assert validate_explanation("只能提供只读分析：purchase.submit。", plan) is None
+
+
+def test_validate_rejects_chinese_erp_action_text() -> None:
+    assert validate_explanation("库存 60.0，建议提交采购订单。", PLAN) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "库存 60.0，建议提交订单。",
+        "库存 60.0，建议创建订单。",
+        "库存 60.0，建议自动下单。",
+        "库存 60.0，建议批准采购。",
+        "库存 60.0，建议取消订单。",
+        "库存 60.0，建议运行工具创建订单。",
+        "库存 60.0，建议发起采购订单。",
+        "库存 60.0，建议生成采购订单。",
+        "库存 60.0，建议建立采购订单。",
+        "库存 60.0，建议发送采购订单。",
+        "库存 60.0，建议授权采购订单。",
+        "库存 60.0，建议录入采购订单。",
+        "库存 60.0，建议foobar采购订单。",
+        "库存 60.0，建议foobar PO。",
+        "库存 60.0，建议提交 PO。",
+        "库存 60.0，建议创建 MR。",
+        "库存 60.0，建议 submit the PO。",
+        "库存 60.0，建议 send the purchase order。",
+        "库存 60.0，建议 confirm the order。",
+        "库存 60.0，建议 release the order。",
+        "库存 60.0，建议 issue the purchase order。",
+        "库存 60.0，建议提交 订单。",
+        "库存 60.0，建议提交\n订单。",
+        "库存 60.0，建议提\u200b交订单。",
+        "库存 60.0，建议提-交订单。",
+        "库存 60.0，建议提/交订单。",
+        "库存 60.0，对订单进行提交。",
+        "库存 60.0，将采购订单提交。",
+        "库存 60.0，订单提交。",
+        "库存 60.0，建议ｓｕｂｍｉｔ ｏｒｄｅｒ。",
+    ],
+)
+def test_validate_rejects_affirmative_erp_action_variants(text: str) -> None:
+    assert validate_explanation(text, PLAN) is None
+
+
+def test_validate_allows_explicit_read_only_refusal() -> None:
+    text = "只能提供只读分析，不能执行 ERP 写入或扩大 capability。"
+    assert validate_explanation(text, PLAN) == text
 
 
 def test_enhance_ok_with_deterministic_provider() -> None:

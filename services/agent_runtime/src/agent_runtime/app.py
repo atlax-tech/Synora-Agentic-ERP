@@ -1,11 +1,13 @@
 import asyncio
 import contextlib
+import hashlib
 import hmac
 import os
-from typing import Any
+import re
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from agent_runtime.agent.enhance import (
     EnhancementEvidence,
@@ -21,7 +23,19 @@ from agent_runtime.coach.runtime import (
     CoachRuntimeRequest,
     answer_coach_runtime,
 )
-from agent_runtime.providers import ProviderError, provider_from_environment, provider_model
+from agent_runtime.multi_agent.contracts import (
+    MultiAgentResult,
+    OrchestrationScope,
+    plan_view_from_mapping,
+)
+from agent_runtime.multi_agent.planner_reviewer import run_planner_reviewer
+from agent_runtime.providers import (
+    Provider,
+    ProviderError,
+    provider_for_role,
+    provider_from_environment,
+    provider_model,
+)
 from agent_runtime.workflow.checkpoint import (
     CheckpointConflict,
     CheckpointError,
@@ -39,6 +53,7 @@ from agent_runtime.workflow.runtime import (
 
 _RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
 _RUNTIME_TOKEN_HEADER = "X-Synora-Runtime-Token"
+_SAFE_PROVIDER_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$")
 
 
 class HealthResponse(BaseModel):
@@ -47,8 +62,22 @@ class HealthResponse(BaseModel):
 
 
 class EnhanceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
     plan: dict[str, Any]
-    provider_name: str = "byok-runtime"
+    provider_name: str = Field(
+        default="byok-runtime",
+        min_length=1,
+        max_length=80,
+    )
+    orchestration_mode: Literal["single_agent", "planner_reviewer"] = "single_agent"
+    orchestration_scope: OrchestrationScope | None = None
+
+    @model_validator(mode="after")
+    def require_orchestration_scope(self) -> EnhanceRequest:
+        if self.orchestration_mode == "planner_reviewer" and self.orchestration_scope is None:
+            raise ValueError("planner_reviewer requires an orchestration_scope")
+        return self
 
 
 class EnhanceResponse(BaseModel):
@@ -72,6 +101,11 @@ def _workflow_error(error: Exception) -> HTTPException:
     if isinstance(error, (CheckpointConflict, CheckpointError)):
         return HTTPException(status_code=409, detail="workflow state conflict")
     return HTTPException(status_code=409, detail="workflow request was rejected")
+
+
+def _safe_provider_label(value: str) -> str:
+    """Keep user/provider labels out of evidence when they contain secrets."""
+    return value if _SAFE_PROVIDER_LABEL.fullmatch(value) else "untrusted-provider"
 
 
 app = FastAPI(
@@ -145,6 +179,66 @@ async def _coach_with_disconnect_guard(
         raise
 
 
+def _orchestration_summary(result: MultiAgentResult) -> dict[str, object]:
+    """Expose only bounded counts, fixed stop code and digest-level trace."""
+    return {
+        "mode": "planner_reviewer",
+        "model_calls": result.stop_reason.model_calls,
+        "handoff_count": result.handoff_count,
+        "revision_count": result.revision_count,
+        "stop_reason": result.stop_reason.code,
+        "deterministic_validated": result.deterministic_validated,
+        "role_usage": [
+            {
+                "role_id": usage.role_id,
+                "calls": usage.calls,
+                "prompt_tokens": usage.prompt_tokens,
+                "completion_tokens": usage.completion_tokens,
+                "reasoning_tokens": usage.reasoning_tokens,
+                "elapsed_ms": usage.elapsed_ms,
+            }
+            for usage in result.role_usage
+        ],
+        "trace": {
+            "event_count": result.trace.event_count,
+            "event_types": list(result.trace.event_types),
+            "digest": result.trace.digest,
+        },
+    }
+
+
+def _missing_provider_orchestration_summary() -> dict[str, object]:
+    return {
+        "mode": "planner_reviewer",
+        "model_calls": 0,
+        "handoff_count": 0,
+        "revision_count": 0,
+        "stop_reason": "MODEL_ERROR",
+        "deterministic_validated": False,
+        "role_usage": [],
+        "trace": {
+            "event_count": 0,
+            "event_types": [],
+            "digest": hashlib.sha256(b"").hexdigest(),
+        },
+    }
+
+
+_SAFE_ORCHESTRATION_FALLBACK = "无法生成计划解释，请人工核对确定性计划。"
+
+
+def _safe_orchestration_fallback(
+    plan: dict[str, Any], scope: OrchestrationScope | None = None
+) -> str:
+    try:
+        view = plan_view_from_mapping(plan)
+    except ValueError:
+        return _SAFE_ORCHESTRATION_FALLBACK
+    if scope is not None and (view.company != scope.company or view.warehouse != scope.warehouse):
+        return _SAFE_ORCHESTRATION_FALLBACK
+    return view.summary
+
+
 @app.get("/healthz", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(service="synora-agent-runtime", status="ok")
@@ -164,25 +258,71 @@ async def enhance(request: EnhanceRequest, http_request: Request) -> EnhanceResp
         http_request.headers.get(_RUNTIME_TOKEN_HEADER, ""), expected_token
     ):
         raise HTTPException(status_code=401, detail="runtime authentication required")
-    provider_label = provider_model(environ) or request.provider_name
+    provider_label = _safe_provider_label(provider_model(environ) or request.provider_name)
     try:
-        provider = provider_from_environment(environ=environ)
-    except (ProviderError, ValueError) as error:
+        provider: Provider
+        if request.orchestration_mode == "planner_reviewer":
+            provider = provider_for_role("primary", environ=environ)
+        else:
+            provider = provider_from_environment(environ=environ)
+    except (ProviderError, ValueError):
         # 未配置 BYOK: 回退确定性摘要并记录证据 (与 enhance_plan 回退语义一致)。
+        evidence = EnhancementEvidence(
+            provider=provider_label,
+            prompt_tokens=0,
+            completion_tokens=0,
+            reasoning_tokens=0,
+            elapsed_ms=0,
+            status="fallback_error",
+            fallback_reason="provider not configured",
+        ).__dict__
+        if request.orchestration_mode == "planner_reviewer":
+            evidence["orchestration"] = _missing_provider_orchestration_summary()
         return EnhanceResponse(
-            explanation=str(request.plan.get("summary", "")),
-            evidence=EnhancementEvidence(
-                provider=provider_label,
-                prompt_tokens=0,
-                completion_tokens=0,
-                reasoning_tokens=0,
-                elapsed_ms=0,
-                status="fallback_error",
-                fallback_reason=f"provider not configured: {error}",
-            ).__dict__,
+            explanation=(
+                _safe_orchestration_fallback(request.plan, request.orchestration_scope)
+                if request.orchestration_mode == "planner_reviewer"
+                else str(request.plan.get("summary", ""))
+            ),
+            evidence=evidence,
+        )
+    if request.orchestration_mode == "planner_reviewer":
+        try:
+            orchestration_result = await run_planner_reviewer(
+                request.plan,
+                provider,
+                provider_name=provider_label,
+                scope=request.orchestration_scope,
+            )
+        finally:
+            close = getattr(provider, "aclose", None)
+            if close is not None:
+                await close()
+        usage = orchestration_result.role_usage
+        orchestration_evidence = {
+            "provider": provider_label,
+            "prompt_tokens": sum(item.prompt_tokens for item in usage),
+            "completion_tokens": sum(item.completion_tokens for item in usage),
+            "reasoning_tokens": sum(item.reasoning_tokens for item in usage),
+            "elapsed_ms": orchestration_result.stop_reason.elapsed_ms,
+            "status": (
+                "orchestration_ok"
+                if orchestration_result.stop_reason.code in {"ACCEPTED", "REVISED_ACCEPTED"}
+                else "orchestration_fallback"
+            ),
+            "fallback_reason": (
+                None
+                if orchestration_result.stop_reason.code in {"ACCEPTED", "REVISED_ACCEPTED"}
+                else orchestration_result.stop_reason.detail
+            ),
+            "orchestration": _orchestration_summary(orchestration_result),
+        }
+        return EnhanceResponse(
+            explanation=orchestration_result.final_text,
+            evidence=orchestration_evidence,
         )
     try:
-        explanation, evidence = await enhance_plan(
+        explanation, enhancement_evidence = await enhance_plan(
             request.plan,
             provider,
             provider_name=provider_label,
@@ -192,7 +332,7 @@ async def enhance(request: EnhanceRequest, http_request: Request) -> EnhanceResp
         close = getattr(provider, "aclose", None)
         if close is not None:
             await close()
-    return EnhanceResponse(explanation=explanation, evidence=evidence.__dict__)
+    return EnhanceResponse(explanation=explanation, evidence=enhancement_evidence.__dict__)
 
 
 @app.post("/agent/execute", response_model=AgentExecuteResponse)

@@ -5,11 +5,17 @@ enhance_plan 回退确定性摘要并返回证据, 端点仍返回 200。
 """
 
 import asyncio
+import json
 
 import httpx
 from agent_runtime.app import app
+from agent_runtime.multi_agent.contracts import plan_view_digest, plan_view_from_mapping
+from agent_runtime.providers import DeterministicProvider, ProviderError, ProviderResponse
 
 PLAN = {
+    "goal": "ensure stock for ITEM-9",
+    "company": "Test Company",
+    "warehouse": "Main",
     "summary": "共分析 1 个物料：1 个缺货、0 个重复采购风险。",
     "findings": [
         {
@@ -91,3 +97,159 @@ def test_enhance_context_budget_failure_is_a_deterministic_200_fallback(monkeypa
     assert response.json()["explanation"] == PLAN["summary"]
     assert response.json()["evidence"]["status"] == "fallback_context_budget"
     assert provider.calls == 0
+
+
+def test_enhance_planner_reviewer_exposes_only_sanitized_orchestration(monkeypatch) -> None:
+    digest = plan_view_digest(plan_view_from_mapping(PLAN))
+    provider = DeterministicProvider(
+        scripted_responses=[
+            ProviderResponse(
+                text=json.dumps(
+                    {
+                        "candidate_explanation": "该物料库存 2.0，建议补货。",
+                        "citation_summary": ["risk=SHORTAGE"],
+                        "unknowns": [],
+                        "plan_digest": digest,
+                    },
+                    ensure_ascii=False,
+                ),
+                prompt_tokens=2,
+                completion_tokens=3,
+            ),
+            ProviderResponse(
+                text=json.dumps(
+                    {
+                        "decision": "ACCEPT",
+                        "issue_codes": [],
+                        "feedback": "",
+                        "reviewed_plan_digest": digest,
+                    }
+                ),
+                prompt_tokens=2,
+                completion_tokens=2,
+            ),
+        ]
+    )
+    monkeypatch.setattr(
+        "agent_runtime.app.provider_for_role",
+        lambda role, *, environ=None: provider,
+    )
+
+    response = asyncio.run(
+        _post_enhance(
+            {
+                "plan": PLAN,
+                "orchestration_mode": "planner_reviewer",
+                "orchestration_scope": {
+                    "task_id": "00000000-0000-0000-0000-000000000001",
+                    "run_id": "00000000-0000-0000-0000-000000000002",
+                    "correlation_id": "00000000-0000-0000-0000-000000000003",
+                    "principal": "buyer@example.test",
+                    "company": "Test Company",
+                    "warehouse": "Main",
+                },
+            },
+        )
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["explanation"] == "该物料库存 2.0，建议补货。"
+    orchestration = body["evidence"]["orchestration"]
+    assert orchestration["mode"] == "planner_reviewer"
+    assert orchestration["model_calls"] == 2
+    assert orchestration["handoff_count"] == 1
+    assert orchestration["trace"]["digest"]
+    assert "candidate_explanation" not in json.dumps(orchestration)
+
+
+def test_enhance_rejects_unknown_orchestration_mode() -> None:
+    response = asyncio.run(_post_enhance({"plan": PLAN, "orchestration_mode": "supervisor"}))
+    assert response.status_code == 422
+
+
+def test_enhance_planner_reviewer_requires_scope() -> None:
+    response = asyncio.run(_post_enhance({"plan": PLAN, "orchestration_mode": "planner_reviewer"}))
+    assert response.status_code == 422
+
+
+def test_enhance_invalid_planner_projection_uses_safe_fallback(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "agent_runtime.app.provider_for_role",
+        lambda role, *, environ=None: (_ for _ in ()).throw(ProviderError("secret=top-secret")),
+    )
+    response = asyncio.run(
+        _post_enhance(
+            {
+                "plan": {
+                    "summary": "purchase.submit secret: abc",
+                    "findings": [],
+                },
+                "orchestration_mode": "planner_reviewer",
+                "orchestration_scope": {
+                    "task_id": "00000000-0000-0000-0000-000000000001",
+                    "run_id": "00000000-0000-0000-0000-000000000002",
+                    "correlation_id": "00000000-0000-0000-0000-000000000003",
+                    "principal": "buyer@example.test",
+                    "company": "Test Company",
+                    "warehouse": "Main",
+                },
+            }
+        )
+    )
+    assert response.status_code == 200
+    assert response.json()["explanation"] == "无法生成计划解释，请人工核对确定性计划。"
+
+
+def test_enhance_provider_failure_does_not_leak_cross_scope_summary(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "agent_runtime.app.provider_for_role",
+        lambda role, *, environ=None: (_ for _ in ()).throw(ProviderError("not configured")),
+    )
+    plan = {**PLAN, "company": "Secret Company", "summary": "跨范围敏感库存 777.0"}
+    response = asyncio.run(
+        _post_enhance(
+            {
+                "plan": plan,
+                "orchestration_mode": "planner_reviewer",
+                "orchestration_scope": {
+                    "task_id": "00000000-0000-0000-0000-000000000001",
+                    "run_id": "00000000-0000-0000-0000-000000000002",
+                    "correlation_id": "00000000-0000-0000-0000-000000000003",
+                    "principal": "buyer@example.test",
+                    "company": "Allowed Company",
+                    "warehouse": "Main",
+                },
+            }
+        )
+    )
+    assert response.status_code == 200
+    assert response.json()["explanation"] == "无法生成计划解释，请人工核对确定性计划。"
+    assert "Secret Company" not in response.text
+    assert "777.0" not in response.text
+    assert "top-secret" not in response.text
+
+
+def test_enhance_rejects_secret_like_provider_name_without_echoing_it() -> None:
+    response = asyncio.run(
+        _post_enhance(
+            {
+                "plan": PLAN,
+                "provider_name": "api_key=TOPSECRET",
+            }
+        )
+    )
+    assert response.status_code == 200
+    assert response.json()["evidence"]["provider"] == "untrusted-provider"
+    assert "TOPSECRET" not in response.text
+
+
+def test_enhance_provider_error_does_not_echo_secret_in_single_agent_evidence(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "agent_runtime.app.provider_from_environment",
+        lambda *, environ=None: (_ for _ in ()).throw(ProviderError("api_key=TOPSECRET")),
+    )
+    response = asyncio.run(_post_enhance({"plan": PLAN, "provider_name": "ci-test"}))
+    assert response.status_code == 200
+    assert response.json()["evidence"]["fallback_reason"] == "provider not configured"
+    assert "TOPSECRET" not in response.text
