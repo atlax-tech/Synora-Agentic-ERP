@@ -17,7 +17,9 @@ _UNSAFE_SECRET_VALUE_PATTERN = re.compile(
 _EXTERNAL_SCOPE_PATTERN = re.compile(
     r"(?i)(?:\b(?:other|another)[-_ ](?:company|warehouse|user)\b|"
     r"\b(?:other|another)[-_ ](?:company|warehouse)\s+(?:inventory|stock|data|facts?)\b|"
-    r"\b(?:OTHER-COMPANY|OTHER-WAREHOUSE)\b)"
+    r"\b(?:OTHER-COMPANY|OTHER-WAREHOUSE)\b|"
+    r"(?:其他|别的|另一(?:个|家)?|不同的)(?:公司|仓库|用户)|"
+    r"(?:跨公司|跨仓库|跨用户)|(?:公司|仓库|用户)(?:之外|以外|范围外))"
 )
 _EXTERNAL_SCOPE_FACT_PATTERN = re.compile(
     r"(?i)(?:inventory|stock|quantity|data|facts?|records?|access|"
@@ -25,7 +27,8 @@ _EXTERNAL_SCOPE_FACT_PATTERN = re.compile(
 )
 _EXTERNAL_SCOPE_NEGATION_PATTERN = re.compile(
     r"(?i)(?:\b(?:cannot|can't|unable|refuse|reject|not\s+provide|read[- ]?only)\b|"
-    r"不能|不可|无法|拒绝|不提供|只读|仅限|当前范围)"
+    r"不能|不可|无法|拒绝|不提供|只读|仅限|当前范围|没有|无|不含|不存在|未提供|"
+    r"未包含|不涉及)"
 )
 _UNSAFE_CAPABILITY_PATTERN = re.compile(
     r"(?ix)(?:"

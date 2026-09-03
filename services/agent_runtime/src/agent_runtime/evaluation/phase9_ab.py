@@ -25,7 +25,11 @@ from agent_runtime.evaluation.phase9_baseline import (
     case_spec_sha256,
     load_phase9_baseline_cases,
 )
-from agent_runtime.evaluation.security import input_projection_isolated, security_counters
+from agent_runtime.evaluation.security import (
+    input_projection_isolated,
+    security_counters,
+    security_counters_digest,
+)
 from agent_runtime.multi_agent.contracts import (
     MultiAgentResult,
     OrchestrationScope,
@@ -64,6 +68,11 @@ class ABCaseResult(StrictModel):
     case_id: str = Field(min_length=1, max_length=80)
     category: str = Field(min_length=1, max_length=80)
     input_projection_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    # Shared source-plan digest and exact arm input digest are separate: the
+    # single arm and role projections intentionally send different messages.
+    arm_input_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    output_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    security_counters_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     outcome: str = Field(min_length=1, max_length=80)
     stop_reason: str = Field(min_length=1, max_length=80)
     task_correct: bool
@@ -335,8 +344,21 @@ def _input_digest(case: PatternCase) -> str:
     return plan_view_digest(case.plan)
 
 
-def _trace_digest(events: Sequence[str]) -> str:
-    return hashlib.sha256(canonical_json(list(events)).encode("utf-8")).hexdigest()
+def _digest_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _empty_input_digest() -> str:
+    return _digest_text("[]")
+
+
+def _trace_digest(events: Sequence[str], *, output_digest: str, security_digest: str) -> str:
+    payload = {
+        "events": list(events),
+        "output_digest": output_digest,
+        "security_counters_digest": security_digest,
+    }
+    return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
 
 def _projection_texts(pattern_case: PatternCase) -> tuple[str, ...]:
@@ -365,7 +387,7 @@ def _security(
     case: BaselineCase,
     input_isolation_pass: bool,
     unauthorized_tool_calls: int = 0,
-) -> tuple[bool, int, int, int, int]:
+) -> tuple[bool, int, int, int, int, str]:
     counters = security_counters(
         text,
         unauthorized_tool_calls=unauthorized_tool_calls,
@@ -386,6 +408,7 @@ def _security(
         counters.erp_business_writes,
         counters.scope_leaks,
         counters.secret_leaks,
+        security_counters_digest(counters),
     )
 
 
@@ -437,7 +460,7 @@ def _single_result(
         safe_fallback=fallback,
     )
     isolated = _input_isolation(case, pattern_case)
-    security, tool_calls, writes, scope_leaks, secret_leaks = _security(
+    security, tool_calls, writes, scope_leaks, secret_leaks, counters_digest = _security(
         explanation,
         case=case,
         input_isolation_pass=isolated,
@@ -452,12 +475,20 @@ def _single_result(
     else:
         stop_reason = "FINAL_ANSWER"
         outcome = "VALID_EXPLANATION"
-    trace = ["observation"] * len(case.observations) + ["model_call", status]
+    output_digest = _digest_text(explanation)
+    trace_digest = _trace_digest(
+        ["observation"] * len(case.observations) + ["model_call", status],
+        output_digest=output_digest,
+        security_digest=counters_digest,
+    )
     return ABCaseResult(
         arm="single_agent",
         case_id=pattern_case.case_id,
         category=pattern_case.category,
         input_projection_digest=_input_digest(pattern_case),
+        arm_input_digest=str(getattr(evidence, "input_digest", None) or _empty_input_digest()),
+        output_digest=output_digest,
+        security_counters_digest=counters_digest,
         outcome=outcome,
         stop_reason=stop_reason,
         task_correct=task,
@@ -472,8 +503,8 @@ def _single_result(
         elapsed_ms=int(getattr(evidence, "elapsed_ms", 0)),
         handoff_count=0,
         revision_count=0,
-        trace_event_count=len(trace),
-        trace_digest=_trace_digest(trace),
+        trace_event_count=len(case.observations) + 2,
+        trace_digest=trace_digest,
         input_isolation_pass=isolated,
         unauthorized_tool_calls=tool_calls,
         erp_business_writes=writes,
@@ -494,18 +525,27 @@ def _multi_result(
         safe_fallback=safe_fallback,
     )
     isolated = _input_isolation(case, pattern_case)
-    security, tool_calls, writes, scope_leaks, secret_leaks = _security(
+    security, tool_calls, writes, scope_leaks, secret_leaks, counters_digest = _security(
         result.final_text,
         case=case,
         input_isolation_pass=isolated,
         unauthorized_tool_calls=result.trace.unauthorized_tool_calls,
     )
+    trace_bound = (
+        result.trace.input_digest
+        and result.trace.final_text_digest == _digest_text(result.final_text)
+        and result.trace.security_counters_digest == counters_digest
+    )
+    security = security and bool(trace_bound)
     usage = result.role_usage
     return ABCaseResult(
         arm="planner_reviewer",
         case_id=pattern_case.case_id,
         category=pattern_case.category,
         input_projection_digest=_input_digest(pattern_case),
+        arm_input_digest=result.trace.input_digest,
+        output_digest=_digest_text(result.final_text),
+        security_counters_digest=counters_digest,
         outcome=stop,
         stop_reason=stop,
         task_correct=task,
@@ -835,6 +875,10 @@ def render_ab_decision_package(report: ABReport) -> str:
         (
             "两个 arm 按相同 P9-01→P9-12 顺序、同一源计划投影 digest 和同一模型角色执行；"
             "没有选择性重跑。"
+        ),
+        (
+            "artifact 的 input_projection_digest 表示共享源计划；每个 case 的 arm_input_digest "
+            "另行绑定实际发送给该 arm 的序列化 provider messages。"
         ),
         ("本地没有金额价格，token/延迟仅作成本代理；失败响应和完整 Prompt/候选原文不写入报告。"),
         "",

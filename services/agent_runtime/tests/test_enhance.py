@@ -129,10 +129,21 @@ def test_validate_rejects_capability_echo_from_untrusted_request() -> None:
 
 @pytest.mark.parametrize(
     "text",
-    ["库存 60.0，secret ABCDEF。", "OTHER-COMPANY inventory 60.0。", "another user data 1.0。"],
+    [
+        "库存 60.0，secret ABCDEF。",
+        "OTHER-COMPANY inventory 60.0。",
+        "another user data 1.0。",
+        "当前其他公司的库存为 60.0。",
+        "另一家公司的库存为 60.0。",
+    ],
 )
 def test_validate_rejects_secret_and_external_scope_echoes(text: str) -> None:
     assert validate_explanation(text, PLAN) is None
+
+
+def test_validate_allows_negated_chinese_external_scope_refusal() -> None:
+    text = "无法提供其他公司的库存，请在当前授权范围内重新查询。"
+    assert validate_explanation(text, PLAN) == text
 
 
 def test_validate_rejects_chinese_erp_action_text() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from typing import Any
 from uuid import UUID
@@ -153,6 +154,13 @@ def test_chinese_erp_action_candidate_is_rejected_before_review() -> None:
             _response(_planner("库存 2.0，建议提交采购订单。")),
         ]
     )
+    result = asyncio.run(run_planner_reviewer(PLAN, provider))
+    assert result.stop_reason.code == "INVALID_OUTPUT"
+    assert result.stop_reason.model_calls == 1
+
+
+def test_chinese_external_scope_candidate_is_rejected_before_review() -> None:
+    provider = RecordingProvider([_response(_planner("当前其他公司的库存为 60.0。"))])
     result = asyncio.run(run_planner_reviewer(PLAN, provider))
     assert result.stop_reason.code == "INVALID_OUTPUT"
     assert result.stop_reason.model_calls == 1
@@ -390,6 +398,34 @@ def test_provider_tool_calls_are_rejected_even_when_text_is_valid() -> None:
     assert result.stop_reason.code == "INVALID_OUTPUT"
     assert result.stop_reason.model_calls == 1
     assert result.trace.unauthorized_tool_calls == 1
+    assert result.trace.final_text_digest
+    assert result.trace.input_digest
+    assert result.trace.security_counters_digest
+
+
+def test_trace_digest_binds_output_and_security_counter_digest() -> None:
+    clean = RecordingProvider([_response(_planner()), _response(_review())])
+    tool = RecordingProvider(
+        [
+            ProviderResponse(
+                text=_planner(),
+                tool_calls=(ProviderToolCall(id="1", name="gateway", arguments="{}"),),
+                prompt_tokens=1,
+                completion_tokens=1,
+            )
+        ]
+    )
+    clean_result = asyncio.run(run_planner_reviewer(PLAN, clean))
+    tool_result = asyncio.run(run_planner_reviewer(PLAN, tool))
+    assert clean_result.trace.digest != tool_result.trace.digest
+    assert (
+        clean_result.trace.final_text_digest
+        == hashlib.sha256(clean_result.final_text.encode("utf-8")).hexdigest()
+    )
+    tampered = clean_result.model_dump(mode="json")
+    tampered["final_text"] = "被篡改的解释"
+    with pytest.raises(ValueError, match="final_text_digest"):
+        type(clean_result).model_validate_json(json.dumps(tampered, ensure_ascii=False))
 
 
 @pytest.mark.parametrize(

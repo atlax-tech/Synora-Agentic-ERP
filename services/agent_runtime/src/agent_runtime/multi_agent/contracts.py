@@ -314,6 +314,11 @@ class TraceSummary(StrictModel):
     event_count: int = Field(ge=0, le=64)
     event_types: tuple[str, ...] = Field(default=(), max_length=64)
     digest: Digest
+    # These digests bind the redacted trace to the exact model-input sequence,
+    # final text and observed security counters without persisting their values.
+    input_digest: Digest
+    final_text_digest: Digest
+    security_counters_digest: Digest
     unauthorized_tool_calls: int = Field(default=0, ge=0, le=3)
 
 
@@ -339,6 +344,9 @@ class MultiAgentResult(StrictModel):
         if self.stop_reason.model_calls != sum(item.calls for item in self.role_usage):
             raise ValueError("stop reason model call count mismatch")
         _check_safe_text(self.final_text, field_name="final text")
+        expected_output_digest = _digest_text(self.final_text)
+        if self.trace.final_text_digest != expected_output_digest:
+            raise ValueError("trace final_text_digest does not match final text")
         return self
 
 

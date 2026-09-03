@@ -20,6 +20,11 @@ from pydantic import ValidationError
 
 from agent_runtime.agent.contracts import canonical_json
 from agent_runtime.agent.enhance import safe_deterministic_fallback, validate_explanation
+from agent_runtime.evaluation.security import (
+    SecurityCounters,
+    security_counters,
+    security_counters_digest,
+)
 from agent_runtime.multi_agent.contracts import (
     DeterministicPlanView,
     MultiAgentLimits,
@@ -86,7 +91,15 @@ class _Trace:
         # structure.  Candidate text and provider messages never do.
         self._events.append({"type": event_type, **payload})
 
-    def summary(self, *, task_id: UUID, run_id: UUID, correlation_id: UUID) -> TraceSummary:
+    def summary(
+        self,
+        *,
+        task_id: UUID,
+        run_id: UUID,
+        correlation_id: UUID,
+        final_text: str,
+        security_counter_values: SecurityCounters,
+    ) -> TraceSummary:
         # Bind the digest to the three run identities without exposing those
         # identifiers in the persisted trace summary.  Equal event streams
         # from different runs therefore cannot share a trace digest.
@@ -94,6 +107,14 @@ class _Trace:
             {key: value for key, value in event.items() if key != "elapsed_ms"}
             for event in self._events
         ]
+        input_digests = tuple(
+            str(event["input_digest"])
+            for event in self._events
+            if event.get("type") == "model.requested" and "input_digest" in event
+        )
+        input_digest = hashlib.sha256(canonical_json(input_digests).encode("utf-8")).hexdigest()
+        final_text_digest = hashlib.sha256(final_text.encode("utf-8")).hexdigest()
+        security_digest = security_counters_digest(security_counter_values)
         digest_payload = {
             "identity": {
                 "task_id": str(task_id),
@@ -101,12 +122,18 @@ class _Trace:
                 "correlation_id": str(correlation_id),
             },
             "events": digest_events,
+            "input_digest": input_digest,
+            "final_text_digest": final_text_digest,
+            "security_counters_digest": security_digest,
         }
         digest = hashlib.sha256(canonical_json(digest_payload).encode("utf-8")).hexdigest()
         return TraceSummary(
             event_count=len(self._events),
             event_types=tuple(str(item["type"]) for item in self._events),
             digest=digest,
+            input_digest=input_digest,
+            final_text_digest=final_text_digest,
+            security_counters_digest=security_digest,
             unauthorized_tool_calls=self._unauthorized_tool_calls,
         )
 
@@ -308,6 +335,10 @@ def _make_result(
 ) -> MultiAgentResult:
     role_usage = tuple(usage[role] for role in ("procurement_planner", "policy_risk_reviewer"))
     model_calls = sum(item.calls for item in role_usage)
+    observed_security = security_counters(
+        final_text,
+        unauthorized_tool_calls=trace._unauthorized_tool_calls,
+    )
     return MultiAgentResult(
         task_id=task_id,
         run_id=run_id,
@@ -326,6 +357,8 @@ def _make_result(
             task_id=task_id,
             run_id=run_id,
             correlation_id=correlation_id,
+            final_text=final_text,
+            security_counter_values=observed_security,
         ),
         correlation_id=correlation_id,
         deterministic_validated=deterministic_validated,

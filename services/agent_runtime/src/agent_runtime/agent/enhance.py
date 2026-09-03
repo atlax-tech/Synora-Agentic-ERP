@@ -13,6 +13,7 @@ DeterministicProvider, 不依赖
 付费真实模型。
 """
 
+import hashlib
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -149,6 +150,9 @@ class EnhancementEvidence:
     dropped_fragment_ids: tuple[str, ...] = ()
     skill_refs: tuple[str, ...] = ()
     unauthorized_tool_calls: int = 0
+    # Digest of the exact serialized provider messages; the message content
+    # itself is never persisted or returned by the API.
+    input_digest: str | None = None
 
 
 def safe_deterministic_fallback(plan: Mapping[str, Any]) -> str:
@@ -216,6 +220,7 @@ def _make_evidence(
     context_result: ContextBuildResult | None,
     actual_prompt_tokens: int | None = None,
     unauthorized_tool_calls: int = 0,
+    input_digest: str | None = None,
 ) -> EnhancementEvidence:
     metadata = _context_evidence(
         context_result,
@@ -235,6 +240,13 @@ def _make_evidence(
         if not isinstance(value, (list, tuple)) or not all(isinstance(item, str) for item in value):
             return ()
         return tuple(value)
+
+    if input_digest is None and context_result is not None:
+        input_digest = hashlib.sha256(
+            canonical_json(
+                [message.model_dump(mode="json") for message in context_result.messages]
+            ).encode("utf-8")
+        ).hexdigest()
 
     return EnhancementEvidence(
         provider=provider,
@@ -263,6 +275,7 @@ def _make_evidence(
         dropped_fragment_ids=metadata_strings("dropped_fragment_ids"),
         skill_refs=metadata_strings("skill_refs"),
         unauthorized_tool_calls=max(0, unauthorized_tool_calls),
+        input_digest=input_digest,
     )
 
 
