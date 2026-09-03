@@ -251,6 +251,7 @@ def _provider_fallback_response(request: EnhanceRequest, provider_label: str) ->
         elapsed_ms=0,
         status="fallback_error",
         fallback_reason="provider not configured",
+        model_calls=0,
     ).__dict__
     if request.orchestration_mode == "planner_reviewer":
         evidence["orchestration"] = _missing_provider_orchestration_summary()

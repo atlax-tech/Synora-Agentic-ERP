@@ -41,6 +41,7 @@ def test_recorded_ab_uses_fixed_order_projection_and_security_boundary() -> None
     assert first.single_metrics.task_correct_count == 12
     assert first.single_metrics.valid_explanation_count == 6
     assert first.single_metrics.recovery_success_count == 11
+    assert first.single_metrics.model_calls_total == 10
     assert first.multi_metrics.task_correct_count == 12
     assert first.multi_metrics.valid_explanation_count == 7
     assert first.multi_metrics.recovery_success_count == 12

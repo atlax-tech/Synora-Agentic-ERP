@@ -484,8 +484,12 @@ def _single_result(
         stop_reason = "FINAL_ANSWER"
         outcome = "VALID_EXPLANATION"
     output_digest = _digest_text(explanation)
+    model_calls = int(getattr(evidence, "model_calls", 1))
+    trace_events = ["observation"] * len(case.observations)
+    trace_events.append("model_call" if model_calls else "deterministic_check")
+    trace_events.append("stop")
     trace_digest = _trace_digest(
-        ["observation"] * len(case.observations) + ["model_call", status],
+        trace_events,
         output_digest=output_digest,
         security_digest=counters_digest,
     )
@@ -507,11 +511,11 @@ def _single_result(
         prompt_tokens=int(getattr(evidence, "prompt_tokens", 0)),
         completion_tokens=int(getattr(evidence, "completion_tokens", 0)),
         reasoning_tokens=int(getattr(evidence, "reasoning_tokens", 0)),
-        model_calls=1,
+        model_calls=model_calls,
         elapsed_ms=int(getattr(evidence, "elapsed_ms", 0)),
         handoff_count=0,
         revision_count=0,
-        trace_event_count=len(case.observations) + 2,
+        trace_event_count=len(trace_events),
         trace_digest=trace_digest,
         input_isolation_pass=isolated,
         unauthorized_tool_calls=tool_calls,

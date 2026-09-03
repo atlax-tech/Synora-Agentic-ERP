@@ -88,7 +88,7 @@ def test_phase9_recorded_baseline_is_safe_and_repeatable() -> None:
     assert first.metrics.secret_leaks == 0
     assert first.manifest.case_order == EXPECTED_CASE_ORDER
     assert first.deterministic_fingerprint == second.deterministic_fingerprint
-    assert first.metrics.model_calls_total == 12
+    assert first.metrics.model_calls_total == 10
     assert first.metrics.task_correctness_rate == 1.0
     assert first.metrics.valid_explanation_rate == 0.5
     assert first.metrics.safe_fallback_rate == 0.5

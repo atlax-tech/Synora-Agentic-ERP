@@ -153,6 +153,7 @@ class EnhancementEvidence:
     # Digest of the exact serialized provider messages; the message content
     # itself is never persisted or returned by the API.
     input_digest: str | None = None
+    model_calls: int = 1
 
 
 def safe_deterministic_fallback(plan: Mapping[str, Any]) -> str:
@@ -221,6 +222,7 @@ def _make_evidence(
     actual_prompt_tokens: int | None = None,
     unauthorized_tool_calls: int = 0,
     input_digest: str | None = None,
+    model_calls: int = 1,
 ) -> EnhancementEvidence:
     metadata = _context_evidence(
         context_result,
@@ -276,6 +278,7 @@ def _make_evidence(
         skill_refs=metadata_strings("skill_refs"),
         unauthorized_tool_calls=max(0, unauthorized_tool_calls),
         input_digest=input_digest,
+        model_calls=max(0, model_calls),
     )
 
 
@@ -308,6 +311,34 @@ async def enhance_plan(
 ) -> tuple[str, EnhancementEvidence]:
     """生成模型解释; 校验失败或调用失败回退确定性计划摘要并记录证据。"""
     started = monotonic()
+    findings = plan.get("findings")
+    risks = (
+        {str(finding.get("risk")) for finding in findings if isinstance(finding, dict)}
+        if isinstance(findings, list)
+        else set()
+    )
+    deterministic_exception = (
+        "RECONCILIATION_REQUIRED"
+        if "RECONCILIATION_REQUIRED" in risks
+        else "INPUT_REQUIRED"
+        if "INPUT_REQUIRED" in risks
+        else None
+    )
+    if deterministic_exception is not None:
+        return (
+            safe_deterministic_fallback(plan),
+            _make_evidence(
+                provider=provider_name,
+                prompt_tokens=0,
+                completion_tokens=0,
+                reasoning_tokens=0,
+                elapsed_ms=int((monotonic() - started) * 1000),
+                status="fallback_deterministic",
+                fallback_reason=f"deterministic exception: {deterministic_exception}",
+                context_result=None,
+                model_calls=0,
+            ),
+        )
     try:
         context_result = build_context(plan, environ=context_environ)
     except ContextBuildError as error:
@@ -327,6 +358,7 @@ async def enhance_plan(
                 status=status,
                 fallback_reason=f"context failure: {error.code}",
                 context_result=error.result,
+                model_calls=0,
             ),
         )
     try:

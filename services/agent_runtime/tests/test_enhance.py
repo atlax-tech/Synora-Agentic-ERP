@@ -326,6 +326,31 @@ def test_enhance_missing_context_budget_returns_deterministic_summary() -> None:
     assert provider.calls == 0
 
 
+@pytest.mark.parametrize("risk", ["INPUT_REQUIRED", "RECONCILIATION_REQUIRED"])
+def test_enhance_deterministic_exception_skips_provider(risk: str) -> None:
+    class _UnexpectedProvider:
+        calls = 0
+
+        async def complete(self, *args, **kwargs):
+            self.calls += 1
+            raise AssertionError("provider must not be called")
+
+    plan = {
+        **_SHORTAGE_PLAN,
+        "summary": "无法形成安全解释，请人工核对确定性结果。",
+        "findings": [{**_SHORTAGE_PLAN["findings"][0], "risk": risk}],
+    }
+    provider = _UnexpectedProvider()
+
+    text, evidence = _run(enhance_plan(plan, provider, context_environ=CONTEXT_ENV))
+
+    assert text == plan["summary"]
+    assert evidence.status == "fallback_deterministic"
+    assert evidence.model_calls == 0
+    assert evidence.prompt_tokens == 0
+    assert provider.calls == 0
+
+
 def test_enhance_actual_prompt_budget_failure_keeps_usage_and_falls_back() -> None:
     class _OverContextBudgetProvider:
         async def complete(self, *args, **kwargs):

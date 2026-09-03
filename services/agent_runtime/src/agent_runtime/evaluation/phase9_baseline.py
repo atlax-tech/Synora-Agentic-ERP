@@ -208,7 +208,7 @@ class BaselineCaseFile(StrictModel):
 
 class BaselineTraceStep(StrictModel):
     step: int = Field(ge=1, le=64)
-    event: Literal["observation", "model_call", "stop"]
+    event: Literal["observation", "deterministic_check", "model_call", "stop"]
     observation_digest: str | None = Field(default=None, pattern=_DIGEST_PATTERN)
     model_call: bool = False
     stop_reason: StopReason | None = None
@@ -602,7 +602,10 @@ async def _run_case(
         for index, observation in enumerate(case.observations, 1)
     ]
     call_step = len(trace) + 1
-    trace.append(BaselineTraceStep(step=call_step, event="model_call", model_call=True))
+    if evidence.model_calls:
+        trace.append(BaselineTraceStep(step=call_step, event="model_call", model_call=True))
+    else:
+        trace.append(BaselineTraceStep(step=call_step, event="deterministic_check"))
     trace.append(
         BaselineTraceStep(
             step=call_step + 1,
@@ -628,7 +631,7 @@ async def _run_case(
             prompt_tokens=evidence.prompt_tokens,
             completion_tokens=evidence.completion_tokens,
             reasoning_tokens=evidence.reasoning_tokens,
-            model_calls=1,
+            model_calls=evidence.model_calls,
             elapsed_ms=evidence.elapsed_ms,
             estimated_cost_microusd=0,
         ),
