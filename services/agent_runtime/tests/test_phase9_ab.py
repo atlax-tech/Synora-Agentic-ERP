@@ -132,6 +132,28 @@ def test_ab_report_rejects_tampered_metrics_or_cross_arm_projection() -> None:
         type(report).model_validate_json(json.dumps(body))
 
 
+def test_ab_report_rejects_quality_or_non_adopted_card_tampering() -> None:
+    report = run_phase9_ab()
+
+    body = report.model_dump(mode="json")
+    body["adoption_cards"][2]["net_benefit"] = True
+    body["adoption_cards"][2]["thresholds_met"] = True
+    with pytest.raises(ValueError, match=r"quality|net benefit"):
+        type(report).model_validate_json(json.dumps(body))
+
+    body = report.model_dump(mode="json")
+    body["planner_reviewer"] = [
+        {**item, "arm": "planner_reviewer"} for item in body["single_agent"]
+    ]
+    body["multi_metrics"] = {**body["single_metrics"], "arm": "planner_reviewer"}
+    for card in body["adoption_cards"][:2]:
+        card["net_benefit"] = True
+        card["thresholds_met"] = True
+        card["security_passed"] = True
+    with pytest.raises(ValueError, match=r"quality|net benefit"):
+        type(report).model_validate_json(json.dumps(body))
+
+
 def test_ab_case_manifest_rejects_unknown_or_nonfinite_fields(tmp_path: Path) -> None:
     source = json.loads(BASELINE_CASE_SPEC_PATH.read_text(encoding="utf-8"))
     source["cases"][0]["unknown"] = "must fail closed"

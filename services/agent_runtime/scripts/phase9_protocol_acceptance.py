@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
 import httpx
 from a2a.client.client import ClientConfig
 from a2a.client.client_factory import ClientFactory
+from a2a.client.errors import A2AClientTimeoutError
 from a2a.helpers import get_artifact_text, new_text_message
 from a2a.types.a2a_pb2 import (
     CancelTaskRequest,
@@ -39,10 +40,14 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 from labs.protocols.phase9_a2a import PolicyRiskReviewRequest
 from labs.protocols.phase9_anp import (
     FIXED_DESCRIPTOR_SET,
+    AgentDescriptor,
+    AmbiguousRouteError,
+    NoRouteError,
     RouteCycleError,
     RouteRequest,
     fixed_descriptors,
     select_fixed_route,
+    select_route,
 )
 from labs.protocols.phase9_mcp import TOOL_NAME, server
 
@@ -231,6 +236,41 @@ async def _a2a_acceptance() -> dict[str, object]:
                 raise RuntimeError("A2A canceled task changed terminal state")
             cancel_no_completed = not canceled_current.artifacts
 
+            invalid_state_transition_error = False
+            try:
+                continuation = SendMessageRequest(
+                    message=new_text_message(
+                        json.dumps(_a2a_payload()),
+                        media_type="application/json",
+                        context_id=cancel_task.context_id,
+                        task_id=cancel_task.id,
+                        role=Role.ROLE_USER,
+                    ),
+                    configuration=SendMessageConfiguration(return_immediately=False),
+                )
+                _ = [item async for item in client.send_message(continuation)]
+            except Exception:
+                invalid_state_transition_error = True
+
+            race_request = SendMessageRequest(
+                message=new_text_message(
+                    json.dumps(_a2a_payload()), media_type="application/json", role=Role.ROLE_USER
+                ),
+                configuration=SendMessageConfiguration(return_immediately=True),
+            )
+            race_submitted = (await anext(client.send_message(race_request))).task
+            race_cancel = asyncio.create_task(
+                client.cancel_task(CancelTaskRequest(id=race_submitted.id))
+            )
+            race_current = await race_cancel
+            await asyncio.sleep(0.25)
+            race_after = await client.get_task(GetTaskRequest(id=race_submitted.id))
+            cancel_completed_race_no_completed = (
+                race_current.status.state == TaskState.TASK_STATE_CANCELED
+                and race_after.status.state == TaskState.TASK_STATE_CANCELED
+                and not race_after.artifacts
+            )
+
             mismatch_request = SendMessageRequest(
                 message=new_text_message(
                     json.dumps(_a2a_payload()),
@@ -277,6 +317,8 @@ async def _a2a_acceptance() -> dict[str, object]:
             except Exception:
                 malformed_error = True
 
+            handler_exception_error = malformed_error
+
             oversized = _a2a_payload()
             oversized["candidate_explanation"] = "x" * 4_001
             oversized_error = False
@@ -296,6 +338,29 @@ async def _a2a_acceptance() -> dict[str, object]:
                 oversized_error = result.task.status.state == TaskState.TASK_STATE_FAILED
             except Exception:
                 oversized_error = True
+
+            timeout_error = False
+            timeout_http_client = httpx.AsyncClient(
+                transport=httpx.AsyncHTTPTransport(), base_url=base_url, timeout=0.05
+            )
+            timeout_client = await ClientFactory(
+                ClientConfig(streaming=False, httpx_client=timeout_http_client)
+            ).create_from_url(base_url)
+            try:
+                timeout_request = SendMessageRequest(
+                    message=new_text_message(
+                        json.dumps(_a2a_payload()),
+                        media_type="application/json",
+                        role=Role.ROLE_USER,
+                    ),
+                    configuration=SendMessageConfiguration(return_immediately=False),
+                )
+                _ = [item async for item in timeout_client.send_message(timeout_request)]
+            except A2AClientTimeoutError:
+                timeout_error = True
+            finally:
+                await timeout_client.close()
+                await timeout_http_client.aclose()
 
             unknown_task_error = False
             try:
@@ -325,6 +390,10 @@ async def _a2a_acceptance() -> dict[str, object]:
         and malformed_error
         and oversized_error
         and cancel_no_completed
+        and invalid_state_transition_error
+        and cancel_completed_race_no_completed
+        and handler_exception_error
+        and timeout_error
     ):
         raise RuntimeError("A2A terminal/error boundaries did not fail closed")
     return {
@@ -337,9 +406,13 @@ async def _a2a_acceptance() -> dict[str, object]:
         "cancel_state": "canceled",
         "cancel_idempotent": True,
         "cancel_no_completed": cancel_no_completed,
+        "cancel_completed_race_no_completed": cancel_completed_race_no_completed,
         "task_context_mismatch_error": mismatch_error,
         "malformed_payload_error": malformed_error,
         "oversized_payload_error": oversized_error,
+        "handler_exception_error": handler_exception_error,
+        "timeout_error": timeout_error,
+        "invalid_state_transition_error": invalid_state_transition_error,
         "unknown_task_error": unknown_task_error,
         "completed_cancel_error": completed_cancel_error,
         "erp_business_writes": 0,
@@ -359,6 +432,66 @@ def _anp_acceptance() -> dict[str, object]:
         allowed_tools=[],
     )
     decision = select_fixed_route(request)
+    no_candidate_error = False
+    try:
+        select_fixed_route(request.model_copy(update={"capability": "missing.capability"}))
+    except NoRouteError:
+        no_candidate_error = True
+
+    ambiguous_candidate_error = False
+    reviewer = next(
+        descriptor
+        for descriptor in FIXED_DESCRIPTOR_SET
+        if descriptor.agent_id == decision.agent_id
+    )
+    ambiguous = reviewer.model_copy(update={"agent_id": "policy-risk-reviewer-alt"})
+    try:
+        select_route((reviewer, ambiguous), request)
+    except AmbiguousRouteError:
+        ambiguous_candidate_error = True
+
+    malicious_descriptor_error = False
+    try:
+        AgentDescriptor.model_validate(
+            {
+                **reviewer.model_dump(mode="json"),
+                "endpoint": "http://169.254.169.254/latest/meta-data",
+            }
+        )
+    except ValueError:
+        malicious_descriptor_error = True
+
+    unknown_version_error = False
+    try:
+        unknown_version = AgentDescriptor.model_validate(
+            {**reviewer.model_dump(mode="json"), "protocol_version": "9.9"}
+        )
+        select_route((unknown_version,), request)
+    except NoRouteError:
+        unknown_version_error = True
+
+    expanded_permission_error = False
+    try:
+        expanded = AgentDescriptor.model_validate(
+            {**reviewer.model_dump(mode="json"), "data_scopes": ["procurement.read", "erp.write"]}
+        )
+        select_route((expanded,), request)
+    except NoRouteError:
+        expanded_permission_error = True
+
+    open_network_endpoint_error = False
+    try:
+        AgentDescriptor.model_validate(
+            {**reviewer.model_dump(mode="json"), "endpoint": "https://review.example.com/a2a"}
+        )
+    except ValueError:
+        open_network_endpoint_error = True
+
+    unknown_field_error = False
+    try:
+        AgentDescriptor.model_validate({**reviewer.model_dump(mode="json"), "write": True})
+    except ValueError:
+        unknown_field_error = True
     cycle_rejected = False
     try:
         from labs.protocols.phase9_anp import assert_acyclic_routes
@@ -366,7 +499,17 @@ def _anp_acceptance() -> dict[str, object]:
         assert_acyclic_routes({"planner": ["reviewer"], "reviewer": ["planner"]})
     except RouteCycleError:
         cycle_rejected = True
-    if decision.agent_id != "policy-risk-reviewer" or not cycle_rejected:
+    if (
+        decision.agent_id != "policy-risk-reviewer"
+        or not cycle_rejected
+        or not no_candidate_error
+        or not ambiguous_candidate_error
+        or not malicious_descriptor_error
+        or not unknown_version_error
+        or not expanded_permission_error
+        or not open_network_endpoint_error
+        or not unknown_field_error
+    ):
         raise RuntimeError("ANP fixed descriptor or cycle boundary failed")
     return {
         "status": "PASS",
@@ -376,6 +519,13 @@ def _anp_acceptance() -> dict[str, object]:
         ),
         "selected_agent": decision.agent_id,
         "selected_endpoint": decision.endpoint,
+        "no_candidate_error": no_candidate_error,
+        "multi_candidate_conflict_error": ambiguous_candidate_error,
+        "malicious_descriptor_rejected": malicious_descriptor_error,
+        "unknown_version_error": unknown_version_error,
+        "expanded_permission_rejected": expanded_permission_error,
+        "open_network_endpoint_rejected": open_network_endpoint_error,
+        "unknown_field_rejected": unknown_field_error,
         "cycle_rejected": cycle_rejected,
         "network_discovery": False,
         "adoption": "LAB_ONLY",

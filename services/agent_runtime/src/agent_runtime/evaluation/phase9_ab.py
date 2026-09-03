@@ -221,11 +221,25 @@ class ABReport(StrictModel):
         if {card.role for card in self.adoption_cards} != expected_roles:
             raise ValueError("A/B adoption cards must cover the four fixed roles")
         cards_by_role = {card.role: card for card in self.adoption_cards}
-        for role in ("procurement_planner", "policy_risk_reviewer"):
-            card = cards_by_role[role]
-            expected_net_benefit = card.thresholds_met and card.security_passed
+        quality_benefit = (
+            self.multi_metrics.task_correct_count > self.single_metrics.task_correct_count
+            or self.multi_metrics.valid_explanation_count
+            > self.single_metrics.valid_explanation_count
+            or self.multi_metrics.recovery_success_count
+            > self.single_metrics.recovery_success_count
+        )
+        role_quality = {
+            "procurement_planner": quality_benefit,
+            "policy_risk_reviewer": quality_benefit,
+            "erp_coach": False,
+            "reconciliation_agent": False,
+        }
+        for role, card in cards_by_role.items():
+            expected_net_benefit = (
+                role_quality[role] and card.thresholds_met and card.security_passed
+            )
             if card.net_benefit != expected_net_benefit:
-                raise ValueError("A/B net benefit must include thresholds and security")
+                raise ValueError("A/B net benefit must include quality, thresholds, and security")
             if card.decision == "ADOPT" and not card.net_benefit:
                 raise ValueError("A/B ADOPT requires net benefit")
         if self.status == "PASS" and not all(
