@@ -8,9 +8,9 @@
 运行:
     uv run --python 3.14 python env/dev/p35/p35_e2e.py
 
-成功输出 P35-HTTP-OK。`ok` 表示模型解释通过校验; `fallback_validation` 或预算
-触发的 `fallback_error` 也表示真实 BYOK 已调用且安全回退生效。脚本只创建
-Synora 自有 Run/分析/计划记录, 不写 ERPNext 业务单据, 不输出凭据。
+成功输出 P35-HTTP-OK。脚本要求真实 Planner→Reviewer 双角色链路通过确定性校验;
+失败只输出断言类型。脚本只创建 Synora 自有 Run/分析/计划记录, 不写 ERPNext
+业务单据, 不输出凭据。
 """
 
 import os
@@ -71,13 +71,17 @@ def main() -> None:
         evidence = plan["evidence"]
         assert plan_result["run_state"] == "SUCCEEDED"
         assert isinstance(plan["enhanced_text"], str) and plan["enhanced_text"].strip()
-        assert evidence["status"] in {"ok", "fallback_validation", "fallback_error"}, evidence
-        # 真实 provider 已被调用; 若模型文本未通过确定性校验, 页面必须展示回退摘要。
+        assert evidence["status"] == "orchestration_ok", evidence
+        orchestration = evidence.get("orchestration")
+        assert isinstance(orchestration, dict), evidence
+        assert orchestration["mode"] == "planner_reviewer", orchestration
+        assert orchestration["model_calls"] == 2, orchestration
+        assert orchestration["handoff_count"] == 1, orchestration
+        assert orchestration["revision_count"] == 0, orchestration
+        assert orchestration["stop_reason"] == "ACCEPTED", orchestration
+        assert orchestration["deterministic_validated"] is True, orchestration
         assert evidence["provider"] not in {"runtime", "byok-runtime"}, evidence
-        if evidence["status"] == "fallback_error":
-            assert "budget" in evidence["fallback_reason"], evidence
-        else:
-            assert evidence["prompt_tokens"] > 0, evidence
+        assert evidence["prompt_tokens"] > 0, evidence
         detail = _message(
             client.get(
                 "/api/method/synora_agentic_erp.api.get_run",
