@@ -93,6 +93,11 @@ def test_validate_accepts_shortage_explanation() -> None:
     assert validate_explanation(text, _SHORTAGE_PLAN) == text
 
 
+def test_validate_accepts_document_word_in_deterministic_fact_context() -> None:
+    text = "现有库存为 2.0，无在途订单，而需求为 10.0，净缺口为 -8.0。"
+    assert validate_explanation(text, _SHORTAGE_PLAN) == text
+
+
 def test_validate_rejects_inverted_duplicate_risk() -> None:
     # DUPLICATE_RISK 结论但模型说需要采购 -> 拒绝。
     text = "该物料建议补货，需要采购。"

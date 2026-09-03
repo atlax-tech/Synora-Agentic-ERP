@@ -258,6 +258,21 @@ def test_invalid_reviewer_output_fails_closed() -> None:
     assert result.stop_reason.model_calls == 2
 
 
+def test_scalar_tuple_fields_are_normalized_without_relaxing_schema() -> None:
+    planner = json.loads(_planner())
+    planner["citation_summary"] = "risk=SHORTAGE"
+    planner["unknowns"] = "none"
+    provider = RecordingProvider(
+        [
+            _response(json.dumps(planner, ensure_ascii=False)),
+            _response(_review()),
+        ]
+    )
+    result = asyncio.run(run_planner_reviewer(PLAN, provider))
+    assert result.stop_reason.code == "ACCEPTED"
+    assert result.deterministic_validated is True
+
+
 def test_digest_mismatch_is_rejected_before_handoff() -> None:
     provider = RecordingProvider([_response(_planner(digest="f" * 64))])
     result = asyncio.run(run_planner_reviewer(PLAN, provider))

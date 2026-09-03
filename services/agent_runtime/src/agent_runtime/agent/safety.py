@@ -232,7 +232,8 @@ _READONLY_CONTEXT_PATTERN = re.compile(
     rf"(?ix)(?:(?:只读|只提供|仅提供|无法|不能|不可|不得|禁止|不应|不该|不建议|无需|不需要|"
     rf"不要|拒绝|未授权|未获授权|仅可|只可|只能|不会|未|查看|查询|读取|核对|检查|分析|对账|"
     rf"确认事实|验证|比较|现有|已有|当前|历史|相关|引用).{{0,24}}(?:{_DOCUMENT_PATTERN})|"
-    rf"(?:{_DOCUMENT_PATTERN}).{{0,24}}(?:未|无需|不需要|不要|不能|不可|不得|禁止|不建议|只读))"
+    rf"(?:{_DOCUMENT_PATTERN}).{{0,24}}(?:未|无需|不需要|不要|不能|不可|不得|禁止|不建议|只读)|"
+    rf"(?:在途|库存|需求|缺口|现有|已有|当前|事实|数量).{{0,4}}(?:{_DOCUMENT_PATTERN}))"
 )
 _TEXT_BOUNDARY_PATTERN = re.compile(r"[\u3002\uff01\uff1f\uff1b;,.!?\n]+")
 _ACTION_BOUNDARY_MARKER = "\u241e"

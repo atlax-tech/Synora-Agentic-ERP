@@ -117,7 +117,9 @@ def _planner_messages(
     system = (
         "你是 Procurement Planner。你只能生成 PlannerOutput JSON。"
         "只依据确定性计划投影写候选解释、引用摘要和未知项；不得调用工具、"
-        "不得生成 ERP 动作、授权、审批或 Secret。数字和风险必须来自投影。\n"
+        "不得生成 ERP 动作、授权、审批或 Secret。不要提及采购订单、MR、PO、提交、"
+        "创建、批准、写入或调用工具；只描述库存、需求、缺口和只读建议。"
+        "数字和风险必须来自投影。\n"
         f"输出 schema: planner.v1；计划 digest: {digest}\n{revision_rule}"
         "JSON 字段必须严格为 candidate_explanation、citation_summary、unknowns、plan_digest。"
     )
@@ -173,6 +175,12 @@ def _parse_json[ModelT: PlannerOutput | ReviewDecision](
         value = normalized.get(field_name)
         if isinstance(value, list):
             normalized[field_name] = tuple(value)
+        elif isinstance(value, str):
+            # Some local JSON-mode models emit one citation or issue code as
+            # a scalar.  Normalize that bounded wire shorthand to the typed
+            # one-item tuple; all values still pass the strict model and
+            # safety validators below.
+            normalized[field_name] = (value,)
     try:
         return cast(ModelT, model_type.model_validate(normalized))
     except ValidationError as error:
