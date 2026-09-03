@@ -828,7 +828,6 @@ class TestProviderFromEnvironment:
         assert provider._providers[2]._model == "grok-4.5"
         assert provider._providers[3]._model == "qwen3.8:27b"
         assert provider._providers[1]._reasoning_effort == "low"
-        assert provider._providers[1]._temperature == 0.0
         assert provider._providers[2]._reasoning_effort == "low"
         assert provider._providers[1]._proxy == "http://127.0.0.1:7899"
         assert "assist-secret" not in repr(provider)
@@ -856,7 +855,6 @@ class TestProviderFromEnvironment:
         assist = provider._providers[1]
         assert isinstance(assist, OpenAICompatibleProvider)
         assert assist._reasoning_effort == "low"
-        assert assist._temperature == 0.0
         backup = provider._providers[2]
         assert isinstance(backup, OpenAICompatibleProvider)
         assert backup._wire_api == "responses"

@@ -939,7 +939,6 @@ def _build_named_provider(
             api_key=SecretStr(api_key),
             model=model,
             reasoning_effort=GLM_5_3_FLASH_DEFAULT_REASONING_EFFORT,
-            temperature=0.0,
             proxy=proxy,
             transport=transport,
         )
