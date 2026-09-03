@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "suite": "P9.1-single-agent",
+  "case_id": "P9-01",
+  "provider_mode": "real",
+  "model_role": "primary",
+  "model_name": "qwen3:8b",
+  "prompt_schema_version": "2",
+  "tool_schema_version": "1",
+  "status": "ok",
+  "prompt_tokens": 519,
+  "completion_tokens": 46,
+  "reasoning_tokens": 0,
+  "model_calls": 1,
+  "elapsed_ms": 22311,
+  "valid_explanation": true,
+  "deterministic_validation": "PASS",
+  "erp_business_writes": 0,
+  "raw_prompt_persisted": false,
+  "raw_model_response_persisted": false,
+  "secret_leak": false,
+  "note": "One real local Ollama representative request; the full baseline remains recorded until the fixed execution arm is selected."
+}
