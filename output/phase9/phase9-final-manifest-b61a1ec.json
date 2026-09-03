@@ -1,0 +1,285 @@
+{
+  "schema_version": "1",
+  "suite": "phase9-final-manifest",
+  "status": "BLOCKED",
+  "generated_at": "2026-09-04T05:06:39+08:00",
+  "code_head": "b8ebd8eff7a5267e398a8cbd71c6ef2145d698b7",
+  "implementation_head": "b8ebd8eff7a5267e398a8cbd71c6ef2145d698b7",
+  "evidence_commit": "b61a1ecb43fbd6b4cb168645d471ed710a2d51e5",
+  "upstream": {
+    "FDP_REV_FRAPPE": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+    "FDP_REV_ERP_NEXT": "11e0ba0a1c45f217e2e73e885f699102d06da325"
+  },
+  "fixed_case_spec_sha256": "05d22c0ddc3617079d279d664a4422a541861af83c64fbb6d9edcc7e2a56acb7",
+  "provider_search": [
+    {
+      "order": 1,
+      "role": "primary",
+      "model": "qwen3:8b",
+      "status": "BLOCKED",
+      "completion_token_cap": 128,
+      "threshold_profile": "approved-qwen-v1",
+      "artifact": "output/phase9/phase9-ab-real-v10.json"
+    },
+    {
+      "order": 2,
+      "role": "assist",
+      "model": "glm-5.3-flash",
+      "status": "BLOCKED",
+      "completion_token_cap": 512,
+      "threshold_profile": "relative-model-v1",
+      "artifact": "output/phase9/phase9-ab-real-glm-v7.json",
+      "supersedes": "output/phase9/phase9-ab-real-glm-v3.json",
+      "reason": "Reviewer-required rerun failed task and total-token relative thresholds"
+    },
+    {
+      "order": 3,
+      "role": "backup",
+      "model": "grok-4.5",
+      "status": "BLOCKED",
+      "completion_token_cap": 512,
+      "threshold_profile": "relative-model-v1",
+      "artifact": "output/phase9/phase9-ab-real-grok-v1.json"
+    },
+    {
+      "order": 4,
+      "role": "last_local",
+      "model": "qwen3.8:27b",
+      "status": "NOT_CALLED",
+      "reason": "user-directed stop after qwen, GLM, and Grok; no 27B call recorded"
+    }
+  ],
+  "adopted_roles": [],
+  "adoption_constraints": {
+    "coach": "RETAIN_PHASE8_INDEPENDENT_ENTRY",
+    "reconciliation": "REJECT_UNLESS_EXCEPTION_TRIGGERED",
+    "provider_search_stopped_on_first_adopted_candidate": false,
+    "business_planner_reviewer_authorized": false
+  },
+  "evidence": [
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v3.json",
+      "sha256": "0ea8729d3ca9bbf1d9cfef4c9d323f7bd573fd24ca7fa2487ef1c55a71ff6e90",
+      "role": "p9.5-adoption",
+      "status": "SUPERSEDED_REVIEWER_MISSING",
+      "note": "Historical candidate retained; multi arm skipped Reviewer calls"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v3.md",
+      "sha256": "821aaf6ca4d92d32791cb7069dd18091afe9cc2d2783762c3d9c2726bae3fb63",
+      "role": "p9.5-historical-candidate-decision"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v4.json",
+      "sha256": "cd5a283c61d321b3d96021f867d9dd8ecc436aa2ccf376f7422cbdec03319592",
+      "role": "p9.5-glm-retry",
+      "status": "BLOCKED"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v4.md",
+      "sha256": "9e763d5ff414234d613ccc82c92de0114f648398000ce82f034ca635b0a06a85",
+      "role": "p9.5-glm-retry-decision"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v5.json",
+      "sha256": "68e5d03e5d969ec8b61f915c1266f9409c6e85d51a45f768bccf01b09bdca867",
+      "role": "p9.5-glm-retry",
+      "status": "BLOCKED"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v5.md",
+      "sha256": "327bc65881375112ce136d339d8180ca07683ec96bb606a5fd720df6436babe4",
+      "role": "p9.5-glm-retry-decision"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v6.json",
+      "sha256": "0d252e93494d2b4c228d09d987e84328d722db209e97ebf77a5a17feb7bcd8ca",
+      "role": "p9.5-glm-retry",
+      "status": "BLOCKED"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v6.md",
+      "sha256": "be95ee92cfcb5420e15111b18978413afec20043cb36ade43ef91968cc8105b3",
+      "role": "p9.5-glm-retry-decision"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-grok-v1.json",
+      "sha256": "7653e4d944dd71ac375e37396436abcbc6def55ec6938654c0afc57f2f8743b5",
+      "role": "p9.5-provider-failure",
+      "status": "BLOCKED"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-grok-v1.md",
+      "sha256": "773e35738d302f932ce71aa60a234648a00541a721c8f043a4e338bee68a7109",
+      "role": "p9.5-provider-failure-decision"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-v10.json",
+      "sha256": "bce371b3718cc8b7a317f79c539de1b8c90402ecb72cdae25534d84677ae1712",
+      "role": "p9.5-provider-failure",
+      "status": "BLOCKED"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-v10.md",
+      "sha256": "4181b3945c8b2b6c942617ca8eb5535b7024d98387f7304f33607801b78b5f5f",
+      "role": "p9.5-provider-failure-decision"
+    },
+    {
+      "path": "output/phase9/phase9-single-agent-baseline-fcab824.json",
+      "sha256": "254d384bc24cd28f718c41c4cb498445c5f8769960960e211e6741abb2e2f5cb",
+      "role": "p9.5-recorded-baseline",
+      "status": null
+    },
+    {
+      "path": "output/phase9/phase9-single-agent-baseline-fcab824.md",
+      "sha256": "3f6be443804ce4147f396b9a93c018d70317b93115db53af3c76372518a07f97",
+      "role": "p9.5-recorded-baseline-decision"
+    },
+    {
+      "path": "output/phase9/phase9-ab-recorded-fcab824.json",
+      "sha256": "4a36f4f1c29e12f1e2d35345259ce64a658f34dfae1a5ec9addcd0c205bdee9d",
+      "role": "p9.5-recorded-ab",
+      "status": "BLOCKED"
+    },
+    {
+      "path": "output/phase9/phase9-ab-recorded-fcab824.md",
+      "sha256": "04113b4c5afc9f2eafac178bfbf975b1ab45887aef813aa5f5bb21fde23f8cb8",
+      "role": "p9.5-recorded-ab-decision"
+    },
+    {
+      "path": "output/phase9/phase9-pattern-comparison-fcab824.json",
+      "sha256": "a13c85cf93889e47799212421150035afa049eab03d8eab494ce82d731b78e19",
+      "role": "p9.4-patterns",
+      "status": null
+    },
+    {
+      "path": "output/phase9/phase9-pattern-comparison-fcab824.md",
+      "sha256": "96945b2a8bbcebde77345f1306a9c2228354c1a988c18178e9ad97d9be6e958b",
+      "role": "p9.4-patterns-decision"
+    },
+    {
+      "path": "output/phase9/phase9-protocol-acceptance-d31ea1f.json",
+      "sha256": "85f8fd1d2faae3db8046a7780dbd51311bb69b19a53dfdb772f4b1198a076c1b",
+      "role": "p9.6-p9.8-protocol-summary",
+      "status": "PASS"
+    },
+    {
+      "path": "output/phase9/phase9-mcp-acceptance-d31ea1f.json",
+      "sha256": "b8c3ed70ee2e62213718c51148763ab363f970068856c12e1c254d7c1d455361",
+      "role": "p9.6-mcp",
+      "status": "PASS"
+    },
+    {
+      "path": "output/phase9/phase9-a2a-acceptance-d31ea1f.json",
+      "sha256": "2e7b4b08c71a3794ea7f4d86a8e2ad4900a7a1c9de10083252409f1661a2f333",
+      "role": "p9.7-a2a",
+      "status": "PASS"
+    },
+    {
+      "path": "output/phase9/phase9-anp-acceptance-d31ea1f.json",
+      "sha256": "b4e2dd2ff3dbe7e35859944b3d2848b73b83687b1bc30977fee252fb6780cf70",
+      "role": "p9.8-anp",
+      "status": "PASS"
+    },
+    {
+      "path": "output/phase9/phase9-real-acceptance-fcab824.json",
+      "sha256": "f38b9e2b54ebde0cea073d6757f3dd6e78391277a4eaca4cdfad5de95a102548",
+      "role": "p9.9-real-acceptance",
+      "status": "PASS"
+    },
+    {
+      "path": "output/playwright/phase9-buyer-fcab824.png",
+      "sha256": "3ca447e4cd511a267c54cf71e762a15c9d9d4e1bd3d55af40bd145fe2cc891ad",
+      "role": "p9.9-browser-buyer"
+    },
+    {
+      "path": "output/playwright/phase9-viewer-fcab824.png",
+      "sha256": "12d72d329e4b5282f8abd11d89ac9f8a1a2b7e60cbf5d6bc08fda95b916387cd",
+      "role": "p9.9-browser-viewer"
+    },
+    {
+      "path": "output/playwright/phase9-system-manager-fcab824.png",
+      "sha256": "b71cd6d2cddf87cd08c45ab63efff32af517902dae15d85b9f30c8331ae7af17",
+      "role": "p9.9-browser-system-manager"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v7.json",
+      "sha256": "d22a436485ae3d9a36bfb34001140bcebd4c6ac22d26bed382e0fd930c3c7b46",
+      "role": "p9.5-reviewer-required-rerun",
+      "status": "BLOCKED"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v7.md",
+      "sha256": "221c308dcc6c68fce291f49bc884582a701535068ce50edcc537dc87720e2c09",
+      "role": "p9.5-reviewer-required-rerun-decision"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v7-failure.json",
+      "sha256": "a5232340c8273884af0871813494d2ae14f367692b2ef4d0ff325f8082cb9566",
+      "role": "p9.5-no-env-preflight-failure",
+      "status": "BLOCKED",
+      "note": "No provider call; environment-loading diagnostic only"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v7-failure.md",
+      "sha256": "182ec92f49d303874e9a2bf78a1671810a876f8dec24806ce4c643b65723e043",
+      "role": "p9.5-no-env-preflight-failure-decision"
+    }
+  ],
+  "command_exit_codes": {
+    "focused_a2a_mcp_anp_pytest_after_review_2_fixes": 0,
+    "phase9_protocol_acceptance_d31ea1f": 0,
+    "phase9_real_acceptance_fcab824": 0,
+    "phase9_recorded_baseline_fcab824": 0,
+    "phase9_recorded_ab_fcab824": 0,
+    "phase9_pattern_comparison_fcab824": 0,
+    "make_format_check": 0,
+    "make_lint": 0,
+    "make_type": 0,
+    "make_unit": 0,
+    "make_integration": 0,
+    "uv_lock_check_python314": 0,
+    "python314_compileall": 0,
+    "protocol_import_smoke_python314": 0,
+    "git_diff_check": 0,
+    "ponytail_audit": 0,
+    "ponytail_debt": 0,
+    "harness_manifest_structure_reference": 0,
+    "phase9_ab_real_glm_v7": 0,
+    "phase9_ab_real_glm_v7_missing_env_diagnostic": 2,
+    "phase9_ab_focused_after_final_review": 0,
+    "phase9_ab_ruff_after_final_review": 0,
+    "phase9_ab_mypy_after_final_review": 0
+  },
+  "review": {
+    "round_1": "CHANGES_REQUIRED",
+    "round_1_fixes_commit": "fcab82401b5671259271e7d343bcd7cab1f8899a",
+    "round_2": "CHANGES_REQUIRED",
+    "round_2_fixes_commit": "d31ea1f3a15a51915f0969f8f05a9494ee598c58",
+    "round_3": "CHANGES_REQUIRED",
+    "round_3_post_review_fix_commit": "b8ebd8eff7a5267e398a8cbd71c6ef2145d698b7",
+    "round_3_post_review_evidence_commit": "b61a1ec",
+    "allowed_results": [
+      "PASS",
+      "CHANGES_REQUIRED",
+      "BLOCKED"
+    ],
+    "further_review": "NOT_PERMITTED_BY_PHASE9_PLAN"
+  },
+  "write_safety": {
+    "erp_business_writes": 0,
+    "qwen27_called": false,
+    "real_success_path_provider": "assist/glm-5.3-flash (historical P9.9 chain only; adoption blocked)",
+    "historical_failures_preserved": true,
+    "fixed_dataset_or_thresholds_modified": false
+  },
+  "unrun_or_pending": [
+    "authority document synchronization after independent review PASS (not permitted while BLOCKED)",
+    "README file-level proposal and user approval/application (not permitted while BLOCKED)",
+    "Harness Phase A file-level proposal and user approval/application (not permitted while BLOCKED)",
+    "final closure commit and clean-worktree verification",
+    "fourth independent adversarial review (not permitted by plan)"
+  ],
+  "artifact_policy": "immutable digest-bound evidence; historical failures retained; v7 supersedes the invalid Reviewer adoption candidate; no prompt, response text, ERP rows, secret or credential",
+  "head_binding_note": "Protocol artifacts remain bound to d31ea1f; b8ebd8e changes only the P9.5 evaluator require_reviewer flag. P9.9 real acceptance remains the historical fcab824 business-chain evidence and is not an adoption authorization."
+}
