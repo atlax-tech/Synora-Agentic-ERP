@@ -166,7 +166,10 @@ def _bench_execute_get_all(
         capture_output=True,
         text=True,
     )
-    decoded = json.loads(result.stdout.strip())
+    raw_output = result.stdout.strip()
+    # Bench suppresses falsy return values; an empty ``get_all`` therefore
+    # arrives as a successful empty stdout rather than the JSON literal ``[]``.
+    decoded = [] if not raw_output else json.loads(raw_output)
     if not isinstance(decoded, list) or not all(isinstance(row, dict) for row in decoded):
         raise RuntimeError("ERP anchor query returned an invalid shape")
     return decoded
