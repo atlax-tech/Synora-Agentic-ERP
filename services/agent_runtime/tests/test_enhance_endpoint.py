@@ -108,6 +108,7 @@ def test_enhance_context_budget_failure_is_a_deterministic_200_fallback(monkeypa
 def test_enhance_planner_reviewer_exposes_only_sanitized_orchestration(monkeypatch) -> None:
     digest = plan_view_digest(plan_view_from_mapping(PLAN))
     selected_roles: list[str] = []
+    observed_caps: list[int | None] = []
     provider = DeterministicProvider(
         scripted_responses=[
             ProviderResponse(
@@ -143,8 +144,17 @@ def test_enhance_planner_reviewer_exposes_only_sanitized_orchestration(monkeypat
         selected_roles.append(role)
         return provider
 
+    from agent_runtime import app as runtime_app
+
+    original_runner = runtime_app.run_planner_reviewer
+
+    async def observed_runner(*args, **kwargs):
+        observed_caps.append(kwargs.get("max_completion_tokens"))
+        return await original_runner(*args, **kwargs)
+
     monkeypatch.setenv("ASSIST_MODEL", "glm-5.3-flash")
     monkeypatch.setattr("agent_runtime.app.provider_for_role", selected_provider)
+    monkeypatch.setattr(runtime_app, "run_planner_reviewer", observed_runner)
 
     response = asyncio.run(
         _post_enhance(
@@ -174,6 +184,7 @@ def test_enhance_planner_reviewer_exposes_only_sanitized_orchestration(monkeypat
     assert orchestration["handoff_count"] == 1
     assert orchestration["trace"]["digest"]
     assert "candidate_explanation" not in json.dumps(orchestration)
+    assert observed_caps == [512]
 
 
 def test_enhance_rejects_unknown_orchestration_mode() -> None:
