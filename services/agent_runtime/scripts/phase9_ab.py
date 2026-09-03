@@ -23,6 +23,23 @@ from agent_runtime.evaluation.phase9_ab import (  # noqa: E402
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("recorded", "real"), default="recorded")
+    parser.add_argument(
+        "--model-role",
+        choices=("primary", "assist", "backup", "last_local"),
+        default=None,
+        help="real-mode named provider role; recorded mode ignores it",
+    )
+    parser.add_argument(
+        "--completion-token-cap",
+        type=int,
+        default=128,
+        help="bounded completion cap for both A/B arms",
+    )
+    parser.add_argument(
+        "--threshold-profile",
+        choices=("approved-qwen-v1", "relative-model-v1"),
+        default="approved-qwen-v1",
+    )
     parser.add_argument("--case-spec", type=Path, default=BASELINE_CASE_SPEC_PATH)
     parser.add_argument(
         "--output",
@@ -36,7 +53,13 @@ def main() -> int:
     )
     args = parser.parse_args()
     try:
-        report = run_phase9_ab(case_spec_path=args.case_spec, mode=args.mode)
+        report = run_phase9_ab(
+            case_spec_path=args.case_spec,
+            mode=args.mode,
+            model_role=args.model_role,
+            completion_token_cap=args.completion_token_cap,
+            threshold_profile=args.threshold_profile,
+        )
     except Exception as error:
         # Preserve a bounded first-failure artifact without echoing provider
         # URLs, exception messages, prompts, or response text.

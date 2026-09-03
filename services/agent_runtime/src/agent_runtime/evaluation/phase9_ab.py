@@ -42,11 +42,20 @@ from agent_runtime.multi_agent.planner_reviewer import (
     run_planner_reviewer,
 )
 from agent_runtime.providers import (
+    ASSIST_MODEL_ENV,
+    BACKUP_MODEL_ENV,
+    BACKUP_OLLAMA_MODEL_ENV,
+    GLM_5_3_FLASH_MODEL,
+    GROK_4_5_MODEL,
+    OLLAMA_MODEL_ENV,
+    QWEN3_8_27B_MODEL,
+    QWEN3_8B_MODEL,
     Provider,
     ProviderError,
     ProviderMessage,
     ProviderResponse,
     ProviderResponseFormat,
+    ProviderRole,
     ProviderToolSpec,
     provider_for_role,
 )
@@ -55,6 +64,7 @@ from labs.agent_patterns.phase9_patterns import PatternCase, load_phase9_pattern
 ABArm = Literal["single_agent", "planner_reviewer"]
 ABMode = Literal["recorded", "real"]
 AdoptionDecision = Literal["ADOPT", "RETAIN", "REJECT", "LAB_ONLY"]
+ThresholdProfile = Literal["approved-qwen-v1", "relative-model-v1"]
 
 RECOMMENDED_TASK_CASES = 7
 RECOMMENDED_VALID_CASES = 11
@@ -147,7 +157,9 @@ class ABManifest(StrictModel):
     prompt_schema_version: str = "2"
     skill_schema_version: str = "1"
     tool_schema_version: str = "1"
-    threshold_profile: Literal["recommended"] = "recommended"
+    threshold_profile: ThresholdProfile = "approved-qwen-v1"
+    completion_token_cap: int = Field(default=128, ge=1, le=8192)
+    baseline_digest: str = Field(pattern=r"^[0-9a-f]{64}$", default="0" * 64)
 
     @field_validator("case_order")
     @classmethod
@@ -208,6 +220,19 @@ class ABReport(StrictModel):
         }
         if {card.role for card in self.adoption_cards} != expected_roles:
             raise ValueError("A/B adoption cards must cover the four fixed roles")
+        cards_by_role = {card.role: card for card in self.adoption_cards}
+        for role in ("procurement_planner", "policy_risk_reviewer"):
+            card = cards_by_role[role]
+            expected_net_benefit = card.thresholds_met and card.security_passed
+            if card.net_benefit != expected_net_benefit:
+                raise ValueError("A/B net benefit must include thresholds and security")
+            if card.decision == "ADOPT" and not card.net_benefit:
+                raise ValueError("A/B ADOPT requires net benefit")
+        if self.status == "PASS" and not all(
+            cards_by_role[role].decision == "ADOPT"
+            for role in ("procurement_planner", "policy_risk_reviewer")
+        ):
+            raise ValueError("A/B PASS requires Planner and Reviewer adoption")
         security = all(
             item.input_isolation_pass and getattr(item, name) == 0
             for item in (*self.single_agent, *self.planner_reviewer)
@@ -235,7 +260,10 @@ class ABReport(StrictModel):
         expected_status = (
             "PASS"
             if self.all_security_passed
-            and any(card.decision == "ADOPT" for card in self.adoption_cards)
+            and all(
+                cards_by_role[role].decision == "ADOPT"
+                for role in ("procurement_planner", "policy_risk_reviewer")
+            )
             else "BLOCKED"
         )
         if self.status != expected_status:
@@ -346,6 +374,28 @@ def _input_digest(case: PatternCase) -> str:
 
 def _digest_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+_MODEL_ENV_BY_ROLE: dict[ProviderRole, str] = {
+    "primary": OLLAMA_MODEL_ENV,
+    "assist": ASSIST_MODEL_ENV,
+    "backup": BACKUP_MODEL_ENV,
+    "last_local": BACKUP_OLLAMA_MODEL_ENV,
+}
+_MODEL_DEFAULT_BY_ROLE: dict[ProviderRole, str] = {
+    "primary": QWEN3_8B_MODEL,
+    "assist": GLM_5_3_FLASH_MODEL,
+    "backup": GROK_4_5_MODEL,
+    "last_local": QWEN3_8_27B_MODEL,
+}
+
+
+def _model_name_for_role(role: ProviderRole) -> str:
+    return os.getenv(_MODEL_ENV_BY_ROLE[role], _MODEL_DEFAULT_BY_ROLE[role]).strip()
+
+
+def _metrics_digest(metrics: ABMetrics) -> str:
+    return _digest_text(canonical_json(metrics.model_dump(mode="json")))
 
 
 def _empty_input_digest() -> str:
@@ -614,18 +664,40 @@ def _metrics(arm: ABArm, results: Sequence[ABCaseResult]) -> ABMetrics:
     )
 
 
-def _thresholds(multi: ABMetrics) -> bool:
+def _thresholds(
+    single: ABMetrics,
+    multi: ABMetrics,
+    *,
+    profile: ThresholdProfile,
+) -> bool:
+    if profile == "approved-qwen-v1":
+        return (
+            multi.task_correct_count >= RECOMMENDED_TASK_CASES
+            and multi.valid_explanation_count >= RECOMMENDED_VALID_CASES
+            and multi.recovery_success_count >= RECOMMENDED_RECOVERY_CASES
+            and multi.p95_latency_ms <= RECOMMENDED_P95_MS
+            and multi.total_tokens <= RECOMMENDED_TOTAL_TOKENS
+        )
     return (
-        multi.task_correct_count >= RECOMMENDED_TASK_CASES
-        and multi.valid_explanation_count >= RECOMMENDED_VALID_CASES
-        and multi.recovery_success_count >= RECOMMENDED_RECOVERY_CASES
-        and multi.p95_latency_ms <= RECOMMENDED_P95_MS
-        and multi.total_tokens <= RECOMMENDED_TOTAL_TOKENS
+        multi.task_correct_count >= single.task_correct_count
+        and multi.valid_explanation_count >= single.valid_explanation_count
+        and multi.recovery_success_count >= single.recovery_success_count
+        and multi.p95_latency_ms <= math.ceil(single.p95_latency_ms * 1.5)
+        and multi.total_tokens <= math.ceil(single.total_tokens * 1.5)
+        and (
+            multi.task_correct_count > single.task_correct_count
+            or multi.valid_explanation_count > single.valid_explanation_count
+            or multi.recovery_success_count > single.recovery_success_count
+        )
     )
 
 
 def _adoption_cards(
-    single: ABMetrics, multi: ABMetrics, *, mode: ABMode
+    single: ABMetrics,
+    multi: ABMetrics,
+    *,
+    mode: ABMode,
+    threshold_profile: ThresholdProfile,
 ) -> tuple[AdoptionCard, ...]:
     security = all(
         value == 0
@@ -641,7 +713,7 @@ def _adoption_cards(
         or multi.valid_explanation_count > single.valid_explanation_count
         or multi.recovery_success_count > single.recovery_success_count
     )
-    threshold_ok = _thresholds(multi)
+    threshold_ok = _thresholds(single, multi, profile=threshold_profile)
     net = quality_benefit and security and threshold_ok
     evidence_arm = "real same-model A/B" if mode == "real" else "recorded A/B only"
     planner_decision: AdoptionDecision = "ADOPT" if net else "REJECT"
@@ -664,7 +736,7 @@ def _adoption_cards(
             role="procurement_planner",
             decision=planner_decision,
             evidence_arm=evidence_arm,
-            net_benefit=quality_benefit,
+            net_benefit=net,
             thresholds_met=threshold_ok,
             security_passed=security,
             reason=planner_reason,
@@ -673,7 +745,7 @@ def _adoption_cards(
             role="policy_risk_reviewer",
             decision=reviewer_decision,
             evidence_arm=evidence_arm,
-            net_benefit=quality_benefit,
+            net_benefit=net,
             thresholds_met=threshold_ok,
             security_passed=security,
             reason=reviewer_reason,
@@ -742,6 +814,8 @@ async def _run_single_arm(
     *,
     mode: ABMode,
     provider: Provider | None = None,
+    provider_name: str | None = None,
+    max_tokens: int = 256,
 ) -> tuple[ABCaseResult, ...]:
     results: list[ABCaseResult] = []
     for case, pattern_case in zip(baseline_cases, pattern_cases, strict=True):
@@ -749,8 +823,10 @@ async def _run_single_arm(
         explanation, evidence = await enhance_plan(
             pattern_case.plan.model_dump(mode="json"),
             selected,
-            provider_name="primary" if mode == "real" else "recorded-single-agent",
+            provider_name=provider_name
+            or ("primary" if mode == "real" else "recorded-single-agent"),
             context_environ={CONTEXT_INPUT_TOKEN_BUDGET_ENV: "100000"},
+            max_tokens=max_tokens,
         )
         results.append(_single_result(case, pattern_case, explanation, evidence))
     return tuple(results)
@@ -762,6 +838,8 @@ async def _run_multi_arm(
     *,
     mode: ABMode,
     provider: Provider | None = None,
+    provider_name: str | None = None,
+    max_tokens: int = 128,
 ) -> tuple[ABCaseResult, ...]:
     results: list[ABCaseResult] = []
     for case, pattern_case in zip(baseline_cases, pattern_cases, strict=True):
@@ -771,8 +849,10 @@ async def _run_multi_arm(
         orchestration = await run_planner_reviewer(
             pattern_case.plan.model_dump(mode="json"),
             selected,
-            provider_name="primary" if mode == "real" else "recorded-planner-reviewer",
+            provider_name=provider_name
+            or ("primary" if mode == "real" else "recorded-planner-reviewer"),
             scope=_scope(pattern_case),
+            max_completion_tokens=max_tokens,
         )
         results.append(_multi_result(case, pattern_case, orchestration))
     return tuple(results)
@@ -782,42 +862,69 @@ async def run_phase9_ab_async(
     *,
     case_spec_path: Path = BASELINE_CASE_SPEC_PATH,
     mode: ABMode = "recorded",
+    model_role: ProviderRole | None = None,
+    completion_token_cap: int = 128,
+    threshold_profile: ThresholdProfile = "approved-qwen-v1",
 ) -> ABReport:
+    if completion_token_cap < 1:
+        raise ValueError("completion_token_cap must be positive")
     baseline_cases = load_phase9_baseline_cases(case_spec_path)
     pattern_cases = load_phase9_pattern_cases(case_spec_path)
     if mode == "recorded":
-        single = await _run_single_arm(baseline_cases, pattern_cases, mode=mode)
-        multi = await _run_multi_arm(baseline_cases, pattern_cases, mode=mode)
+        single = await _run_single_arm(
+            baseline_cases,
+            pattern_cases,
+            mode=mode,
+            max_tokens=completion_token_cap,
+        )
+        multi = await _run_multi_arm(
+            baseline_cases,
+            pattern_cases,
+            mode=mode,
+            max_tokens=completion_token_cap,
+        )
         model_name = "recorded-phase9"
+        selected_role: str = "recorded"
     else:
-        primary_single = provider_for_role("primary")
+        selected_role_typed: ProviderRole = model_role or "primary"
+        selected_role = selected_role_typed
+        primary_single = provider_for_role(selected_role_typed)
         try:
             single = await _run_single_arm(
                 baseline_cases,
                 pattern_cases,
                 mode=mode,
                 provider=primary_single,
+                provider_name=selected_role_typed,
+                max_tokens=completion_token_cap,
             )
         finally:
             close = getattr(primary_single, "aclose", None)
             if callable(close):
                 await close()
-        primary_multi = provider_for_role("primary")
+        primary_multi = provider_for_role(selected_role_typed)
         try:
             multi = await _run_multi_arm(
                 baseline_cases,
                 pattern_cases,
                 mode=mode,
                 provider=primary_multi,
+                provider_name=selected_role_typed,
+                max_tokens=completion_token_cap,
             )
         finally:
             close = getattr(primary_multi, "aclose", None)
             if callable(close):
                 await close()
-        model_name = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+        model_name = _model_name_for_role(selected_role_typed)
     single_metrics = _metrics("single_agent", single)
     multi_metrics = _metrics("planner_reviewer", multi)
-    cards = _adoption_cards(single_metrics, multi_metrics, mode=mode)
+    cards = _adoption_cards(
+        single_metrics,
+        multi_metrics,
+        mode=mode,
+        threshold_profile=threshold_profile,
+    )
     security = all(item.security_pass for item in (*single, *multi)) and all(
         getattr(item, name) == 0
         for item in (*single, *multi)
@@ -833,11 +940,21 @@ async def run_phase9_ab_async(
         case_spec_sha256=case_spec_sha256(case_spec_path),
         code_head=_code_head(),
         provider_mode=mode,
-        model_role="primary" if mode == "real" else "recorded",
+        model_role=selected_role,
         model_name=model_name,
+        threshold_profile=threshold_profile,
+        completion_token_cap=completion_token_cap,
+        baseline_digest=_metrics_digest(single_metrics),
     )
     status: Literal["PASS", "BLOCKED"] = (
-        "PASS" if security and any(card.decision == "ADOPT" for card in cards) else "BLOCKED"
+        "PASS"
+        if security
+        and all(
+            card.decision == "ADOPT"
+            for card in cards
+            if card.role in {"procurement_planner", "policy_risk_reviewer"}
+        )
+        else "BLOCKED"
     )
     body = {
         "schema_version": "1",
@@ -865,9 +982,22 @@ async def run_phase9_ab_async(
 
 
 def run_phase9_ab(
-    *, case_spec_path: Path = BASELINE_CASE_SPEC_PATH, mode: ABMode = "recorded"
+    *,
+    case_spec_path: Path = BASELINE_CASE_SPEC_PATH,
+    mode: ABMode = "recorded",
+    model_role: ProviderRole | None = None,
+    completion_token_cap: int = 128,
+    threshold_profile: ThresholdProfile = "approved-qwen-v1",
 ) -> ABReport:
-    return asyncio.run(run_phase9_ab_async(case_spec_path=case_spec_path, mode=mode))
+    return asyncio.run(
+        run_phase9_ab_async(
+            case_spec_path=case_spec_path,
+            mode=mode,
+            model_role=model_role,
+            completion_token_cap=completion_token_cap,
+            threshold_profile=threshold_profile,
+        )
+    )
 
 
 def render_ab_decision_package(report: ABReport) -> str:
@@ -885,6 +1015,11 @@ def render_ab_decision_package(report: ABReport) -> str:
             f"case SHA：`{report.manifest.case_spec_sha256}`。"
         ),
         f"deterministic fingerprint：`{report.deterministic_fingerprint}`。",
+        (
+            f"threshold profile：`{report.manifest.threshold_profile}`；"
+            f"completion cap：`{report.manifest.completion_token_cap}`；"
+            f"single baseline digest：`{report.manifest.baseline_digest}`。"
+        ),
         "",
         (
             "两个 arm 按相同 P9-01→P9-12 顺序、同一源计划投影 digest 和同一模型角色执行；"
@@ -917,8 +1052,10 @@ def render_ab_decision_package(report: ABReport) -> str:
         [
             "",
             (
-                "推荐门槛：task ≥7/12、valid ≥11/12、recovery ≥10/12、p95 ≤7833 ms、"
-                "总 token ≤9653，安全项 100%，并至少改善一个获批目标。"
+                "approved-qwen-v1：task ≥7/12、valid ≥11/12、recovery ≥10/12、p95 ≤7833 ms、"
+                "总 token ≤9653；relative-model-v1：multi 的 task/valid/recovery 不低于同模型 "
+                "single，至少一项严格提升，p95/token 不超过 single 的 1.5 倍；"
+                "两者均要求安全项 100%。"
             ),
             "",
             "## Adoption Cards",

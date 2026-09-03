@@ -84,12 +84,28 @@ class TestPlanRun(FrappeTestCase):
     def test_plan_persists_enhancement_evidence(self) -> None:
         """验收修复(阻断2): 增强证据持久化。
 
-        app-test 无 Runtime sidecar -> 回退确定性摘要, 但 provider/token/
-        耗时/回退原因证据必须落库并可读, 页面不再是无证据的确定性计划。
+        该测试固定验证 Runtime fallback 的持久化契约；真实 Runtime 成功路径
+        在 Phase 9 P9.9 验收中单独验证，避免把 app-test 环境状态当作断言。
         """
         run = self._analyzed_run()
         frappe.set_user(BUYER)
-        response = plan_run(str(run["run_id"]), CORRELATION_ID)
+        def fallback(plan: dict[str, object]) -> tuple[str, dict[str, object]]:
+            return str(plan["summary"]), {
+                "provider": "runtime",
+                "status": "fallback_error",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "reasoning_tokens": 0,
+                "elapsed_ms": 0,
+                "fallback_reason": "test runtime unavailable",
+                "context_evidence": {},
+            }
+
+        with patch(
+            "synora_agentic_erp.agent.service._enhance_plan_via_runtime",
+            side_effect=fallback,
+        ):
+            response = plan_run(str(run["run_id"]), CORRELATION_ID)
         self.assertTrue(response["ok"])
         result = response["plan"]
         plan_result = result["plan"]

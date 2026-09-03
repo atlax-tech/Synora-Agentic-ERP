@@ -96,6 +96,24 @@ def test_recorded_ab_decision_package_is_redacted_and_reports_proxy_cost() -> No
     assert "候选原文" in package
 
 
+def test_adoption_cards_report_final_net_benefit_and_baseline_binding() -> None:
+    report = run_phase9_ab()
+    cards = {card.role: card for card in report.adoption_cards}
+
+    for role in ("procurement_planner", "policy_risk_reviewer"):
+        card = cards[role]
+        assert card.net_benefit is (card.thresholds_met and card.security_passed)
+        assert card.decision != "ADOPT"
+    assert len(report.manifest.baseline_digest) == 64
+
+
+def test_relative_threshold_profile_requires_same_model_baseline() -> None:
+    report = run_phase9_ab(threshold_profile="relative-model-v1", completion_token_cap=512)
+    assert report.manifest.threshold_profile == "relative-model-v1"
+    assert report.manifest.completion_token_cap == 512
+    assert report.manifest.baseline_digest != "0" * 64
+
+
 def test_ab_report_rejects_tampered_metrics_or_cross_arm_projection() -> None:
     report = run_phase9_ab()
     body = report.model_dump(mode="json")

@@ -308,6 +308,7 @@ async def enhance_plan(
     provider_name: str = "unknown",
     *,
     context_environ: Mapping[str, str] | None = None,
+    max_tokens: int = ENHANCE_MAX_TOKENS,
 ) -> tuple[str, EnhancementEvidence]:
     """生成模型解释; 校验失败或调用失败回退确定性计划摘要并记录证据。"""
     started = monotonic()
@@ -365,7 +366,7 @@ async def enhance_plan(
         response = await provider.complete(
             list(context_result.messages),
             tools=[],
-            max_tokens=ENHANCE_MAX_TOKENS,
+            max_tokens=max_tokens,
         )
     except ProviderError as error:
         elapsed_ms = int((monotonic() - started) * 1000)

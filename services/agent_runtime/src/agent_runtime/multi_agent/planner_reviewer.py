@@ -245,7 +245,9 @@ def _parse_json[ModelT: PlannerOutput | ReviewDecision](
         ) from error
 
 
-def _response_usage(response: ProviderResponse) -> tuple[int, int, int]:
+def _response_usage(
+    response: ProviderResponse, *, max_completion_tokens: int
+) -> tuple[int, int, int]:
     prompt = response.prompt_tokens
     completion = response.completion_tokens
     reasoning = response.reasoning_tokens
@@ -253,7 +255,7 @@ def _response_usage(response: ProviderResponse) -> tuple[int, int, int]:
         raise _OrchestrationFailure("INVALID_OUTPUT", "provider usage was invalid")
     if prompt + completion + reasoning == 0:
         raise _OrchestrationFailure("INVALID_OUTPUT", "provider usage was missing")
-    if completion > MAX_COMPLETION_TOKENS_PER_CALL:
+    if completion > max_completion_tokens:
         raise _OrchestrationFailure(
             "BUDGET_EXCEEDED", "provider completion exceeded the role budget"
         )
@@ -390,6 +392,7 @@ async def run_planner_reviewer(
     limits: MultiAgentLimits | None = None,
     cancellation_event: asyncio.Event | None = None,
     clock: Callable[[], float] = monotonic,
+    max_completion_tokens: int = MAX_COMPLETION_TOKENS_PER_CALL,
 ) -> MultiAgentResult:
     """Run at most Planner, Reviewer and one Planner revision model calls.
 
@@ -398,6 +401,8 @@ async def run_planner_reviewer(
     is no fourth model call that could turn a bounded workflow into a loop.
     """
     del provider_name  # Provider identity belongs in the outer evidence layer.
+    if max_completion_tokens < 1:
+        raise ValueError("max_completion_tokens must be positive")
     selected_limits = limits or MultiAgentLimits()
     if scope is not None:
         if (
@@ -554,7 +559,7 @@ async def run_planner_reviewer(
             provider.complete(
                 messages,
                 tools=[],
-                max_tokens=MAX_COMPLETION_TOKENS_PER_CALL,
+                max_tokens=max_completion_tokens,
                 response_format=_JSON_RESPONSE_FORMAT,
             )
         )
@@ -613,7 +618,7 @@ async def run_planner_reviewer(
         if tool_count:
             trace._unauthorized_tool_calls += tool_count
         try:
-            _response_usage(response)
+            _response_usage(response, max_completion_tokens=max_completion_tokens)
         except _OrchestrationFailure as failure:
             usage[role] = _merge_usage(usage[role], _attempt_usage(role))
             trace.add("model.failed", role=role, code=failure.code)
