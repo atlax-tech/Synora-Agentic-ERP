@@ -107,6 +107,7 @@ def test_enhance_context_budget_failure_is_a_deterministic_200_fallback(monkeypa
 
 def test_enhance_planner_reviewer_exposes_only_sanitized_orchestration(monkeypatch) -> None:
     digest = plan_view_digest(plan_view_from_mapping(PLAN))
+    selected_roles: list[str] = []
     provider = DeterministicProvider(
         scripted_responses=[
             ProviderResponse(
@@ -136,10 +137,14 @@ def test_enhance_planner_reviewer_exposes_only_sanitized_orchestration(monkeypat
             ),
         ]
     )
-    monkeypatch.setattr(
-        "agent_runtime.app.provider_for_role",
-        lambda role, *, environ=None: provider,
-    )
+
+    def selected_provider(role: str, *, environ=None):
+        del environ
+        selected_roles.append(role)
+        return provider
+
+    monkeypatch.setenv("ASSIST_MODEL", "glm-5.3-flash")
+    monkeypatch.setattr("agent_runtime.app.provider_for_role", selected_provider)
 
     response = asyncio.run(
         _post_enhance(
@@ -161,6 +166,8 @@ def test_enhance_planner_reviewer_exposes_only_sanitized_orchestration(monkeypat
     assert response.status_code == 200
     body = response.json()
     assert body["explanation"] == "该物料库存 2.0，建议补货。"
+    assert selected_roles == ["assist"]
+    assert body["evidence"]["provider"] == "glm-5.3-flash"
     orchestration = body["evidence"]["orchestration"]
     assert orchestration["mode"] == "planner_reviewer"
     assert orchestration["model_calls"] == 2

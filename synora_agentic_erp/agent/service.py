@@ -22,6 +22,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from time import monotonic
 from typing import Any, cast
+from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
 
 import frappe
@@ -1181,7 +1182,15 @@ def _persist_workflow_trace(
         return
 
 
-def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def _enhance_plan_via_runtime(
+    plan: dict[str, Any],
+    *,
+    run_id: str | None = None,
+    correlation_id: str | None = None,
+    principal: str | None = None,
+    company: str | None = None,
+    warehouse: str | None = None,
+) -> tuple[str, dict[str, Any]]:
     """调用 Runtime /enhance 生成模型解释; 任何失败回退确定性摘要并记录证据。
 
     返回 (展示文本, 证据)。证据含 provider/status/prompt_tokens/completion_tokens/
@@ -1208,7 +1217,31 @@ def _enhance_plan_via_runtime(plan: dict[str, Any]) -> tuple[str, dict[str, Any]
     except GatewayFault as error:
         return fallback(f"runtime config: {error.code}")
 
-    payload = json.dumps({"plan": plan, "provider_name": "byok-runtime"}).encode("utf-8")
+    payload_body: dict[str, Any] = {"plan": plan, "provider_name": "byok-runtime"}
+    if all(value is not None for value in (run_id, correlation_id, principal, company)):
+        trusted_run_id = str(run_id)
+        trusted_correlation_id = str(correlation_id)
+        payload_body.update(
+            {
+                "orchestration_mode": "planner_reviewer",
+                "orchestration_scope": {
+                    "task_id": str(
+                        uuid5(
+                            NAMESPACE_URL,
+                            f"synora:planner-reviewer:task:{trusted_run_id}:{trusted_correlation_id}",
+                        )
+                    ),
+                    "run_id": str(uuid5(NAMESPACE_URL, f"synora:run:{trusted_run_id}")),
+                    "correlation_id": str(
+                        uuid5(NAMESPACE_URL, f"synora:correlation:{trusted_correlation_id}")
+                    ),
+                    "principal": str(principal),
+                    "company": str(company),
+                    "warehouse": warehouse,
+                },
+            }
+        )
+    payload = json.dumps(payload_body).encode("utf-8")
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     runtime_token = os.environ.get(_RUNTIME_TOKEN_ENV, "").strip()
     if runtime_token:
@@ -2338,7 +2371,14 @@ def plan_run(run_id: str, correlation_id: str) -> dict[str, Any]:
     # 解释文本, 严格校验失败或 Runtime/Provider 不可用 -> 回退确定性摘要,
     # 证据 (provider/token/耗时/回退原因) 一并持久化。
     plan_data = plan.to_dict()
-    enhanced_text, evidence = _enhance_plan_via_runtime(plan_data)
+    enhanced_text, evidence = _enhance_plan_via_runtime(
+        plan_data,
+        run_id=run.name,
+        correlation_id=str(run.correlation_id),
+        principal=str(frappe.session.user),
+        company=str(run.company_scope),
+        warehouse=str(run.warehouse_scope) if run.warehouse_scope else None,
+    )
     try:
         frappe.get_doc(
             {

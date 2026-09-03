@@ -31,8 +31,10 @@ from agent_runtime.multi_agent.contracts import (
 )
 from agent_runtime.multi_agent.planner_reviewer import run_planner_reviewer
 from agent_runtime.providers import (
+    ASSIST_MODEL_ENV,
     Provider,
     ProviderError,
+    ProviderRole,
     provider_for_role,
     provider_from_environment,
     provider_model,
@@ -55,6 +57,7 @@ from agent_runtime.workflow.runtime import (
 _RUNTIME_TOKEN_ENV = "SYNORA_RUNTIME_TOKEN"
 _RUNTIME_TOKEN_HEADER = "X-Synora-Runtime-Token"
 _SAFE_PROVIDER_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$")
+_ADOPTED_ORCHESTRATION_PROVIDER_ROLE: ProviderRole = "assist"
 
 
 class HealthResponse(BaseModel):
@@ -107,6 +110,15 @@ def _workflow_error(error: Exception) -> HTTPException:
 def _safe_provider_label(value: str) -> str:
     """Keep user/provider labels out of evidence when they contain secrets."""
     return value if _SAFE_PROVIDER_LABEL.fullmatch(value) else "untrusted-provider"
+
+
+def _provider_label_for_request(request: EnhanceRequest, environ: dict[str, str]) -> str:
+    model_name = (
+        environ.get(ASSIST_MODEL_ENV, "")
+        if request.orchestration_mode == "planner_reviewer"
+        else provider_model(environ)
+    )
+    return _safe_provider_label(model_name or request.provider_name)
 
 
 app = FastAPI(
@@ -284,11 +296,11 @@ async def enhance(request: EnhanceRequest, http_request: Request) -> EnhanceResp
         http_request.headers.get(_RUNTIME_TOKEN_HEADER, ""), expected_token
     ):
         raise HTTPException(status_code=401, detail="runtime authentication required")
-    provider_label = _safe_provider_label(provider_model(environ) or request.provider_name)
+    provider_label = _provider_label_for_request(request, environ)
     try:
         provider: Provider
         if request.orchestration_mode == "planner_reviewer":
-            provider = provider_for_role("primary", environ=environ)
+            provider = provider_for_role(_ADOPTED_ORCHESTRATION_PROVIDER_ROLE, environ=environ)
         else:
             provider = provider_from_environment(environ=environ)
     except ProviderError:
