@@ -343,7 +343,7 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 
 必读：PRD F-013/F-014/F-016、SPEC Retrieval/Memory 契约、Phase 3 FTS5 与 Phase 7 Context 基线。
 
-当前出口状态（2026-09-03）：`COMPLETED / PASS / READY FOR THE NEXT PHASE`。T08/P8.5、T09 阶段证据和 T10 独立只读审查均已完成；Phase 9 尚未开始。以下收口证据是当前权威口径，后面的逐任务描述保留为历史执行快照，不得覆盖本状态。
+当前出口状态（2026-09-03）：`COMPLETED / PASS / READY FOR THE NEXT PHASE`。T08/P8.5、T09 阶段证据和 T10 独立只读审查均已完成；Phase 9 已进入后续执行，当前状态见第 18 节。以下收口证据是 Phase 8 的权威口径，后面的逐任务描述保留为历史执行快照，不得覆盖本状态。
 
 ### Phase 8 当前收口证据（2026-09-03）
 
@@ -376,6 +376,8 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 出口证据：经审核的经验和 SOP 可带来源召回；跨用户/公司、过期、恶意记忆/检索文本 fail closed；Coach 会重查实时 ERP 事实。
 
 ## 18. Phase 9 — Multi-Agent、MCP 与 A2A
+
+当前执行状态（2026-09-03）：`IN_PROGRESS / P9.5 BLOCKED / P9.6–P9.8 LAB_ONLY COMPLETE`。P9.5 的同模型 A/B 已按用户批准门槛完成完整双臂重跑，但没有角色取得净收益：Planner、Reviewer、Reconciliation 为 `REJECT`，Coach 为 `RETAIN`，因此不放宽阈值、不接入 `/enhance`。P9.6 本地 MCP、P9.7 localhost A2A 和 P9.8 固定 descriptor ANP 概念实验已有代码、测试和开发日志证据；P9.9 真实业务/协议/恢复验收与 P9.10 L3 出口尚未开始。Phase 9 不得据此标记为 `PASS`，Phase 10 保持未开始。
 
 - 实现 Supervisor、Peer-to-Peer、Hierarchical、managed-agent-as-tool 和显式 graph node 的最小对照。
 - 先评估 `Planner → Policy/Risk Reviewer`，只在异常路径启动 Reconciliation Agent；所有 handoff typed、工具隔离、预算有界。
