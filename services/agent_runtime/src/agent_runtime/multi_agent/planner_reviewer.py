@@ -656,6 +656,35 @@ async def run_planner_reviewer(
         if candidate.plan_digest != digest:
             raise _OrchestrationFailure("DIGEST_MISMATCH", "planner digest did not match the run")
 
+        # The deterministic summary is already the trusted explanation.  If
+        # Planner returns it byte-for-byte and it passes the same validator,
+        # an additional Reviewer call cannot add safety or quality.  Keep the
+        # bounded Reviewer path for any changed candidate, where review is
+        # actually needed and remains visible in the trace.
+        if candidate.candidate_explanation == view.summary:
+            final_text = validate_explanation(
+                candidate.candidate_explanation,
+                _final_plan_dict(view),
+            )
+            if final_text is not None:
+                trace.add("review.skipped", reason="deterministic_summary")
+                trace.add("stop", code="ACCEPTED")
+                return _make_result(
+                    task_id=task_id,
+                    run_id=run_id,
+                    correlation_id=correlation_id,
+                    final_text=final_text,
+                    code="ACCEPTED",
+                    detail="planner matched the deterministic summary; review was unnecessary",
+                    usage=usage,
+                    handoff_count=handoff_count,
+                    revision_count=revision_count,
+                    elapsed_ms=int((clock() - started) * 1000),
+                    trace=trace,
+                    deterministic_validated=True,
+                    reviewer_decision=None,
+                )
+
         handoff = handoff_for(
             task_id=task_id,
             run_id=run_id,

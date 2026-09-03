@@ -110,6 +110,19 @@ def test_accept_is_deterministically_validated_and_tools_are_empty() -> None:
     assert all(tools == [] for _, tools in provider.calls)
 
 
+def test_exact_deterministic_summary_skips_unnecessary_reviewer_call() -> None:
+    provider = RecordingProvider([_response(_planner(str(PLAN["summary"])))])
+    result = asyncio.run(run_planner_reviewer(PLAN, provider))
+
+    assert result.stop_reason.code == "ACCEPTED"
+    assert result.stop_reason.model_calls == 1
+    assert result.handoff_count == 0
+    assert result.reviewer_decision is None
+    assert [event for event in result.trace.event_types if event == "review.skipped"] == [
+        "review.skipped"
+    ]
+
+
 def test_role_prompt_drops_capability_and_cookie_from_untrusted_plan() -> None:
     provider = RecordingProvider([_response(_planner()), _response(_review())])
     plan = {**PLAN, "requested_capability": "purchase.submit", "cookie": "secret-cookie"}
