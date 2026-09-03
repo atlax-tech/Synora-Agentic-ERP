@@ -482,6 +482,32 @@ async def run_planner_reviewer(
         )
 
     digest = plan_view_digest(view)
+    deterministic_risks = {finding.risk for finding in view.findings}
+    if deterministic_risks & {"INPUT_REQUIRED", "RECONCILIATION_REQUIRED"}:
+        deterministic_code: MultiAgentStopCode = (
+            "REVIEW_ESCALATED"
+            if "RECONCILIATION_REQUIRED" in deterministic_risks
+            else "DETERMINISTIC_FALLBACK"
+        )
+        trace.add("run.started", plan_digest=digest, depth=0)
+        trace.add("deterministic.check", reason=deterministic_code)
+        trace.add("stop", code=deterministic_code)
+        return _make_result(
+            task_id=task_id,
+            run_id=run_id,
+            correlation_id=correlation_id,
+            final_text=safe_deterministic_fallback(_final_plan_dict(view)),
+            code=deterministic_code,
+            detail="deterministic plan requires input or reconciliation before model review",
+            usage=usage,
+            handoff_count=0,
+            revision_count=0,
+            elapsed_ms=int((clock() - started) * 1000),
+            trace=trace,
+            deterministic_validated=False,
+            reviewer_decision=None,
+        )
+
     if isinstance(provider, FailoverProvider):
         trace.add("stop", code="MODEL_ERROR")
         return _make_result(

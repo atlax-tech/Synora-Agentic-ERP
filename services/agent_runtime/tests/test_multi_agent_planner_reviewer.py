@@ -306,6 +306,27 @@ def test_scope_mismatch_fails_before_any_model_call() -> None:
     assert provider.calls == []
 
 
+@pytest.mark.parametrize(
+    ("risk", "expected"),
+    [("INPUT_REQUIRED", "DETERMINISTIC_FALLBACK"), ("RECONCILIATION_REQUIRED", "REVIEW_ESCALATED")],
+)
+def test_deterministic_exception_stops_before_any_model_call(risk: str, expected: str) -> None:
+    plan = {
+        **PLAN,
+        "summary": "无法生成计划解释，请人工核对确定性计划。",
+        "findings": [{**PLAN["findings"][0], "risk": risk}],
+    }
+    provider = RecordingProvider([])
+
+    result = asyncio.run(run_planner_reviewer(plan, provider))
+
+    assert result.stop_reason.code == expected
+    assert result.stop_reason.model_calls == 0
+    assert result.final_text == plan["summary"]
+    assert result.trace.event_count >= 3
+    assert provider.calls == []
+
+
 def test_failover_provider_is_rejected_to_keep_physical_calls_bounded() -> None:
     from agent_runtime.providers import FailoverProvider
 
