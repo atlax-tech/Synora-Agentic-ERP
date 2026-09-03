@@ -426,7 +426,9 @@ def _git_head() -> str:
             capture_output=True,
             text=True,
         ).stdout.strip()
-    except OSError, subprocess.CalledProcessError:
+    except OSError:
+        return "unknown-head"
+    except subprocess.CalledProcessError:
         return "unknown-head"
 
 
