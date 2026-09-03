@@ -56,6 +56,7 @@ select = ["E", "F", "I", "UP", "B", "RUF"]
 "services/agent_runtime/src/agent_runtime/multi_agent/planner_reviewer.py" = ["RUF001"]
 "services/agent_runtime/tests/test_multi_agent_contracts.py" = ["RUF001"]
 "services/agent_runtime/tests/test_multi_agent_planner_reviewer.py" = ["RUF001"]
+"labs/agent_patterns/phase9_patterns.py" = ["RUF001"]
 
 [tool.ruff.format]
 quote-style = "double"
