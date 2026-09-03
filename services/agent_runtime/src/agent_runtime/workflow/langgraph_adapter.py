@@ -9,11 +9,17 @@ silently widens the Synora workflow contract.
 from __future__ import annotations
 
 import importlib.util
-from typing import Any
+from typing import Any, TypedDict
 
 
 class LangGraphUnavailable(RuntimeError):
     pass
+
+
+class LabState(TypedDict, total=False):
+    """Orchestration-only state used by the optional LangGraph lab."""
+
+    lab_node_executed: bool
 
 
 def langgraph_available() -> bool:
@@ -34,12 +40,12 @@ def build_strict_lab_graph(*, checkpointer: Any) -> Any:
         raise LangGraphUnavailable("LangGraph lab imports are unavailable") from exc
     del SqliteSaver
 
-    def execute_node(state: dict[str, object]) -> dict[str, object]:
+    def execute_node(state: LabState) -> LabState:
         # The node contains no ERP side effect.  The real typed executor remains
         # outside the graph and must provide idempotent results before resuming.
         return {**state, "lab_node_executed": True}
 
-    graph = StateGraph(dict)
+    graph = StateGraph(LabState)
     graph.add_node("execute", execute_node)
     graph.add_edge(START, "execute")
     graph.add_edge("execute", END)

@@ -239,6 +239,28 @@ def _safe_orchestration_fallback(
     return view.summary
 
 
+def _provider_fallback_response(request: EnhanceRequest, provider_label: str) -> EnhanceResponse:
+    evidence = EnhancementEvidence(
+        provider=provider_label,
+        prompt_tokens=0,
+        completion_tokens=0,
+        reasoning_tokens=0,
+        elapsed_ms=0,
+        status="fallback_error",
+        fallback_reason="provider not configured",
+    ).__dict__
+    if request.orchestration_mode == "planner_reviewer":
+        evidence["orchestration"] = _missing_provider_orchestration_summary()
+    return EnhanceResponse(
+        explanation=(
+            _safe_orchestration_fallback(request.plan, request.orchestration_scope)
+            if request.orchestration_mode == "planner_reviewer"
+            else str(request.plan.get("summary", ""))
+        ),
+        evidence=evidence,
+    )
+
+
 @app.get("/healthz", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(service="synora-agent-runtime", status="ok")
@@ -265,27 +287,11 @@ async def enhance(request: EnhanceRequest, http_request: Request) -> EnhanceResp
             provider = provider_for_role("primary", environ=environ)
         else:
             provider = provider_from_environment(environ=environ)
-    except (ProviderError, ValueError):
+    except ProviderError:
         # 未配置 BYOK: 回退确定性摘要并记录证据 (与 enhance_plan 回退语义一致)。
-        evidence = EnhancementEvidence(
-            provider=provider_label,
-            prompt_tokens=0,
-            completion_tokens=0,
-            reasoning_tokens=0,
-            elapsed_ms=0,
-            status="fallback_error",
-            fallback_reason="provider not configured",
-        ).__dict__
-        if request.orchestration_mode == "planner_reviewer":
-            evidence["orchestration"] = _missing_provider_orchestration_summary()
-        return EnhanceResponse(
-            explanation=(
-                _safe_orchestration_fallback(request.plan, request.orchestration_scope)
-                if request.orchestration_mode == "planner_reviewer"
-                else str(request.plan.get("summary", ""))
-            ),
-            evidence=evidence,
-        )
+        return _provider_fallback_response(request, provider_label)
+    except ValueError:
+        return _provider_fallback_response(request, provider_label)
     if request.orchestration_mode == "planner_reviewer":
         try:
             orchestration_result = await run_planner_reviewer(
