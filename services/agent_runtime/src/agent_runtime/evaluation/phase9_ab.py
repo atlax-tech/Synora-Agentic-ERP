@@ -867,6 +867,10 @@ async def _run_multi_arm(
             or ("primary" if mode == "real" else "recorded-planner-reviewer"),
             scope=_scope(pattern_case),
             max_completion_tokens=max_tokens,
+            # The P9.5 arm is evidence for a Planner -> Reviewer workflow.
+            # Do not allow the runtime's deterministic-summary shortcut to
+            # turn a multi-agent arm into a Planner-only measurement.
+            require_reviewer=True,
         )
         results.append(_multi_result(case, pattern_case, orchestration))
     return tuple(results)
