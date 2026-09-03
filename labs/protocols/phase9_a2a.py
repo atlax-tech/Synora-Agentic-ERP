@@ -34,12 +34,14 @@ from a2a.types.a2a_pb2 import (
     CancelTaskRequest,
     ListTasksRequest,
     ListTasksResponse,
+    Message,
+    SendMessageRequest,
     Task,
     TaskState,
     TaskStatus,
 )
 from a2a.utils.constants import PROTOCOL_VERSION_1_0, TransportProtocol
-from a2a.utils.errors import TaskNotFoundError
+from a2a.utils.errors import InvalidParamsError, TaskNotFoundError
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -219,6 +221,19 @@ class PolicyRiskReviewerExecutor(AgentExecutor):
 class IdempotentCancelRequestHandler(DefaultRequestHandler):
     """Preserve a canceled task on repeated cancel requests."""
 
+    async def on_message_send(
+        self, params: SendMessageRequest, context: ServerCallContext
+    ) -> Task | Message:
+        """Reject a continuation whose task and context IDs disagree."""
+
+        task_id = params.message.task_id
+        context_id = params.message.context_id
+        if task_id and context_id:
+            task = await self.task_store.get(task_id, context)
+            if task is not None and task.context_id != context_id:
+                raise InvalidParamsError("task and context IDs do not match")
+        return cast("Task | Message", await super().on_message_send(params, context))
+
     async def on_cancel_task(
         self, params: CancelTaskRequest, context: ServerCallContext
     ) -> Task | None:
@@ -264,11 +279,11 @@ def build_agent_card(endpoint: str = DEFAULT_ENDPOINT) -> AgentCard:
     )
 
 
-def build_app(endpoint: str = DEFAULT_ENDPOINT) -> FastAPI:
+def build_app(endpoint: str = DEFAULT_ENDPOINT, *, work_delay_seconds: float = 0.02) -> FastAPI:
     """Build the loopback-only A2A ASGI application."""
 
     rpc_path = _assert_loopback_endpoint(endpoint)
-    executor = PolicyRiskReviewerExecutor()
+    executor = PolicyRiskReviewerExecutor(work_delay_seconds=work_delay_seconds)
     task_store = BoundedInMemoryTaskStore()
     card = build_agent_card(endpoint)
     handler = IdempotentCancelRequestHandler(

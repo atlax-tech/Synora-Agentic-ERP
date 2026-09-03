@@ -94,6 +94,64 @@ class AgentDescriptor(_StrictModel):
         return _unique_bounded(value, field_name=field_name)
 
 
+FIXED_DESCRIPTOR_SET: Final[tuple[AgentDescriptor, ...]] = (
+    AgentDescriptor(
+        agent_id="procurement-planner",
+        protocol="A2A",
+        protocol_version="1.0",
+        input_schema="planner.v1",
+        output_schema="planner.v1",
+        endpoint_type="loopback_http",
+        endpoint="http://127.0.0.1:8030/planner",
+        capabilities=["procurement.plan"],
+        data_scopes=["procurement.read"],
+        tool_allowlist=[],
+    ),
+    AgentDescriptor(
+        agent_id="policy-risk-reviewer",
+        protocol="A2A",
+        protocol_version="1.0",
+        input_schema="reviewer.v1",
+        output_schema="review.v1",
+        endpoint_type="loopback_http",
+        endpoint="http://127.0.0.1:8029/a2a",
+        capabilities=["policy.review"],
+        data_scopes=["procurement.read"],
+        tool_allowlist=[],
+    ),
+    AgentDescriptor(
+        agent_id="erp-coach",
+        protocol="A2A",
+        protocol_version="1.0",
+        input_schema="coach.v1",
+        output_schema="coach.v1",
+        endpoint_type="loopback_http",
+        endpoint="http://127.0.0.1:8031/coach",
+        capabilities=["erp.coach"],
+        data_scopes=["procurement.read"],
+        tool_allowlist=[],
+    ),
+    AgentDescriptor(
+        agent_id="reconciliation-agent",
+        protocol="A2A",
+        protocol_version="1.0",
+        input_schema="reconciliation.v1",
+        output_schema="reconciliation.v1",
+        endpoint_type="loopback_http",
+        endpoint="http://127.0.0.1:8032/reconciliation",
+        capabilities=["procurement.reconcile"],
+        data_scopes=["procurement.read"],
+        tool_allowlist=[],
+    ),
+)
+
+
+def fixed_descriptors() -> tuple[AgentDescriptor, ...]:
+    """Return the immutable Phase 9 descriptor set used by the lab."""
+
+    return tuple(descriptor.model_copy(deep=True) for descriptor in FIXED_DESCRIPTOR_SET)
+
+
 class RouteRequest(_StrictModel):
     protocol: ProtocolName
     protocol_version: str = Field(pattern=_VERSION, min_length=3, max_length=20)
@@ -190,6 +248,12 @@ def select_route(descriptors: Iterable[AgentDescriptor], request: RouteRequest) 
         data_scopes=best.data_scopes,
         tool_allowlist=best.tool_allowlist,
     )
+
+
+def select_fixed_route(request: RouteRequest) -> RoutingDecision:
+    """Select only from the bounded Phase 9 descriptor set."""
+
+    return select_route(FIXED_DESCRIPTOR_SET, request)
 
 
 def assert_acyclic_routes(routes: Mapping[str, Iterable[str]]) -> None:

@@ -67,6 +67,10 @@ def test_typed_payload_rejects_extra_fields_and_control_text() -> None:
         PolicyRiskReviewRequest.model_validate(
             {**_payload(), "candidate_explanation": "bad\x00payload"}
         )
+    with pytest.raises(ValueError):
+        PolicyRiskReviewRequest.model_validate({**_payload(), "candidate_explanation": "x" * 4_001})
+    with pytest.raises(ValueError):
+        PolicyRiskReviewRequest.model_validate({**_payload(), "unknowns": ["x"] * 33})
 
 
 def test_a2a_client_observes_completed_task_and_bound_artifact() -> None:
@@ -129,6 +133,44 @@ async def _test_a2a_cancel_is_idempotent_and_does_not_complete() -> None:
         assert canceled_again.status.state == TaskState.TASK_STATE_CANCELED
         current = await client.get_task(GetTaskRequest(id=task.id))
         assert current.status.state == TaskState.TASK_STATE_CANCELED
+        assert not current.artifacts
+    finally:
+        await client.close()
+        await http_client.aclose()
+        await app.state.phase9_handler.aclose()
+
+
+def test_a2a_rejects_task_context_mismatch() -> None:
+    asyncio.run(_test_a2a_rejects_task_context_mismatch())
+
+
+async def _test_a2a_rejects_task_context_mismatch() -> None:
+    app = build_app(work_delay_seconds=0.2)
+    http_client, client = await _client_for(app)
+    try:
+        request = SendMessageRequest(
+            message=new_text_message(
+                json.dumps(_payload()),
+                media_type="application/json",
+                role=Role.ROLE_USER,
+            ),
+            configuration=SendMessageConfiguration(return_immediately=True),
+        )
+        responses = [response async for response in client.send_message(request)]
+        task = responses[0].task
+        mismatched = SendMessageRequest(
+            message=new_text_message(
+                json.dumps(_payload()),
+                media_type="application/json",
+                context_id="wrong-context",
+                task_id=task.id,
+                role=Role.ROLE_USER,
+            ),
+            configuration=SendMessageConfiguration(return_immediately=False),
+        )
+        with pytest.raises(Exception, match="context"):
+            _ = [response async for response in client.send_message(mismatched)]
+        await client.cancel_task(CancelTaskRequest(id=task.id))
     finally:
         await client.close()
         await http_client.aclose()

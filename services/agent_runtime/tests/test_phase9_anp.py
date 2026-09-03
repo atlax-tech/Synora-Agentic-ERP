@@ -11,6 +11,8 @@ from labs.protocols.phase9_anp import (
     RouteCycleError,
     RouteRequest,
     assert_acyclic_routes,
+    fixed_descriptors,
+    select_fixed_route,
     select_route,
 )
 
@@ -62,6 +64,20 @@ def test_select_route_chooses_least_permission_descriptor() -> None:
     assert decision.endpoint == "http://127.0.0.1:8029/a2a"
 
 
+def test_fixed_descriptor_set_is_bounded_and_routes_reviewer() -> None:
+    descriptors = fixed_descriptors()
+    assert [item.agent_id for item in descriptors] == [
+        "procurement-planner",
+        "policy-risk-reviewer",
+        "erp-coach",
+        "reconciliation-agent",
+    ]
+    decision = select_fixed_route(_request())
+    assert decision.agent_id == "policy-risk-reviewer"
+    assert all(item.endpoint.startswith("http://127.0.0.1:") for item in descriptors)
+    assert all(item.tool_allowlist == [] for item in descriptors)
+
+
 def test_route_rejects_external_endpoint_and_permission_expansion() -> None:
     with pytest.raises(ValueError):
         _descriptor("external", endpoint="https://reviewer.example/a2a")
@@ -73,6 +89,10 @@ def test_route_rejects_external_endpoint_and_permission_expansion() -> None:
         select_route(
             [_descriptor("too-wide", scopes=["procurement.read", "finance.write"])], request
         )
+
+    malicious = fixed_descriptors()[1].model_copy(update={"tool_allowlist": ["purchase.submit"]})
+    with pytest.raises(NoRouteError):
+        select_route([malicious], request)
 
 
 def test_route_rejects_unknown_version_and_ambiguous_equal_rank() -> None:
