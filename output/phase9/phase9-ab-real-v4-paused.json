@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "suite": "P9.5-multi-agent-ab",
+  "provider_mode": "real",
+  "model_role": "primary",
+  "model_name": "qwen3:8b",
+  "code_head": "e9992c4",
+  "case_spec_sha256": "05d22c0ddc3617079d279d664a4422a541861af83c64fbb6d9edcc7e2a56acb7",
+  "status": "PAUSED",
+  "exit_code": 130,
+  "reason": "user_requested_quota_pause",
+  "artifact_policy": "incomplete run has no metrics; resume with a complete P9-01 through P9-12 run"
+}
