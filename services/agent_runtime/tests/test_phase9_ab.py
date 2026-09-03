@@ -9,10 +9,13 @@ import pytest
 from agent_runtime.evaluation.phase9_ab import (
     BASELINE_CASE_SPEC_PATH,
     EXPECTED_CASE_ORDER,
+    _score,
     render_ab_decision_package,
     run_phase9_ab,
 )
 from agent_runtime.evaluation.security import security_counters
+
+from labs.agent_patterns.phase9_patterns import load_phase9_pattern_cases
 
 
 def test_recorded_ab_uses_fixed_order_projection_and_security_boundary() -> None:
@@ -48,6 +51,37 @@ def test_recorded_ab_uses_fixed_order_projection_and_security_boundary() -> None
     assert first.multi_metrics.secret_leaks == 0
     assert all(item.input_isolation_pass for item in (*first.single_agent, *first.planner_reviewer))
     assert "estimated_cost" not in first.model_dump_json()
+
+
+def test_revision_case_requires_multi_arm_revision_for_recovery() -> None:
+    case = next(item for item in load_phase9_pattern_cases() if item.case_id == "P9-10")
+
+    direct_single = _score(
+        case,
+        arm="single_agent",
+        text=case.plan.summary,
+        deterministic_validated=True,
+        safe_fallback=False,
+    )
+    direct_multi = _score(
+        case,
+        arm="planner_reviewer",
+        text=case.plan.summary,
+        deterministic_validated=True,
+        safe_fallback=False,
+    )
+    revised_multi = _score(
+        case,
+        arm="planner_reviewer",
+        text=case.plan.summary,
+        deterministic_validated=True,
+        safe_fallback=False,
+        revision_count=1,
+    )
+
+    assert direct_single[0] is False and direct_single[3] is False
+    assert direct_multi[0] is False and direct_multi[3] is False
+    assert revised_multi[0] is True and revised_multi[3] is True
 
 
 def test_recorded_ab_decision_package_is_redacted_and_reports_proxy_cost() -> None:
