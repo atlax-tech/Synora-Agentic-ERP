@@ -28,6 +28,7 @@ from agent_runtime.evaluation.phase9_baseline import (
     case_spec_sha256,
     load_phase9_baseline_cases,
 )
+from agent_runtime.evaluation.security import input_projection_isolated, security_counters
 from agent_runtime.multi_agent.contracts import (
     DeterministicPlanView,
     MultiAgentStopCode,
@@ -134,6 +135,7 @@ class PatternOutcome(StrictModel):
     trace_event_types: tuple[str, ...]
     trace_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     checkpoint_keys: tuple[str, ...] = ()
+    input_isolation_pass: bool = True
     unauthorized_tool_calls: int = Field(default=0, ge=0)
     erp_business_writes: int = Field(default=0, ge=0)
     scope_leaks: int = Field(default=0, ge=0)
@@ -214,7 +216,7 @@ class PatternReport(StrictModel):
         if self.manifest.patterns != PATTERN_NAMES:
             raise ValueError("pattern manifest order is not fixed")
         expected_security = all(
-            getattr(item, name) == 0
+            item.input_isolation_pass and getattr(item, name) == 0
             for item in (*self.cases, *self.trajectories)
             for name in (
                 "unauthorized_tool_calls",
@@ -251,6 +253,9 @@ class PatternCase:
     prompt_tokens: int = 128
     completion_tokens: int = 32
     reasoning_tokens: int = 0
+    untrusted_text: str = ""
+    requested_capability: str | None = None
+    private_user: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -548,6 +553,21 @@ class _Flow:
         )
         self.event("stop", code=stop)
         trace_digest = hashlib.sha256(canonical_json(self.events).encode("utf-8")).hexdigest()
+        counters = security_counters(
+            text,
+            unauthorized_tool_calls=sum(call.tool_count for call in self.adapter.calls),
+            source_untrusted_text=self.case.untrusted_text,
+        )
+        projection_texts = (
+            canonical_json(visible_plan_projection(self.view, PLANNER_ROLE_SPEC.visible_fields)),
+            canonical_json(visible_plan_projection(self.view, REVIEWER_ROLE_SPEC.visible_fields)),
+        )
+        isolated = input_projection_isolated(
+            projection_texts,
+            untrusted_text=self.case.untrusted_text,
+            requested_capability=self.case.requested_capability,
+            private_user=self.case.private_user,
+        )
         return PatternOutcome(
             pattern=self.pattern,
             case_id=self.case.case_id,
@@ -567,6 +587,11 @@ class _Flow:
             trace_event_types=tuple(str(event["type"]) for event in self.events),
             trace_digest=trace_digest,
             checkpoint_keys=checkpoint_keys,
+            input_isolation_pass=isolated,
+            unauthorized_tool_calls=counters.unauthorized_tool_calls,
+            erp_business_writes=counters.erp_business_writes,
+            scope_leaks=counters.scope_leaks,
+            secret_leaks=counters.secret_leaks,
         )
 
     def failure(
@@ -1004,6 +1029,9 @@ def _baseline_pattern_case(case: BaselineCase) -> PatternCase:
         prompt_tokens=fixture.prompt_tokens,
         completion_tokens=max(16, fixture.completion_tokens),
         reasoning_tokens=fixture.reasoning_tokens,
+        untrusted_text=case.plan.untrusted_text,
+        requested_capability=case.plan.requested_capability,
+        private_user=case.plan.scope.user,
     )
 
 

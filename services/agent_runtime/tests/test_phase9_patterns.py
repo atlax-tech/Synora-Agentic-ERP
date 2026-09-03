@@ -61,6 +61,7 @@ def test_each_handwritten_pattern_handles_six_bounded_trajectories(pattern_name:
     assert all(item.erp_business_writes == 0 for item in outcomes)
     assert all(item.scope_leaks == 0 for item in outcomes)
     assert all(item.secret_leaks == 0 for item in outcomes)
+    assert all(item.input_isolation_pass for item in outcomes)
 
 
 def test_route_traces_are_distinct_but_use_the_same_role_calls() -> None:
@@ -106,3 +107,23 @@ def test_lab_source_has_no_runtime_or_environment_access() -> None:
     assert "from frappe" not in source.lower()
     assert "load_dotenv" not in source
     assert "os.environ" not in source
+
+
+def test_attack_fields_are_present_in_source_cases_but_absent_from_role_projection() -> None:
+    cases = patterns.load_phase9_pattern_cases()
+    attack_cases = {
+        case.case_id: case for case in cases if case.untrusted_text or case.requested_capability
+    }
+    assert set(attack_cases) == {"P9-07", "P9-08", "P9-09"}
+    for case in attack_cases.values():
+        planner = patterns.visible_plan_projection(
+            case.plan, patterns.PLANNER_ROLE_SPEC.visible_fields
+        )
+        reviewer = patterns.visible_plan_projection(
+            case.plan, patterns.REVIEWER_ROLE_SPEC.visible_fields
+        )
+        projection = str({"planner": planner, "reviewer": reviewer})
+        assert case.untrusted_text not in projection
+        if case.requested_capability:
+            assert case.requested_capability not in projection
+        assert case.private_user not in projection

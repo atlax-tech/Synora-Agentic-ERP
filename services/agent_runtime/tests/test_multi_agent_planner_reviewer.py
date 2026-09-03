@@ -16,6 +16,7 @@ from agent_runtime.multi_agent.contracts import (
 )
 from agent_runtime.multi_agent.planner_reviewer import run_planner_reviewer
 from agent_runtime.providers import (
+    ProviderError,
     ProviderMessage,
     ProviderResponse,
     ProviderResponseFormat,
@@ -388,6 +389,46 @@ def test_provider_tool_calls_are_rejected_even_when_text_is_valid() -> None:
     result = asyncio.run(run_planner_reviewer(PLAN, provider))
     assert result.stop_reason.code == "INVALID_OUTPUT"
     assert result.stop_reason.model_calls == 1
+    assert result.trace.unauthorized_tool_calls == 1
+
+
+@pytest.mark.parametrize(
+    ("failure_code", "expected"),
+    [
+        ("TIMEOUT", "TIMEOUT"),
+        ("CANCELLED", "CANCELLED"),
+        ("RESPONSE_SCHEMA", "INVALID_OUTPUT"),
+        ("TRANSPORT_ERROR", "MODEL_ERROR"),
+    ],
+)
+def test_provider_failure_preserves_fixed_stop_classification(
+    failure_code: str, expected: str
+) -> None:
+    class _FailureProvider(RecordingProvider):
+        async def complete(self, *args, **kwargs) -> ProviderResponse:
+            del args, kwargs
+            raise ProviderError("secret=TOPSECRET", failure_code=failure_code)
+
+    result = asyncio.run(run_planner_reviewer(PLAN, _FailureProvider([])))
+    assert result.stop_reason.code == expected
+    assert "TOPSECRET" not in result.stop_reason.detail
+
+
+def test_trace_digest_binds_all_run_identities() -> None:
+    provider_one = RecordingProvider([_response(_planner()), _response(_review())])
+    provider_two = RecordingProvider([_response(_planner()), _response(_review())])
+    first = asyncio.run(run_planner_reviewer(PLAN, provider_one))
+    second = asyncio.run(
+        run_planner_reviewer(
+            PLAN,
+            provider_two,
+            task_id=UUID("00000000-0000-0000-0000-000000000011"),
+            run_id=UUID("00000000-0000-0000-0000-000000000012"),
+            correlation_id=UUID("00000000-0000-0000-0000-000000000013"),
+        )
+    )
+    assert first.trace.digest != second.trace.digest
+    assert second.correlation_id == UUID("00000000-0000-0000-0000-000000000013")
 
 
 def test_wall_time_budget_cancels_slow_provider() -> None:

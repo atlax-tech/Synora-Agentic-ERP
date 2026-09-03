@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from agent_runtime.agent.enhance import (
     EnhancementEvidence,
     enhance_plan,
+    safe_deterministic_fallback,
 )
 from agent_runtime.agent.execution import (
     AgentExecuteRequest,
@@ -203,6 +204,7 @@ def _orchestration_summary(result: MultiAgentResult) -> dict[str, object]:
             "event_count": result.trace.event_count,
             "event_types": list(result.trace.event_types),
             "digest": result.trace.digest,
+            "unauthorized_tool_calls": result.trace.unauthorized_tool_calls,
         },
     }
 
@@ -220,6 +222,7 @@ def _missing_provider_orchestration_summary() -> dict[str, object]:
             "event_count": 0,
             "event_types": [],
             "digest": hashlib.sha256(b"").hexdigest(),
+            "unauthorized_tool_calls": 0,
         },
     }
 
@@ -255,7 +258,7 @@ def _provider_fallback_response(request: EnhanceRequest, provider_label: str) ->
         explanation=(
             _safe_orchestration_fallback(request.plan, request.orchestration_scope)
             if request.orchestration_mode == "planner_reviewer"
-            else str(request.plan.get("summary", ""))
+            else safe_deterministic_fallback(request.plan)
         ),
         evidence=evidence,
     )

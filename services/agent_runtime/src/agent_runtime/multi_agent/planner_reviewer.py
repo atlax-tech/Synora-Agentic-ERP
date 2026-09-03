@@ -19,7 +19,7 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from agent_runtime.agent.contracts import canonical_json
-from agent_runtime.agent.enhance import validate_explanation
+from agent_runtime.agent.enhance import safe_deterministic_fallback, validate_explanation
 from agent_runtime.multi_agent.contracts import (
     DeterministicPlanView,
     MultiAgentLimits,
@@ -79,18 +79,35 @@ class _OrchestrationFailure(Exception):
 class _Trace:
     def __init__(self) -> None:
         self._events: list[dict[str, object]] = []
+        self._unauthorized_tool_calls = 0
 
     def add(self, event_type: str, **payload: object) -> None:
         # Only digests, role IDs, fixed codes and usage counts enter this
         # structure.  Candidate text and provider messages never do.
         self._events.append({"type": event_type, **payload})
 
-    def summary(self) -> TraceSummary:
-        digest = hashlib.sha256(canonical_json(self._events).encode("utf-8")).hexdigest()
+    def summary(self, *, task_id: UUID, run_id: UUID, correlation_id: UUID) -> TraceSummary:
+        # Bind the digest to the three run identities without exposing those
+        # identifiers in the persisted trace summary.  Equal event streams
+        # from different runs therefore cannot share a trace digest.
+        digest_events = [
+            {key: value for key, value in event.items() if key != "elapsed_ms"}
+            for event in self._events
+        ]
+        digest_payload = {
+            "identity": {
+                "task_id": str(task_id),
+                "run_id": str(run_id),
+                "correlation_id": str(correlation_id),
+            },
+            "events": digest_events,
+        }
+        digest = hashlib.sha256(canonical_json(digest_payload).encode("utf-8")).hexdigest()
         return TraceSummary(
             event_count=len(self._events),
             event_types=tuple(str(item["type"]) for item in self._events),
             digest=digest,
+            unauthorized_tool_calls=self._unauthorized_tool_calls,
         )
 
 
@@ -241,6 +258,25 @@ def _attempt_usage(role_id: RoleId) -> RoleUsage:
     return RoleUsage(role_id=role_id, calls=1)
 
 
+def _provider_stop_code(error: ProviderError) -> MultiAgentStopCode:
+    """Preserve fixed transport/schema/timeout classes without raw details."""
+    if error.budget_code == "TOKEN_BUDGET":
+        return "BUDGET_EXCEEDED"
+    mapping: dict[str, MultiAgentStopCode] = {
+        "TIMEOUT": "TIMEOUT",
+        "CANCELLED": "CANCELLED",
+        "RESPONSE_SCHEMA": "INVALID_OUTPUT",
+        "RESPONSE_NO_CHOICES": "INVALID_OUTPUT",
+        "RESPONSE_CONTENT_MISSING": "INVALID_OUTPUT",
+        "RESPONSE_TOO_LARGE": "INVALID_OUTPUT",
+        "INVALID_OUTPUT": "INVALID_OUTPUT",
+        "DIGEST_MISMATCH": "DIGEST_MISMATCH",
+        "SCOPE_MISMATCH": "SCOPE_MISMATCH",
+        "TOKEN_BUDGET": "BUDGET_EXCEEDED",
+    }
+    return mapping.get(str(getattr(error, "failure_code", "PROVIDER_ERROR")), "MODEL_ERROR")
+
+
 async def _cancel_task_bounded(task: asyncio.Task[Any], *, timeout_seconds: float = 0.1) -> None:
     """Stop a provider task without waiting forever for a broken transport."""
     task.cancel()
@@ -258,6 +294,7 @@ def _make_result(
     *,
     task_id: UUID,
     run_id: UUID,
+    correlation_id: UUID,
     final_text: str,
     code: MultiAgentStopCode,
     detail: str,
@@ -285,7 +322,12 @@ def _make_result(
         role_usage=role_usage,
         handoff_count=handoff_count,
         revision_count=revision_count,
-        trace=trace.summary(),
+        trace=trace.summary(
+            task_id=task_id,
+            run_id=run_id,
+            correlation_id=correlation_id,
+        ),
+        correlation_id=correlation_id,
         deterministic_validated=deterministic_validated,
         reviewer_decision=reviewer_decision,
     )
@@ -346,6 +388,7 @@ async def run_planner_reviewer(
         return _make_result(
             task_id=task_id,
             run_id=run_id,
+            correlation_id=correlation_id,
             final_text=_safe_fallback(),
             code="INVALID_OUTPUT",
             detail="deterministic plan projection was rejected",
@@ -363,6 +406,7 @@ async def run_planner_reviewer(
         return _make_result(
             task_id=task_id,
             run_id=run_id,
+            correlation_id=correlation_id,
             final_text=_safe_fallback(),
             code="SCOPE_MISMATCH",
             detail="plan scope did not match the trusted orchestration scope",
@@ -379,6 +423,7 @@ async def run_planner_reviewer(
         return _make_result(
             task_id=task_id,
             run_id=run_id,
+            correlation_id=correlation_id,
             final_text=_safe_fallback(),
             code="SCOPE_MISMATCH",
             detail="request identity did not match the trusted orchestration scope",
@@ -397,7 +442,8 @@ async def run_planner_reviewer(
         return _make_result(
             task_id=task_id,
             run_id=run_id,
-            final_text=view.summary,
+            correlation_id=correlation_id,
+            final_text=safe_deterministic_fallback(_final_plan_dict(view)),
             code="MODEL_ERROR",
             detail="planner_reviewer requires one provider without hidden failover",
             usage=usage,
@@ -471,9 +517,7 @@ async def run_planner_reviewer(
             ) from error
         except ProviderError as error:
             usage[role] = _merge_usage(usage[role], _error_usage(role, error))
-            code: MultiAgentStopCode = (
-                "BUDGET_EXCEEDED" if error.budget_code == "TOKEN_BUDGET" else "MODEL_ERROR"
-            )
+            code = _provider_stop_code(error)
             trace.add("model.failed", role=role, code=code)
             raise _OrchestrationFailure(code, "provider call failed") from error
         except _OrchestrationFailure:
@@ -494,6 +538,9 @@ async def run_planner_reviewer(
             usage[role] = _merge_usage(usage[role], _attempt_usage(role))
             trace.add("model.failed", role=role, code="INVALID_OUTPUT")
             raise _OrchestrationFailure("INVALID_OUTPUT", "provider response type was invalid")
+        tool_count = len(response.tool_calls)
+        if tool_count:
+            trace._unauthorized_tool_calls += tool_count
         try:
             _response_usage(response)
         except _OrchestrationFailure as failure:
@@ -501,8 +548,13 @@ async def run_planner_reviewer(
             trace.add("model.failed", role=role, code=failure.code)
             raise
         usage[role] = _merge_usage(usage[role], _role_usage(role, response, elapsed_ms))
-        if response.tool_calls:
-            trace.add("model.failed", role=role, code="INVALID_OUTPUT")
+        if tool_count:
+            trace.add(
+                "model.failed",
+                role=role,
+                code="INVALID_OUTPUT",
+                tool_count=len(response.tool_calls),
+            )
             raise _OrchestrationFailure("INVALID_OUTPUT", "role returned an unauthorized tool call")
         if cancellation_event is not None and cancellation_event.is_set():
             trace.add("model.failed", role=role, code="CANCELLED")
@@ -588,6 +640,7 @@ async def run_planner_reviewer(
             return _make_result(
                 task_id=task_id,
                 run_id=run_id,
+                correlation_id=correlation_id,
                 final_text=final_text,
                 code="ACCEPTED",
                 detail="review accepted; deterministic validation passed",
@@ -667,6 +720,7 @@ async def run_planner_reviewer(
             return _make_result(
                 task_id=task_id,
                 run_id=run_id,
+                correlation_id=correlation_id,
                 final_text=final_text,
                 code="REVISED_ACCEPTED",
                 detail="one revision passed deterministic validation",
@@ -686,7 +740,8 @@ async def run_planner_reviewer(
         return _make_result(
             task_id=task_id,
             run_id=run_id,
-            final_text=view.summary,
+            correlation_id=correlation_id,
+            final_text=safe_deterministic_fallback(_final_plan_dict(view)),
             code=code,
             detail="review did not authorize a candidate explanation",
             usage=usage,
@@ -702,7 +757,8 @@ async def run_planner_reviewer(
         return _make_result(
             task_id=task_id,
             run_id=run_id,
-            final_text=view.summary,
+            correlation_id=correlation_id,
+            final_text=safe_deterministic_fallback(_final_plan_dict(view)),
             code=failure.code,
             detail=failure.detail,
             usage=usage,

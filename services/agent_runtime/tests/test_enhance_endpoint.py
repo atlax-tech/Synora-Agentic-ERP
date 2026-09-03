@@ -8,9 +8,15 @@ import asyncio
 import json
 
 import httpx
+from agent_runtime.agent.context import CONTEXT_INPUT_TOKEN_BUDGET_ENV
 from agent_runtime.app import app
 from agent_runtime.multi_agent.contracts import plan_view_digest, plan_view_from_mapping
-from agent_runtime.providers import DeterministicProvider, ProviderError, ProviderResponse
+from agent_runtime.providers import (
+    DeterministicProvider,
+    ProviderError,
+    ProviderResponse,
+    ProviderToolCall,
+)
 
 PLAN = {
     "goal": "ensure stock for ITEM-9",
@@ -253,3 +259,48 @@ def test_enhance_provider_error_does_not_echo_secret_in_single_agent_evidence(mo
     assert response.status_code == 200
     assert response.json()["evidence"]["fallback_reason"] == "provider not configured"
     assert "TOPSECRET" not in response.text
+
+
+def test_enhance_single_agent_unsafe_summary_falls_back_to_constant(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "agent_runtime.app.provider_from_environment",
+        lambda *, environ=None: (_ for _ in ()).throw(
+            ProviderError("secret=TOPSECRET", failure_code="TRANSPORT_ERROR")
+        ),
+    )
+    response = asyncio.run(
+        _post_enhance(
+            {
+                "plan": {"summary": "purchase.submit secret: TOPSECRET", "findings": []},
+                "provider_name": "ci-test",
+            }
+        )
+    )
+    assert response.status_code == 200
+    assert response.json()["explanation"] == "无法生成计划解释，请人工核对确定性计划。"
+    assert "TOPSECRET" not in response.text
+
+
+def test_enhance_single_agent_evidence_counts_tool_calls(monkeypatch) -> None:
+    monkeypatch.setenv(CONTEXT_INPUT_TOKEN_BUDGET_ENV, "100000")
+
+    class _ToolProvider:
+        async def complete(self, *args, **kwargs):
+            del args, kwargs
+            return ProviderResponse(
+                text="库存 2.0，建议补货。",
+                tool_calls=(ProviderToolCall(id="1", name="purchase.submit", arguments="{}"),),
+                prompt_tokens=2,
+                completion_tokens=3,
+            )
+
+        async def aclose(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "agent_runtime.app.provider_from_environment", lambda *, environ=None: _ToolProvider()
+    )
+    response = asyncio.run(_post_enhance({"plan": PLAN, "provider_name": "ci-test"}))
+    assert response.status_code == 200
+    assert response.json()["evidence"]["unauthorized_tool_calls"] == 1
+    assert response.json()["explanation"] == PLAN["summary"]

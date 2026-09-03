@@ -314,6 +314,7 @@ class TraceSummary(StrictModel):
     event_count: int = Field(ge=0, le=64)
     event_types: tuple[str, ...] = Field(default=(), max_length=64)
     digest: Digest
+    unauthorized_tool_calls: int = Field(default=0, ge=0, le=3)
 
 
 class MultiAgentResult(StrictModel):
@@ -321,6 +322,7 @@ class MultiAgentResult(StrictModel):
 
     task_id: UUID
     run_id: UUID
+    correlation_id: UUID
     final_text: str = Field(min_length=1, max_length=4_000)
     stop_reason: MultiAgentStopReason
     role_usage: tuple[RoleUsage, ...] = Field(default=(), max_length=4)

@@ -10,6 +10,23 @@ _UNSAFE_LITERAL_PATTERN = re.compile(
     r"approve\s*the\s*order|expand\s*capability|(?:runtime\s*)?token\s*[:=]|"
     r"api[_-]?key\s*[:=]|authorization\s*[:=]|cookie\s*[:=]|secret\s*[:=])"
 )
+_UNSAFE_SECRET_VALUE_PATTERN = re.compile(
+    r"(?i)\b(?:secret|api[_-]?key|authorization|cookie|runtime\s+token)\b"
+    r"\s*(?:[:=]\s*[^\s,;]{3,}|\s+(?-i:[A-Z0-9][A-Z0-9_-]{5,}))"
+)
+_EXTERNAL_SCOPE_PATTERN = re.compile(
+    r"(?i)(?:\b(?:other|another)[-_ ](?:company|warehouse|user)\b|"
+    r"\b(?:other|another)[-_ ](?:company|warehouse)\s+(?:inventory|stock|data|facts?)\b|"
+    r"\b(?:OTHER-COMPANY|OTHER-WAREHOUSE)\b)"
+)
+_EXTERNAL_SCOPE_FACT_PATTERN = re.compile(
+    r"(?i)(?:inventory|stock|quantity|data|facts?|records?|access|"
+    r"库存|数量|事实|记录|访问|仓库|公司|用户)"
+)
+_EXTERNAL_SCOPE_NEGATION_PATTERN = re.compile(
+    r"(?i)(?:\b(?:cannot|can't|unable|refuse|reject|not\s+provide|read[- ]?only)\b|"
+    r"不能|不可|无法|拒绝|不提供|只读|仅限|当前范围)"
+)
 _UNSAFE_CAPABILITY_PATTERN = re.compile(
     r"(?ix)(?:"
     r"开放(?:写(?:入)?|调用|工具|权限|能力)|申请扩大(?:写入)?(?:权限|能力)|"
@@ -392,6 +409,18 @@ def _has_unsafe_action_pair(text: str) -> bool:
     return False
 
 
+def _has_external_scope_leak(value: str) -> bool:
+    """Reject an affirmative reference to another company/user/warehouse."""
+    for match in _EXTERNAL_SCOPE_PATTERN.finditer(value):
+        context = value[max(0, match.start() - 48) : match.end() + 48]
+        if _EXTERNAL_SCOPE_FACT_PATTERN.search(context) is None:
+            continue
+        prefix = value[max(0, match.start() - 48) : match.start()]
+        if _EXTERNAL_SCOPE_NEGATION_PATTERN.search(prefix) is None:
+            return True
+    return False
+
+
 def _documents_have_readonly_context(value: str) -> bool:
     """Require ERP references to be read-only or part of a deterministic fact."""
     normalized = _without_format(value)
@@ -422,6 +451,10 @@ def contains_unsafe_text(value: str) -> bool:
     """Return whether text exposes a capability or affirmative ERP action."""
     compact = _compact(value)
     if _UNSAFE_LITERAL_PATTERN.search(compact):
+        return True
+    if _UNSAFE_SECRET_VALUE_PATTERN.search(value):
+        return True
+    if _has_external_scope_leak(value):
         return True
     action_compact = _action_compact(compact)
     if any(

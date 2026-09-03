@@ -9,6 +9,7 @@ import pytest
 from agent_runtime.agent.context import CONTEXT_INPUT_TOKEN_BUDGET_ENV
 from agent_runtime.agent.enhance import (
     ENHANCE_MAX_TOKENS,
+    SAFE_ENHANCEMENT_FALLBACK,
     build_context,
     build_prompt,
     enhance_plan,
@@ -18,6 +19,7 @@ from agent_runtime.providers import (
     DeterministicProvider,
     ProviderError,
     ProviderResponse,
+    ProviderToolCall,
 )
 
 PLAN = {
@@ -125,6 +127,14 @@ def test_validate_rejects_capability_echo_from_untrusted_request() -> None:
     assert validate_explanation("只能提供只读分析：purchase.submit。", plan) is None
 
 
+@pytest.mark.parametrize(
+    "text",
+    ["库存 60.0，secret ABCDEF。", "OTHER-COMPANY inventory 60.0。", "another user data 1.0。"],
+)
+def test_validate_rejects_secret_and_external_scope_echoes(text: str) -> None:
+    assert validate_explanation(text, PLAN) is None
+
+
 def test_validate_rejects_chinese_erp_action_text() -> None:
     assert validate_explanation("库存 60.0，建议提交采购订单。", PLAN) is None
 
@@ -224,7 +234,38 @@ def test_enhance_falls_back_on_provider_error() -> None:
     text, evidence = _run(enhance_plan(PLAN, _BoomProvider(), context_environ=CONTEXT_ENV))
     assert text == PLAN["summary"]
     assert evidence.status == "fallback_error"
-    assert "down" in str(evidence.fallback_reason)
+    assert evidence.fallback_reason == "provider failure: PROVIDER_ERROR"
+
+
+def test_enhance_never_echoes_unsafe_deterministic_summary_on_provider_error() -> None:
+    unsafe_plan = {**PLAN, "summary": "purchase.submit secret: TOPSECRET"}
+
+    class _BoomProvider:
+        async def complete(self, *args, **kwargs):
+            del args, kwargs
+            raise ProviderError("secret=TOPSECRET", failure_code="TRANSPORT_ERROR")
+
+    text, evidence = _run(enhance_plan(unsafe_plan, _BoomProvider(), context_environ=CONTEXT_ENV))
+    assert text == SAFE_ENHANCEMENT_FALLBACK
+    assert "TOPSECRET" not in text
+    assert evidence.fallback_reason == "provider failure: TRANSPORT_ERROR"
+
+
+def test_enhance_rejects_and_counts_provider_tool_calls() -> None:
+    class _ToolProvider:
+        async def complete(self, messages, tools=None, model=None, max_tokens=None):
+            del messages, tools, model, max_tokens
+            return ProviderResponse(
+                text="库存 60.0，建议补货。",
+                tool_calls=(ProviderToolCall(id="1", name="purchase.submit", arguments="{}"),),
+                prompt_tokens=10,
+                completion_tokens=5,
+            )
+
+    text, evidence = _run(enhance_plan(PLAN, _ToolProvider(), context_environ=CONTEXT_ENV))
+    assert text == PLAN["summary"]
+    assert evidence.status == "fallback_validation"
+    assert evidence.unauthorized_tool_calls == 1
 
 
 def test_enhance_preserves_rejected_provider_usage() -> None:

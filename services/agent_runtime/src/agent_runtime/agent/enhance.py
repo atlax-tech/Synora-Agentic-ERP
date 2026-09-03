@@ -7,8 +7,9 @@
 2. 文本中出现的数字必须能在确定性计划数据中找到 (模型不得编造数量);
 3. 文本不得反转风险结论 (缺货/重复采购等分类词由数据决定)。
 
-校验失败或 provider 调用失败 -> 回退确定性文案 (plan["summary"]), 并记录
-token、耗时、状态与回退原因证据。CI 使用 DeterministicProvider, 不依赖
+校验失败或 provider 调用失败 -> 回退经过同一安全校验的确定性文案; 不安全或
+损坏的摘要使用固定安全文案, 并记录 token、耗时、状态与固定回退原因证据。CI 使用
+DeterministicProvider, 不依赖
 付费真实模型。
 """
 
@@ -38,6 +39,7 @@ from agent_runtime.providers import Provider, ProviderError, ProviderMessage
 # 模型输出上限 (成本护栏; 解释文本 256 token 足够)。
 ENHANCE_MAX_TOKENS = 256
 ENHANCEMENT_TASK_PROFILE = "PLAN_ENHANCEMENT"
+SAFE_ENHANCEMENT_FALLBACK = "无法生成计划解释，请人工核对确定性计划。"
 
 _NUMBER_TOKEN = re.compile(r"-?\d+(?:\.\d+)?")
 
@@ -146,6 +148,15 @@ class EnhancementEvidence:
     compression_reasons: tuple[str, ...] = ()
     dropped_fragment_ids: tuple[str, ...] = ()
     skill_refs: tuple[str, ...] = ()
+    unauthorized_tool_calls: int = 0
+
+
+def safe_deterministic_fallback(plan: Mapping[str, Any]) -> str:
+    """Return a deterministic summary only after normal output checks."""
+    summary = plan.get("summary")
+    if isinstance(summary, str) and validate_explanation(summary, dict(plan)) is not None:
+        return summary
+    return SAFE_ENHANCEMENT_FALLBACK
 
 
 def build_context(
@@ -204,6 +215,7 @@ def _make_evidence(
     fallback_reason: str | None,
     context_result: ContextBuildResult | None,
     actual_prompt_tokens: int | None = None,
+    unauthorized_tool_calls: int = 0,
 ) -> EnhancementEvidence:
     metadata = _context_evidence(
         context_result,
@@ -250,7 +262,28 @@ def _make_evidence(
         compression_reasons=metadata_strings("compression_reasons"),
         dropped_fragment_ids=metadata_strings("dropped_fragment_ids"),
         skill_refs=metadata_strings("skill_refs"),
+        unauthorized_tool_calls=max(0, unauthorized_tool_calls),
     )
+
+
+def _provider_failure_code(error: ProviderError) -> str:
+    """Map provider details to a fixed, non-secret evidence code."""
+    if error.budget_code == "TOKEN_BUDGET":
+        return "TOKEN_BUDGET"
+    code = str(getattr(error, "failure_code", "PROVIDER_ERROR"))
+    allowed = {
+        "TIMEOUT",
+        "CANCELLED",
+        "TRANSPORT_ERROR",
+        "RESPONSE_SCHEMA",
+        "RESPONSE_NO_CHOICES",
+        "RESPONSE_CONTENT_MISSING",
+        "RESPONSE_TOO_LARGE",
+        "HTTP_ERROR",
+        "INVALID_REQUEST",
+        "PROVIDER_ERROR",
+    }
+    return code if code in allowed else "PROVIDER_ERROR"
 
 
 async def enhance_plan(
@@ -271,7 +304,7 @@ async def enhance_plan(
             else "fallback_context_invalid"
         )
         return (
-            str(plan.get("summary", "")),
+            safe_deterministic_fallback(plan),
             _make_evidence(
                 provider=provider_name,
                 prompt_tokens=0,
@@ -279,13 +312,14 @@ async def enhance_plan(
                 reasoning_tokens=0,
                 elapsed_ms=int((monotonic() - started) * 1000),
                 status=status,
-                fallback_reason=f"context error: {error.reason}",
+                fallback_reason=f"context failure: {error.code}",
                 context_result=error.result,
             ),
         )
     try:
         response = await provider.complete(
             list(context_result.messages),
+            tools=[],
             max_tokens=ENHANCE_MAX_TOKENS,
         )
     except ProviderError as error:
@@ -302,7 +336,7 @@ async def enhance_plan(
         else:
             status = "fallback_error"
         return (
-            str(plan.get("summary", "")),
+            safe_deterministic_fallback(plan),
             _make_evidence(
                 provider=provider_name,
                 prompt_tokens=error.prompt_tokens,
@@ -310,7 +344,7 @@ async def enhance_plan(
                 reasoning_tokens=error.reasoning_tokens,
                 elapsed_ms=elapsed_ms,
                 status=status,
-                fallback_reason=f"provider error: {error}",
+                fallback_reason=f"provider failure: {_provider_failure_code(error)}",
                 context_result=context_result,
                 actual_prompt_tokens=error.prompt_tokens,
             ),
@@ -325,7 +359,7 @@ async def enhance_plan(
             else "fallback_context_invalid"
         )
         return (
-            str(plan.get("summary", "")),
+            safe_deterministic_fallback(plan),
             _make_evidence(
                 provider=provider_name,
                 prompt_tokens=response.prompt_tokens,
@@ -333,15 +367,31 @@ async def enhance_plan(
                 reasoning_tokens=response.reasoning_tokens,
                 elapsed_ms=elapsed_ms,
                 status=status,
-                fallback_reason=f"context error: {error.reason}",
+                fallback_reason=f"context failure: {error.code}",
                 context_result=error.result or context_result,
                 actual_prompt_tokens=response.prompt_tokens,
+            ),
+        )
+    if response.tool_calls:
+        return (
+            safe_deterministic_fallback(plan),
+            _make_evidence(
+                provider=provider_name,
+                prompt_tokens=response.prompt_tokens,
+                completion_tokens=response.completion_tokens,
+                reasoning_tokens=response.reasoning_tokens,
+                elapsed_ms=elapsed_ms,
+                status="fallback_validation",
+                fallback_reason="model output failed validation (unauthorized tool calls)",
+                context_result=context_result,
+                actual_prompt_tokens=response.prompt_tokens,
+                unauthorized_tool_calls=len(response.tool_calls),
             ),
         )
     explanation = validate_explanation(response.text, plan)
     if explanation is None:
         return (
-            str(plan.get("summary", "")),
+            safe_deterministic_fallback(plan),
             _make_evidence(
                 provider=provider_name,
                 prompt_tokens=response.prompt_tokens,
