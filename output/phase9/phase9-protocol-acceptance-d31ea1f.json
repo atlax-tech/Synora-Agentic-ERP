@@ -1,0 +1,79 @@
+{
+  "schema_version": "1",
+  "suite": "phase9-protocol-acceptance",
+  "status": "PASS",
+  "code_head": "d31ea1f3a15a51915f0969f8f05a9494ee598c58",
+  "mcp_sdk": "2.0.0",
+  "a2a_sdk": "1.1.2",
+  "mcp": {
+    "status": "PASS",
+    "tool_names": [
+      "synora.procurement_risk.analyze"
+    ],
+    "stdio_tool_names": [
+      "synora.procurement_risk.analyze"
+    ],
+    "valid_result_digest": "bb13a9ce1c731704472ffafe94c878aeb2a50ad2e8f197a0a6cd45e55ca00894",
+    "unknown_tool_error": true,
+    "rejected_cases": {
+      "nan": true,
+      "infinity": true,
+      "unknown_field": true,
+      "oversized_input": true,
+      "injection_text": true
+    },
+    "resources": 0,
+    "resource_templates": 0,
+    "prompts": 0,
+    "stdout_protocol_only": true,
+    "stdio_cancellation_clean": true,
+    "stdio_process_closed": true,
+    "sensitive_environment_scrubbed": true,
+    "erp_business_writes": 0
+  },
+  "a2a": {
+    "status": "PASS",
+    "transport": "JSONRPC",
+    "loopback_host": "127.0.0.1",
+    "port": 65392,
+    "normal_state": "completed",
+    "normal_task_digest": "b930a010bcc31df0964339b7dbe1325123e30ef5ac25c583bb0b0ab8b19146a0",
+    "cancel_state": "canceled",
+    "cancel_idempotent": true,
+    "cancel_no_completed": true,
+    "cancel_completed_race_no_completed": true,
+    "task_context_mismatch_error": true,
+    "malformed_payload_error": true,
+    "oversized_payload_error": true,
+    "handler_exception_error": true,
+    "timeout_error": true,
+    "timeout_server_completed": true,
+    "invalid_state_transition_error": true,
+    "unknown_task_error": true,
+    "completed_cancel_error": true,
+    "erp_business_writes": 0,
+    "process_exit_code": -15
+  },
+  "anp": {
+    "status": "PASS",
+    "descriptor_ids": [
+      "procurement-planner",
+      "policy-risk-reviewer",
+      "erp-coach",
+      "reconciliation-agent"
+    ],
+    "descriptor_digest": "bf224a84c01ce565033b09e2db032645248d83968cb9e10516e04229f40548a9",
+    "selected_agent": "policy-risk-reviewer",
+    "selected_endpoint": "http://127.0.0.1:8029/a2a",
+    "no_candidate_error": true,
+    "multi_candidate_conflict_error": true,
+    "malicious_descriptor_rejected": true,
+    "unknown_version_error": true,
+    "expanded_permission_rejected": true,
+    "open_network_endpoint_rejected": true,
+    "unknown_field_rejected": true,
+    "cycle_rejected": true,
+    "network_discovery": false,
+    "adoption": "LAB_ONLY"
+  }
+}

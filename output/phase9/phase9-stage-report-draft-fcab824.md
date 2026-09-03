@@ -2,7 +2,7 @@
 
 状态：`PENDING INDEPENDENT REVIEW`
 
-代码 HEAD：`fcab82401b5671259271e7d343bcd7cab1f8899a`
+代码 HEAD：`d31ea1f3a15a51915f0969f8f05a9494ee598c58`
 Frappe SHA：`6a329d068416768ec47ccd3326b9cc95a8d7bf99`
 ERPNext SHA：`11e0ba0a1c45f217e2e73e885f699102d06da325`
 
@@ -27,14 +27,14 @@ Planner 与 Reviewer Adoption Card 均为 `ADOPT`，`net_benefit=true`、`thresh
 
 ## P9.6–P9.8 协议证据
 
-- `output/phase9/phase9-mcp-acceptance-fcab824.json`：official in-memory/stdio client，唯一工具 discovery/call，未知工具、未知字段、NaN/Infinity、超长输入、注入文本、取消和异常退出均拒绝；resources/templates/prompts 为 0，stdout 仅协议消息，敏感环境已清理，ERP 写入为 0。
-- `output/phase9/phase9-a2a-acceptance-fcab824.json`：官方 SDK 经真实 TCP `127.0.0.1` 完成正常完成、未知 task、context mismatch、malformed/oversized payload、重复/终态取消、cancel/completed 竞争、handler exception、timeout 和非法状态转换；每项结果均为 `true`，取消后无 completed，进程退出码为 -15，ERP 写入为 `0`。
-- `output/phase9/phase9-anp-acceptance-fcab824.json`：四个固定 descriptor，权限最小且唯一候选才路由；无候选、多候选冲突、恶意 descriptor、未知版本、权限扩大、开放网络端点、未知字段和循环路由均 fail closed；每项结果均为 `true`，`adoption=LAB_ONLY`。
-- 合并摘要：`output/phase9/phase9-protocol-acceptance-fcab824.json`。
+- `output/phase9/phase9-mcp-acceptance-d31ea1f.json`：official in-memory/stdio client，唯一工具 discovery/call，未知工具、未知字段、NaN/Infinity、超长输入、注入文本、取消和异常退出均拒绝；resources/templates/prompts 为 0，stdout 仅协议消息，敏感环境已清理，ERP 写入为 0。
+- `output/phase9/phase9-a2a-acceptance-d31ea1f.json`：官方 SDK 经真实 TCP `127.0.0.1` 完成正常完成、未知 task、context mismatch、malformed/oversized payload、重复/终态取消、cancel/completed 竞争、handler exception、timeout、timeout 后服务端完成和非法状态转换；每项结果均为 `true`，取消后无 completed，进程退出码为 -15，ERP 写入为 `0`。
+- `output/phase9/phase9-anp-acceptance-d31ea1f.json`：四个固定 descriptor，权限最小且唯一候选才路由；无候选、多候选冲突、恶意 descriptor、未知版本、权限扩大、开放网络端点、未知字段和循环路由均 fail closed；每项结果均为 `true`，`adoption=LAB_ONLY`。
+- 合并摘要：`output/phase9/phase9-protocol-acceptance-d31ea1f.json`。
 
 ## P9.9 真实业务与恢复证据
 
-`output/phase9/phase9-real-acceptance-fcab824.json` 为 `PASS`，`output/phase9/phase9-final-manifest-fcab824.json` 绑定当前 HEAD、上游 SHA、命令退出码和所列 artifact SHA-256；验收包含：
+`output/phase9/phase9-real-acceptance-fcab824.json` 为 `PASS`，`output/phase9/phase9-final-manifest-d31ea1f.json` 绑定当前 HEAD、上游 SHA、命令退出码和所列 artifact SHA-256；验收包含：
 
 - server-derived `OrchestrationScope`，客户端未提供 identity fields，UUID5 绑定 task/run/correlation；
 - Buyer 正常链路使用真实 GLM `planner_reviewer`，Run `efa39d1c-e9ee-405b-8a61-d7996d128200`，状态 `SUCCEEDED`，停止原因 `ACCEPTED`；
@@ -51,7 +51,7 @@ Planner 与 Reviewer Adoption Card 均为 `ADOPT`，`net_benefit=true`、`thresh
 
 ## 最终 artifact 与截图 SHA-256 清单
 
-manifest：`output/phase9/phase9-final-manifest-fcab824.json`；SHA-256：`5d83d350f6a8a8be535d7aa8b86d0ee90d3bc5588c01d49866bcb20972b42456`。
+manifest：`output/phase9/phase9-final-manifest-d31ea1f.json`；SHA-256：`154631a58877650e6923beea711a57d75c985dd7844de4bfc9623ffaccbcf50f`。
 
 - `output/phase9/phase9-ab-real-glm-v3.json`：`0ea8729d3ca9bbf1d9cfef4c9d323f7bd573fd24ca7fa2487ef1c55a71ff6e90`
 - `output/phase9/phase9-ab-real-glm-v3.md`：`821aaf6ca4d92d32791cb7069dd18091afe9cc2d2783762c3d9c2726bae3fb63`
@@ -71,10 +71,10 @@ manifest：`output/phase9/phase9-final-manifest-fcab824.json`；SHA-256：`5d83d
 - `output/phase9/phase9-ab-recorded-fcab824.md`：`04113b4c5afc9f2eafac178bfbf975b1ab45887aef813aa5f5bb21fde23f8cb8`
 - `output/phase9/phase9-pattern-comparison-fcab824.json`：`a13c85cf93889e47799212421150035afa049eab03d8eab494ce82d731b78e19`
 - `output/phase9/phase9-pattern-comparison-fcab824.md`：`96945b2a8bbcebde77345f1306a9c2228354c1a988c18178e9ad97d9be6e958b`
-- `output/phase9/phase9-protocol-acceptance-fcab824.json`：`cd1006651e4efacfd5038fed28c5fc0f05a696f6388bd209c5477c4c682638b0`
-- `output/phase9/phase9-mcp-acceptance-fcab824.json`：`9d3620f56e70df3a9d40bf52fba064346164a0ca672fa6cb9783e0aa086800c3`
-- `output/phase9/phase9-a2a-acceptance-fcab824.json`：`af6238891c7efe9c3fdafd4019e56a37876cfd1f838dbcb6f033c0e14229a34e`
-- `output/phase9/phase9-anp-acceptance-fcab824.json`：`394d2f479dcb07b8c8e5b191d6aed591e2b39e7e0daebd8d2db66bd15891de71`
+- `output/phase9/phase9-protocol-acceptance-d31ea1f.json`：`85f8fd1d2faae3db8046a7780dbd51311bb69b19a53dfdb772f4b1198a076c1b`
+- `output/phase9/phase9-mcp-acceptance-d31ea1f.json`：`b8c3ed70ee2e62213718c51148763ab363f970068856c12e1c254d7c1d455361`
+- `output/phase9/phase9-a2a-acceptance-d31ea1f.json`：`2e7b4b08c71a3794ea7f4d86a8e2ad4900a7a1c9de10083252409f1661a2f333`
+- `output/phase9/phase9-anp-acceptance-d31ea1f.json`：`b4e2dd2ff3dbe7e35859944b3d2848b73b83687b1bc30977fee252fb6780cf70`
 - `output/phase9/phase9-real-acceptance-fcab824.json`：`f38b9e2b54ebde0cea073d6757f3dd6e78391277a4eaca4cdfad5de95a102548`
 - `output/playwright/phase9-buyer-fcab824.png`：`3ca447e4cd511a267c54cf71e762a15c9d9d4e1bd3d55af40bd145fe2cc891ad`
 - `output/playwright/phase9-viewer-fcab824.png`：`12d72d329e4b5282f8abd11d89ac9f8a1a2b7e60cbf5d6bc08fda95b916387cd`
@@ -135,4 +135,4 @@ P0/P1 风险均为 `0`。P2 有 owner、下一门禁和复验命令；P3 进入 
 
 ## 独立对抗审查
 
-第一轮审查已返回 `CHANGES_REQUIRED`，修复项已在第 44 轮日志记录并换到当前 HEAD；第二轮审查将重新接收原始计划、权威文档、最终 diff、P9.5 原始 A/B、P9.6–P9.9 artifacts、浏览器截图、L3 输出和本报告草稿，结论只能为 `PASS`、`CHANGES_REQUIRED` 或 `BLOCKED`。
+第一轮审查已返回 `CHANGES_REQUIRED`，修复项已在第 44 轮日志记录并换到当前 HEAD；第二轮审查已返回 `CHANGES_REQUIRED`，三项 A2A 修复已在 `d31ea1f` 完成并重新生成协议 artifact；第三轮为最后一次独立对抗审查，将重新接收原始计划、权威文档、最终 diff、P9.5 原始 A/B、P9.6–P9.9 artifacts、浏览器截图、L3 输出和本报告草稿，结论只能为 `PASS`、`CHANGES_REQUIRED` 或 `BLOCKED`。
