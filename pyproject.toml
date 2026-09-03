@@ -17,6 +17,10 @@ dev = [
     "pytest==9.1.1",
     "ruff==0.16.4",
 ]
+protocol-lab = [
+    "a2a-sdk[fastapi]==1.1.2",
+    "mcp==2.0.0",
+]
 lab = [
     "smolagents @ git+https://github.com/huggingface/smolagents.git@30bb1161095dbae2271e6bc3cc4c219cc3897a57",
 ]
