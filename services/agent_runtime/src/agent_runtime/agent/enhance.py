@@ -60,6 +60,21 @@ _RISK_INVERTED_TERMS: dict[str, tuple[str, ...]] = {
 _INVENTED_SHORTAGE_TERMS = ("已缺货", "目前缺货", "严重缺货", "发生短缺", "库存耗尽", "断货")
 # 计划全部为缺货结论时, 文本声称供应过剩 -> 编造风险。
 _INVENTED_SURPLUS_TERMS = ("供应过剩", "完全不需要采购", "过剩")
+# A model may repeat an untrusted request for a write tool or secret.  Even
+# without a callable tool, echoing those capability names makes the response
+# unsafe and can train the user to treat text as authorization.
+_UNSAFE_OUTPUT_TERMS = (
+    "purchase.submit",
+    "material_request.create",
+    "purchase_order.create",
+    "purchase_order.submit",
+    "approve the order",
+    "expand capability",
+    "runtime token",
+    "api key",
+    "authorization:",
+    "cookie:",
+)
 
 
 def build_prompt(plan: dict[str, Any]) -> list[ProviderMessage]:
@@ -117,6 +132,9 @@ def validate_explanation(text: str, plan: dict[str, Any]) -> str | None:
             return None
     semantic_error = _risk_semantic_check(text, plan)
     if semantic_error is not None:
+        return None
+    folded = text.casefold()
+    if any(term in folded for term in _UNSAFE_OUTPUT_TERMS):
         return None
     return text
 
