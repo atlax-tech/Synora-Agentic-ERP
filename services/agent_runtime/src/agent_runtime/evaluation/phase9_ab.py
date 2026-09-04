@@ -749,17 +749,18 @@ def _adoption_cards(
     threshold_ok = _thresholds(single, multi, profile=threshold_profile)
     net = quality_benefit and security and threshold_ok
     evidence_arm = "real same-model A/B" if mode == "real" else "recorded A/B only"
+    profile_label = threshold_profile.replace("-", " ")
     planner_decision: AdoptionDecision = "ADOPT" if net else "REJECT"
     planner_reason = (
-        "Planner arm meets the approved recommended thresholds and improves at least one "
-        "measured target."
+        f"Planner arm meets the {profile_label} quality thresholds and improves at least "
+        "one measured target."
         if net
         else "No approved real net-benefit evidence; keep the Planner experiment LAB_ONLY."
     )
     reviewer_decision: AdoptionDecision = "ADOPT" if net else "REJECT"
     reviewer_reason = (
-        "Reviewer arm is eligible for /enhance only after the same-model A/B clears "
-        "every threshold."
+        f"Reviewer arm is eligible for /enhance after the same-model A/B clears the "
+        f"{profile_label} quality thresholds."
         if net
         else "Reviewer does not receive authorization from an ACCEPT; the A/B has not "
         "proved approved net benefit."
