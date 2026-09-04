@@ -1,6 +1,6 @@
 # Development
 
-Status: `CONFIRMED` engineering policy; P2.1 implementation commands are `CONFIRMED` (verified 2026-08-24). Phase 9 implementation, evidence, and independent adversarial review are `PASS` as of 2026-09-04; final phase status remains pending the explicitly approved README/Harness synchronization.
+Status: `CONFIRMED` engineering policy; P2.1 implementation commands are `CONFIRMED` (verified 2026-08-24). Phase 9 implementation, evidence, independent adversarial review, and README/Harness synchronization are complete as of 2026-09-04 with status `COMPLETED / PASS / READY FOR THE NEXT PHASE`.
 
 ## Change Protocol
 
@@ -254,7 +254,7 @@ Implementation HEAD is `8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e`; the evidence/
 
 P9.6–P9.8 formal MCP stdio, real `127.0.0.1` TCP A2A, and fixed ANP acceptance passed. P9.9 real Buyer/Viewer/System Manager acceptance passed with genuine GLM calls, controlled recovery, three bound screenshots, unchanged ERP anchors, and zero ERP business writes. P9.10 format, lint, type, unit, integration, focused, Python 3.14, upstream, ponytail, and Harness read-only checks are recorded in `output/phase9/phase9-final-manifest-8b7ff1b.json`; the expected pre-sync Harness drift remains explicit. The sole final independent adversarial review returned `PASS`.
 
-The stage report draft is `output/phase9/phase9-stage-report-draft-8b7ff1b.md` with status `PENDING README/HARNESS APPROVAL` after the review result was incorporated. README and `.harness/` remain unchanged pending the required file-level proposal and user approval.
+The stage report is `output/phase9/phase9-stage-report-draft-8b7ff1b.md` with status `COMPLETED / PASS / READY FOR THE NEXT PHASE`. The approved file-level proposal `P9-HARNESS-CLOSE-20260904-v2` synchronized both README files and `.harness/` metadata after the independent review passed.
 
 ## Sources
 

@@ -377,7 +377,7 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 
 ## 18. Phase 9 — Multi-Agent、MCP 与 A2A
 
-当前执行状态（2026-09-04）：`EVIDENCE PASS / INDEPENDENT REVIEW PASS / PENDING README-HARNESS APPROVAL`。P9.5 按用户批准的 `quality-first-model-v1` 完成真实同模型 A/B：GLM `assist/glm-5.3-flash` 的 v12 是第一份满足质量优先规则的证据，Planner 与 Reviewer 均 `ADOPT`；token 只作为审计数据，不再单独否决。v13 的随机波动失败、qwen3:8b 和 Grok 的失败 artifact 均保留，`qwen3.8:27b` 未调用。P9.6–P9.8 的真实 MCP stdio、`127.0.0.1` TCP A2A 和固定 ANP fail-closed 验收均 `PASS`；MCP/A2A/ANP 保持 `LAB_ONLY`，ANP 为 `NOT ADOPTED`。P9.9 真实 GLM 业务链路、三角色权限、故障恢复、浏览器和 ERP 零写入验收均 `PASS`。P9.10 L3、Rubric、风险登记和阶段报告草稿已冻结，唯一独立对抗审查返回 `PASS`；最终阶段状态待 README/Harness 精确 proposal 获批准后写为 `COMPLETED / PASS / READY FOR THE NEXT PHASE`。Phase 10 保持未开始。
+当前执行状态（2026-09-04）：`COMPLETED / PASS / READY FOR THE NEXT PHASE`。P9.5 按用户批准的 `quality-first-model-v1` 完成真实同模型 A/B：GLM `assist/glm-5.3-flash` 的 v12 是第一份满足质量优先规则的证据，Planner 与 Reviewer 均 `ADOPT`；token 只作为审计数据，不再单独否决。v13 的随机波动失败、qwen3:8b 和 Grok 的失败 artifact 均保留，`qwen3.8:27b` 未调用。P9.6–P9.8 的真实 MCP stdio、`127.0.0.1` TCP A2A 和固定 ANP fail-closed 验收均 `PASS`；MCP/A2A/ANP 保持 `LAB_ONLY`，ANP 为 `NOT ADOPTED`。P9.9 真实 GLM 业务链路、三角色权限、故障恢复、浏览器和 ERP 零写入验收均 `PASS`。P9.10 L3、Rubric、风险登记和阶段报告已冻结，唯一独立对抗审查返回 `PASS`；README/Harness proposal `P9-HARNESS-CLOSE-20260904-v2` 已批准并同步。Phase 10 保持未开始。
 
 - 实现 Supervisor、Peer-to-Peer、Hierarchical、managed-agent-as-tool 和显式 graph node 的最小对照。
 - 先评估 `Planner → Policy/Risk Reviewer`，只在异常路径启动 Reconciliation Agent；所有 handoff typed、工具隔离、预算有界。

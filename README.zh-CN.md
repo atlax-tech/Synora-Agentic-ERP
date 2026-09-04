@@ -8,9 +8,9 @@
 
 Synora 已完成 **Phase 0 至 Phase 3 的只读范围**：经治理的工程基线、固定的 Frappe/ERPNext v16 组合、类型化只读 ERP Gateway（服务端 Run/capability 模型、已验证只读工具、Agent Runtime HTTPX 客户端），以及只读 Procurement Agent（确定性风险分析、可解释计划、BYOK 模型 Provider、FTS5 检索和失败安全的解释增强）均已实现。P3.5 的 Buyer → Frappe → Runtime → BYOK 链路已通过真实 HTTP 走通；模型输出不安全、超预算或无法验证时，会明确回退到确定性摘要。
 
-Phase 3 阶段出口审查**已通过**：独立对抗审查最初返回 `CHANGES_REQUIRED`（8 项阻断），修复经过三轮复评；本轮最终收尾又关闭了 CAS 失败者误回滚、Docker sidecar 配置/认证、重定向、推理 token 成本记录和过时证据口径。模型护栏准确来说是“请求级输出预算 + Provider 用量校验”，不是服务商计费前的硬成本上限。Phase 4–7 已完成。Phase 8 现已达到 **`COMPLETED / PASS / READY FOR THE NEXT PHASE`**（2026-09-03），有真实 grounded Coach 代表题、一次不可变 12 案、三角色权限证据、零写入检查和独立只读审查支撑。Phase 9 尚未开始，后续 ERP 写入仍单独分阶段交付。
+Phase 3 阶段出口审查**已通过**：独立对抗审查最初返回 `CHANGES_REQUIRED`（8 项阻断），修复经过三轮复评；本轮最终收尾又关闭了 CAS 失败者误回滚、Docker sidecar 配置/认证、重定向、推理 token 成本记录和过时证据口径。模型护栏准确来说是“请求级输出预算 + Provider 用量校验”，不是服务商计费前的硬成本上限。Phase 4–7 已完成。Phase 8 已达到 **`COMPLETED / PASS / READY FOR THE NEXT PHASE`**（2026-09-03），有真实 grounded Coach 代表题、一次不可变 12 案、三角色权限证据、零写入检查和独立只读审查支撑。Phase 9 现已达到 **`COMPLETED / PASS / READY FOR THE NEXT PHASE`**（2026-09-04）：质量优先同模型 A/B 采用了有界的 GLM `assist/glm-5.3-flash` Planner → Policy/Risk Reviewer 路径；真实 Frappe/Runtime、MCP/A2A/ANP 协议、L3、ERP 业务零写入和独立对抗审查均通过。MCP/A2A/ANP 仍为 `LAB_ONLY`（ANP 未采用）；Phase 10 及后续 ERP 写入继续分阶段交付。
 
-Phase 8 Coach 使用命名 BYOK 角色（`qwen3:8b` → `glm-5.3-flash` → `grok-4.5` → `qwen3.8:27b`），请求级有界升级，固定 `tools=[]`、`trust_env=False` 和有限 deadline。结果证明的是已实现的只读链路及其安全边界，不声称生产部署、客户采用或泛化模型质量收益。
+Phase 8 Coach 使用命名 BYOK 角色（`qwen3:8b` → `glm-5.3-flash` → `grok-4.5` → `qwen3.8:27b`），请求级有界升级，固定 `tools=[]`、`trust_env=False` 和有限 deadline。Phase 9 沿用该 Provider 顺序，在第一个质量优先采用候选处停止，未调用 `qwen3.8:27b`。证据证明的是已实现的有界链路及其安全边界，不声称生产部署、客户采用或泛化模型质量收益。
 
 已批准的项目定位是**“Agent 开发岗位学习仓库 + 真实 ERP 实践载体”**。同一仓库、同一开发主线中同时保留业务应用层和教学实验层：前者证明 Agent 技术能在真实 ERP 约束下工作，后者在采用或拒绝一项技术前做最小可运行对照。这不是两个仓库或两条长期分支，商业化最小范围也不是学习目标。
 
@@ -249,7 +249,7 @@ Synora-Agentic-ERP/
 - [x] Phase 6：受治理 MR/PO Draft、审批、幂等、回执与对账
 - [x] Phase 7：Prompt、Context Engineering 与 Skills
 - [x] Phase 8：Memory、RAG 与 Contextual ERP Coach
-- [ ] Phase 9：Multi-Agent、MCP 与 A2A 实验及证据门禁
+- [x] Phase 9：Multi-Agent、MCP 与 A2A 证据门禁（质量优先 Planner → Reviewer；MCP/A2A/ANP 保持 LAB_ONLY）
 - [ ] Phase 10：完整 P2P 运营 Agent
 - [ ] Phase 11：Web/GUI Agent 与多模态观察
 - [ ] Phase 12：自进化、后训练与 Agentic RL 实验
@@ -259,7 +259,7 @@ Synora-Agentic-ERP/
 
 ## 参与贡献
 
-受治理的只读 Gateway、Phase 3 Procurement Agent 和 Phase 8 Contextual Coach 收口已实现；Phase 9 及以后仍处于分阶段交付状态。修改前请先阅读 `AGENTS.md` 及相关需求、架构、测试和验收文档；遵循 Assignment/导师流程，保持小步提交，在 `docs/development-log/` 中记录通俗中文说明、用户原话问题，并如实报告实际运行的命令。
+受治理的只读 Gateway、Phase 3 Procurement Agent、Phase 8 Contextual Coach 和有界 Phase 9 Planner → Reviewer 路径均已按证据收口；Phase 10 及以后仍处于分阶段交付状态。修改前请先阅读 `AGENTS.md` 及相关需求、架构、测试和验收文档；遵循 Assignment/导师流程，保持小步提交，在 `docs/development-log/` 中记录通俗中文说明、用户原话问题，并如实报告实际运行的命令。
 
 ## 常见问题
 
@@ -269,7 +269,7 @@ Synora-Agentic-ERP/
 
 ### 为什么不一开始就使用 Multi-Agent？
 
-学习路线会在 Phase 9 实现 Multi-Agent、MCP 和 A2A。单 Agent 是对比基线；只有有可测净收益的角色进入业务主线，其他角色仍保留可运行学习证据。
+Phase 9 已完成这项对比：质量优先同模型证据采用有界 Planner → Policy/Risk Reviewer 路径，MCP/A2A/ANP 保持 LAB_ONLY，拒绝的角色继续保留可运行证据；单 Agent 仍是对比基线。
 
 ### 为什么先使用 FTS5，而不是直接使用向量数据库？
 
@@ -277,7 +277,7 @@ FTS5 本地、可检查、成本低，适合作为明确基线。完整 RAG 路�
 
 ### 现在能运行 Synora 吗？
 
-Phase 3 只读 Gateway 与采购 Agent 可基于固定 Bench 环境运行：命令见 `docs/DEVELOPMENT.md`，真实 HTTP 检查见 `env/dev/p26` 与 `env/dev/p35`。Phase 8 的真实 Coach 证据和可复跑命令见 `docs/TESTING.md` 与 `output/phase8/`。Phase 9 尚未开始；`approval-workflow-mapping` 和后续受治理写入仍单独分阶段交付。
+Phase 3 只读 Gateway 与采购 Agent 可基于固定 Bench 环境运行：命令见 `docs/DEVELOPMENT.md`，真实 HTTP 检查见 `env/dev/p26` 与 `env/dev/p35`。Phase 8 的真实 Coach 与 Phase 9 的真实 Planner → Reviewer、协议和零写入证据见 `docs/TESTING.md` 及 `output/phase8/`、`output/phase9/`。Phase 10 的后续受治理写入仍单独分阶段交付；Phase 9 证据复现仍需要固定本地 Bench 和已配置的 Provider 环境。
 
 ## License
 

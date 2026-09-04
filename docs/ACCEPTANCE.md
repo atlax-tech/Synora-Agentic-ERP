@@ -2,9 +2,9 @@
 
 Status: `CONFIRMED` product-level acceptance direction. Phase 8 is
 `COMPLETED / PASS / READY FOR THE NEXT PHASE` as of 2026-09-03. Phase 9's
-implementation, real acceptance, L3 evidence, and independent review are
-`PASS` as of 2026-09-04; final phase status awaits the explicit README/Harness
-synchronization approval required by the project workflow.
+implementation, real acceptance, L3 evidence, independent review, and
+README/Harness synchronization are complete as of 2026-09-04; its status is
+`COMPLETED / PASS / READY FOR THE NEXT PHASE`.
 
 ## Product Acceptance Principles
 

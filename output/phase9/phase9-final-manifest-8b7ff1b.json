@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "suite": "phase9-final-manifest",
-  "status": "PENDING_README_HARNESS_APPROVAL",
+  "status": "COMPLETED_PASS_READY_FOR_NEXT_PHASE",
   "generated_at": "2026-09-04T06:53:54.399616+00:00",
   "code_head": "8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e",
   "implementation_head": "8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e",
@@ -220,8 +220,8 @@
   ],
   "report": {
     "path": "output/phase9/phase9-stage-report-draft-8b7ff1b.md",
-    "sha256": "529ce29866de80a38544b57f7982f1239159b0f7ce9b5930a55f6024928ff0fc",
-    "status": "PENDING_README_HARNESS_APPROVAL"
+    "sha256": "f46a29e949cde95e671a1b8949acda1d8a99b05976d8460b98dc7ccba993af05",
+    "status": "COMPLETED_PASS_READY_FOR_NEXT_PHASE"
   },
   "command_exit_codes": {
     "make_format_check": 0,
@@ -241,7 +241,7 @@
     "harness_validate_structure": 0,
     "harness_check_references": 0,
     "harness_score_health": 0,
-    "harness_detect_drift": 1
+    "harness_detect_drift": 0
   },
   "review": {
     "status": "PASS",
@@ -272,14 +272,11 @@
     "evidence_commit": "9f2f6ca6217ecacbc8acc87aaa7686869c70dc02",
     "adoption_evidence_source_head": "7bad441034d44dfb6aa39d278a932c25034a7700",
     "adoption_source_diff": "Adoption Card reason text only; runtime/evaluator semantics unchanged",
-    "report_sha256": "529ce29866de80a38544b57f7982f1239159b0f7ce9b5930a55f6024928ff0fc",
+    "report_sha256": "f46a29e949cde95e671a1b8949acda1d8a99b05976d8460b98dc7ccba993af05",
     "manifest_self_digest": "excluded to avoid circular digest",
     "review_result": "PASS",
-    "review_head": "a87f254c2339ee9253d4c0802b38e4b9dcfb7103"
+    "review_head": "a87f254c2339ee9253d4c0802b38e4b9dcfb7103",
+    "harness_proposal": "P9-HARNESS-CLOSE-20260904-v2"
   },
-  "unrun_or_pending": [
-    "README proposal approval",
-    "Harness Phase A proposal approval",
-    "final README/Harness application and drift recheck"
-  ]
+  "unrun_or_pending": []
 }

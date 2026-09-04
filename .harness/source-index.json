@@ -7,7 +7,7 @@
       "path": "docs/PRD.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "79cb5558e348e3c93f8aef57591a6c8e8e32e45394a105fb609d7dcb057cb14d",
+      "sha256": "d5b442be6e530f0e395431152815c9d2fd91c61ecc2de235903f8da10280af21",
       "locator": "single merged product definition and requirements baseline; unresolved decisions remain explicitly marked"
     },
     {
@@ -15,7 +15,7 @@
       "path": "docs/ARCHITECTURE.md",
       "kind": "architecture",
       "status": "CONFIRMED",
-      "sha256": "ccdcacbab1c6bdb3546a453d2cb368e16ea971a2eeb2d2771e3c416b5d7b9ab1",
+      "sha256": "a67b7c68e1e401c8996aaa7ed0b61a213192efa3079c1a9e88e9927676719ca8",
       "locator": "approved target architecture; open implementation decisions remain explicit"
     },
     {
@@ -31,7 +31,7 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "10247684c2930a880fc4467d2953e40cb44cadc77ea4d90b63e1ef6d3c7f8bee",
+      "sha256": "efb8d04309c58f2bc7ea4f75be7f5afe41e61aed6a252dd6dc3db0acd34f0bcc",
       "locator": "phase selection and execution order, risk-tiered gates, independent adversarial review, and Phase 0 through Phase 13 status"
     },
     {
@@ -87,7 +87,7 @@
       "path": "docs/DEVELOPMENT.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "ad1a9d81476d78d66cdcc3b5dc0763492ce823c2b15f1f4100135b183c73f3df",
+      "sha256": "bef03c02c3b7dacf3125b58f96aa3b06bbb9f0c56e18f2ccdb6d7a5b09beb8f0",
       "locator": "implementation evidence protocol, mentor-led Assignment requirement, verbatim blocker recording, and phase/release PASS gate"
     },
     {
@@ -95,7 +95,7 @@
       "path": "README.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "8e71ae44f7abffa5168567cffdbaf4369e7b33cec14c84825a528d92e2b8b1ff",
+      "sha256": "34b7aea82b1c27070faca71c1197ade9b18c8aa3ba272c9f41b6e5d89c809040",
       "locator": "English repository positioning, evidence status, mentor-led learning workflow, phase gates, architecture summary, and roadmap"
     },
     {
@@ -208,7 +208,7 @@
       "kind": "code",
       "locator": "模型自然语言增强：确定性计算 + 模型仅解释 + 严格校验回退 + provider/usage/reasoning 证据记录",
       "status": "CONFIRMED",
-      "sha256": "f160226bd96f8286d99e695bd0474757538234aa970f3ffce7affb8d8fbe2352"
+      "sha256": "252287b62e7b25b2be09cad131c1e8328e703b3ac05602c8b65a67ef967de8b7"
     },
     {
       "id": "p34-provider-module",
@@ -240,7 +240,7 @@
       "kind": "code",
       "locator": "可解释只读计划生成（goal 匹配、风险摘要、逐项建议+来源+未知项）",
       "status": "CONFIRMED",
-      "sha256": "b5f34a8efdc301ade84de381eb48840b55028a1cd36e81e5d31ff31d0e8c174b"
+      "sha256": "d0c258506bdd7b7e0d664eae995b9ed90b754f7227c729941349999f2589fb6a"
     },
     {
       "id": "p32-state-machine",
@@ -288,7 +288,7 @@
       "kind": "code",
       "locator": "P3.5 plan/analyze 编排、Run capability/state/CAS、失败恢复、Runtime tokenized HTTP boundary",
       "status": "CONFIRMED",
-      "sha256": "0ab0e281b946b3296a5499a5cd0fbd4ba3b381f4df5d3157ce99a12e372499f3"
+      "sha256": "040983f96aeeb22a7d310cc48829beb95b7f0bb79d36674c4fe7d95564dd0367"
     },
     {
       "id": "p35-runtime-app",
@@ -296,7 +296,7 @@
       "kind": "code",
       "locator": "Runtime /enhance：内部令牌校验、BYOK provider label、确定性回退和 evidence 返回",
       "status": "CONFIRMED",
-      "sha256": "9482699ce9e8a02f4307ad884decde26361e8e2d7cd9ab1084bb04837b1abadd"
+      "sha256": "34dfa040622cf5a9d29c95b2f0a65f46463ee443d429d7361253edd304b9dabd"
     },
     {
       "id": "p35-api-evidence",
@@ -304,7 +304,7 @@
       "kind": "code",
       "locator": "Run Plan evidence API 与 T03 Memory review queue/detail/review wrappers；provider/token/权限边界保持受控",
       "status": "CONFIRMED",
-      "sha256": "a397c1e51869ce8fe9ed38cc6a3dc7c2fd1bdd7eb75180be6335f11576791a31"
+      "sha256": "583b7abdfc194156844036391c994193c3c59b08b4f46b7324a2a519242a350e"
     },
     {
       "id": "p35-run-plan-doctype",
@@ -312,7 +312,7 @@
       "kind": "code",
       "locator": "Synora Run Plan 只读证据 DocType：provider、prompt/completion/reasoning token、耗时、回退原因",
       "status": "CONFIRMED",
-      "sha256": "99f3f9f041872d8c257290b04a9b34a246ade9f428c2cbf315643c2125bd4baa"
+      "sha256": "735097d95a0ed2270464e55622f50b593265b46472c9adf1c709abce3d92830a"
     },
     {
       "id": "p35-lifecycle-guard-tests",
@@ -336,7 +336,7 @@
       "kind": "testing",
       "locator": "Buyer → Frappe → Runtime → BYOK → evidence → get_run 真实 HTTP 验收；仅创建 Synora 自有记录",
       "status": "CONFIRMED",
-      "sha256": "52ae6fa0b3afa02c7b72ff6a53f7269d970bd499fd5d2af41b099f57bee9afaa"
+      "sha256": "a524f069e468c471eaac1605a4ef18d789082c745d352d88ab6fd06412cba5ee"
     },
     {
       "id": "p41-governed-records-preparation",
@@ -599,7 +599,7 @@
       "path": "synora_agentic_erp/synora_agentic_erp/page/runs/runs.js",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "d574a6418852fa1e9bd258cf905ef9bc776db5df947810b9ecd77ad1ff05a566",
+      "sha256": "edcb58fa6f7c7f57cc10ae5adeab39904320a9ed257e3f440add788b6d23dbec",
       "locator": "Runs Trace metadata rendering, escaping, status announcements, keyboard controls, pagination, and permission-filtered details"
     },
     {
@@ -673,6 +673,246 @@
       "status": "CONFIRMED",
       "sha256": "6a66beb97966ff527bca60952a33527badd4703db9c6ad85c5cb8e787ad648c1",
       "locator": "T03 native Memory List indicators and scoped review fields"
+    },
+    {
+      "id": "phase9-adoption-decision",
+      "path": "docs/decisions/ADR-0008-phase9-multi-agent-adoption-threshold.md",
+      "kind": "architecture",
+      "status": "CONFIRMED",
+      "sha256": "f6a3371db18a5561ea9b9441cd1e6fc8823140ba335077f9c946494d749e6259",
+      "locator": "Phase 9 quality-first multi-agent adoption threshold and role decisions"
+    },
+    {
+      "id": "phase9-development-log",
+      "path": "docs/development-log/20260903-Phase-9-开发日志.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "ad9ea5e498739f2ee3fae7bfbe3236ac99c17356a1f3879817e1b790a4cc042a",
+      "locator": "Phase 9 implementation, validation, review, and closure history"
+    },
+    {
+      "id": "phase9-pattern-lab",
+      "path": "labs/agent_patterns/phase9_patterns.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "c217130547007923ffce1de3dfa093187396e7696a3df858a30f235dd8e1fbe6",
+      "locator": "bounded Phase 9 agent-pattern comparison lab"
+    },
+    {
+      "id": "phase9-mcp-lab",
+      "path": "labs/protocols/phase9_mcp.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "4bfd9b82d4bc119e1cca559827904600cb3f57033479aa12da0b7689e75283fe",
+      "locator": "MCP protocol lab with one read-only procurement risk tool"
+    },
+    {
+      "id": "phase9-a2a-lab",
+      "path": "labs/protocols/phase9_a2a.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "bc0aec7c0d5aff48cda49a257aa25c62e2f9d1906299a9bb91f23cc02f37c596",
+      "locator": "A2A bounded task lifecycle protocol lab"
+    },
+    {
+      "id": "phase9-anp-lab",
+      "path": "labs/protocols/phase9_anp.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "69218f526cd576b69f2beacba6148437d170a469535557a6d2316bba6484ce38",
+      "locator": "fixed ANP descriptor discovery and fail-closed routing lab"
+    },
+    {
+      "id": "phase9-ab-evaluator",
+      "path": "services/agent_runtime/src/agent_runtime/evaluation/phase9_ab.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "26d3351dd8b4436cf3c74fc02ccbb6275611d2593bf99ac4eb2ecaa8fba71144",
+      "locator": "same-model single versus Planner Reviewer evaluation and Adoption Cards"
+    },
+    {
+      "id": "phase9-baseline-evaluator",
+      "path": "services/agent_runtime/src/agent_runtime/evaluation/phase9_baseline.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "532ce96a3b96d76cf7813db3cca16e3b319a6ec15504062a1fb5c62c519b2a72",
+      "locator": "fixed Phase 9 case baseline and manifest binding"
+    },
+    {
+      "id": "phase9-security-evaluator",
+      "path": "services/agent_runtime/src/agent_runtime/evaluation/security.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "01cb903b4cbe668e3b84a8e3ab9ee2ada71813e143318ad3e8121043f13dee0a",
+      "locator": "Phase 9 security and isolation evidence derivation"
+    },
+    {
+      "id": "phase9-multi-agent-contracts",
+      "path": "services/agent_runtime/src/agent_runtime/multi_agent/contracts.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "157cbe2523e2425a0a29aad5f5f1ca2cbf9d49b847a06e5a50e414292195bf81",
+      "locator": "typed orchestration scope, role results, and bounded evidence contracts"
+    },
+    {
+      "id": "phase9-planner-reviewer",
+      "path": "services/agent_runtime/src/agent_runtime/multi_agent/planner_reviewer.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "aaf86fe67154ed70ea4972a754f0ff254b9ff94b5dff38f974f2ab27ce511677",
+      "locator": "bounded Planner to Policy Risk Reviewer orchestration"
+    },
+    {
+      "id": "phase9-multi-agent-package",
+      "path": "services/agent_runtime/src/agent_runtime/multi_agent/__init__.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "71fd2cb42ac5d3ff900b216c9637c731b131656e98ad40964e833b01b66f48b2",
+      "locator": "public Phase 9 multi-agent package exports"
+    },
+    {
+      "id": "phase9-ab-cli",
+      "path": "services/agent_runtime/scripts/phase9_ab.py",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "65c21c699bc77fc0a8f2f7c365beb0d45e0ee5a4a918a4fd074d9b78d40292a1",
+      "locator": "recorded and real Phase 9 A B command entrypoint"
+    },
+    {
+      "id": "phase9-baseline-cli",
+      "path": "services/agent_runtime/scripts/phase9_baseline.py",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "fa2af27d8d12998b2a95a60aa540326fb93aa40def81fb5681698a8cc3cd0279",
+      "locator": "fixed baseline artifact command entrypoint"
+    },
+    {
+      "id": "phase9-pattern-cli",
+      "path": "services/agent_runtime/scripts/phase9_patterns.py",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "53a8efa4275b8c28f24fdaaa2e54ecf301d28e4cab2aba91b63aa1e9cc93b6eb",
+      "locator": "pattern comparison artifact command entrypoint"
+    },
+    {
+      "id": "phase9-protocol-acceptance-cli",
+      "path": "services/agent_runtime/scripts/phase9_protocol_acceptance.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "1abf223369444a7d749e346a4ac984cf4b5f9ff43af9273c17d76949cc3045b5",
+      "locator": "combined MCP A2A ANP acceptance command"
+    },
+    {
+      "id": "phase9-real-acceptance-cli",
+      "path": "services/agent_runtime/scripts/phase9_real_acceptance.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "110b42f3f1195c823a4eae28d89310529ff5b57f420c88e03954aa5d8040551e",
+      "locator": "real Frappe Runtime GLM permissions recovery and zero-write acceptance"
+    },
+    {
+      "id": "phase9-a2a-server-cli",
+      "path": "services/agent_runtime/scripts/phase9_a2a_server.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "0c7af604972b518f2cf6ae30d7e1847811722617d50ee4e81fb85ed2f8d3b45c",
+      "locator": "localhost A2A subprocess acceptance server"
+    },
+    {
+      "id": "phase9-mcp-server-cli",
+      "path": "services/agent_runtime/scripts/phase9_mcp_server.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "fb28f0c4ac39671504400aa3f56732c9044c57e8c6e8af4a2ec8ef62835888f0",
+      "locator": "stdio MCP subprocess acceptance server"
+    },
+    {
+      "id": "phase9-ab-tests",
+      "path": "services/agent_runtime/tests/test_phase9_ab.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "02b145b0eb2c0cf2abe064cf03731776709f21b6a0b17c1fe58f03d9bfef7e72",
+      "locator": "A B manifest threshold evidence and Adoption Card regression tests"
+    },
+    {
+      "id": "phase9-baseline-tests",
+      "path": "services/agent_runtime/tests/test_phase9_baseline.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "ae7d04ed58ee92c245c05fa48b2ccb4c8f37fe314072819b6dc1a1cfa36030b9",
+      "locator": "fixed case baseline tests"
+    },
+    {
+      "id": "phase9-pattern-tests",
+      "path": "services/agent_runtime/tests/test_phase9_patterns.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "fced7d84333960ba62e91973d9b9321646f492ca383f4f3835621b445e8a53c8",
+      "locator": "pattern comparison safety and trajectory tests"
+    },
+    {
+      "id": "phase9-mcp-tests",
+      "path": "services/agent_runtime/tests/test_phase9_mcp.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "6f34da2dbcadbc91f7ab8ab2ae99c935b20ef8904de6954abf174c7bdd893d08",
+      "locator": "MCP discovery strict input environment and process lifecycle tests"
+    },
+    {
+      "id": "phase9-a2a-tests",
+      "path": "services/agent_runtime/tests/test_phase9_a2a.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "a4bcba3878bb43a2b66629fe1f9d7ef8a83bd49685be90e2d4ed36f198344d32",
+      "locator": "A2A lifecycle cancellation race and malformed input tests"
+    },
+    {
+      "id": "phase9-anp-tests",
+      "path": "services/agent_runtime/tests/test_phase9_anp.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "bde41a1f97cdb8f970bc048adab5e3d6567fd17454eb54e98413d0719e425be9",
+      "locator": "ANP fixed discovery minimum privilege and fail-closed tests"
+    },
+    {
+      "id": "phase9-multi-agent-contract-tests",
+      "path": "services/agent_runtime/tests/test_multi_agent_contracts.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "a1ffd480fde6f7f71923316d81a94332fadcfedf519b4553a735d74f36845831",
+      "locator": "typed multi-agent contract validation tests"
+    },
+    {
+      "id": "phase9-planner-reviewer-tests",
+      "path": "services/agent_runtime/tests/test_multi_agent_planner_reviewer.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "6b38d3711ffd80a27e2c143405d5acb07737931873e6006347ddcc4826ec690c",
+      "locator": "Planner Reviewer budget safety revision and cancellation tests"
+    },
+    {
+      "id": "phase9-frappe-plan-tests",
+      "path": "tests/test_plan.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "84a51670ab1c59117a7b231d542c5b0cb40e2954e26aa379b6df21b6569cdc0b",
+      "locator": "Frappe plan enhancement scope permissions fallback and evidence tests"
+    },
+    {
+      "id": "phase9-python-project",
+      "path": "pyproject.toml",
+      "kind": "configuration",
+      "status": "CONFIRMED",
+      "sha256": "070e83c8d04a0d89d6d094f43d852f23f66ae0368a5332f9aad47481f7dba473",
+      "locator": "Phase 9 protocol-lab dependency group and project test configuration"
+    },
+    {
+      "id": "phase9-python-lock",
+      "path": "uv.lock",
+      "kind": "configuration",
+      "status": "CONFIRMED",
+      "sha256": "49d2d441e1deb61b82e210a7318580f4963f37bab847db9da53792466c99abd9",
+      "locator": "locked Phase 9 MCP and A2A SDK dependency graph"
     }
   ]
 }

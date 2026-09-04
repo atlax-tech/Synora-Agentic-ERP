@@ -79,12 +79,16 @@
     },
     {
       "id": "multi-agent-adoption-threshold",
-      "status": "UNRESOLVED",
+      "status": "RESOLVED",
       "question": "What measured improvement is required before a Multi-Agent role is adopted?",
       "impact": "Without an A/B threshold, complexity could be introduced for interview optics rather than product value.",
       "sources": [
-        "docs/ARCHITECTURE.md#Multi-Agent Evolution Boundary"
-      ]
+        "docs/ARCHITECTURE.md#Multi-Agent Evolution Boundary",
+        "docs/decisions/ADR-0008-phase9-multi-agent-adoption-threshold.md",
+        "output/phase9/phase9-ab-real-glm-v12.json",
+        "output/phase9/phase9-real-acceptance-8b7ff1b.json"
+      ],
+      "resolution": "Resolved by ADR-0008 quality-first amendment and the immutable GLM v12 same-model A/B: Planner and Policy/Risk Reviewer improved task, validity, and recovery quality with controlled latency and full safety, then passed real P9.9 acceptance and independent adversarial review. Token usage remains recorded but is informational for this adoption decision."
     },
     {
       "id": "vector-retrieval-threshold",

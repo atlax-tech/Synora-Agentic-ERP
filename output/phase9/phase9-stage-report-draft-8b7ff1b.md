@@ -1,6 +1,6 @@
 # Phase 9 阶段报告草稿
 
-状态：`PENDING README/HARNESS APPROVAL`（独立对抗审查已 `PASS`）
+状态：`COMPLETED / PASS / READY FOR THE NEXT PHASE`（独立对抗审查已 `PASS`）
 
 实现 HEAD：`8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e`
 证据提交：`9f2f6ca6217ecacbc8acc87aaa7686869c70dc02`（仅新增证据/日志，不改变实现逻辑）
@@ -85,7 +85,7 @@ P0/P1 风险为 `0`；P2 有 owner、下一门禁和复验命令。
 
 ## 未运行与授权边界
 
-- 权威文档已按审查结论同步；README 与 `.harness/` 尚未写入。需生成 `harness-update` Phase A immutable proposal，向用户展示 README/Harness 精确文件 diff 并取得一次明确批准，再执行最终写入和 drift 复验。
+- 权威文档、两份 README 与 `.harness/` 已按批准的 `P9-HARNESS-CLOSE-20260904-v2` 同步，最终 drift 复验通过。
 - 本阶段不创建 Assignment、不写学习笔记、不调用 `codex-with-chatgpt`，不修改 `.env*`、Frappe/ERPNext 上游或数据库事务事实。
 - Phase 10 尚未开始。
 
