@@ -162,15 +162,14 @@ def _planner_messages(
         else "这是首次候选生成。\n"
     )
     system = (
-        "你是 Procurement Planner，只返回一个单行 JSON 对象。"
-        "只依据确定性计划投影写一条简短候选解释；数字、风险和只读边界必须保持不变，"
-        "不得调用工具、授权、审批、写入 ERP 或暴露 Secret。安全拒绝或缺失事实时，"
-        "保留投影中的拒绝/未知结论，不要把它改成采购动作。"
-        "candidate_explanation 最好直接复述 summary，不添加新数字；citation_summary 和 "
-        "unknowns 固定为 []。禁止 Markdown、额外字段和解释性前后缀。\n"
-        f"输出 schema: planner.v1；计划 digest: {digest}\n{revision_rule}"
-        f'严格返回：{{"candidate_explanation":"...","citation_summary":[],"unknowns":[], '
-        f'"plan_digest":"{digest}"}}。'
+        "你是 Procurement Planner。只输出单行 JSON，字段为 "
+        "candidate_explanation,citation_summary,unknowns,plan_digest。"
+        "仅依据 deterministic_plan；保持数字、风险和只读边界，不调用工具、授权、审批、"
+        "写 ERP 或泄露 Secret。缺失事实或安全拒绝时保留原结论；解释简短复述 summary，"
+        "不加数字；citation_summary/unknowns=[]。"
+        "禁止 Markdown、额外字段和前后缀。\n"
+        f"schema=planner.v1; digest={digest}\n{revision_rule}"
+        f'{{"candidate_explanation":"...","citation_summary":[],"unknowns":[],"plan_digest":"{digest}"}}'
     )
     payload = {
         "deterministic_plan": visible_plan_projection(view, PLANNER_ROLE_SPEC.visible_fields),
@@ -189,22 +188,22 @@ def _reviewer_messages(
     candidate: PlannerOutput,
 ) -> list[ProviderMessage]:
     system = (
-        "你是 Policy/Risk Reviewer，只返回一个单行 ReviewDecision JSON。"
-        "只检查候选是否保持 facts_summary 的数字、风险和只读边界；不得改写事实、"
-        "生成用户可见解释、授权或调用工具。正常且安全的候选返回 ACCEPT；"
-        "只有发现固定问题才返回 REVISE、REJECT 或 ESCALATE。\n"
-        "decision 只能是 ACCEPT、REVISE、REJECT、ESCALATE；允许的 issue_codes 只有："
-        "MISSING_FACTS、UNSUPPORTED_CLAIM、DIGEST_MISMATCH、SCOPE_MISMATCH、UNSAFE_ACTION、"
-        "RISK_CONFLICT、INVALID_SCHEMA、REQUIRES_RECONCILIATION、TIMEOUT、CANCELLED、"
-        "BUDGET_EXCEEDED。ACCEPT 时 issue_codes 必须为 []、feedback 必须为空；"
-        "非 ACCEPT 必须使用上述代码。"
-        "禁止 Markdown、额外字段和解释性前后缀。\n"
-        f'严格返回：{{"decision":"ACCEPT","issue_codes":[],"feedback":"","reviewed_plan_digest":"{digest}"}}。'
+        "你是 Policy/Risk Reviewer。只输出单行 JSON，字段为 "
+        "decision,issue_codes,feedback,reviewed_plan_digest。"
+        "核对 candidate_explanation 是否保持 facts_summary 的数字、风险和只读边界；"
+        "不改写事实、生成解释、授权或调用工具。"
+        "正常安全返回 ACCEPT；问题返回 REVISE/REJECT/ESCALATE。"
+        'decision=ACCEPT 时 issue_codes=[]、feedback=""；否则 issue_codes 只能是 '
+        "MISSING_FACTS,UNSUPPORTED_CLAIM,DIGEST_MISMATCH,SCOPE_MISMATCH,UNSAFE_ACTION,RISK_CONFLICT,"
+        "INVALID_SCHEMA,REQUIRES_RECONCILIATION,TIMEOUT,CANCELLED,BUDGET_EXCEEDED。"
+        "禁止 Markdown、额外字段和前后缀。\n"
+        f'schema=review.v1; digest={digest}; {{"decision":"ACCEPT","issue_codes":[],"feedback":"",'
+        f'"reviewed_plan_digest":"{digest}"}}'
     )
     payload = {
         "facts_summary": _facts_summary(view),
+        "candidate_explanation": candidate.candidate_explanation,
         "plan_digest": digest,
-        "candidate": candidate.model_dump(mode="json"),
     }
     return [
         ProviderMessage(role="system", content=system),
