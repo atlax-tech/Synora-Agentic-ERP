@@ -1,0 +1,30 @@
+{
+  "schema_version": "1",
+  "suite": "phase9-a2a-acceptance",
+  "status": "PASS",
+  "code_head": "8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e",
+  "sdk": "1.1.2",
+  "a2a": {
+    "status": "PASS",
+    "transport": "JSONRPC",
+    "loopback_host": "127.0.0.1",
+    "port": 53950,
+    "normal_state": "completed",
+    "normal_task_digest": "8fdb1b84ce91b624c4b33e4a4ba725baea68c71495dcd54dde9e5d7479ffb904",
+    "cancel_state": "canceled",
+    "cancel_idempotent": true,
+    "cancel_no_completed": true,
+    "cancel_completed_race_no_completed": true,
+    "task_context_mismatch_error": true,
+    "malformed_payload_error": true,
+    "oversized_payload_error": true,
+    "handler_exception_error": true,
+    "timeout_error": true,
+    "timeout_server_completed": true,
+    "invalid_state_transition_error": true,
+    "unknown_task_error": true,
+    "completed_cancel_error": true,
+    "erp_business_writes": 0,
+    "process_exit_code": -15
+  }
+}
