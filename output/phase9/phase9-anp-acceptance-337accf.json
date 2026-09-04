@@ -1,0 +1,29 @@
+{
+  "schema_version": "1",
+  "suite": "phase9-anp-acceptance",
+  "status": "PASS",
+  "code_head": "337accf9c4a90faebcc1d18b6c0e3f648c3f5156",
+  "sdk": null,
+  "anp": {
+    "status": "PASS",
+    "descriptor_ids": [
+      "procurement-planner",
+      "policy-risk-reviewer",
+      "erp-coach",
+      "reconciliation-agent"
+    ],
+    "descriptor_digest": "bf224a84c01ce565033b09e2db032645248d83968cb9e10516e04229f40548a9",
+    "selected_agent": "policy-risk-reviewer",
+    "selected_endpoint": "http://127.0.0.1:8029/a2a",
+    "no_candidate_error": true,
+    "multi_candidate_conflict_error": true,
+    "malicious_descriptor_rejected": true,
+    "unknown_version_error": true,
+    "expanded_permission_rejected": true,
+    "open_network_endpoint_rejected": true,
+    "unknown_field_rejected": true,
+    "cycle_rejected": true,
+    "network_discovery": false,
+    "adoption": "LAB_ONLY"
+  }
+}

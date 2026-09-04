@@ -1,0 +1,33 @@
+{
+  "schema_version": "1",
+  "suite": "phase9-mcp-acceptance",
+  "status": "PASS",
+  "code_head": "337accf9c4a90faebcc1d18b6c0e3f648c3f5156",
+  "sdk": "2.0.0",
+  "mcp": {
+    "status": "PASS",
+    "tool_names": [
+      "synora.procurement_risk.analyze"
+    ],
+    "stdio_tool_names": [
+      "synora.procurement_risk.analyze"
+    ],
+    "valid_result_digest": "bb13a9ce1c731704472ffafe94c878aeb2a50ad2e8f197a0a6cd45e55ca00894",
+    "unknown_tool_error": true,
+    "rejected_cases": {
+      "nan": true,
+      "infinity": true,
+      "unknown_field": true,
+      "oversized_input": true,
+      "injection_text": true
+    },
+    "resources": 0,
+    "resource_templates": 0,
+    "prompts": 0,
+    "stdout_protocol_only": true,
+    "stdio_cancellation_clean": true,
+    "stdio_process_closed": true,
+    "sensitive_environment_scrubbed": true,
+    "erp_business_writes": 0
+  }
+}

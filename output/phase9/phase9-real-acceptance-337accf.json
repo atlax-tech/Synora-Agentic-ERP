@@ -1,0 +1,209 @@
+{
+  "schema_version": "1",
+  "suite": "phase9-real-acceptance",
+  "status": "PASS",
+  "code_head": "337accf9c4a90faebcc1d18b6c0e3f648c3f5156",
+  "upstream": {
+    "FDP_REV_FRAPPE": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+    "FDP_REV_ERP_NEXT": "11e0ba0a1c45f217e2e73e885f699102d06da325"
+  },
+  "provider": {
+    "role": "assist",
+    "model": "glm-5.3-flash",
+    "path": "real_success_only",
+    "model_search_stopped": true,
+    "qwen27_called": false
+  },
+  "scope": {
+    "source": "server_derived_run_session",
+    "client_supplied_identity_fields": false,
+    "company": "SYNORA-P1 Test Company",
+    "warehouse": "SYNORA-P1 Stores - SP1",
+    "principal": "synora-p1-buyer@dev.localhost",
+    "task_run_correlation": "server_uuid5_bound"
+  },
+  "business_chain": {
+    "status": "orchestration_ok",
+    "run_prefix": "85dbb64e",
+    "run_state": "SUCCEEDED",
+    "provider": "glm-5.3-flash",
+    "mode": "planner_reviewer",
+    "model_calls": 2,
+    "handoff_count": 1,
+    "revision_count": 0,
+    "stop_reason": "ACCEPTED",
+    "deterministic_validated": true,
+    "prompt_tokens": 1003,
+    "completion_tokens": 171,
+    "reasoning_tokens": 10,
+    "trace_digest": "2ece09b9867305d2378f1ce2bdbb719611f6fe74f86253521cf1d92089ceb166"
+  },
+  "permissions": {
+    "viewer": {
+      "status": "PASS",
+      "error_code": "RUN_REJECTED"
+    },
+    "system_manager": {
+      "status": "PASS",
+      "safe_plan_keys": [
+        "company",
+        "evidence",
+        "findings",
+        "generated_at",
+        "goal",
+        "horizon_days",
+        "summary",
+        "warehouse"
+      ],
+      "evidence_digest": "190a3945a927cfe31bbc250bc2b55526eaa04bc3bb409f9e25545f0485386a51",
+      "raw_prompt_persisted": false,
+      "provider_credentials_exposed": false
+    }
+  },
+  "fault_recovery": {
+    "revision_accept": {
+      "status": "REVISED_ACCEPTED",
+      "model_calls": 3,
+      "handoff_count": 2,
+      "revision_count": 1,
+      "provider_mode": "controlled_test_double"
+    },
+    "scope_mismatch": {
+      "status": "SCOPE_MISMATCH",
+      "model_calls": 0,
+      "provider_calls": 0,
+      "provider_mode": "controlled_test_double"
+    },
+    "deterministic_anomaly": {
+      "status": "DETERMINISTIC_FALLBACK",
+      "model_calls": 0,
+      "provider_calls": 0,
+      "provider_mode": "controlled_test_double"
+    },
+    "invalid_model_output": {
+      "status": "INVALID_OUTPUT",
+      "model_calls": 1,
+      "provider_mode": "controlled_test_double"
+    },
+    "timeout": {
+      "status": "TIMEOUT",
+      "model_calls": 1,
+      "provider_mode": "controlled_test_double"
+    },
+    "cancellation": {
+      "status": "CANCELLED",
+      "model_calls": 1,
+      "provider_mode": "controlled_test_double",
+      "terminal_no_completion": true
+    }
+  },
+  "isolation": {
+    "mcp_a2a_anp": {
+      "mcp": {
+        "status": "PASS",
+        "artifact": "output/phase9/phase9-mcp-acceptance-337accf.json",
+        "digest": "f1e80b6b1909fcd38ba284ae675343d0996eb037990c2c0104620f0a91478a9c",
+        "erp_business_writes": 0
+      },
+      "a2a": {
+        "status": "PASS",
+        "artifact": "output/phase9/phase9-a2a-acceptance-337accf.json",
+        "digest": "2c92d4f8ed9b35cf3a3b9b8803a50e03522d5a20b124178778242d643b09da23",
+        "erp_business_writes": 0
+      },
+      "anp": {
+        "status": "PASS",
+        "artifact": "output/phase9/phase9-anp-acceptance-337accf.json",
+        "digest": "11d63da591d601c72f9d91e096f8258467371cf51db89f0c1b3965fbf259a75b",
+        "erp_business_writes": 0
+      }
+    },
+    "erp_business_writes": 0,
+    "prompt_persisted": false,
+    "hidden_reasoning_persisted": false,
+    "secret_persisted": false
+  },
+  "erp_anchors": {
+    "before": {
+      "anchors": {
+        "Material Request": {
+          "count": 1113,
+          "digest": "0f9261a7718cb32662ad545ac328b74e1a3aa3e50d439e5dcc9dd88f21bf3723"
+        },
+        "Material Request Item": {
+          "count": 1113,
+          "digest": "fc0ba6b39993d193fa9cff110b0aa5e1a3fb15c3ebf53dd704b067ab0b2c8e3a"
+        },
+        "Purchase Order": {
+          "count": 1184,
+          "digest": "d50701168d64f741ca9b3bf018c599d5b1aa7c4fa97c794b9eb71803601aa7f5"
+        },
+        "Purchase Order Item": {
+          "count": 1184,
+          "digest": "1a94ece10025438deaff56aea77760b122ac9fc58ece960ec7ade1c3d16345f0"
+        },
+        "Bin": {
+          "count": 1,
+          "digest": "20c4607a8bfcb079f2baf77611a5a5d19fff47b4b1ac17bc7b4a141dc7f996f4"
+        },
+        "Stock Entry": {
+          "count": 0,
+          "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "Purchase Receipt": {
+          "count": 12,
+          "digest": "ee0f87eff49f0e2c31bbfd3cfe97c4eaa18f4c3306506a78dc53a445cf95fa25"
+        },
+        "Purchase Invoice": {
+          "count": 10,
+          "digest": "f980d5409d41b3980b72a92cf3f0082eac24e974700b4624dd4ceca5c2306af0"
+        }
+      },
+      "digest": "3312bb16561008b7deb16946fdf35ae4da8afa5f18c6df6551531f4644bf502b",
+      "business_write_count": 0
+    },
+    "after": {
+      "anchors": {
+        "Material Request": {
+          "count": 1113,
+          "digest": "0f9261a7718cb32662ad545ac328b74e1a3aa3e50d439e5dcc9dd88f21bf3723"
+        },
+        "Material Request Item": {
+          "count": 1113,
+          "digest": "fc0ba6b39993d193fa9cff110b0aa5e1a3fb15c3ebf53dd704b067ab0b2c8e3a"
+        },
+        "Purchase Order": {
+          "count": 1184,
+          "digest": "d50701168d64f741ca9b3bf018c599d5b1aa7c4fa97c794b9eb71803601aa7f5"
+        },
+        "Purchase Order Item": {
+          "count": 1184,
+          "digest": "1a94ece10025438deaff56aea77760b122ac9fc58ece960ec7ade1c3d16345f0"
+        },
+        "Bin": {
+          "count": 1,
+          "digest": "20c4607a8bfcb079f2baf77611a5a5d19fff47b4b1ac17bc7b4a141dc7f996f4"
+        },
+        "Stock Entry": {
+          "count": 0,
+          "digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "Purchase Receipt": {
+          "count": 12,
+          "digest": "ee0f87eff49f0e2c31bbfd3cfe97c4eaa18f4c3306506a78dc53a445cf95fa25"
+        },
+        "Purchase Invoice": {
+          "count": 10,
+          "digest": "f980d5409d41b3980b72a92cf3f0082eac24e974700b4624dd4ceca5c2306af0"
+        }
+      },
+      "digest": "3312bb16561008b7deb16946fdf35ae4da8afa5f18c6df6551531f4644bf502b",
+      "business_write_count": 0
+    },
+    "unchanged": true
+  },
+  "command_exit_codes": {
+    "phase9_real_acceptance": 0
+  },
+  "artifact_policy": "immutable digest-bound summary; no prompt, response text, ERP rows, secret or credential"
+}
