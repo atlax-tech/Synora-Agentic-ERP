@@ -1,6 +1,6 @@
 # Development
 
-Status: `CONFIRMED` engineering policy; P2.1 implementation commands are `CONFIRMED` (verified 2026-08-24).
+Status: `CONFIRMED` engineering policy; P2.1 implementation commands are `CONFIRMED` (verified 2026-08-24). Phase 9 implementation, evidence, and independent adversarial review are `PASS` as of 2026-09-04; final phase status remains pending the explicitly approved README/Harness synchronization.
 
 ## Change Protocol
 
@@ -247,6 +247,14 @@ role then returned `OK` with `reasoning_effort=low`. Grok's initial 403 came
 from the old gateway mapping; the corrected `cf.api.fan/v1` endpoint was
 verified with the Grok Responses protocol (HTTP 200) and its key/model were
 therefore not re-tested during final Coach acceptance.
+
+## Phase 9 closure evidence (2026-09-04)
+
+Implementation HEAD is `8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e`; the evidence/report freeze is committed at `a87f254c2339ee9253d4c0802b38e4b9dcfb7103`. GLM v12 is the adopted Planner/Reviewer quality-first A/B (`ADOPT` for both); token totals are recorded but not a veto, and qwen3.8:27b was not called. GLM v13’s later stochastic failure and the qwen/Grok failures remain immutable evidence.
+
+P9.6–P9.8 formal MCP stdio, real `127.0.0.1` TCP A2A, and fixed ANP acceptance passed. P9.9 real Buyer/Viewer/System Manager acceptance passed with genuine GLM calls, controlled recovery, three bound screenshots, unchanged ERP anchors, and zero ERP business writes. P9.10 format, lint, type, unit, integration, focused, Python 3.14, upstream, ponytail, and Harness read-only checks are recorded in `output/phase9/phase9-final-manifest-8b7ff1b.json`; the expected pre-sync Harness drift remains explicit. The sole final independent adversarial review returned `PASS`.
+
+The stage report draft is `output/phase9/phase9-stage-report-draft-8b7ff1b.md` with status `PENDING INDEPENDENT REVIEW` retained until the review result is incorporated in the final status. README and `.harness/` remain unchanged pending the required file-level proposal and user approval.
 
 ## Sources
 

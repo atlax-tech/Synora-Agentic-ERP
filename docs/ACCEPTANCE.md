@@ -1,8 +1,10 @@
 # Acceptance
 
 Status: `CONFIRMED` product-level acceptance direction. Phase 8 is
-`COMPLETED / PASS / READY FOR THE NEXT PHASE` as of 2026-09-03; Phase 9 has
-not started. The evidence below is the milestone-specific acceptance record.
+`COMPLETED / PASS / READY FOR THE NEXT PHASE` as of 2026-09-03. Phase 9's
+implementation, real acceptance, L3 evidence, and independent review are
+`PASS` as of 2026-09-04; final phase status awaits the explicit README/Harness
+synchronization approval required by the project workflow.
 
 ## Product Acceptance Principles
 
@@ -78,6 +80,14 @@ Receipt, Invoice, Payment, and PO submission are staged requirements, not remove
   are separately bound.
 - Independent read-only review completed with `PASS` before this status was
   written. Phase 9 remains planned and not started.
+
+## Phase 9 final acceptance (2026-09-04)
+
+- The quality-first GLM v12 same-model A/B is the adoption evidence for Planner and Reviewer. Multi quality is non-regressing with strict valid/recovery improvement, controlled p95, complete safety checks, and a real Reviewer handoff; token totals remain audit data. qwen3:8b and Grok failures are retained and qwen3.8:27b was not called.
+- MCP, A2A, and ANP protocol acceptance passed with stdio/loopback lifecycle and fail-closed checks. These remain `LAB_ONLY`; ANP is `NOT ADOPTED` because open-network discovery is not required by Phase 9.
+- The real Buyer → Frappe → Runtime → GLM path passed with Viewer denial, System Manager redaction, revision/scope/fallback/invalid/timeout/cancellation handling, unchanged MR/PO/Bin anchors, and zero ERP business writes. The three role screenshots are bound to implementation HEAD `8b7ff1b`.
+- L3 gates and the independent adversarial review passed. The authoritative report and manifest are `output/phase9/phase9-stage-report-draft-8b7ff1b.md` and `output/phase9/phase9-final-manifest-8b7ff1b.json`; their evidence commit is `a87f254`.
+- README and Harness updates remain a separately approved synchronization step. No production deployment, customer adoption, or unmeasured general model-quality claim is made.
 
 ## Sources
 

@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: `CONFIRMED` staged learning and delivery plan. Synora is an Agent-development learning repository and a real ERP practice vehicle. The business application layer and teaching lab live in one repository and one development line; staging does not remove complete business requirements. Phase 8 is `COMPLETED / PASS / READY FOR THE NEXT PHASE` (2026-09-03); Phase 9 has not started.
+Status: `CONFIRMED` staged learning and delivery plan. Synora is an Agent-development learning repository and a real ERP practice vehicle. The business application layer and teaching lab live in one repository and one development line; staging does not remove complete business requirements. Phase 8 is `COMPLETED / PASS / READY FOR THE NEXT PHASE` (2026-09-03). Phase 9 implementation, evidence, and independent review are complete as of 2026-09-04; final README/Harness synchronization is pending the required explicit approval, and Phase 10 has not started.
 
 ## Phase 0 — Governance Bootstrap
 
@@ -76,11 +76,11 @@ Exit: authorized experience and SOP knowledge can be recalled with provenance; s
 
 ## Phase 9 — Multi-Agent, MCP, and A2A
 
-- Compare Supervisor, peer-to-peer, hierarchical, managed-agent-as-tool, and explicit graph-node patterns.
-- Evaluate Planner -> Policy/Risk Reviewer first; start Reconciliation Agent only for exception paths.
-- Implement local MCP and minimal A2A protocol exercises with typed handoffs, isolated tools, and bounded delegation.
+- The runnable pattern comparison, typed Planner -> Policy/Risk Reviewer handoff, bounded exception path, local MCP, localhost A2A, and fixed ANP descriptor lab are complete. The protocol labs remain `LAB_ONLY`; ANP is `NOT ADOPTED` because this phase has no open-network discovery requirement.
+- GLM `assist/glm-5.3-flash` is the first quality-first same-model A/B candidate with Planner and Reviewer `ADOPT`. The quality-first profile requires multi-agent quality non-regression, at least one strict quality improvement, controlled p95 latency, and 100% safety; token usage remains recorded evidence and is not an adoption veto. qwen3:8b and Grok failure artifacts are retained, and qwen3.8:27b was not called.
+- The real Frappe → Runtime → GLM path, Buyer/Viewer/System Manager permissions, controlled recovery cases, browser evidence, and ERP zero-write checks are complete. The bound report and manifest are `output/phase9/phase9-stage-report-draft-8b7ff1b.md` and `output/phase9/phase9-final-manifest-8b7ff1b.json`; independent adversarial review returned `PASS`.
 
-Exit: adopted roles show measured net benefit over the single-Agent baseline; rejected roles retain runnable experiments and evidence explaining the decision.
+Exit: `PASS` evidence is complete and adopted roles show measured quality benefit over the same-model single-Agent baseline; rejected roles retain runnable experiments and evidence explaining the decision. The phase remains pending only the approved README/Harness synchronization step.
 
 ## Phase 10 — Complete P2P Operating Agent
 

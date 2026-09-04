@@ -1,6 +1,6 @@
 # Phase 9 阶段报告草稿
 
-状态：`PENDING INDEPENDENT REVIEW`
+状态：`PENDING README/HARNESS APPROVAL`（独立对抗审查已 `PASS`）
 
 实现 HEAD：`8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e`
 证据提交：`9f2f6ca6217ecacbc8acc87aaa7686869c70dc02`（仅新增证据/日志，不改变实现逻辑）
@@ -52,7 +52,7 @@ P9.9 在真实 Frappe→Runtime→GLM 环境通过：Buyer 使用真实 GLM Plan
 13. ponytail-debt — 0（1 marker，0 no-trigger）。
 14. Harness validate manifest — 0；structure — 0；references — 0（592 checked, broken 0）；health score — 0。`detect_drift.py` 退出 `1`，仅报告待阶段文档/Harness fingerprint 同步的既有 drift，未修改 `.harness/`。
 
-## Rubric（独立审查前冻结）
+## Rubric（独立审查后冻结）
 
 | 维度 | 分数 | 依据 |
 |---|---:|---|
@@ -78,10 +78,14 @@ P9.9 在真实 Frappe→Runtime→GLM 环境通过：Buyer 使用真实 GLM Plan
 
 P0/P1 风险为 `0`；P2 有 owner、下一门禁和复验命令。
 
+## 独立对抗审查
+
+- 唯一最终独立对抗审查在实现与证据冻结后执行，审查输入包含原始计划、权威文档、`1229bab..HEAD` diff、P9.5–P9.9 证据、三角色截图、L3 命令、Rubric 与风险表。
+- 审查结果：`PASS`。审查确认质量优先 GLM v12 采用、协议和真实业务验收、权限/隔离、零 ERP 写入、L3 门禁和无 27B 事实均有绑定证据。
+
 ## 未运行与授权边界
 
-- 独立对抗审查尚未运行；本报告保持 `PENDING INDEPENDENT REVIEW`。
-- 权威文档仍有 Harness fingerprint drift，README 与 `.harness/` 尚未写入；需先完成独立审查，再生成 `harness-update` Phase A immutable proposal，向用户展示精确文件 diff 并取得一次明确批准。
+- 权威文档已按审查结论同步；README 与 `.harness/` 尚未写入。需生成 `harness-update` Phase A immutable proposal，向用户展示 README/Harness 精确文件 diff 并取得一次明确批准，再执行最终写入和 drift 复验。
 - 本阶段不创建 Assignment、不写学习笔记、不调用 `codex-with-chatgpt`，不修改 `.env*`、Frappe/ERPNext 上游或数据库事务事实。
 - Phase 10 尚未开始。
 

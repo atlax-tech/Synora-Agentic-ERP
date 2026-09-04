@@ -1,6 +1,6 @@
 # Synora Agentic ERP 产品需求文档
 
-文档状态：产品定义与落地需求 v2 已批准；2026-08-26 定位更新以 `docs/项目方向纠偏.md` 为依据。本文是项目唯一的产品需求事实源；标有 `[待确认]` 的细节不得由 Coding Agent 自由补全。
+文档状态：产品定义与落地需求 v2 已批准；2026-08-26 定位更新以 `docs/项目方向纠偏.md` 为依据。Phase 9 的 Multi-Agent、MCP、A2A 和 ANP 实现/验收证据已于 2026-09-04 通过独立审查；最终 README/Harness 同步仍按批准门禁执行。本文是项目唯一的产品需求事实源；标有 `[待确认]` 的细节不得由 Coding Agent 自由补全。
 
 ## 1. 产品概述
 
@@ -302,6 +302,8 @@ F-009 至 F-012 是完整 P2P 需求的一部分，只是分阶段实现，不�
 
 **风险控制**：共享 typed state、显式 handoff schema、统一 gateway/policy/audit、角色工具 allowlist、最大步数、超时、loop detection、完整 trace，并与单 Agent baseline A/B 对比。
 
+**Phase 9 结果**：真实同模型 GLM `assist/glm-5.3-flash` A/B 在质量优先 profile 下使 Planner 与 Policy/Risk Reviewer 达到 `ADOPT`；multi 的任务、有效解释和恢复质量不低于同模型 single，至少一项严格提升，p95 受控且安全项全通过。token 仍保留为审计指标，不单独否决采用。Coach 保持 Phase 8 独立入口，Reconciliation 仅异常触发；MCP/A2A/ANP 仅保留为 `LAB_ONLY` 证据。
+
 ### 5.12 F-016 Agent 学习实验与采用证据
 
 **功能描述**：在同一仓库的 `labs/agent_patterns/` 中实现可运行的最小模式，并与真实 ERP 业务层共用 typed contract、golden task、Trace 和安全门禁。
@@ -428,8 +430,8 @@ F-009 至 F-012 是完整 P2P 需求的一部分，只是分阶段实现，不�
 
 ### 9.3 Multi-Agent 验收
 
-- 与单 Agent baseline 使用同一数据集比较质量、延迟、成本、安全、trace 完整性和复杂度。
-- 未产生净收益或破坏治理边界时不采用。
+- 与单 Agent baseline 使用同一数据集比较质量、延迟、成本、安全、trace 完整性和复杂度；Phase 9 的 GLM v12 真实双臂、协议验收和 P9.9 业务验收已绑定 manifest 并通过独立审查。
+- 质量优先采用要求 multi 不低于同模型 single、至少一项质量严格提升、p95 不超过 single 的 1.5 倍且安全 100%；token、调用数和总墙钟时间继续记录但不单独否决。未产生净收益或破坏治理边界时仍不采用。
 
 ### 9.4 学习证据验收
 
@@ -480,7 +482,7 @@ F-009 至 F-012 是完整 P2P 需求的一部分，只是分阶段实现，不�
 - [ ] 性能、并发和数据保留指标；浏览器、视口与可访问性基线已由 P3.1 解决。
 - [ ] 本地模型和可选 Provider 的 eval baseline。
 - [ ] LangGraph checkpoint 与恢复 Spike 结果。
-- [ ] RAG 向量化和 Multi-Agent 的量化准入阈值。
+- [x] Phase 9 Multi-Agent 量化准入阈值已由 ADR-0008 及 2026-09-04 用户质量优先修订解决；RAG 向量化仍待独立证据。
 - [ ] MIT、ERPNext GPL-3.0、Harness Armor CC BY-NC 的发布与 NOTICE 边界。
 
 这些问题不阻塞 Harness 和前置文档建设，但相关实现开始前必须逐项解决或明确进入哪个里程碑解决。

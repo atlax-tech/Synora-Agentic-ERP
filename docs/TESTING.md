@@ -1,6 +1,6 @@
 # Testing
 
-Status: `CONFIRMED` strategy; the root format, lint, type, unit, integration, and runtime commands are verified and recorded in `docs/DEVELOPMENT.md`. Phase 8's implementation-specific evaluation and acceptance commands are now backed by the final evidence below; Phase 9 has not started.
+Status: `CONFIRMED` strategy; the root format, lint, type, unit, integration, and runtime commands are verified and recorded in `docs/DEVELOPMENT.md`. Phase 8's implementation-specific evaluation and acceptance commands remain backed by the final evidence below. Phase 9's implementation-specific evidence and independent review passed on 2026-09-04; its final public/Harness synchronization is pending explicit approval.
 
 ## Test Layers
 
@@ -81,6 +81,16 @@ that the Make target ran.
 
 The independent read-only Phase 8 review is an exit gate: only its final
 `PASS` is accepted. Phase 9 is explicitly not started.
+
+## Phase 9 final evidence (2026-09-04)
+
+The evidence is bound to implementation HEAD `8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e` and evidence commit `a87f254c2339ee9253d4c0802b38e4b9dcfb7103`. The fixed case-spec SHA is `05d22c0ddc3617079d279d664a4422a541861af83c64fbb6d9edcc7e2a56acb7`.
+
+- P9.5 real GLM v12 quality-first A/B: single `7/12, 8/12, 7/12`, multi `8/12, 9/12, 8/12`; multi p95 `9598 ms` versus single `16388 ms`; security counters are all zero. Planner and Reviewer Adoption Cards are `ADOPT`; token totals `11051` versus `5700` are recorded and are not a veto. The later v13 stochastic failure remains preserved.
+- P9.6–P9.8 formal protocol acceptance: MCP stdio, real loopback TCP A2A lifecycle/cancel/error/timeout/race, and fixed ANP discovery/rejection all `PASS`; ERP business writes `0`.
+- P9.9 real acceptance: Buyer’s real GLM Planner → Reviewer path is `ACCEPTED`; Viewer is denied, System Manager receives only a redacted summary, controlled recovery paths pass, and ERP anchors are unchanged with business writes `0`. Buyer, Viewer, and System Manager screenshots are bound to the same implementation HEAD.
+- P9.10: format-check, lint, type, unit (`843 passed`), integration (`210 tests OK`), focused Phase 9 suite (`44 passed`), artifact/zero-write, lock/compile/import, upstream SHA/dirty, ponytail, and Harness manifest/structure/reference checks exited `0`; `detect_drift.py` exited `1` only for the documented pre-sync managed-document drift.
+- The independent adversarial review returned `PASS`. Full digests, commands, risks, rubric, unrun items, and provider search order are in `output/phase9/phase9-final-manifest-8b7ff1b.json` and the stage report draft.
 
 ## Sources
 

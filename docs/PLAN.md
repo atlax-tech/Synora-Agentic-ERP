@@ -377,13 +377,13 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 
 ## 18. Phase 9 — Multi-Agent、MCP 与 A2A
 
-当前执行状态（2026-09-03）：`IN_PROGRESS / P9.5 BLOCKED / P9.6–P9.8 LAB_ONLY COMPLETE`。P9.5 的同模型 A/B 已按用户批准门槛完成完整双臂重跑，但没有角色取得净收益：Planner、Reviewer、Reconciliation 为 `REJECT`，Coach 为 `RETAIN`，因此不放宽阈值、不接入 `/enhance`。P9.6 本地 MCP、P9.7 localhost A2A 和 P9.8 固定 descriptor ANP 概念实验已有代码、测试和开发日志证据；P9.9 真实业务/协议/恢复验收与 P9.10 L3 出口尚未开始。Phase 9 不得据此标记为 `PASS`，Phase 10 保持未开始。
+当前执行状态（2026-09-04）：`EVIDENCE PASS / INDEPENDENT REVIEW PASS / PENDING README-HARNESS APPROVAL`。P9.5 按用户批准的 `quality-first-model-v1` 完成真实同模型 A/B：GLM `assist/glm-5.3-flash` 的 v12 是第一份满足质量优先规则的证据，Planner 与 Reviewer 均 `ADOPT`；token 只作为审计数据，不再单独否决。v13 的随机波动失败、qwen3:8b 和 Grok 的失败 artifact 均保留，`qwen3.8:27b` 未调用。P9.6–P9.8 的真实 MCP stdio、`127.0.0.1` TCP A2A 和固定 ANP fail-closed 验收均 `PASS`；MCP/A2A/ANP 保持 `LAB_ONLY`，ANP 为 `NOT ADOPTED`。P9.9 真实 GLM 业务链路、三角色权限、故障恢复、浏览器和 ERP 零写入验收均 `PASS`。P9.10 L3、Rubric、风险登记和阶段报告草稿已冻结，唯一独立对抗审查返回 `PASS`；最终阶段状态待 README/Harness 精确 proposal 获批准后写为 `COMPLETED / PASS / READY FOR THE NEXT PHASE`。Phase 10 保持未开始。
 
 - 实现 Supervisor、Peer-to-Peer、Hierarchical、managed-agent-as-tool 和显式 graph node 的最小对照。
 - 先评估 `Planner → Policy/Risk Reviewer`，只在异常路径启动 Reconciliation Agent；所有 handoff typed、工具隔离、预算有界。
 - 实现本地 MCP server 和最小 A2A Agent Card/Task/status/cancel；ANP 保留概念实验和选型报告。
 
-出口证据：每个候选角色有同任务质量、安全、延迟、成本、恢复对比；只有净收益角色进入业务主线，其他实验保留拒绝证据。
+出口证据：每个候选角色有同任务质量、安全、延迟、成本、恢复对比；GLM v12 的质量优先 Adoption Card 绑定 `output/phase9/phase9-final-manifest-8b7ff1b.json`，其他候选与角色保留拒绝/保留证据；P9.6–P9.9 与 L3 证据绑定 `8b7ff1b`，审查 PASS 绑定提交 `a87f254`。
 
 ## 19. Phase 10 — 完整 P2P 运营 Agent
 
