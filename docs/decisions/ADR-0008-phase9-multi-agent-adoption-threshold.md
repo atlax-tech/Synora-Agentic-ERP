@@ -31,6 +31,12 @@ P9.1 已冻结 12 个固定采购用例，并完成同一 `primary/qwen3:8b` 的
 
 在没有带价格 provider manifest 前，只比较 prompt/completion/reasoning token、模型调用数、p50/p95 延迟和总墙钟时间。不得把 token 或延迟换算成金额，也不得把 `0` 的未计价字段解释为零成本。若以后引入有价格 provider，必须新建完整 manifest，并重新执行同模型 A/B。
 
+## 2026-09-04 用户修订：质量优先采用档
+
+本修订覆盖 GLM 等候选模型的 Phase 9 P9.5 采用判定，保留历史 artifact 和原推荐档定义不变。新增 `quality-first-model-v1`：multi 的 task、valid、recovery 不得低于同模型 single，至少一项必须严格提升，p95 不得超过 single 的 1.5 倍，安全项必须 100%；token、调用数和总墙钟时间继续记录在 manifest/evidence 中，但不再单独否决采用。确定性验证、Reviewer 真实参与、权限边界、ERP 零写入和失败回退仍是硬门槛。
+
+该修订针对 GLM v11 已观察到的事实：质量指标和安全通过，唯一失败项是 token 比例。用户明确要求以模型返回质量为首要判断依据，因此后续 GLM 证据使用该新 profile；`relative-model-v1` 的历史 artifact 不回写、不重算。
+
 ## 影响与风险
 
 推荐档允许候选方案在质量提升的前提下使用至多 1.5 倍基线 token 和 p95 延迟。12 案单机单模型分布仍是方向性证据，不代表 provider 通用性；P9.5 必须保留每个 arm 的完整 manifest、失败 artifact 和代码 HEAD。安全项没有成本换取例外，任何 P0/P1 风险未关闭都阻断阶段出口。

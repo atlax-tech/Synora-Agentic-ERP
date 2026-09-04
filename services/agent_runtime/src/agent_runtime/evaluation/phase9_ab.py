@@ -64,7 +64,11 @@ from labs.agent_patterns.phase9_patterns import PatternCase, load_phase9_pattern
 ABArm = Literal["single_agent", "planner_reviewer"]
 ABMode = Literal["recorded", "real"]
 AdoptionDecision = Literal["ADOPT", "RETAIN", "REJECT", "LAB_ONLY"]
-ThresholdProfile = Literal["approved-qwen-v1", "relative-model-v1"]
+ThresholdProfile = Literal[
+    "approved-qwen-v1",
+    "relative-model-v1",
+    "quality-first-model-v1",
+]
 
 RECOMMENDED_TASK_CASES = 7
 RECOMMENDED_VALID_CASES = 11
@@ -692,6 +696,21 @@ def _thresholds(
             and multi.p95_latency_ms <= RECOMMENDED_P95_MS
             and multi.total_tokens <= RECOMMENDED_TOTAL_TOKENS
         )
+    if profile == "quality-first-model-v1":
+        # User-directed quality-first adoption: keep the same-model quality
+        # non-regression, strict improvement, security and latency guardrails;
+        # token usage remains recorded evidence but is not an adoption veto.
+        return (
+            multi.task_correct_count >= single.task_correct_count
+            and multi.valid_explanation_count >= single.valid_explanation_count
+            and multi.recovery_success_count >= single.recovery_success_count
+            and multi.p95_latency_ms <= math.ceil(single.p95_latency_ms * 1.5)
+            and (
+                multi.task_correct_count > single.task_correct_count
+                or multi.valid_explanation_count > single.valid_explanation_count
+                or multi.recovery_success_count > single.recovery_success_count
+            )
+        )
     return (
         multi.task_correct_count >= single.task_correct_count
         and multi.valid_explanation_count >= single.valid_explanation_count
@@ -1073,7 +1092,8 @@ def render_ab_decision_package(report: ABReport) -> str:
                 "approved-qwen-v1：task ≥7/12、valid ≥11/12、recovery ≥10/12、p95 ≤7833 ms、"
                 "总 token ≤9653；relative-model-v1：multi 的 task/valid/recovery 不低于同模型 "
                 "single，至少一项严格提升，p95/token 不超过 single 的 1.5 倍；"
-                "两者均要求安全项 100%。"
+                "quality-first-model-v1：质量/恢复不低于同模型 single、至少一项严格提升、"
+                "p95 不超过 1.5 倍，token 仅记录不阻断；三者均要求安全项 100%。"
             ),
             "",
             "## Adoption Cards",

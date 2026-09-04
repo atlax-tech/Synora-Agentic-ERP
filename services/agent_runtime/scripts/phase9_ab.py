@@ -37,7 +37,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--threshold-profile",
-        choices=("approved-qwen-v1", "relative-model-v1"),
+        choices=("approved-qwen-v1", "relative-model-v1", "quality-first-model-v1"),
         default="approved-qwen-v1",
     )
     parser.add_argument("--case-spec", type=Path, default=BASELINE_CASE_SPEC_PATH)

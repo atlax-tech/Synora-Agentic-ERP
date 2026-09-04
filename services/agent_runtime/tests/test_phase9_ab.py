@@ -10,6 +10,7 @@ from agent_runtime.evaluation.phase9_ab import (
     BASELINE_CASE_SPEC_PATH,
     EXPECTED_CASE_ORDER,
     _score,
+    _thresholds,
     render_ab_decision_package,
     run_phase9_ab,
 )
@@ -112,6 +113,23 @@ def test_relative_threshold_profile_requires_same_model_baseline() -> None:
     assert report.manifest.threshold_profile == "relative-model-v1"
     assert report.manifest.completion_token_cap == 512
     assert report.manifest.baseline_digest != "0" * 64
+
+
+def test_quality_first_profile_keeps_token_as_evidence_only() -> None:
+    report = run_phase9_ab(threshold_profile="quality-first-model-v1", completion_token_cap=512)
+    baseline = report.single_metrics.model_copy(update={"p95_latency_ms": 100})
+    inflated = report.multi_metrics.model_copy(
+        update={"total_tokens": report.single_metrics.total_tokens * 10, "p95_latency_ms": 100}
+    )
+    assert (
+        _thresholds(
+            baseline,
+            inflated,
+            profile="quality-first-model-v1",
+        )
+        is True
+    )
+    assert report.manifest.threshold_profile == "quality-first-model-v1"
 
 
 def test_ab_report_rejects_tampered_metrics_or_cross_arm_projection() -> None:
