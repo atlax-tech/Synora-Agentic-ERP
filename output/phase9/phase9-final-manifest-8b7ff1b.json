@@ -1,0 +1,284 @@
+{
+  "schema_version": "1",
+  "suite": "phase9-final-manifest",
+  "status": "PENDING_INDEPENDENT_REVIEW",
+  "generated_at": "2026-09-04T14:45:00+08:00",
+  "code_head": "8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e",
+  "implementation_head": "8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e",
+  "evidence_commit": "9f2f6ca6217ecacbc8acc87aaa7686869c70dc02",
+  "upstream": {
+    "FDP_REV_FRAPPE": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+    "FDP_REV_ERP_NEXT": "11e0ba0a1c45f217e2e73e885f699102d06da325"
+  },
+  "fixed_case_spec_sha256": "05d22c0ddc3617079d279d664a4422a541861af83c64fbb6d9edcc7e2a56acb7",
+  "provider_search": [
+    {
+      "order": 1,
+      "role": "primary",
+      "model": "qwen3:8b",
+      "status": "BLOCKED",
+      "completion_token_cap": 128,
+      "threshold_profile": "approved-qwen-v1",
+      "artifact": "output/phase9/phase9-ab-real-v10.json",
+      "note": "historical primary candidate; failed before quality-first decision"
+    },
+    {
+      "order": 2,
+      "role": "assist",
+      "model": "glm-5.3-flash",
+      "status": "ADOPTED",
+      "completion_token_cap": 512,
+      "threshold_profile": "quality-first-model-v1",
+      "artifact": "output/phase9/phase9-ab-real-glm-v12.json",
+      "artifact_code_head": "7bad441034d44dfb6aa39d278a932c25034a7700",
+      "decision": "Planner and Reviewer ADOPT; first qualifying quality-first run"
+    },
+    {
+      "order": 3,
+      "role": "backup",
+      "model": "grok-4.5",
+      "status": "BLOCKED",
+      "completion_token_cap": 512,
+      "threshold_profile": "relative-model-v1",
+      "artifact": "output/phase9/phase9-ab-real-grok-v1.json",
+      "note": "historical run before GLM quality-first adoption; not called after v12"
+    },
+    {
+      "order": 4,
+      "role": "last_local",
+      "model": "qwen3.8:27b",
+      "status": "NOT_CALLED",
+      "reason": "user-directed stop; no 27B call recorded"
+    }
+  ],
+  "adopted_roles": [
+    "procurement_planner",
+    "policy_risk_reviewer"
+  ],
+  "adoption_constraints": {
+    "coach": "RETAIN_PHASE8_INDEPENDENT_ENTRY",
+    "reconciliation": "REJECT_UNLESS_EXCEPTION_TRIGGERED",
+    "provider_search_stopped_on_first_adopted_candidate": true,
+    "business_planner_reviewer_authorized": true,
+    "token_policy": "informational_only_under_quality_first"
+  },
+  "evidence": [
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v12.json",
+      "sha256": "4fd4385cb3856201c5ce2d8991b2c88acf282a521df44473dfb8fb118f2d56bd",
+      "role": "p9.5-adoption",
+      "status": "PASS",
+      "note": "GLM quality-first source evidence"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v12.md",
+      "sha256": "6cfa80b6dc0729079c05d5a3a1758c138bfc2d707268d5795ac3c536f3870009",
+      "role": "p9.5-adoption-decision",
+      "status": "PASS",
+      "note": "GLM quality-first decision package"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v13.json",
+      "sha256": "cd1d3c6dec1b77efa9ce474223f8b41e519eab9e96eabeab2accf0181785b4ae",
+      "role": "p9.5-superseded-retry",
+      "status": "BLOCKED",
+      "note": "non-functional wording HEAD stochastic retry"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-glm-v13.md",
+      "sha256": "789deb7c203d91f6fba1c6371b87e057519abfb052bf6f825fbb9a11a23cd4d2",
+      "role": "p9.5-superseded-retry-decision",
+      "status": "BLOCKED",
+      "note": "preserved failed retry"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-v10.json",
+      "sha256": "bce371b3718cc8b7a317f79c539de1b8c90402ecb72cdae25534d84677ae1712",
+      "role": "p9.5-primary-qwen",
+      "status": "BLOCKED",
+      "note": "historical qwen candidate"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-v10.md",
+      "sha256": "4181b3945c8b2b6c942617ca8eb5535b7024d98387f7304f33607801b78b5f5f",
+      "role": "p9.5-primary-qwen-decision",
+      "status": "BLOCKED",
+      "note": "historical qwen decision"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-grok-v1.json",
+      "sha256": "7653e4d944dd71ac375e37396436abcbc6def55ec6938654c0afc57f2f8743b5",
+      "role": "p9.5-backup-grok",
+      "status": "BLOCKED",
+      "note": "historical grok candidate"
+    },
+    {
+      "path": "output/phase9/phase9-ab-real-grok-v1.md",
+      "sha256": "773e35738d302f932ce71aa60a234648a00541a721c8f043a4e338bee68a7109",
+      "role": "p9.5-backup-grok-decision",
+      "status": "BLOCKED",
+      "note": "historical grok decision"
+    },
+    {
+      "path": "output/phase9/phase9-single-agent-baseline-8b7ff1b.json",
+      "sha256": "68605d08c170984dbbf98f9783587de3b8766a733d9390105252dab0ae4d64c4",
+      "role": "p9.5-recorded-baseline",
+      "status": "PASS",
+      "note": "fixed fixture baseline"
+    },
+    {
+      "path": "output/phase9/phase9-single-agent-baseline-8b7ff1b.md",
+      "sha256": "a198e0d8019d8b80a42545b92ba22129617af4bbbe84097ccc77bec54d14d085",
+      "role": "p9.5-recorded-baseline-decision",
+      "status": "PASS",
+      "note": "fixed fixture baseline decision"
+    },
+    {
+      "path": "output/phase9/phase9-ab-recorded-8b7ff1b.json",
+      "sha256": "24c9336238a48b3960a9a3af457fb0d9579aab0b29ece7ffd9664d6002edb25e",
+      "role": "p9.5-recorded-ab",
+      "status": "BLOCKED",
+      "note": "fixed fixture timing profile"
+    },
+    {
+      "path": "output/phase9/phase9-ab-recorded-8b7ff1b.md",
+      "sha256": "b6f6abd9521ed3c47cd7259fa8bb807eeea44f3f6d5fcb1d3fc121a212fc1b41",
+      "role": "p9.5-recorded-ab-decision",
+      "status": "BLOCKED",
+      "note": "fixed fixture timing profile decision"
+    },
+    {
+      "path": "output/phase9/phase9-pattern-comparison-8b7ff1b.json",
+      "sha256": "2ef1f975a0966ad23c29a6a2d488b2cb5e6260849963a1c018ed3369bbb6348c",
+      "role": "p9.4-patterns",
+      "status": "PASS",
+      "note": "recorded pattern comparison"
+    },
+    {
+      "path": "output/phase9/phase9-pattern-comparison-8b7ff1b.md",
+      "sha256": "020a4492ce59cbfe1e1ae4ef178ae124cd0f3648e5936587460666b63d4ee526",
+      "role": "p9.4-patterns-decision",
+      "status": "PASS",
+      "note": "recorded pattern decision"
+    },
+    {
+      "path": "output/phase9/phase9-mcp-acceptance-8b7ff1b.json",
+      "sha256": "4f526c4d147e8d3e52fdb572cada6b02bbfc4a9a204f220b6912be624263adce",
+      "role": "p9.6-mcp",
+      "status": "PASS",
+      "note": "official in-memory and stdio acceptance"
+    },
+    {
+      "path": "output/phase9/phase9-a2a-acceptance-8b7ff1b.json",
+      "sha256": "32235c08979d1a972b304cfed0b477708c1efb78aa64f0babc78cce15da999e2",
+      "role": "p9.7-a2a",
+      "status": "PASS",
+      "note": "official SDK real loopback TCP acceptance"
+    },
+    {
+      "path": "output/phase9/phase9-anp-acceptance-8b7ff1b.json",
+      "sha256": "617ed7716334e81958d3ed1975c30cc3fdd2089f43f46b7aa19a265edb2c491c",
+      "role": "p9.8-anp",
+      "status": "PASS",
+      "note": "fixed descriptor discovery acceptance"
+    },
+    {
+      "path": "output/phase9/phase9-protocol-acceptance-8b7ff1b.json",
+      "sha256": "0cfe8ef181f25eb6bdbad477a2a917b361272ae1796711baac792f80b8cddbf4",
+      "role": "p9.6-p9.8-protocol-summary",
+      "status": "PASS",
+      "note": "protocol summary"
+    },
+    {
+      "path": "output/phase9/phase9-real-acceptance-8b7ff1b.json",
+      "sha256": "5d31cb04d2abf74405f1ffa571e8a143397104b74f54bf4c0c1e4645ba67c46e",
+      "role": "p9.9-real-acceptance",
+      "status": "PASS",
+      "note": "real business/permission/recovery acceptance"
+    },
+    {
+      "path": "output/playwright/phase9-buyer-8b7ff1b.png",
+      "sha256": "a39058003aa72d172c97e455b1af12fcfdde99a0347cabe84dff2a180470cd29",
+      "role": "p9.9-browser-buyer",
+      "status": "PASS",
+      "note": "Buyer real reviewed detail"
+    },
+    {
+      "path": "output/playwright/phase9-viewer-8b7ff1b.png",
+      "sha256": "ba90e47fb70ab381a90962d2aac2d4ee73201f87c8698f2e6d984b8b2d6f8609",
+      "role": "p9.9-browser-viewer",
+      "status": "PASS",
+      "note": "Viewer permission denial"
+    },
+    {
+      "path": "output/playwright/phase9-system-manager-8b7ff1b.png",
+      "sha256": "cd3f045bdb64580375333b2c90bf33c528a639a785d54c8f060f19a118e82606",
+      "role": "p9.9-browser-system-manager",
+      "status": "PASS",
+      "note": "System Manager redacted detail"
+    }
+  ],
+  "report": {
+    "path": "output/phase9/phase9-stage-report-draft-8b7ff1b.md",
+    "sha256": "1fd6cc0e89c8246419c2a42c9db019bfe6dbef597060ccc18e422c081e354193",
+    "status": "PENDING_INDEPENDENT_REVIEW"
+  },
+  "command_exit_codes": {
+    "make_format_check": 0,
+    "make_lint": 0,
+    "make_type": 0,
+    "make_unit": 0,
+    "make_integration": 0,
+    "phase9_focused_suite": 0,
+    "phase9_artifact_schema_head_zero_write": 0,
+    "uv_lock_check_python314": 0,
+    "python314_compileall_import_smoke": 0,
+    "git_diff_check": 0,
+    "fixed_upstream_sha_dirty": 0,
+    "ponytail_audit": 0,
+    "ponytail_debt": 0,
+    "harness_validate_manifest": 0,
+    "harness_validate_structure": 0,
+    "harness_check_references": 0,
+    "harness_score_health": 0,
+    "harness_detect_drift": 1
+  },
+  "review": {
+    "status": "PENDING",
+    "rounds_completed": 3,
+    "prior_rounds": [
+      "CHANGES_REQUIRED",
+      "CHANGES_REQUIRED",
+      "CHANGES_REQUIRED"
+    ],
+    "new_review_required_after_quality_first_decision": true,
+    "allowed_results": [
+      "PASS",
+      "CHANGES_REQUIRED",
+      "BLOCKED"
+    ]
+  },
+  "write_safety": {
+    "erp_business_writes": 0,
+    "qwen27_called": false,
+    "real_success_path_provider": "assist/glm-5.3-flash",
+    "mcp_a2a_anp_business_capability": "none",
+    "prompt_or_raw_model_text_persisted": false,
+    "secret_persisted": false
+  },
+  "binding": {
+    "artifact_code_head": "8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e",
+    "evidence_commit": "9f2f6ca6217ecacbc8acc87aaa7686869c70dc02",
+    "adoption_evidence_source_head": "7bad441034d44dfb6aa39d278a932c25034a7700",
+    "adoption_source_diff": "Adoption Card reason text only; runtime/evaluator semantics unchanged",
+    "report_sha256": "1fd6cc0e89c8246419c2a42c9db019bfe6dbef597060ccc18e422c081e354193",
+    "manifest_self_digest": "excluded to avoid circular digest"
+  },
+  "unrun_or_pending": [
+    "independent adversarial review",
+    "authority docs sync",
+    "README proposal approval",
+    "Harness Phase A proposal approval",
+    "final docs/Harness drift recheck"
+  ]
+}
