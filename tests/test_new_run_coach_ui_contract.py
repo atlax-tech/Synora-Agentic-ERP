@@ -16,7 +16,7 @@ def test_new_run_exposes_a_separate_coach_purpose_and_optional_context() -> None
     source = PAGE.read_text(encoding="utf-8")
 
     for required in (
-        'options: "PROCUREMENT_ANALYSIS\\nERP_COACH"',
+        'options: "PROCUREMENT_ANALYSIS\\nP2P_EXECUTION\\nERP_COACH"',
         'fieldname: "coach_question"',
         'fieldname: "coach_context_type"',
         'fieldname: "coach_context_name"',

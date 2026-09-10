@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from agent_runtime.providers import ProviderError
+from typing import NoReturn
+
+import pytest
+from agent_runtime.providers import ProviderError, ProviderRole
 
 from labs.p2p_orchestration import phase10_comparison as comparison
 from labs.p2p_orchestration.phase10_comparison import (
@@ -56,8 +59,10 @@ def test_report_json_is_bounded_and_does_not_contain_credentials_or_prompts() ->
     assert "prompt" not in rendered.lower()
 
 
-def test_real_report_keeps_fixed_matrix_and_blocks_missing_provider(monkeypatch) -> None:
-    def unavailable(_role):
+def test_real_report_keeps_fixed_matrix_and_blocks_missing_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unavailable(_role: ProviderRole) -> NoReturn:
         raise ProviderError("provider unavailable", failure_code="INVALID_CONFIGURATION")
 
     monkeypatch.setattr(comparison, "provider_for_role", unavailable)

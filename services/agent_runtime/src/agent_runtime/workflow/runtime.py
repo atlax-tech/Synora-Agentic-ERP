@@ -386,7 +386,7 @@ class WorkflowRuntime:
     async def _advance(
         self,
         state: WorkflowState,
-        request: WorkflowRequest,
+        request: WorkflowRequest | WorkflowP2PPlanRequest,
         *,
         lease: str | None = None,
     ) -> WorkflowResult:
@@ -453,6 +453,11 @@ class WorkflowRuntime:
                     return self.engine.result(waiting)
                 if ready.tool_name is None:
                     raise WorkflowError("WORKFLOW_INVALID", "tool step is incomplete")
+                if not isinstance(request, WorkflowRequest):
+                    raise WorkflowError(
+                        "WORKFLOW_INVALID",
+                        "P2P request cannot execute a tool step",
+                    )
                 if client is None:
                     client = GatewayClient()
                 if adapter is None:

@@ -39,7 +39,6 @@ _LEGAL = [
 
 _ILLEGAL = [
     ("CREATED", "SUCCEEDED"),
-    ("CREATED", "PROPOSED"),
     ("ANALYZING", "SUCCEEDED"),
     ("PROPOSED", "EXECUTING"),
     ("SUCCEEDED", "CREATED"),

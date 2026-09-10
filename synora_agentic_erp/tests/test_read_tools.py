@@ -212,7 +212,7 @@ class TestReadTools(FrappeTestCase):
     def test_open_purchase_order_uses_submitted_erp_status(self) -> None:
         order_name = self._create_open_purchase_order()
         run = self._issue()
-        orders = self._call(run, "purchase_order.open", {"supplier": SUPPLIER})
+        orders = self._call(run, "purchase_order.open", {"supplier": SUPPLIER, "limit": 50})
 
         result = next(row for row in orders["data"] if row["purchase_order"] == order_name)
         self.assertEqual(result["status"], "To Receive and Bill")
@@ -482,7 +482,7 @@ class TestReadTools(FrappeTestCase):
         request_rows = [row for row in requests["data"] if row["material_request"] == request.name]
         self.assertEqual({row["stock_uom"] for row in request_rows}, {"Unit", "Kg"})
 
-        orders = self._call(run, "purchase_order.open", {})
+        orders = self._call(run, "purchase_order.open", {"limit": 50})
         order_rows = [row for row in orders["data"] if row["purchase_order"] == order.name]
         self.assertEqual({row["stock_uom"] for row in order_rows}, {"Unit", "Kg"})
         kg_row = next(row for row in order_rows if row["stock_uom"] == "Kg")
