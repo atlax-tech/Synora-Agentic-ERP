@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import today
 
 from synora_agentic_erp.api import (
     analyze_run,
@@ -28,6 +29,7 @@ SUPPLIER = "SYNORA-P1-Supplier-1"
 PRICE_LIST = "SYNORA-P1 Buying CNY"
 ITEM_GROUP = "SYNORA-P1 Items"
 STOCK_UOM = "Unit"
+P10_TEST_DATE = today()
 
 
 class TestPhase10PurchaseReceipt(FrappeTestCase):  # type: ignore[misc]
@@ -68,7 +70,7 @@ class TestPhase10PurchaseReceipt(FrappeTestCase):  # type: ignore[misc]
                 "doctype": "Purchase Order",
                 "supplier": SUPPLIER,
                 "company": COMPANY,
-                "transaction_date": "2026-09-10",
+                "transaction_date": P10_TEST_DATE,
                 "schedule_date": "2026-09-20",
                 "currency": "CNY",
                 "buying_price_list": PRICE_LIST,
@@ -122,7 +124,7 @@ class TestPhase10PurchaseReceipt(FrappeTestCase):  # type: ignore[misc]
         if action_type == "CREATE_PR_DRAFT":
             payload.update(
                 {
-                    "transaction_date": "2026-09-10",
+                    "transaction_date": P10_TEST_DATE,
                     "items": [
                         {
                             "source_row": source_row,
@@ -216,7 +218,7 @@ class TestPhase10PurchaseReceipt(FrappeTestCase):  # type: ignore[misc]
         self.assertEqual(first_draft["target"]["docstatus"], 0)
         first_pr_name = str(first_draft["target"]["name"])
         first_pr = frappe.get_doc("Purchase Receipt", first_pr_name)
-        self.assertEqual(str(first_pr.posting_date), "2026-09-10")
+        self.assertEqual(str(first_pr.posting_date), P10_TEST_DATE)
         self.assertEqual(first_pr.items[0].purchase_order_item, po_item_name)
         self.assertEqual(first_pr.items[0].qty, 1)
 

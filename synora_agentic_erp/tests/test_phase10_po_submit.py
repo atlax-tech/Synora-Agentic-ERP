@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import today
 
 from synora_agentic_erp.api import (
     analyze_run,
@@ -28,6 +29,7 @@ SUPPLIER = "SYNORA-P1-Supplier-1"
 PRICE_LIST = "SYNORA-P1 Buying CNY"
 ITEM_GROUP = "SYNORA-P1 Items"
 STOCK_UOM = "Unit"
+P10_TEST_DATE = today()
 
 
 class TestPhase10PurchaseOrderSubmit(FrappeTestCase):  # type: ignore[misc]
@@ -68,7 +70,7 @@ class TestPhase10PurchaseOrderSubmit(FrappeTestCase):  # type: ignore[misc]
                 "doctype": "Purchase Order",
                 "supplier": SUPPLIER,
                 "company": COMPANY,
-                "transaction_date": "2026-09-10",
+                "transaction_date": P10_TEST_DATE,
                 "schedule_date": "2026-09-20",
                 "currency": "CNY",
                 "buying_price_list": PRICE_LIST,

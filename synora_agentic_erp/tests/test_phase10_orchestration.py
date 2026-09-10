@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -15,6 +16,7 @@ from synora_agentic_erp.governance.p2p_orchestration import (
     derive_step_views,
     infer_dependencies,
 )
+from synora_agentic_erp.governance.policy import _run_identity
 
 COMPANY = "SYNORA-P1 Test Company"
 WAREHOUSE = "SYNORA-P1 Stores - SP1"
@@ -128,6 +130,32 @@ class TestPhase10OrchestrationProjection(FrappeTestCase):  # type: ignore[misc]
 
         views = derive_step_views([entry])
         self.assertEqual(views[0].state, "EXECUTING")
+
+    def test_declined_action_projects_to_supported_failed_plan_step(self) -> None:
+        entries = [
+            _entry("SUBMIT_PO", "a-po", state="DECLINED", created_at="1"),
+            _entry("CREATE_PR_DRAFT", "b-pr", state="APPROVED", created_at="2"),
+        ]
+
+        chain = chain_from_entries("EXECUTING", entries)
+        self.assertEqual(chain["steps"][0]["state"], "FAILED")
+        self.assertEqual(chain["steps"][1]["state"], "BLOCKED")
+        self.assertIn("dependency a-po is FAILED", chain["blocked_reasons"])
+
+    def test_plan_execute_uses_workflow_deadline_after_segment_capability_expires(self) -> None:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        run = SimpleNamespace(
+            initiator=BUYER,
+            status="ACTIVE",
+            revoked=0,
+            run_state="AWAITING_APPROVAL",
+            execution_mode="PLAN_EXECUTE",
+            expires_at=now.replace(year=2020),
+            workflow_expires_at=now.replace(year=2030),
+        )
+        action = SimpleNamespace(initiator=BUYER)
+        result = _run_identity(action, run, BUYER)
+        self.assertEqual(result.status, "PASS")
 
     def test_verified_receipts_alone_cannot_close_without_a_business_goal(self) -> None:
         entries = [

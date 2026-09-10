@@ -696,7 +696,10 @@ def _candidate_expiry(run: Any) -> str:
 
     now = now_datetime()
     try:
-        deadline = get_datetime(getattr(run, "expires_at", None))
+        deadline_value = getattr(run, "expires_at", None)
+        if getattr(run, "execution_mode", None) == "PLAN_EXECUTE":
+            deadline_value = getattr(run, "workflow_expires_at", None) or deadline_value
+        deadline = get_datetime(deadline_value)
     except Exception as error:
         raise GatewayFault("CONFLICT", "P2P Run deadline is unavailable", 409) from error
     if deadline is None:
@@ -1509,8 +1512,16 @@ def derive_step_views(entries: Iterable[dict[str, Any]]) -> tuple[P2PPlanStepVie
             projected = "WAITING_APPROVAL"
         elif state == "APPROVED":
             projected = "READY"
-        elif state in {"DECLINED", "EXPIRED"}:
-            projected = state
+        elif state == "DECLINED":
+            # Governance keeps DECLINED as the immutable Action state, while
+            # the PlanStep doctype intentionally has no separate DECLINED
+            # value.  Project a rejected side-effect candidate to the
+            # supported terminal failure state so the dependency graph can
+            # block downstream writes without inventing a new persistence
+            # state.
+            projected = "FAILED"
+        elif state == "EXPIRED":
+            projected = "EXPIRED"
         else:
             projected = "PLANNED"
         raw[action_id] = projected

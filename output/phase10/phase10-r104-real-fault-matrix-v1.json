@@ -1,0 +1,2894 @@
+{
+  "schema_version": "phase10-r104-fault-matrix-v1",
+  "captured_at": "2026-09-10T18:44:10Z",
+  "source_revision": "4381d47fb488751c2e4596285e27153c0e31acb9",
+  "working_tree_diff_sha256": "234dba35e371a842da1a80210edd097918c37adf28918ecf716b809d0b4e2a55",
+  "execution": {
+    "compose_file": "/Users/qilong.lu/WorkDir/atlax-tech/Synora-Agentic-ERP/env/dev/docker-compose.yml",
+    "site": "dev.localhost",
+    "worker_module": "env/dev/p10/phase10_fault_worker.py",
+    "fault_control": "isolated bench console subprocess only; no HTTP parameter",
+    "readback": "new bench console subprocess after every worker invocation",
+    "cases": 28
+  },
+  "action_types": [
+    "SUBMIT_PO",
+    "CREATE_PR_DRAFT",
+    "SUBMIT_PR",
+    "CREATE_PI_DRAFT",
+    "SUBMIT_PI",
+    "CREATE_PAYMENT_ENTRY_DRAFT",
+    "SUBMIT_PAYMENT_ENTRY"
+  ],
+  "boundaries": [
+    "reservation_committed",
+    "before_erp_call",
+    "after_erp_call",
+    "before_receipt"
+  ],
+  "cases": [
+    {
+      "action_type": "SUBMIT_PO",
+      "boundary": "reservation_committed",
+      "run_id": "3c10af3e-45f5-431d-a353-9a192a4b9716",
+      "action_id": "7e3f2fac-3ac1-4643-8a4e-b6ab40ea3663",
+      "approval_id": "6856a66c-7d9f-420c-997c-19377e60af69",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "885561a3a546b8100347b63c003d601c90ef56a1fa94288f24dd3523ae253501",
+      "source_doctype": "Purchase Order",
+      "source_name": "PUR-ORD-2026-02267",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-0414feb1fdc54c77",
+        "po_name": "PUR-ORD-2026-02267",
+        "po_row": "h7fv3efc8g",
+        "source_doctype": "Purchase Order",
+        "source_name": "PUR-ORD-2026-02267"
+      },
+      "worker": {
+        "function": "crash_after_reservation",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_RESERVATION_COMMITTED_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "7e3f2fac-3ac1-4643-8a4e-b6ab40ea3663",
+          "action_type": "SUBMIT_PO",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "3ba296b4-bf5f-4da2-9923-92c5ea04b3fa",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "3c10af3e-45f5-431d-a353-9a192a4b9716",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "7e3f2fac-3ac1-4643-8a4e-b6ab40ea3663",
+            "action_type": "SUBMIT_PO",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "3ba296b4-bf5f-4da2-9923-92c5ea04b3fa",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "af9793bf-c15b-4476-b0cf-c1aff82476ba",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "c63d363e-e028-484a-aba5-39bf79407f9b",
+            "target_name": "PUR-ORD-2026-02267",
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "7e3f2fac-3ac1-4643-8a4e-b6ab40ea3663",
+          "action_type": "SUBMIT_PO",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "3ba296b4-bf5f-4da2-9923-92c5ea04b3fa",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "af9793bf-c15b-4476-b0cf-c1aff82476ba",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "af9793bf-c15b-4476-b0cf-c1aff82476ba",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PO",
+      "boundary": "before_erp_call",
+      "run_id": "9ebc5fe5-a5b6-476a-a3d4-5459d071a9b5",
+      "action_id": "1fb794ef-f8fd-4fa1-8dff-db5153a2b654",
+      "approval_id": "c2f3700d-74a1-46f4-8843-0b46a1fbcf28",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "1f4c3214b39cb05b842c97f11f44d596ab4ee58ef5775a344596a54cd6288b9a",
+      "source_doctype": "Purchase Order",
+      "source_name": "PUR-ORD-2026-02268",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-31a52f6ce1ed47c3",
+        "po_name": "PUR-ORD-2026-02268",
+        "po_row": "h7ha53kjj4",
+        "source_doctype": "Purchase Order",
+        "source_name": "PUR-ORD-2026-02268"
+      },
+      "worker": {
+        "function": "fail_before_erp_call",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "1fb794ef-f8fd-4fa1-8dff-db5153a2b654",
+          "action_type": "SUBMIT_PO",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "b5c591b1-ee3d-4439-b8e6-4c488d8d0459",
+            "status": "FAILED",
+            "attempt": 1,
+            "target_name": "PUR-ORD-2026-02268",
+            "receipt": "e38f68a8-798b-4962-bbf2-7788891ce92a",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError"
+          },
+          "receipt": {
+            "receipt_id": "e38f68a8-798b-4962-bbf2-7788891ce92a",
+            "final_state": "FAILED",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError",
+            "target_doctype": "Purchase Order",
+            "target_name": "PUR-ORD-2026-02268"
+          },
+          "target": {
+            "docstatus": 0,
+            "doctype": "Purchase Order",
+            "name": "PUR-ORD-2026-02268"
+          }
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PO",
+      "boundary": "after_erp_call",
+      "run_id": "652af500-aba0-4649-8b47-568da349d56f",
+      "action_id": "c1d0ddf6-f265-4cb8-8c69-c4f27ab8dc54",
+      "approval_id": "28a1accd-58a0-49b3-ac01-af0e6ca313a4",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "f6249046b05f5cdab291e243a4c2379d371dcc1ce7e6223175c2e4498ace4f1c",
+      "source_doctype": "Purchase Order",
+      "source_name": "PUR-ORD-2026-02269",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-56664359c43f48f1",
+        "po_name": "PUR-ORD-2026-02269",
+        "po_row": "h7im0a5cet",
+        "source_doctype": "Purchase Order",
+        "source_name": "PUR-ORD-2026-02269"
+      },
+      "worker": {
+        "function": "crash_after_erp_call",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_NATIVE_ERP_COMMITTED_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "c1d0ddf6-f265-4cb8-8c69-c4f27ab8dc54",
+          "action_type": "SUBMIT_PO",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "6f67653d-9d71-48e2-a41a-1817daf54ed0",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": true,
+          "result_status": "RECONCILED_SUCCESS",
+          "can_retry": false,
+          "run": {
+            "run_id": "652af500-aba0-4649-8b47-568da349d56f",
+            "run_state": "EXECUTING",
+            "state_version": 4
+          },
+          "action": {
+            "action_id": "c1d0ddf6-f265-4cb8-8c69-c4f27ab8dc54",
+            "action_type": "SUBMIT_PO",
+            "state": "EXECUTED"
+          },
+          "reservation": {
+            "reservation_id": "6f67653d-9d71-48e2-a41a-1817daf54ed0",
+            "status": "RECONCILED_SUCCESS",
+            "target_name": "PUR-ORD-2026-02269",
+            "receipt": null,
+            "failure_category": "RECONCILIATION_PENDING"
+          },
+          "receipt": {
+            "receipt_id": "aeda7910-212d-4811-a4c2-0e67fb0c7ea4",
+            "final_state": "RECONCILED_SUCCESS",
+            "target_doctype": "Purchase Order",
+            "target_name": "PUR-ORD-2026-02269"
+          },
+          "target": {
+            "doctype": "Purchase Order",
+            "name": "PUR-ORD-2026-02269"
+          },
+          "reconciliation": {
+            "reason": "one reviewed P2P target read back",
+            "reconciliation_correlation_id": "1b18d643-7389-464d-beef-e27847531c6b",
+            "target_name": "PUR-ORD-2026-02269",
+            "verified": true
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "c1d0ddf6-f265-4cb8-8c69-c4f27ab8dc54",
+          "action_type": "SUBMIT_PO",
+          "action_state": "EXECUTED",
+          "action_state_version": 4,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "6f67653d-9d71-48e2-a41a-1817daf54ed0",
+            "status": "RECONCILED_SUCCESS",
+            "attempt": 1,
+            "target_name": "PUR-ORD-2026-02269",
+            "receipt": "aeda7910-212d-4811-a4c2-0e67fb0c7ea4",
+            "response_category": "ERP_SUCCESS",
+            "failure_category": "RECONCILIATION_PENDING"
+          },
+          "receipt": {
+            "receipt_id": "aeda7910-212d-4811-a4c2-0e67fb0c7ea4",
+            "final_state": "RECONCILED_SUCCESS",
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null,
+            "target_doctype": "Purchase Order",
+            "target_name": "PUR-ORD-2026-02269"
+          },
+          "target": {
+            "docstatus": 1,
+            "doctype": "Purchase Order",
+            "name": "PUR-ORD-2026-02269"
+          }
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PO",
+      "boundary": "before_receipt",
+      "run_id": "4fd0084d-ea61-4f6c-ab64-96d49ec25b34",
+      "action_id": "f124549f-e5ab-4ec7-b14d-b2941c272280",
+      "approval_id": "8bda5660-ad1a-4fcb-b482-2c71aa6861c8",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "6301489894a56981134b1192cb68a42adfbb7b95b988ce5f8539df8aa44084eb",
+      "source_doctype": "Purchase Order",
+      "source_name": "PUR-ORD-2026-02270",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-0f2d38c6c0b447d8",
+        "po_name": "PUR-ORD-2026-02270",
+        "po_row": "h7jg3dank3",
+        "source_doctype": "Purchase Order",
+        "source_name": "PUR-ORD-2026-02270"
+      },
+      "worker": {
+        "function": "fail_before_receipt",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "f124549f-e5ab-4ec7-b14d-b2941c272280",
+          "action_type": "SUBMIT_PO",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "5a1206b8-42ed-40e1-ab2f-393904bfe53a",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "4fd0084d-ea61-4f6c-ab64-96d49ec25b34",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "f124549f-e5ab-4ec7-b14d-b2941c272280",
+            "action_type": "SUBMIT_PO",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "5a1206b8-42ed-40e1-ab2f-393904bfe53a",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "d10f9b7d-1574-419b-98ad-f0afe09c4bca",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "14bbc1d4-ab34-42ee-bb7e-eb8ee2273dee",
+            "target_name": "PUR-ORD-2026-02270",
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "f124549f-e5ab-4ec7-b14d-b2941c272280",
+          "action_type": "SUBMIT_PO",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "5a1206b8-42ed-40e1-ab2f-393904bfe53a",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "d10f9b7d-1574-419b-98ad-f0afe09c4bca",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "d10f9b7d-1574-419b-98ad-f0afe09c4bca",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PR_DRAFT",
+      "boundary": "reservation_committed",
+      "run_id": "876f37f4-1e4a-4449-abda-08e3ed526afc",
+      "action_id": "08693547-0d09-4115-ba39-b8aa884c1d71",
+      "approval_id": "5bad33ce-8e82-40d5-a28c-704095de3ab0",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "e930b1e4cbe860aadb295edddc7f6389efadcb1b53140e63113f2f47c43cc936",
+      "source_doctype": "Purchase Order",
+      "source_name": "PUR-ORD-2026-02271",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-fd251e619deb4f0a",
+        "po_name": "PUR-ORD-2026-02271",
+        "po_row": "h7jn4jboak",
+        "source_doctype": "Purchase Order",
+        "source_name": "PUR-ORD-2026-02271"
+      },
+      "worker": {
+        "function": "crash_after_reservation",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_RESERVATION_COMMITTED_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "08693547-0d09-4115-ba39-b8aa884c1d71",
+          "action_type": "CREATE_PR_DRAFT",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "01f20958-12a9-463e-9471-d36a7d37387e",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "876f37f4-1e4a-4449-abda-08e3ed526afc",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "08693547-0d09-4115-ba39-b8aa884c1d71",
+            "action_type": "CREATE_PR_DRAFT",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "01f20958-12a9-463e-9471-d36a7d37387e",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "2d90714a-1520-4a7d-a506-b646b9a04b19",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "f3d43ec4-1360-49cf-8f25-159281787b35",
+            "target_name": null,
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "08693547-0d09-4115-ba39-b8aa884c1d71",
+          "action_type": "CREATE_PR_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "01f20958-12a9-463e-9471-d36a7d37387e",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "2d90714a-1520-4a7d-a506-b646b9a04b19",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "2d90714a-1520-4a7d-a506-b646b9a04b19",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PR_DRAFT",
+      "boundary": "before_erp_call",
+      "run_id": "7fee1529-d304-4130-9f4d-0980fb038da6",
+      "action_id": "8444316f-3f7f-4636-a84a-dcdbcd2de2aa",
+      "approval_id": "c597dcb2-c150-4987-bbc9-54706f4716a7",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "3a3d0a94b10a4daeed0df0b6d4c44cfffcd18e63bc4eb6c926404e37985fa8e9",
+      "source_doctype": "Purchase Order",
+      "source_name": "PUR-ORD-2026-02272",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-db0c54d6c319478f",
+        "po_name": "PUR-ORD-2026-02272",
+        "po_row": "h7lhfv001v",
+        "source_doctype": "Purchase Order",
+        "source_name": "PUR-ORD-2026-02272"
+      },
+      "worker": {
+        "function": "fail_before_erp_call",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "8444316f-3f7f-4636-a84a-dcdbcd2de2aa",
+          "action_type": "CREATE_PR_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "52df6d1d-3c40-4b98-966b-4d65adaba3fa",
+            "status": "FAILED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "69567c93-59d1-4c7c-b4ca-9f1bb87c7ac5",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError"
+          },
+          "receipt": {
+            "receipt_id": "69567c93-59d1-4c7c-b4ca-9f1bb87c7ac5",
+            "final_state": "FAILED",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PR_DRAFT",
+      "boundary": "after_erp_call",
+      "run_id": "8ef08e1c-c1b9-4237-a961-b729b71b0215",
+      "action_id": "a441f4dd-a01b-4674-9eeb-9eec0dff52d4",
+      "approval_id": "c030f99b-17be-413e-84f4-15ffdeb986c8",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "9de433d70b9698c848964519ccaff49f7276a9bdd25962206fec1119d0ec042d",
+      "source_doctype": "Purchase Order",
+      "source_name": "PUR-ORD-2026-02273",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-64974565967d47bc",
+        "po_name": "PUR-ORD-2026-02273",
+        "po_row": "h7mabbd73b",
+        "source_doctype": "Purchase Order",
+        "source_name": "PUR-ORD-2026-02273"
+      },
+      "worker": {
+        "function": "crash_after_erp_call",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_ATOMIC_ERP_INSERT_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "a441f4dd-a01b-4674-9eeb-9eec0dff52d4",
+          "action_type": "CREATE_PR_DRAFT",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "188c6a7e-a63b-4ca7-a22d-6c5e67e89c17",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "8ef08e1c-c1b9-4237-a961-b729b71b0215",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "a441f4dd-a01b-4674-9eeb-9eec0dff52d4",
+            "action_type": "CREATE_PR_DRAFT",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "188c6a7e-a63b-4ca7-a22d-6c5e67e89c17",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "a41182ca-41cf-4931-94bb-933d6a28ed8e",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "d8a68a4c-c7f6-45cd-8967-3a48b30753f0",
+            "target_name": null,
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "a441f4dd-a01b-4674-9eeb-9eec0dff52d4",
+          "action_type": "CREATE_PR_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "188c6a7e-a63b-4ca7-a22d-6c5e67e89c17",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "a41182ca-41cf-4931-94bb-933d6a28ed8e",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "a41182ca-41cf-4931-94bb-933d6a28ed8e",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PR_DRAFT",
+      "boundary": "before_receipt",
+      "run_id": "f0ec46ff-8b00-43ce-a36c-fb9f25b3f4a4",
+      "action_id": "cf1862f2-97ec-4358-b580-fd9ced3e1b56",
+      "approval_id": "199e77b3-1e4d-416e-9ec2-df81a28ee73d",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "064263aef082826abc5997cc73382abb8179769b0b71aae1bc87a142b1088577",
+      "source_doctype": "Purchase Order",
+      "source_name": "PUR-ORD-2026-02274",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-b7822ea1647c4330",
+        "po_name": "PUR-ORD-2026-02274",
+        "po_row": "h7nm0o2h0k",
+        "source_doctype": "Purchase Order",
+        "source_name": "PUR-ORD-2026-02274"
+      },
+      "worker": {
+        "function": "fail_before_receipt",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "cf1862f2-97ec-4358-b580-fd9ced3e1b56",
+          "action_type": "CREATE_PR_DRAFT",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "6f68afcb-5cf1-4dc5-80f3-86ed0d540bd9",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "f0ec46ff-8b00-43ce-a36c-fb9f25b3f4a4",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "cf1862f2-97ec-4358-b580-fd9ced3e1b56",
+            "action_type": "CREATE_PR_DRAFT",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "6f68afcb-5cf1-4dc5-80f3-86ed0d540bd9",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "f6f77831-c882-40df-97de-439060b4a33a",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "2301a521-35b4-4178-b121-558c492dec1b",
+            "target_name": null,
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "cf1862f2-97ec-4358-b580-fd9ced3e1b56",
+          "action_type": "CREATE_PR_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "6f68afcb-5cf1-4dc5-80f3-86ed0d540bd9",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "f6f77831-c882-40df-97de-439060b4a33a",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "f6f77831-c882-40df-97de-439060b4a33a",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PR",
+      "boundary": "reservation_committed",
+      "run_id": "682a8973-9344-4caf-8649-0c048464a2f3",
+      "action_id": "1cffdc2f-dce0-41e0-876e-069e92553d3a",
+      "approval_id": "bf197236-c46a-4ced-aa07-15376142c0f3",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "1cdbda1df7d29ed987fd4c558cc22d4cbc4e2fa6b77fed5a351c1170af5e9615",
+      "source_doctype": "Purchase Receipt",
+      "source_name": "MAT-PRE-2026-00498",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-03b87d32df94486b",
+        "po_name": "PUR-ORD-2026-02275",
+        "po_row": "h7ol8quaj5",
+        "pr_name": "MAT-PRE-2026-00498",
+        "pr_row": "h7peq5oshu",
+        "source_doctype": "Purchase Receipt",
+        "source_name": "MAT-PRE-2026-00498"
+      },
+      "worker": {
+        "function": "crash_after_reservation",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_RESERVATION_COMMITTED_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "1cffdc2f-dce0-41e0-876e-069e92553d3a",
+          "action_type": "SUBMIT_PR",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "4cd59e7b-a122-4249-acea-f398582b0797",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "682a8973-9344-4caf-8649-0c048464a2f3",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "1cffdc2f-dce0-41e0-876e-069e92553d3a",
+            "action_type": "SUBMIT_PR",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "4cd59e7b-a122-4249-acea-f398582b0797",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "f4d25479-f8ea-456e-9600-75970ddd6888",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "71ed7cf1-c2bb-4e92-ab82-b0956337da91",
+            "target_name": "MAT-PRE-2026-00498",
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "1cffdc2f-dce0-41e0-876e-069e92553d3a",
+          "action_type": "SUBMIT_PR",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "4cd59e7b-a122-4249-acea-f398582b0797",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "f4d25479-f8ea-456e-9600-75970ddd6888",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "f4d25479-f8ea-456e-9600-75970ddd6888",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PR",
+      "boundary": "before_erp_call",
+      "run_id": "766906df-c6b7-4ddb-94af-75228a6dfd29",
+      "action_id": "685777fe-1200-46e7-9238-bdf3a23c092c",
+      "approval_id": "4566ec8b-1f47-4136-b76c-ddb6034e69cc",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "f6ceea5bbf29d091af7c4945ec0026cdb049f5588f26b496b6c43adeb6f8472e",
+      "source_doctype": "Purchase Receipt",
+      "source_name": "MAT-PRE-2026-00499",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-efb6d17a465d41cd",
+        "po_name": "PUR-ORD-2026-02276",
+        "po_row": "h7pck6vg6k",
+        "pr_name": "MAT-PRE-2026-00499",
+        "pr_row": "h7qngfg5k0",
+        "source_doctype": "Purchase Receipt",
+        "source_name": "MAT-PRE-2026-00499"
+      },
+      "worker": {
+        "function": "fail_before_erp_call",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "685777fe-1200-46e7-9238-bdf3a23c092c",
+          "action_type": "SUBMIT_PR",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "e751d9a1-b777-4d65-b43f-d44c1431bf08",
+            "status": "FAILED",
+            "attempt": 1,
+            "target_name": "MAT-PRE-2026-00499",
+            "receipt": "b0d1a303-5a76-4375-8cde-91d5b60627c3",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError"
+          },
+          "receipt": {
+            "receipt_id": "b0d1a303-5a76-4375-8cde-91d5b60627c3",
+            "final_state": "FAILED",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError",
+            "target_doctype": "Purchase Receipt",
+            "target_name": "MAT-PRE-2026-00499"
+          },
+          "target": {
+            "docstatus": 0,
+            "doctype": "Purchase Receipt",
+            "name": "MAT-PRE-2026-00499"
+          }
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PR",
+      "boundary": "after_erp_call",
+      "run_id": "71ad7d51-50cf-40b1-bf78-66126c5e228e",
+      "action_id": "e779edfa-cb2f-4f9f-bc94-8bf38efccb10",
+      "approval_id": "c5539023-7ec3-4305-a7a8-c7b2b1806303",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "1ef3f93031a0dd0e1ef6bbe9c05e24c6d722045341faaa87b3e3dd15f9e469ba",
+      "source_doctype": "Purchase Receipt",
+      "source_name": "MAT-PRE-2026-00500",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-5d3951c69635486b",
+        "po_name": "PUR-ORD-2026-02277",
+        "po_row": "h7rdki07k3",
+        "pr_name": "MAT-PRE-2026-00500",
+        "pr_row": "h7r6olfmvk",
+        "source_doctype": "Purchase Receipt",
+        "source_name": "MAT-PRE-2026-00500"
+      },
+      "worker": {
+        "function": "crash_after_erp_call",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_NATIVE_ERP_COMMITTED_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "e779edfa-cb2f-4f9f-bc94-8bf38efccb10",
+          "action_type": "SUBMIT_PR",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "d18c91ed-85e2-4c2a-9820-4bfb174926eb",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": true,
+          "result_status": "RECONCILED_SUCCESS",
+          "can_retry": false,
+          "run": {
+            "run_id": "71ad7d51-50cf-40b1-bf78-66126c5e228e",
+            "run_state": "EXECUTING",
+            "state_version": 4
+          },
+          "action": {
+            "action_id": "e779edfa-cb2f-4f9f-bc94-8bf38efccb10",
+            "action_type": "SUBMIT_PR",
+            "state": "EXECUTED"
+          },
+          "reservation": {
+            "reservation_id": "d18c91ed-85e2-4c2a-9820-4bfb174926eb",
+            "status": "RECONCILED_SUCCESS",
+            "target_name": "MAT-PRE-2026-00500",
+            "receipt": null,
+            "failure_category": "RECONCILIATION_PENDING"
+          },
+          "receipt": {
+            "receipt_id": "4820c20a-3072-4739-8c6d-2382d7535f09",
+            "final_state": "RECONCILED_SUCCESS",
+            "target_doctype": "Purchase Receipt",
+            "target_name": "MAT-PRE-2026-00500"
+          },
+          "target": {
+            "doctype": "Purchase Receipt",
+            "name": "MAT-PRE-2026-00500"
+          },
+          "reconciliation": {
+            "reason": "one reviewed P2P target read back",
+            "reconciliation_correlation_id": "e8adb579-4ca0-4314-8598-2bcb46ade7fa",
+            "target_name": "MAT-PRE-2026-00500",
+            "verified": true
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "e779edfa-cb2f-4f9f-bc94-8bf38efccb10",
+          "action_type": "SUBMIT_PR",
+          "action_state": "EXECUTED",
+          "action_state_version": 4,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "d18c91ed-85e2-4c2a-9820-4bfb174926eb",
+            "status": "RECONCILED_SUCCESS",
+            "attempt": 1,
+            "target_name": "MAT-PRE-2026-00500",
+            "receipt": "4820c20a-3072-4739-8c6d-2382d7535f09",
+            "response_category": "ERP_SUCCESS",
+            "failure_category": "RECONCILIATION_PENDING"
+          },
+          "receipt": {
+            "receipt_id": "4820c20a-3072-4739-8c6d-2382d7535f09",
+            "final_state": "RECONCILED_SUCCESS",
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null,
+            "target_doctype": "Purchase Receipt",
+            "target_name": "MAT-PRE-2026-00500"
+          },
+          "target": {
+            "docstatus": 1,
+            "doctype": "Purchase Receipt",
+            "name": "MAT-PRE-2026-00500"
+          }
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PR",
+      "boundary": "before_receipt",
+      "run_id": "3418cddc-c036-443b-8c66-ef21caa750dd",
+      "action_id": "1e4e6b33-e828-49a4-a03b-7e13008e75d1",
+      "approval_id": "5b736b59-88a1-43af-9fc3-345e671c5e52",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "7fd1335ed5f8ba48c14968971d049de265c142d474c9a1a15b6ab65bb93873d6",
+      "source_doctype": "Purchase Receipt",
+      "source_name": "MAT-PRE-2026-00501",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-8ff94d4c36e2477d",
+        "po_name": "PUR-ORD-2026-02278",
+        "po_row": "h7s44vefj1",
+        "pr_name": "MAT-PRE-2026-00501",
+        "pr_row": "h7trgpokff",
+        "source_doctype": "Purchase Receipt",
+        "source_name": "MAT-PRE-2026-00501"
+      },
+      "worker": {
+        "function": "fail_before_receipt",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "1e4e6b33-e828-49a4-a03b-7e13008e75d1",
+          "action_type": "SUBMIT_PR",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "b542aa4e-5af9-46d8-aa9e-5a785789c4b4",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "3418cddc-c036-443b-8c66-ef21caa750dd",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "1e4e6b33-e828-49a4-a03b-7e13008e75d1",
+            "action_type": "SUBMIT_PR",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "b542aa4e-5af9-46d8-aa9e-5a785789c4b4",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "cb20deae-2bd2-465f-a55f-60ffb262b575",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "9b2cd220-af29-48c5-b5cc-60e18c506025",
+            "target_name": "MAT-PRE-2026-00501",
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "1e4e6b33-e828-49a4-a03b-7e13008e75d1",
+          "action_type": "SUBMIT_PR",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "b542aa4e-5af9-46d8-aa9e-5a785789c4b4",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "cb20deae-2bd2-465f-a55f-60ffb262b575",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "cb20deae-2bd2-465f-a55f-60ffb262b575",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PI_DRAFT",
+      "boundary": "reservation_committed",
+      "run_id": "f3df1ed4-94a4-4af4-9845-b39f8b0c1839",
+      "action_id": "a72f2fea-f6d1-42ff-849e-63d817b7e8aa",
+      "approval_id": "37bf262f-2ccd-4354-bb21-2fd0edc3820a",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "e12e1ba25f3142679f774945700c5d38e2b69c5b01af791522e8d03b53fd610a",
+      "source_doctype": "Purchase Receipt",
+      "source_name": "MAT-PRE-2026-00502",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-b391fb2a6cbc4346",
+        "po_name": "PUR-ORD-2026-02279",
+        "po_row": "h7tulorq5n",
+        "pr_name": "MAT-PRE-2026-00502",
+        "pr_row": "h7un485beo",
+        "source_doctype": "Purchase Receipt",
+        "source_name": "MAT-PRE-2026-00502"
+      },
+      "worker": {
+        "function": "crash_after_reservation",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_RESERVATION_COMMITTED_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "a72f2fea-f6d1-42ff-849e-63d817b7e8aa",
+          "action_type": "CREATE_PI_DRAFT",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "111301c2-fdeb-4577-bb01-3af9bf4f9cda",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "f3df1ed4-94a4-4af4-9845-b39f8b0c1839",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "a72f2fea-f6d1-42ff-849e-63d817b7e8aa",
+            "action_type": "CREATE_PI_DRAFT",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "111301c2-fdeb-4577-bb01-3af9bf4f9cda",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "da15a900-aecc-434d-98eb-f8d4ef2c6538",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "96404b69-380a-47ea-bace-ea6798c3d757",
+            "target_name": null,
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "a72f2fea-f6d1-42ff-849e-63d817b7e8aa",
+          "action_type": "CREATE_PI_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "111301c2-fdeb-4577-bb01-3af9bf4f9cda",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "da15a900-aecc-434d-98eb-f8d4ef2c6538",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "da15a900-aecc-434d-98eb-f8d4ef2c6538",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PI_DRAFT",
+      "boundary": "before_erp_call",
+      "run_id": "8a22622f-cd23-49ae-aa9c-9e3da33b0ff7",
+      "action_id": "810180ac-d5be-46a3-8e6f-6a1dc86a736a",
+      "approval_id": "63d3d8d0-203a-4f4d-9644-31fd8d2a4150",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "940511f31e62e9cc98db84996e4ac7a0e107527c37bc969aa9f9c1ca87262229",
+      "source_doctype": "Purchase Receipt",
+      "source_name": "MAT-PRE-2026-00503",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-c7079b5e8bf04d96",
+        "po_name": "PUR-ORD-2026-02280",
+        "po_row": "h804fdlotl",
+        "pr_name": "MAT-PRE-2026-00503",
+        "pr_row": "h809olgkjs",
+        "source_doctype": "Purchase Receipt",
+        "source_name": "MAT-PRE-2026-00503"
+      },
+      "worker": {
+        "function": "fail_before_erp_call",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "810180ac-d5be-46a3-8e6f-6a1dc86a736a",
+          "action_type": "CREATE_PI_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "e9b09453-1319-4019-8f34-7d0f134f3c45",
+            "status": "FAILED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "69d015e2-dbe2-47f6-b4fd-c77561c2e442",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError"
+          },
+          "receipt": {
+            "receipt_id": "69d015e2-dbe2-47f6-b4fd-c77561c2e442",
+            "final_state": "FAILED",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PI_DRAFT",
+      "boundary": "after_erp_call",
+      "run_id": "a4d68a48-0a36-4786-a38c-a7a0166cdea0",
+      "action_id": "e54a8e50-f3f2-47dc-8de9-f6436aea1bd2",
+      "approval_id": "04967bec-5f66-4fc0-bd04-86757d0bae4d",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "403837593d089c3122e35e633e3ae11d13d724334de55f9e4a15753df63041e5",
+      "source_doctype": "Purchase Receipt",
+      "source_name": "MAT-PRE-2026-00504",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-c076bcc5eb994f07",
+        "po_name": "PUR-ORD-2026-02281",
+        "po_row": "h826e9rfr2",
+        "pr_name": "MAT-PRE-2026-00504",
+        "pr_row": "h82vuq98ag",
+        "source_doctype": "Purchase Receipt",
+        "source_name": "MAT-PRE-2026-00504"
+      },
+      "worker": {
+        "function": "crash_after_erp_call",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_ATOMIC_ERP_INSERT_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "e54a8e50-f3f2-47dc-8de9-f6436aea1bd2",
+          "action_type": "CREATE_PI_DRAFT",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "cc0bd095-506e-443f-8bd7-bdbe2e069288",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "a4d68a48-0a36-4786-a38c-a7a0166cdea0",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "e54a8e50-f3f2-47dc-8de9-f6436aea1bd2",
+            "action_type": "CREATE_PI_DRAFT",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "cc0bd095-506e-443f-8bd7-bdbe2e069288",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "7885be44-884a-48ba-9eba-55565ab7002c",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "f932dce7-8d01-412f-bbe0-7801674660c6",
+            "target_name": null,
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "e54a8e50-f3f2-47dc-8de9-f6436aea1bd2",
+          "action_type": "CREATE_PI_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "cc0bd095-506e-443f-8bd7-bdbe2e069288",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "7885be44-884a-48ba-9eba-55565ab7002c",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "7885be44-884a-48ba-9eba-55565ab7002c",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PI_DRAFT",
+      "boundary": "before_receipt",
+      "run_id": "782b5d17-31b5-4cb5-9f29-fee7bc99c25d",
+      "action_id": "b3e4a658-147e-43e5-ae38-d721a2f56ad4",
+      "approval_id": "345f0d33-ac0c-45ee-a959-920db00ec6b8",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "3afc745a7175f4941d6b16852d2ea8e01bb01ea2ac3c0c147c167b16820c04b5",
+      "source_doctype": "Purchase Receipt",
+      "source_name": "MAT-PRE-2026-00505",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-d5b513234e6847ee",
+        "po_name": "PUR-ORD-2026-02282",
+        "po_row": "h837i4mkrc",
+        "pr_name": "MAT-PRE-2026-00505",
+        "pr_row": "h84npc10fi",
+        "source_doctype": "Purchase Receipt",
+        "source_name": "MAT-PRE-2026-00505"
+      },
+      "worker": {
+        "function": "fail_before_receipt",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "b3e4a658-147e-43e5-ae38-d721a2f56ad4",
+          "action_type": "CREATE_PI_DRAFT",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "865af2c5-03ff-4c91-954e-6067b50f337c",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "782b5d17-31b5-4cb5-9f29-fee7bc99c25d",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "b3e4a658-147e-43e5-ae38-d721a2f56ad4",
+            "action_type": "CREATE_PI_DRAFT",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "865af2c5-03ff-4c91-954e-6067b50f337c",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "341d3a66-ac1d-473b-ab74-def78912a432",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "9c2b94ab-a4b9-4166-89f2-3179f609801e",
+            "target_name": null,
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "b3e4a658-147e-43e5-ae38-d721a2f56ad4",
+          "action_type": "CREATE_PI_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "865af2c5-03ff-4c91-954e-6067b50f337c",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "341d3a66-ac1d-473b-ab74-def78912a432",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "341d3a66-ac1d-473b-ab74-def78912a432",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PI",
+      "boundary": "reservation_committed",
+      "run_id": "7c3e7268-0a87-485d-80f5-e8005215ac21",
+      "action_id": "72d86d29-1109-47c0-86a6-c5286850572e",
+      "approval_id": "c839eb56-cdab-47ff-8d7e-7825963fd026",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "5e4a110b0f4f157ffd9007f725e05411d3a40b64641b3cb4e2d3463b8985cf9e",
+      "source_doctype": "Purchase Invoice",
+      "source_name": "ACC-PINV-2026-00333",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-f2a06bb74dc7400e",
+        "pi_name": "ACC-PINV-2026-00333",
+        "pi_row": "h86kb4i6sq",
+        "po_name": "PUR-ORD-2026-02283",
+        "po_row": "h85281pvb2",
+        "pr_name": "MAT-PRE-2026-00506",
+        "pr_row": "h86skma8l9",
+        "source_doctype": "Purchase Invoice",
+        "source_name": "ACC-PINV-2026-00333"
+      },
+      "worker": {
+        "function": "crash_after_reservation",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_RESERVATION_COMMITTED_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "72d86d29-1109-47c0-86a6-c5286850572e",
+          "action_type": "SUBMIT_PI",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "f9349048-06ae-47c7-a446-e6110c46b5fa",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "7c3e7268-0a87-485d-80f5-e8005215ac21",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "72d86d29-1109-47c0-86a6-c5286850572e",
+            "action_type": "SUBMIT_PI",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "f9349048-06ae-47c7-a446-e6110c46b5fa",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "680ef001-35a7-4ada-a8cf-f93c19f8d438",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "17b8c776-1ef8-4f8c-82d1-5cc67c26eae5",
+            "target_name": "ACC-PINV-2026-00333",
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "72d86d29-1109-47c0-86a6-c5286850572e",
+          "action_type": "SUBMIT_PI",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "f9349048-06ae-47c7-a446-e6110c46b5fa",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "680ef001-35a7-4ada-a8cf-f93c19f8d438",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "680ef001-35a7-4ada-a8cf-f93c19f8d438",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PI",
+      "boundary": "before_erp_call",
+      "run_id": "57a72100-4829-4a75-968c-433dadb74a05",
+      "action_id": "6ab7fd53-0880-4d74-ab5f-649fae88e430",
+      "approval_id": "8b0fd71f-8dc2-4d70-8108-5af901f731be",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "d4a49a8814574e6a52345b17b6c75c4fa9b65d45d5260fe3616a499288a26ba4",
+      "source_doctype": "Purchase Invoice",
+      "source_name": "ACC-PINV-2026-00334",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-4a5497b158db4b2e",
+        "pi_name": "ACC-PINV-2026-00334",
+        "pi_row": "h88jdk3cnh",
+        "po_name": "PUR-ORD-2026-02284",
+        "po_row": "h87ap5fb3m",
+        "pr_name": "MAT-PRE-2026-00507",
+        "pr_row": "h88b2oofo2",
+        "source_doctype": "Purchase Invoice",
+        "source_name": "ACC-PINV-2026-00334"
+      },
+      "worker": {
+        "function": "fail_before_erp_call",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "6ab7fd53-0880-4d74-ab5f-649fae88e430",
+          "action_type": "SUBMIT_PI",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "f40ff589-d3b3-459c-8fc1-c094293d3e4c",
+            "status": "FAILED",
+            "attempt": 1,
+            "target_name": "ACC-PINV-2026-00334",
+            "receipt": "32bc7d6a-38c8-4147-ac1c-91473e3d714b",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError"
+          },
+          "receipt": {
+            "receipt_id": "32bc7d6a-38c8-4147-ac1c-91473e3d714b",
+            "final_state": "FAILED",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError",
+            "target_doctype": "Purchase Invoice",
+            "target_name": "ACC-PINV-2026-00334"
+          },
+          "target": {
+            "docstatus": 0,
+            "doctype": "Purchase Invoice",
+            "name": "ACC-PINV-2026-00334"
+          }
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PI",
+      "boundary": "after_erp_call",
+      "run_id": "ce743fc0-78ec-48a5-9aa7-a8f670136ba5",
+      "action_id": "44c0be0f-82fb-4893-b559-b9021dd2169b",
+      "approval_id": "a2d91b3d-5fa4-4a43-ab93-878740d7d188",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "e150b707b95f0c07fe785e3c976baff512971b71692670ade1e078b1642de021",
+      "source_doctype": "Purchase Invoice",
+      "source_name": "ACC-PINV-2026-00335",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-b81166bbc25e419a",
+        "pi_name": "ACC-PINV-2026-00335",
+        "pi_row": "h8b4em6keb",
+        "po_name": "PUR-ORD-2026-02285",
+        "po_row": "h89mgm8rad",
+        "pr_name": "MAT-PRE-2026-00508",
+        "pr_row": "h8af7scmkv",
+        "source_doctype": "Purchase Invoice",
+        "source_name": "ACC-PINV-2026-00335"
+      },
+      "worker": {
+        "function": "crash_after_erp_call",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_NATIVE_ERP_COMMITTED_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "44c0be0f-82fb-4893-b559-b9021dd2169b",
+          "action_type": "SUBMIT_PI",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "71d0f8ba-bff0-44b2-95fd-b3893cbab822",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": true,
+          "result_status": "RECONCILED_SUCCESS",
+          "can_retry": false,
+          "run": {
+            "run_id": "ce743fc0-78ec-48a5-9aa7-a8f670136ba5",
+            "run_state": "EXECUTING",
+            "state_version": 4
+          },
+          "action": {
+            "action_id": "44c0be0f-82fb-4893-b559-b9021dd2169b",
+            "action_type": "SUBMIT_PI",
+            "state": "EXECUTED"
+          },
+          "reservation": {
+            "reservation_id": "71d0f8ba-bff0-44b2-95fd-b3893cbab822",
+            "status": "RECONCILED_SUCCESS",
+            "target_name": "ACC-PINV-2026-00335",
+            "receipt": null,
+            "failure_category": "RECONCILIATION_PENDING"
+          },
+          "receipt": {
+            "receipt_id": "7ed8d649-8c55-4f96-b9c6-259fdb2ffc71",
+            "final_state": "RECONCILED_SUCCESS",
+            "target_doctype": "Purchase Invoice",
+            "target_name": "ACC-PINV-2026-00335"
+          },
+          "target": {
+            "doctype": "Purchase Invoice",
+            "name": "ACC-PINV-2026-00335"
+          },
+          "reconciliation": {
+            "reason": "one reviewed P2P target read back",
+            "reconciliation_correlation_id": "6a4e7026-884c-4421-8bf2-35920045b1f9",
+            "target_name": "ACC-PINV-2026-00335",
+            "verified": true
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "44c0be0f-82fb-4893-b559-b9021dd2169b",
+          "action_type": "SUBMIT_PI",
+          "action_state": "EXECUTED",
+          "action_state_version": 4,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "71d0f8ba-bff0-44b2-95fd-b3893cbab822",
+            "status": "RECONCILED_SUCCESS",
+            "attempt": 1,
+            "target_name": "ACC-PINV-2026-00335",
+            "receipt": "7ed8d649-8c55-4f96-b9c6-259fdb2ffc71",
+            "response_category": "ERP_SUCCESS",
+            "failure_category": "RECONCILIATION_PENDING"
+          },
+          "receipt": {
+            "receipt_id": "7ed8d649-8c55-4f96-b9c6-259fdb2ffc71",
+            "final_state": "RECONCILED_SUCCESS",
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null,
+            "target_doctype": "Purchase Invoice",
+            "target_name": "ACC-PINV-2026-00335"
+          },
+          "target": {
+            "docstatus": 1,
+            "doctype": "Purchase Invoice",
+            "name": "ACC-PINV-2026-00335"
+          }
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PI",
+      "boundary": "before_receipt",
+      "run_id": "b3bea71f-f0c9-4d91-9cf1-8a933bd88143",
+      "action_id": "971b164e-cf37-4fe9-9db6-2a1158c160aa",
+      "approval_id": "41283170-75d7-4e01-8afa-b130fad4cf8a",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "1709a846ee363ffd41466f3bd439d3d126f0e38eda1703b134dfa093504280de",
+      "source_doctype": "Purchase Invoice",
+      "source_name": "ACC-PINV-2026-00336",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-9a20b02469d44e45",
+        "pi_name": "ACC-PINV-2026-00336",
+        "pi_row": "h8d2hqkp2r",
+        "po_name": "PUR-ORD-2026-02286",
+        "po_row": "h8c5kqf4c7",
+        "pr_name": "MAT-PRE-2026-00509",
+        "pr_row": "h8cbv3qpo8",
+        "source_doctype": "Purchase Invoice",
+        "source_name": "ACC-PINV-2026-00336"
+      },
+      "worker": {
+        "function": "fail_before_receipt",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "971b164e-cf37-4fe9-9db6-2a1158c160aa",
+          "action_type": "SUBMIT_PI",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "ea6068f9-5eb8-4130-a858-10aa4ac8870b",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "b3bea71f-f0c9-4d91-9cf1-8a933bd88143",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "971b164e-cf37-4fe9-9db6-2a1158c160aa",
+            "action_type": "SUBMIT_PI",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "ea6068f9-5eb8-4130-a858-10aa4ac8870b",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "58e02e5f-8b25-45b9-980b-b3752992b590",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "ffd87a87-c984-4cbb-bf55-ed0d784248fe",
+            "target_name": "ACC-PINV-2026-00336",
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "971b164e-cf37-4fe9-9db6-2a1158c160aa",
+          "action_type": "SUBMIT_PI",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "ea6068f9-5eb8-4130-a858-10aa4ac8870b",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "58e02e5f-8b25-45b9-980b-b3752992b590",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "58e02e5f-8b25-45b9-980b-b3752992b590",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+      "boundary": "reservation_committed",
+      "run_id": "11f3bac0-391a-4749-aef1-4bfc8da42935",
+      "action_id": "40e802ab-56f6-4b67-9e62-5dc697440347",
+      "approval_id": "f45c19eb-4484-4c1f-9838-cda4c5cbb182",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "248cfe17ee14d39501c51ed966b1e1822f4bb6c5096d4fb8769fbc875b317d65",
+      "source_doctype": "Purchase Invoice",
+      "source_name": "ACC-PINV-2026-00337",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-c1de221d6287400d",
+        "pi_name": "ACC-PINV-2026-00337",
+        "pi_row": "h8f8gb6k8l",
+        "po_name": "PUR-ORD-2026-02287",
+        "po_row": "h8ebihroib",
+        "pr_name": "MAT-PRE-2026-00510",
+        "pr_row": "h8e8gjg296",
+        "source_doctype": "Purchase Invoice",
+        "source_name": "ACC-PINV-2026-00337"
+      },
+      "worker": {
+        "function": "crash_after_reservation",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_RESERVATION_COMMITTED_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "40e802ab-56f6-4b67-9e62-5dc697440347",
+          "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "87f7fbe5-74c1-485f-87f0-7e908dc9653d",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "11f3bac0-391a-4749-aef1-4bfc8da42935",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "40e802ab-56f6-4b67-9e62-5dc697440347",
+            "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "87f7fbe5-74c1-485f-87f0-7e908dc9653d",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "c360eb88-f4ce-4c2f-86cc-3ca0211832a8",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "353ae152-c5da-42f0-b234-2c65de3d076c",
+            "target_name": null,
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "40e802ab-56f6-4b67-9e62-5dc697440347",
+          "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "87f7fbe5-74c1-485f-87f0-7e908dc9653d",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "c360eb88-f4ce-4c2f-86cc-3ca0211832a8",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "c360eb88-f4ce-4c2f-86cc-3ca0211832a8",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+      "boundary": "before_erp_call",
+      "run_id": "50939695-534d-4c6b-a89a-dcf98d98e8ca",
+      "action_id": "02d1f6f6-49a7-4f14-9e3e-d622b53b2d05",
+      "approval_id": "c230d598-d8a6-4fcb-b47c-a3bc4af722a2",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "2af4b881d3ce35bf0df8c3567641ec5b95b461839fbdd48b42f9112cb9a19c94",
+      "source_doctype": "Purchase Invoice",
+      "source_name": "ACC-PINV-2026-00338",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-5ca19ef3ed1147d5",
+        "pi_name": "ACC-PINV-2026-00338",
+        "pi_row": "h8ik14kmfd",
+        "po_name": "PUR-ORD-2026-02288",
+        "po_row": "h8gs6t4src",
+        "pr_name": "MAT-PRE-2026-00511",
+        "pr_row": "h8h1klebdo",
+        "source_doctype": "Purchase Invoice",
+        "source_name": "ACC-PINV-2026-00338"
+      },
+      "worker": {
+        "function": "fail_before_erp_call",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "02d1f6f6-49a7-4f14-9e3e-d622b53b2d05",
+          "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "4a71eb57-0b74-4213-bfd2-2c4398f809aa",
+            "status": "FAILED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "ebf14386-cc4a-4d37-bb06-cff2ae9eb85e",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError"
+          },
+          "receipt": {
+            "receipt_id": "ebf14386-cc4a-4d37-bb06-cff2ae9eb85e",
+            "final_state": "FAILED",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+      "boundary": "after_erp_call",
+      "run_id": "1afd6702-c140-4afb-9684-95f37ae06bdd",
+      "action_id": "51bebd8c-6cc8-4b33-aac6-7535ed980060",
+      "approval_id": "095b2658-80af-4880-b676-f0b8ab6db60c",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "6b7145a241108eb5e83a834c27cb44e590f7cf2f6292dd884ef1054d5287b441",
+      "source_doctype": "Purchase Invoice",
+      "source_name": "ACC-PINV-2026-00339",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-be4627277ae74168",
+        "pi_name": "ACC-PINV-2026-00339",
+        "pi_row": "h8kvteauo1",
+        "po_name": "PUR-ORD-2026-02289",
+        "po_row": "h8jnomivnk",
+        "pr_name": "MAT-PRE-2026-00512",
+        "pr_row": "h8jr3a3p8e",
+        "source_doctype": "Purchase Invoice",
+        "source_name": "ACC-PINV-2026-00339"
+      },
+      "worker": {
+        "function": "crash_after_erp_call",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_ATOMIC_ERP_INSERT_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "51bebd8c-6cc8-4b33-aac6-7535ed980060",
+          "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "c5129f0e-b37d-4929-838f-fec491d3d566",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "1afd6702-c140-4afb-9684-95f37ae06bdd",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "51bebd8c-6cc8-4b33-aac6-7535ed980060",
+            "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "c5129f0e-b37d-4929-838f-fec491d3d566",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "61326e43-a306-457e-92e9-76b9651e9c4c",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "c816d149-91b0-4d35-ae7e-1ee12daff263",
+            "target_name": null,
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "51bebd8c-6cc8-4b33-aac6-7535ed980060",
+          "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "c5129f0e-b37d-4929-838f-fec491d3d566",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "61326e43-a306-457e-92e9-76b9651e9c4c",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "61326e43-a306-457e-92e9-76b9651e9c4c",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+      "boundary": "before_receipt",
+      "run_id": "fa8428e4-212f-4323-b069-63dc6c83ec76",
+      "action_id": "7b3df8a8-2068-4b1c-93d4-6e228e325b65",
+      "approval_id": "2e457ef6-99ab-47b5-bb5b-225cf24e80d3",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "664a64fb36c9c926cd8f8ce59fbc0616b380fc4d32203f5438c5ae33998cb680",
+      "source_doctype": "Purchase Invoice",
+      "source_name": "ACC-PINV-2026-00340",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-bdcc46b7001b419b",
+        "pi_name": "ACC-PINV-2026-00340",
+        "pi_row": "h8ntidavrs",
+        "po_name": "PUR-ORD-2026-02290",
+        "po_row": "h8mb7htkog",
+        "pr_name": "MAT-PRE-2026-00513",
+        "pr_row": "h8ml4j0e6c",
+        "source_doctype": "Purchase Invoice",
+        "source_name": "ACC-PINV-2026-00340"
+      },
+      "worker": {
+        "function": "fail_before_receipt",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "7b3df8a8-2068-4b1c-93d4-6e228e325b65",
+          "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "b71598f5-6a13-407f-8242-235f2d161d03",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "fa8428e4-212f-4323-b069-63dc6c83ec76",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "7b3df8a8-2068-4b1c-93d4-6e228e325b65",
+            "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "b71598f5-6a13-407f-8242-235f2d161d03",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "fb02335c-89c7-4d56-becb-8048897cdf0e",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "1b959da4-ef47-4e02-be72-1f82b55ed4a5",
+            "target_name": null,
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "7b3df8a8-2068-4b1c-93d4-6e228e325b65",
+          "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "b71598f5-6a13-407f-8242-235f2d161d03",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "fb02335c-89c7-4d56-becb-8048897cdf0e",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "fb02335c-89c7-4d56-becb-8048897cdf0e",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PAYMENT_ENTRY",
+      "boundary": "reservation_committed",
+      "run_id": "3077a101-7b2c-4867-b632-3064229ba02d",
+      "action_id": "59b0e57d-7b23-4dee-8761-d8cb6ca1588d",
+      "approval_id": "69a135ef-9e04-40e7-8314-627681f38d10",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "d15edf5c78cd4701d75e8f4f13272df30d1f05033e70e28b81d2913082911811",
+      "source_doctype": "Payment Entry",
+      "source_name": "ACC-PAY-2026-00180",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-9800aeea32404604",
+        "payment_name": "ACC-PAY-2026-00180",
+        "pi_name": "ACC-PINV-2026-00341",
+        "pi_row": "h8prai1ps7",
+        "po_name": "PUR-ORD-2026-02291",
+        "po_row": "h8ojh765ae",
+        "pr_name": "MAT-PRE-2026-00514",
+        "pr_row": "h8phl9qjfg",
+        "source_doctype": "Payment Entry",
+        "source_name": "ACC-PAY-2026-00180"
+      },
+      "worker": {
+        "function": "crash_after_reservation",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_RESERVATION_COMMITTED_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "59b0e57d-7b23-4dee-8761-d8cb6ca1588d",
+          "action_type": "SUBMIT_PAYMENT_ENTRY",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "61f9e44f-0879-4a69-8835-cd21913563ad",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "3077a101-7b2c-4867-b632-3064229ba02d",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "59b0e57d-7b23-4dee-8761-d8cb6ca1588d",
+            "action_type": "SUBMIT_PAYMENT_ENTRY",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "61f9e44f-0879-4a69-8835-cd21913563ad",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "64a46510-ac70-4f04-b725-078041d13ce3",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "7fa986f5-de5e-47fb-a3af-2e6deab47a5f",
+            "target_name": "ACC-PAY-2026-00180",
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "59b0e57d-7b23-4dee-8761-d8cb6ca1588d",
+          "action_type": "SUBMIT_PAYMENT_ENTRY",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "61f9e44f-0879-4a69-8835-cd21913563ad",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "64a46510-ac70-4f04-b725-078041d13ce3",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "64a46510-ac70-4f04-b725-078041d13ce3",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PAYMENT_ENTRY",
+      "boundary": "before_erp_call",
+      "run_id": "444a2638-4985-4f27-aa9a-716f403c0728",
+      "action_id": "e3f23ca1-7a5b-4a9d-b8ae-a5b3cd9d0ad7",
+      "approval_id": "f6437c92-226b-4183-82ab-f8076a6ead4f",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "32696cd77c42d9a68c87182664b18072086d2824aa6eb2135fa87a5996cc593c",
+      "source_doctype": "Payment Entry",
+      "source_name": "ACC-PAY-2026-00181",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-2527cf373f814f39",
+        "payment_name": "ACC-PAY-2026-00181",
+        "pi_name": "ACC-PINV-2026-00342",
+        "pi_row": "h8smbmoojo",
+        "po_name": "PUR-ORD-2026-02292",
+        "po_row": "h8ro283938",
+        "pr_name": "MAT-PRE-2026-00515",
+        "pr_row": "h8s2h0rhcl",
+        "source_doctype": "Payment Entry",
+        "source_name": "ACC-PAY-2026-00181"
+      },
+      "worker": {
+        "function": "fail_before_erp_call",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "e3f23ca1-7a5b-4a9d-b8ae-a5b3cd9d0ad7",
+          "action_type": "SUBMIT_PAYMENT_ENTRY",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "d0ce1294-8d73-437f-93c7-0171a62f6b20",
+            "status": "FAILED",
+            "attempt": 1,
+            "target_name": "ACC-PAY-2026-00181",
+            "receipt": "19819a59-adfe-493c-87d2-c619bdb07fe1",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError"
+          },
+          "receipt": {
+            "receipt_id": "19819a59-adfe-493c-87d2-c619bdb07fe1",
+            "final_state": "FAILED",
+            "response_category": "ERP_VALIDATION_ERROR",
+            "failure_category": "ValidationError",
+            "target_doctype": "Payment Entry",
+            "target_name": "ACC-PAY-2026-00181"
+          },
+          "target": {
+            "docstatus": 0,
+            "doctype": "Payment Entry",
+            "name": "ACC-PAY-2026-00181"
+          }
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PAYMENT_ENTRY",
+      "boundary": "after_erp_call",
+      "run_id": "8632601a-80b2-4c64-80d1-3c32ea35814b",
+      "action_id": "1dc731ce-39dd-4a5c-b774-cf2c0213775e",
+      "approval_id": "334a6aab-4733-4740-8872-c58ad9bf68d3",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "b7f88dd2e54ebf029b21b87e9be55628613e0a85086b4055656077a8e98305c6",
+      "source_doctype": "Payment Entry",
+      "source_name": "ACC-PAY-2026-00182",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-87dcc759a76d42aa",
+        "payment_name": "ACC-PAY-2026-00182",
+        "pi_name": "ACC-PINV-2026-00343",
+        "pi_row": "h8v38jqebb",
+        "po_name": "PUR-ORD-2026-02293",
+        "po_row": "h8uiloanmj",
+        "pr_name": "MAT-PRE-2026-00516",
+        "pr_row": "h8vmdv89lq",
+        "source_doctype": "Payment Entry",
+        "source_name": "ACC-PAY-2026-00182"
+      },
+      "worker": {
+        "function": "crash_after_erp_call",
+        "console_exit_code": 137,
+        "worker_process_exit_code": 137,
+        "marker": {
+          "marker": "P10_NATIVE_ERP_COMMITTED_EXIT"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "1dc731ce-39dd-4a5c-b774-cf2c0213775e",
+          "action_type": "SUBMIT_PAYMENT_ENTRY",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "44a11cfd-becd-47f4-ae3e-b14756c99169",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": true,
+          "result_status": "RECONCILED_SUCCESS",
+          "can_retry": false,
+          "run": {
+            "run_id": "8632601a-80b2-4c64-80d1-3c32ea35814b",
+            "run_state": "EXECUTING",
+            "state_version": 4
+          },
+          "action": {
+            "action_id": "1dc731ce-39dd-4a5c-b774-cf2c0213775e",
+            "action_type": "SUBMIT_PAYMENT_ENTRY",
+            "state": "EXECUTED"
+          },
+          "reservation": {
+            "reservation_id": "44a11cfd-becd-47f4-ae3e-b14756c99169",
+            "status": "RECONCILED_SUCCESS",
+            "target_name": "ACC-PAY-2026-00182",
+            "receipt": null,
+            "failure_category": "RECONCILIATION_PENDING"
+          },
+          "receipt": {
+            "receipt_id": "ef5feab1-4c9b-44a5-8518-5ade565558f1",
+            "final_state": "RECONCILED_SUCCESS",
+            "target_doctype": "Payment Entry",
+            "target_name": "ACC-PAY-2026-00182"
+          },
+          "target": {
+            "doctype": "Payment Entry",
+            "name": "ACC-PAY-2026-00182"
+          },
+          "reconciliation": {
+            "reason": "one reviewed P2P target read back",
+            "reconciliation_correlation_id": "c9ffac3d-0cb8-4b09-bf06-a21341a05392",
+            "target_name": "ACC-PAY-2026-00182",
+            "verified": true
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "1dc731ce-39dd-4a5c-b774-cf2c0213775e",
+          "action_type": "SUBMIT_PAYMENT_ENTRY",
+          "action_state": "EXECUTED",
+          "action_state_version": 4,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "44a11cfd-becd-47f4-ae3e-b14756c99169",
+            "status": "RECONCILED_SUCCESS",
+            "attempt": 1,
+            "target_name": "ACC-PAY-2026-00182",
+            "receipt": "ef5feab1-4c9b-44a5-8518-5ade565558f1",
+            "response_category": "ERP_SUCCESS",
+            "failure_category": "RECONCILIATION_PENDING"
+          },
+          "receipt": {
+            "receipt_id": "ef5feab1-4c9b-44a5-8518-5ade565558f1",
+            "final_state": "RECONCILED_SUCCESS",
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null,
+            "target_doctype": "Payment Entry",
+            "target_name": "ACC-PAY-2026-00182"
+          },
+          "target": {
+            "docstatus": 1,
+            "doctype": "Payment Entry",
+            "name": "ACC-PAY-2026-00182"
+          }
+        }
+      }
+    },
+    {
+      "action_type": "SUBMIT_PAYMENT_ENTRY",
+      "boundary": "before_receipt",
+      "run_id": "dfe612e5-af97-48f6-bd94-84cc742a86b1",
+      "action_id": "a9f90d06-4e10-40f9-b730-d8eaf1bbfded",
+      "approval_id": "69df8212-30ed-4867-a799-e8c795f25668",
+      "approval_decision": "ALLOW",
+      "proposal_digest": "da116c55e6af3a2c2840b2fdbafbbbc025e668330678794dd1b1949d0406926b",
+      "source_doctype": "Payment Entry",
+      "source_name": "ACC-PAY-2026-00183",
+      "fixture": {
+        "item_code": "SYNORA-R104-FAULT-d280043641ee497d",
+        "payment_name": "ACC-PAY-2026-00183",
+        "pi_name": "ACC-PINV-2026-00344",
+        "pi_row": "h92cn0cgln",
+        "po_name": "PUR-ORD-2026-02294",
+        "po_row": "h91427rdbo",
+        "pr_name": "MAT-PRE-2026-00517",
+        "pr_row": "h91hime567",
+        "source_doctype": "Payment Entry",
+        "source_name": "ACC-PAY-2026-00183"
+      },
+      "worker": {
+        "function": "fail_before_receipt",
+        "console_exit_code": 0,
+        "worker_process_exit_code": 0,
+        "marker": {
+          "marker": "P10_EXPECTED_EXCEPTION"
+        }
+      },
+      "snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "a9f90d06-4e10-40f9-b730-d8eaf1bbfded",
+          "action_type": "SUBMIT_PAYMENT_ENTRY",
+          "action_state": "APPROVED",
+          "action_state_version": 3,
+          "run_state": "EXECUTING",
+          "reservation": {
+            "reservation_id": "fd682f02-0e85-49bd-9c5b-0e55656c2a28",
+            "status": "STARTED",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": null,
+            "response_category": "ERP_SUCCESS",
+            "failure_category": null
+          },
+          "receipt": null,
+          "target": null
+        }
+      },
+      "reconcile": {
+        "console_exit_code": 0,
+        "readback": {
+          "ok": false,
+          "result_status": "MANUAL_INTERVENTION",
+          "can_retry": false,
+          "run": {
+            "run_id": "dfe612e5-af97-48f6-bd94-84cc742a86b1",
+            "run_state": "RECONCILIATION_REQUIRED",
+            "state_version": 5
+          },
+          "action": {
+            "action_id": "a9f90d06-4e10-40f9-b730-d8eaf1bbfded",
+            "action_type": "SUBMIT_PAYMENT_ENTRY",
+            "state": "EXPIRED"
+          },
+          "reservation": {
+            "reservation_id": "fd682f02-0e85-49bd-9c5b-0e55656c2a28",
+            "status": "MANUAL_INTERVENTION",
+            "target_name": null,
+            "receipt": null,
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "9e14dbb2-b841-4fef-b30a-7df29f5a0000",
+            "final_state": "MANUAL_INTERVENTION",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null,
+          "reconciliation": {
+            "reason": "target identity or critical fields could not be verified",
+            "reconciliation_correlation_id": "f0fcf2de-515c-4403-9f8e-f4de2af236f7",
+            "target_name": "ACC-PAY-2026-00183",
+            "verified": false
+          }
+        }
+      },
+      "post_reconcile_snapshot": {
+        "console_exit_code": 0,
+        "readback": {
+          "action_id": "a9f90d06-4e10-40f9-b730-d8eaf1bbfded",
+          "action_type": "SUBMIT_PAYMENT_ENTRY",
+          "action_state": "EXPIRED",
+          "action_state_version": 4,
+          "run_state": "RECONCILIATION_REQUIRED",
+          "reservation": {
+            "reservation_id": "fd682f02-0e85-49bd-9c5b-0e55656c2a28",
+            "status": "MANUAL_INTERVENTION",
+            "attempt": 1,
+            "target_name": null,
+            "receipt": "9e14dbb2-b841-4fef-b30a-7df29f5a0000",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT"
+          },
+          "receipt": {
+            "receipt_id": "9e14dbb2-b841-4fef-b30a-7df29f5a0000",
+            "final_state": "MANUAL_INTERVENTION",
+            "response_category": "UNCERTAIN_RESULT",
+            "failure_category": "AMBIGUOUS_P2P_RESULT",
+            "target_doctype": null,
+            "target_name": null
+          },
+          "target": null
+        }
+      }
+    }
+  ]
+}

@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import today
 
 from synora_agentic_erp.api import (
     analyze_run,
@@ -34,6 +35,7 @@ ITEM_GROUP = "SYNORA-P1 Items"
 STOCK_UOM = "Unit"
 PAID_FROM = "Cash - SP1"
 PAID_TO = "Creditors - SP1"
+P10_TEST_DATE = today()
 
 
 class TestPhase10Cancellation(FrappeTestCase):  # type: ignore[misc]
@@ -107,7 +109,7 @@ class TestPhase10Cancellation(FrappeTestCase):  # type: ignore[misc]
                 "doctype": "Purchase Order",
                 "supplier": SUPPLIER,
                 "company": COMPANY,
-                "transaction_date": "2026-09-10",
+                "transaction_date": P10_TEST_DATE,
                 "schedule_date": "2026-09-20",
                 "currency": "CNY",
                 "buying_price_list": PRICE_LIST,
@@ -143,7 +145,7 @@ class TestPhase10Cancellation(FrappeTestCase):  # type: ignore[misc]
                 bank_account=PAID_FROM,
                 party_type="Supplier",
                 payment_type="Pay",
-                reference_date="2026-09-10",
+                reference_date=P10_TEST_DATE,
             )
             pe.insert(ignore_permissions=True)
             pe.submit()

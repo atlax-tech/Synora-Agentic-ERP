@@ -294,7 +294,10 @@ def _run_identity(
             not in {"CREATED", "ANALYZING", "PROPOSED", "AWAITING_APPROVAL", "EXECUTING"}
         ):
             return GateResult("FAIL", "Run is no longer active")
-        if _frappe_datetime(run.expires_at) <= _now():
+        run_deadline = getattr(run, "expires_at", None)
+        if getattr(run, "execution_mode", None) == "PLAN_EXECUTE":
+            run_deadline = getattr(run, "workflow_expires_at", None) or run_deadline
+        if _frappe_datetime(run_deadline) <= _now():
             return GateResult("FAIL", "Run has expired")
     except Exception:
         return GateResult("UNKNOWN", "Run identity could not be verified")

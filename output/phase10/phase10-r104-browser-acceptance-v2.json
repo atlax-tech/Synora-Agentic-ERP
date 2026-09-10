@@ -1,0 +1,222 @@
+{
+  "schema_version": "phase10-r104-browser-acceptance-v2",
+  "captured_at": "2026-09-10T19:48:38Z",
+  "source_revision": "4381d47fb488751c2e4596285e27153c0e31acb9",
+  "captured_worktree_diff_sha256_before_sidecar": "234dba35e371a842da1a80210edd097918c37adf28918ecf716b809d0b4e2a55",
+  "runtime": {
+    "compose_file": "env/dev/docker-compose.yml",
+    "site": "dev.localhost",
+    "browser_base_url": "http://127.0.0.1:8000",
+    "mode": "PLAN_EXECUTE",
+    "fault_injection": "none; normal browser/API flow",
+    "known_nonblocking_observation": "A separate exploratory click on Runtime analysis returned 503 UNAVAILABLE and its Run was cancelled through the UI; the acceptance Run was created without that unavailable read-only segment."
+  },
+  "initiator": {
+    "user": "synora-p1-payment-operator@dev.localhost",
+    "roles": ["Purchase User", "Accounts User"],
+    "run_id": "50693541-627c-4593-a4aa-1cf3c45b98a8",
+    "goal": "Complete Phase 10 browser payment-operator settlement v2",
+    "goal_source": {
+      "source_doctype": "Purchase Order",
+      "source_name": "PUR-ORD-2026-02297",
+      "source_row": "eh3b8b9ttk",
+      "item_code": "SYNORA-R104-BROWSER-d77a62cf919146e1",
+      "target_qty": "1",
+      "ordered_qty": "2",
+      "settlement_endpoint": "RECEIVED_BILLED_PAID"
+    },
+    "workflow_expires_at": "2026-09-12 01:03:09.384050"
+  },
+  "final_run_readback": {
+    "run_state": "SUCCEEDED",
+    "status": "REVOKED",
+    "state_version": 5,
+    "p2p_goal_state": "CONFIRMED",
+    "po": {
+      "name": "PUR-ORD-2026-02297",
+      "docstatus": 1,
+      "status": "To Receive and Bill",
+      "per_received": 50.0,
+      "per_billed": 50.0
+    },
+    "purchase_receipt": {
+      "name": "MAT-PRE-2026-00519",
+      "docstatus": 1,
+      "status": "Completed",
+      "per_billed": 100.0,
+      "grand_total": 10.0
+    },
+    "purchase_invoice": {
+      "name": "ACC-PINV-2026-00346",
+      "docstatus": 1,
+      "status": "Paid",
+      "grand_total": 10.0,
+      "outstanding_amount": 0.0
+    },
+    "payment_entry": {
+      "name": "ACC-PAY-2026-00186",
+      "docstatus": 1,
+      "status": "Submitted",
+      "paid_amount": 10.0,
+      "received_amount": 10.0,
+      "total_allocated_amount": 10.0,
+      "unallocated_amount": 0.0
+    },
+    "payment_entry_gl": {
+      "entry_count": 2,
+      "debit_total": 10.0,
+      "credit_total": 10.0
+    }
+  },
+  "actions": [
+    {
+      "sequence": 1,
+      "action_type": "CREATE_PR_DRAFT",
+      "action_id": "739c40d1-7d1d-46e8-9da0-2503e1f92a71",
+      "approval_id": "0d0276b5-bbab-4308-9fd2-66e2677d8463",
+      "approval_actor": "synora-p1-receiver@dev.localhost",
+      "reservation_id": "84e72c05-f5ce-4324-8172-5f84fe8e7ce9",
+      "receipt_id": "0886ee79-7321-45a2-94b4-c9e4099e98cc",
+      "target_doctype": "Purchase Receipt",
+      "target_name": "MAT-PRE-2026-00519",
+      "executor": "synora-p1-receiver@dev.localhost",
+      "action_state": "EXECUTED",
+      "reservation_status": "SUCCEEDED",
+      "receipt_state": "SUCCEEDED"
+    },
+    {
+      "sequence": 2,
+      "action_type": "SUBMIT_PR",
+      "action_id": "b4be1884-beb0-4bda-aaf2-4de3b97cd970",
+      "approval_id": "d14209bf-9761-45ee-bb64-9f243f2b00ef",
+      "approval_actor": "synora-p1-receiver@dev.localhost",
+      "reservation_id": "46498a71-329b-4a99-aedf-c954ea513ced",
+      "receipt_id": "651609bc-934d-4b4e-b86e-77fafdbc469e",
+      "target_doctype": "Purchase Receipt",
+      "target_name": "MAT-PRE-2026-00519",
+      "executor": "synora-p1-receiver@dev.localhost",
+      "action_state": "EXECUTED",
+      "reservation_status": "SUCCEEDED",
+      "receipt_state": "SUCCEEDED"
+    },
+    {
+      "sequence": 3,
+      "action_type": "CREATE_PI_DRAFT",
+      "action_id": "030d8848-5123-45b5-aebc-f40ef5cde464",
+      "approval_id": "a59d1005-41dd-44e1-bf1d-c95dd98088e5",
+      "approval_actor": "synora-p1-accountant@dev.localhost",
+      "reservation_id": "cfa43192-f013-4924-8d81-f86d8380a25a",
+      "receipt_id": "1d07c261-5ecd-4e82-a282-e309c857813d",
+      "target_doctype": "Purchase Invoice",
+      "target_name": "ACC-PINV-2026-00346",
+      "executor": "synora-p1-accountant@dev.localhost",
+      "action_state": "EXECUTED",
+      "reservation_status": "SUCCEEDED",
+      "receipt_state": "SUCCEEDED"
+    },
+    {
+      "sequence": 4,
+      "action_type": "SUBMIT_PI",
+      "action_id": "71919d56-0ac4-456f-9678-05ace6c8cd86",
+      "approval_id": "d00c5c1c-9707-4070-89c9-ea505024167c",
+      "approval_actor": "synora-p1-accountant@dev.localhost",
+      "reservation_id": "0cca0dbb-1e05-4d91-ab55-d1e5aa370b47",
+      "receipt_id": "6a26e5d8-f05a-4a75-9c36-80e4ab59e2ae",
+      "target_doctype": "Purchase Invoice",
+      "target_name": "ACC-PINV-2026-00346",
+      "executor": "synora-p1-accountant@dev.localhost",
+      "action_state": "EXECUTED",
+      "reservation_status": "SUCCEEDED",
+      "receipt_state": "SUCCEEDED"
+    },
+    {
+      "sequence": 5,
+      "action_type": "CREATE_PAYMENT_ENTRY_DRAFT",
+      "action_id": "137f1388-4567-4375-b1a1-6be62bfa7426",
+      "approval_id": "cfc12d7c-3976-40aa-ba67-7e4acb9e7795",
+      "approval_actor": "synora-p1-accountant@dev.localhost",
+      "reservation_id": "4cee9275-6398-4237-b036-53c422a97130",
+      "receipt_id": "82766e6f-d498-4489-9641-ec71e67b1b79",
+      "target_doctype": "Payment Entry",
+      "target_name": "ACC-PAY-2026-00186",
+      "executor": "synora-p1-accountant@dev.localhost",
+      "action_state": "EXECUTED",
+      "reservation_status": "SUCCEEDED",
+      "receipt_state": "SUCCEEDED"
+    },
+    {
+      "sequence": 6,
+      "action_type": "SUBMIT_PAYMENT_ENTRY",
+      "action_id": "d9561339-d341-4764-90a7-d0d916288008",
+      "approval_id": "4f6a78ce-e916-4fe8-89ed-86278f9c120f",
+      "approval_actor": "synora-p1-payment-approver@dev.localhost",
+      "reservation_id": "e61bc5e1-93bd-46c0-a3bd-82728d36aec7",
+      "receipt_id": "b9585792-5ec6-4915-a451-2c212fc96dc7",
+      "target_doctype": "Payment Entry",
+      "target_name": "ACC-PAY-2026-00186",
+      "executor": "synora-p1-payment-approver@dev.localhost",
+      "action_state": "EXECUTED",
+      "reservation_status": "SUCCEEDED",
+      "receipt_state": "SUCCEEDED"
+    }
+  ],
+  "browser_roles": {
+    "initiator": {
+      "user": "synora-p1-payment-operator@dev.localhost",
+      "evidence": [
+        "output/playwright/phase10-r104-browser-payment-operator-new-run-filled.png",
+        "output/playwright/phase10-r104-browser-payment-operator-goal-target.png",
+        "output/playwright/phase10-r104-browser-payment-operator-goal-confirmed.png",
+        "output/playwright/phase10-r104-browser-payment-operator-v2-final.png"
+      ]
+    },
+    "independent_approvers": {
+      "receiver": {
+        "user": "synora-p1-receiver@dev.localhost",
+        "evidence": [
+          "output/playwright/phase10-r104-browser-receiver-v2-pr-create.png",
+          "output/playwright/phase10-r104-browser-receiver-v2-pr-submit.png"
+        ]
+      },
+      "accountant": {
+        "user": "synora-p1-accountant@dev.localhost",
+        "evidence": [
+          "output/playwright/phase10-r104-browser-accountant-v2-pi-create.png",
+          "output/playwright/phase10-r104-browser-accountant-v2-payment-create.png"
+        ]
+      },
+      "payment_approver": {
+        "user": "synora-p1-payment-approver@dev.localhost",
+        "evidence": [
+          "output/playwright/phase10-r104-browser-payment-approver-submit.png"
+        ]
+      }
+    },
+    "unauthorized": {
+      "user": "synora-p1-viewer@dev.localhost",
+      "result": "DENIED",
+      "evidence": [
+        "output/playwright/phase10-r104-viewer-new-run-403.png",
+        "output/playwright/phase10-r104-viewer-runs-403.png"
+      ]
+    }
+  },
+  "evidence_sha256": {
+    "fault_matrix": "7e1e7846ffc5a908926964b9ebf42241211c76a5d62ab4b6a5397864f372e0eb",
+    "phase10_fault_matrix_source": "002289dca24aac880d7e54eb6a347e126ee8bff53089aaf358b30941e921cbf9",
+    "phase10_fault_worker_source": "a9de6ed89b502c85d979f79ebc2170919d3fe9ac4ddd008794030fe91f4d9316",
+    "browser_screenshots": {
+      "phase10-r104-browser-payment-operator-new-run-filled.png": "2e0c5ea49c3b1549f2dddc135640228f8b1a81b414a927928c206b54176aeea6",
+      "phase10-r104-browser-payment-operator-goal-target.png": "ed34e6a9ee792ec1021be5113585acce81f5a69a2c3b246d531190b9a546c2ae",
+      "phase10-r104-browser-payment-operator-goal-confirmed.png": "bc620b242a692d9dc822b04491628f93dcfbfdbdfdf8c4a244542c7c823e4c75",
+      "phase10-r104-browser-receiver-v2-pr-create.png": "0f1266f1dc9649343f2903ecfac16d2ca26b3624f2125bc3ec24506239f15e12",
+      "phase10-r104-browser-receiver-v2-pr-submit.png": "d92b11d02a7f79681058b4f1a37395eef7ef36899bfc9f97bb1d746fce244086",
+      "phase10-r104-browser-accountant-v2-pi-create.png": "d7565746707615e894513bc92104fbd7d0f7554157fd3f2ccbf805acb950b915",
+      "phase10-r104-browser-accountant-v2-payment-create.png": "c348aaa437bb107988e152da34936f35db59dd85396bf8c7b51105d8c117b5d8",
+      "phase10-r104-browser-payment-approver-submit.png": "0a40a561602a996140ece0f9ac5407313f63bf8941e81e742196e58cc4f55df9",
+      "phase10-r104-browser-payment-operator-v2-final.png": "792b717856c65ad2d36ad78ccd7b63b5787e4c8009ece105d1aa23f28a6038b6",
+      "phase10-r104-viewer-new-run-403.png": "532f03aa533920e9b28fc7839e40715caa918c5b7e91c5da97edcc0062d2e98f",
+      "phase10-r104-viewer-runs-403.png": "532f03aa533920e9b28fc7839e40715caa918c5b7e91c5da97edcc0062d2e98f"
+    }
+  }
+}

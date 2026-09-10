@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import today
 
 from synora_agentic_erp.api import (
     analyze_run,
@@ -23,8 +24,8 @@ from synora_agentic_erp.api import (
     evaluate_proposal,
     execute_p2p_action,
     finalize_p2p_run,
-    get_run,
     get_p2p_goal_options,
+    get_run,
     investigate_p2p_run,
     issue_run,
     resume_p2p_run,
@@ -44,6 +45,7 @@ ITEM_GROUP = "SYNORA-P1 Items"
 STOCK_UOM = "Unit"
 PAID_FROM = "Cash - SP1"
 PAID_TO = "Creditors - SP1"
+P10_TEST_DATE = today()
 
 
 class TestPhase10RealP2PEndToEnd(FrappeTestCase):  # type: ignore[misc]
@@ -109,7 +111,7 @@ class TestPhase10RealP2PEndToEnd(FrappeTestCase):  # type: ignore[misc]
                 "doctype": "Purchase Order",
                 "supplier": SUPPLIER,
                 "company": COMPANY,
-                "transaction_date": "2026-09-10",
+                "transaction_date": P10_TEST_DATE,
                 "schedule_date": "2026-09-20",
                 "currency": "CNY",
                 "buying_price_list": PRICE_LIST,
@@ -172,7 +174,7 @@ class TestPhase10RealP2PEndToEnd(FrappeTestCase):  # type: ignore[misc]
         if action_type == "CREATE_PR_DRAFT":
             payload.update(
                 {
-                    "transaction_date": "2026-09-10",
+                    "transaction_date": P10_TEST_DATE,
                     "items": [
                         {
                             "source_row": source_row,
@@ -187,7 +189,7 @@ class TestPhase10RealP2PEndToEnd(FrappeTestCase):  # type: ignore[misc]
         elif action_type == "CREATE_PI_DRAFT":
             payload.update(
                 {
-                    "transaction_date": "2026-09-10",
+                    "transaction_date": P10_TEST_DATE,
                     "items": [
                         {
                             "source_row": source_row,
@@ -207,7 +209,7 @@ class TestPhase10RealP2PEndToEnd(FrappeTestCase):  # type: ignore[misc]
                     "party_type": "Supplier",
                     "party": SUPPLIER,
                     "payment_type": "Pay",
-                    "posting_date": "2026-09-10",
+                    "posting_date": P10_TEST_DATE,
                     "paid_from": PAID_FROM,
                     "paid_to": PAID_TO,
                     "paid_amount": amount,
@@ -662,9 +664,7 @@ class TestPhase10RealP2PEndToEnd(FrappeTestCase):  # type: ignore[misc]
 
     def test_candidate_planner_drives_full_settlement_path(self) -> None:
         po_name, po_item_name, item_code = self._draft_po()
-        run_id = self._new_run(
-            f"Phase 10 E2E planner full path {po_name}", purpose="P2P_EXECUTION"
-        )
+        run_id = self._new_run(f"Phase 10 E2E planner full path {po_name}", purpose="P2P_EXECUTION")
         frappe.set_user(E2E_OWNER)
         confirmed = confirm_p2p_goal(
             run_id,
