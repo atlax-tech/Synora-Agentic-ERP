@@ -7,6 +7,7 @@ Administrator 仅用于本初始化（创建命名测试用户并分配上游真
 - 独立 Purchase User：具备 PO Submit 及关联对象读取权限，与 Buyer 身份分离
 - Stock User：MR/PR 全权，PO 只读
 - Accounts User：PI create/submit/cancel/amend（无 delete），PR 只读，MR/PO 无权限行
+- Payment Operator：Accounts User + Purchase User，用于跨库存与会计边界发起付款提交动作
 密码从环境变量 SYNORA_P2P_USER_PWD 注入（env/dev/.env，不入库）。
 
 容器内用法（env.sh p2p-users 已封装）：
@@ -26,6 +27,12 @@ USERS = [
     ("synora-p1-approver@dev.localhost", "Synora P1 Approver", ["Purchase User"]),
     ("synora-p1-receiver@dev.localhost", "Synora P1 Receiver", ["Stock User", "Purchase User"]),
     ("synora-p1-accountant@dev.localhost", "Synora P1 Accountant", ["Accounts User"]),
+    (
+        "synora-p1-payment-operator@dev.localhost",
+        "Synora P1 Payment Operator",
+        ["Accounts User", "Purchase User"],
+    ),
+    ("synora-p1-payment-approver@dev.localhost", "Synora P1 Payment Approver", ["Accounts User"]),
     ("synora-p1-viewer@dev.localhost", "Synora P1 Viewer", []),  # 无业务角色：权限拒绝用例
 ]
 

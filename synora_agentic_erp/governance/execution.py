@@ -444,7 +444,7 @@ def _serialize_receipt_for_actor(
         is_p2p = action.action_type in P2P_ACTION_TYPES
         if verifier is None:
             if is_p2p:
-                if action.action_type == "SUBMIT_PI":
+                if action.action_type in {"SUBMIT_PI", "SUBMIT_PAYMENT_ENTRY"}:
                     # Import lazily to keep the shared execution module free
                     # of a p2p_execution import cycle.
                     from synora_agentic_erp.governance.p2p_execution import (

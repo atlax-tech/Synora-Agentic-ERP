@@ -46,6 +46,27 @@ def cancel_p10_test_documents() -> None:
             )
         }
     )
+    payment_names = (
+        sorted(
+            {
+                row.parent
+                for row in frappe.get_all(
+                    "Payment Entry Reference",
+                    filters={
+                        "reference_doctype": "Purchase Invoice",
+                        "reference_name": ["in", invoice_names],
+                    },
+                    fields=["parent"],
+                    limit=1000,
+                )
+            }
+        )
+        if invoice_names
+        else []
+    )
+    for name in payment_names:
+        _cancel_if_submitted("Payment Entry", name)
+    frappe.db.commit()
     for name in invoice_names:
         _cancel_if_submitted("Purchase Invoice", name)
     frappe.db.commit()

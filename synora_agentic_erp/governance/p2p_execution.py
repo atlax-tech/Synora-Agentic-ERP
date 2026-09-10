@@ -44,7 +44,6 @@ from synora_agentic_erp.governance.execution_contracts import (
     map_execution_error,
     p2p_read_back,
     p2p_receipt_evidence_matches,
-    p2p_values,
 )
 from synora_agentic_erp.governance.policy import (
     _actor,
@@ -82,6 +81,11 @@ CREATE_ACTIONS = {
 SOURCE_CHILD_DOCTYPES = {
     "CREATE_PR_DRAFT": "Purchase Order Item",
     "CREATE_PI_DRAFT": "Purchase Receipt Item",
+}
+PARENT_SOURCE_ACTIONS = {
+    "CREATE_PAYMENT_ENTRY_DRAFT": "Purchase Invoice",
+    "SUBMIT_PAYMENT_ENTRY": "Payment Entry",
+    "CANCEL_PAYMENT_ENTRY": "Payment Entry",
 }
 KNOWN_CONTROLLER_FAILURES = frozenset(
     {
@@ -198,13 +202,203 @@ def p2p_action_calculation(action: Any) -> dict[str, Any]:
             "accounting_state": "提交前预览; 提交后以 ERP 会计回执为准",
             "basis": "读取当前 Purchase Invoice; ERP controller 负责最终税额、科目和应付",
         }
+    if action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
+        rows = frappe.get_list(
+            "Purchase Invoice",
+            filters={"name": payload["source_name"], "company": payload["company"]},
+            fields=["currency", "outstanding_amount", "status"],
+            user=frappe.session.user,
+            limit=1,
+        )
+        if not rows:
+            return {
+                "currency": "—",
+                "line_amounts": [],
+                "total_amount": "—",
+                "tax_amount": "—",
+                "grand_total": "—",
+                "outstanding_amount": "—",
+                "status": "未知",
+                "accounting_state": "当前 ERP 发票不可见, 审批前必须重新读取",
+                "basis": "当前 ERP 单据不可见",
+            }
+        source = rows[0]
+        paid = _financial_decimal(payload["paid_amount"], "paid_amount")
+        outstanding = _financial_decimal(
+            getattr(source, "outstanding_amount", None), "outstanding_amount"
+        )
+        return {
+            "currency": str(getattr(source, "currency", "") or "—"),
+            "line_amounts": [_financial_number(paid)],
+            "total_amount": _financial_number(paid),
+            "tax_amount": "—",
+            "grand_total": _financial_number(paid),
+            "outstanding_amount": _financial_number(outstanding),
+            "status": "Draft",
+            "accounting_state": "待 ERP controller 生成 Payment Entry GL 并更新发票余额",
+            "basis": "付款金额受当前 Purchase Invoice outstanding 限制; 不执行银行转账",
+        }
+    if action.action_type == "SUBMIT_PAYMENT_ENTRY":
+        rows = frappe.get_list(
+            "Payment Entry",
+            filters={"name": payload["source_name"], "company": payload["company"]},
+            fields=[
+                "paid_to_account_currency",
+                "paid_amount",
+                "received_amount",
+                "total_allocated_amount",
+                "unallocated_amount",
+                "status",
+            ],
+            user=frappe.session.user,
+            limit=1,
+        )
+        if not rows:
+            return {
+                "currency": "—",
+                "line_amounts": [],
+                "total_amount": "—",
+                "tax_amount": "—",
+                "grand_total": "—",
+                "outstanding_amount": "—",
+                "status": "未知",
+                "accounting_state": "当前 Payment Entry 不可见, 审批前必须重新读取",
+                "basis": "当前 ERP 单据不可见",
+            }
+        row = rows[0]
+        paid = _financial_decimal(getattr(row, "paid_amount", None), "paid_amount")
+        received = _financial_decimal(getattr(row, "received_amount", None), "received_amount")
+        allocated = _financial_decimal(
+            getattr(row, "total_allocated_amount", None), "total_allocated_amount"
+        )
+        unallocated = _financial_decimal(
+            getattr(row, "unallocated_amount", None), "unallocated_amount"
+        )
+        return {
+            "currency": str(getattr(row, "paid_to_account_currency", "") or "—"),
+            "line_amounts": [_financial_number(paid)],
+            "total_amount": _financial_number(paid),
+            "tax_amount": "—",
+            "grand_total": _financial_number(received),
+            "outstanding_amount": _financial_number(unallocated),
+            "status": str(getattr(row, "status", "") or "Draft"),
+            "accounting_state": "提交后以 Payment Entry GL 与发票 outstanding 回读为准",
+            "basis": (
+                f"Payment Entry 分配金额 {_financial_number(allocated)}; ERP controller 负责记账"
+            ),
+        }
     raise GatewayFault("INVALID_INPUT", "action does not have a P2P calculation", 400)
 
 
+def _payment_entry_read_back(action: Any, doc: Any, verified: dict[str, Any]) -> dict[str, Any]:
+    """Read back Payment Entry accounting and the invoice it settles."""
+
+    status = _financial_text(getattr(doc, "status", ""), "status")
+    if status != "Submitted":
+        raise ReadBackMismatch("Payment Entry status is not Submitted")
+    if str(getattr(doc, "party_type", "") or "") != "Supplier":
+        raise ReadBackMismatch("Payment Entry party type is not Supplier")
+    if str(getattr(doc, "payment_type", "") or "") != "Pay":
+        raise ReadBackMismatch("Payment Entry type is not Pay")
+    paid = _financial_decimal(getattr(doc, "paid_amount", None), "paid_amount")
+    received = _financial_decimal(getattr(doc, "received_amount", None), "received_amount")
+    allocated_total = _financial_decimal(
+        getattr(doc, "total_allocated_amount", None), "total_allocated_amount"
+    )
+    unallocated = _financial_decimal(getattr(doc, "unallocated_amount", None), "unallocated_amount")
+    if paid <= 0 or received <= 0 or received != paid or allocated_total != paid:
+        raise ReadBackMismatch("Payment Entry amounts are inconsistent")
+    if unallocated < 0 or unallocated > paid:
+        raise ReadBackMismatch("Payment Entry unallocated amount is outside valid bounds")
+
+    references = list(getattr(doc, "references", []) or [])
+    if len(references) != 1:
+        raise ReadBackMismatch("Payment Entry must contain one invoice reference")
+    reference = references[0]
+    if str(getattr(reference, "reference_doctype", "") or "") != "Purchase Invoice":
+        raise ReadBackMismatch("Payment Entry reference is not a Purchase Invoice")
+    reference_name = _financial_text(getattr(reference, "reference_name", ""), "reference_name")
+    reference_allocated = _financial_decimal(
+        getattr(reference, "allocated_amount", None), "reference_allocated_amount"
+    )
+    if reference_allocated != paid:
+        raise ReadBackMismatch("Payment Entry reference allocation does not match paid amount")
+    invoice_rows = frappe.get_list(
+        "Purchase Invoice",
+        filters={"name": reference_name, "company": getattr(doc, "company", "")},
+        fields=["name", "supplier", "status", "grand_total", "outstanding_amount", "docstatus"],
+        user=frappe.session.user,
+        limit=1,
+    )
+    if not invoice_rows:
+        raise ReadBackMismatch("settled Purchase Invoice is outside current ERP scope")
+    invoice = invoice_rows[0]
+    if int(getattr(invoice, "docstatus", 0) or 0) != 1:
+        raise ReadBackMismatch("settled Purchase Invoice is not submitted")
+    if str(getattr(invoice, "supplier", "") or "") != str(getattr(doc, "party", "") or ""):
+        raise ReadBackMismatch("Payment Entry party and invoice supplier differ")
+    invoice_status = _financial_text(getattr(invoice, "status", ""), "invoice.status")
+    if invoice_status not in PI_STATUSES:
+        raise ReadBackMismatch("settled Purchase Invoice status is invalid")
+    invoice_total = _financial_decimal(getattr(invoice, "grand_total", None), "invoice.grand_total")
+    invoice_outstanding = _financial_decimal(
+        getattr(invoice, "outstanding_amount", None), "invoice.outstanding_amount"
+    )
+    if invoice_total <= 0 or invoice_outstanding < 0 or invoice_outstanding > invoice_total:
+        raise ReadBackMismatch("settled Purchase Invoice outstanding amount is invalid")
+    if invoice_status == "Paid" and invoice_outstanding != 0:
+        raise ReadBackMismatch("Paid Purchase Invoice has a non-zero outstanding amount")
+    if invoice_status in {"Unpaid", "Overdue"} and invoice_outstanding <= 0:
+        raise ReadBackMismatch("unpaid Purchase Invoice has no outstanding amount")
+    if invoice_status == "Partly Paid" and not 0 < invoice_outstanding < invoice_total:
+        raise ReadBackMismatch(
+            "partly paid Purchase Invoice has an inconsistent outstanding amount"
+        )
+
+    gl_rows = frappe.db.sql(
+        """
+        SELECT COUNT(*), COALESCE(SUM(debit), 0), COALESCE(SUM(credit), 0)
+        FROM `tabGL Entry`
+        WHERE voucher_type = 'Payment Entry'
+          AND voucher_no = %s
+          AND is_cancelled = 0
+        """,
+        (str(getattr(doc, "name", "") or ""),),
+    )
+    gl_count = int(gl_rows[0][0] or 0)
+    gl_debit = _financial_decimal(gl_rows[0][1], "gl_debit_total")
+    gl_credit = _financial_decimal(gl_rows[0][2], "gl_credit_total")
+    if gl_count <= 0 or abs(gl_debit - gl_credit) > Decimal("0.00000001"):
+        raise ReadBackMismatch("Payment Entry GL entries are missing or unbalanced")
+    verified.update(
+        {
+            "status": status,
+            "party_type": "Supplier",
+            "payment_type": "Pay",
+            "paid_amount": _financial_number(paid),
+            "received_amount": _financial_number(received),
+            "total_allocated_amount": _financial_number(allocated_total),
+            "unallocated_amount": _financial_number(unallocated),
+            "reference_doctype": "Purchase Invoice",
+            "reference_name": reference_name,
+            "reference_allocated_amount": _financial_number(reference_allocated),
+            "purchase_invoice_status": invoice_status,
+            "purchase_invoice_grand_total": _financial_number(invoice_total),
+            "purchase_invoice_outstanding_amount": _financial_number(invoice_outstanding),
+            "gl_entry_count": gl_count,
+            "gl_debit_total": _financial_number(gl_debit),
+            "gl_credit_total": _financial_number(gl_credit),
+        }
+    )
+    return verified
+
+
 def p2p_read_back_with_financials(action: Any, doc: Any) -> dict[str, Any]:
-    """Read back P2P fields plus authoritative PI accounting evidence."""
+    """Read back P2P fields plus authoritative financial evidence."""
 
     verified = p2p_read_back(action, doc)
+    if action.action_type == "SUBMIT_PAYMENT_ENTRY":
+        return _payment_entry_read_back(action, doc, verified)
     if action.action_type != "SUBMIT_PI":
         return verified
 
@@ -408,15 +602,68 @@ def _build_pi(action: Any) -> Any:
     return target
 
 
+def _build_payment_entry(action: Any) -> Any:
+    """Build a payment through ERPNext's Purchase Invoice mapper."""
+
+    from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+
+    payload = action.payload
+    paid_amount = Decimal(str(payload["paid_amount"]))
+    received_amount = Decimal(str(payload["received_amount"]))
+    target = get_payment_entry(
+        "Purchase Invoice",
+        payload["source_name"],
+        party_amount=paid_amount,
+        bank_account=payload["paid_from"],
+        party_type=payload["party_type"],
+        payment_type=payload["payment_type"],
+        reference_date=payload["posting_date"],
+    )
+    for field in (
+        "company",
+        "party_type",
+        "party",
+        "payment_type",
+        "paid_from",
+        "paid_to",
+    ):
+        if str(getattr(target, field, "") or "") != str(payload[field]):
+            raise GatewayFault(
+                "CONFLICT", f"mapped Payment Entry {field} differs from approval", 409
+            )
+
+    references = payload["references"]
+    if len(references) != 1:
+        raise GatewayFault(
+            "CONFLICT", "Payment Entry must contain one approved invoice reference", 409
+        )
+    reference = references[0]
+    target.set("references", [])
+    target.append(
+        "references",
+        {
+            "reference_doctype": reference["reference_doctype"],
+            "reference_name": reference["reference_name"],
+            "allocated_amount": Decimal(str(reference["allocated_amount"])),
+        },
+    )
+    target.posting_date = payload["posting_date"]
+    target.paid_amount = paid_amount
+    target.received_amount = received_amount
+    target.set_missing_ref_details(force=True)
+    target.set_amounts()
+    target.paid_amount = paid_amount
+    target.received_amount = received_amount
+    return target
+
+
 def _build_target(action: Any) -> Any:
     if action.action_type == "CREATE_PR_DRAFT":
         return _build_pr(action)
     if action.action_type == "CREATE_PI_DRAFT":
         return _build_pi(action)
     if action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
-        target = frappe.get_doc(p2p_values(action))
-        target.set_missing_values()
-        return target
+        return _build_payment_entry(action)
     raise GatewayFault("INVALID_INPUT", "action does not create a P2P draft", 400)
 
 
@@ -448,17 +695,25 @@ def _lock_p2p_source(action: Any) -> list[str]:
     """
 
     child_doctype = SOURCE_CHILD_DOCTYPES.get(str(action.action_type))
-    if child_doctype is None:
+    parent_doctype = PARENT_SOURCE_ACTIONS.get(str(action.action_type))
+    if child_doctype is None and parent_doctype is None:
         return []
     payload = action.payload
-    table = f"tab{child_doctype}"
+    lock_specs: list[tuple[str, str, str | None]] = []
+    if child_doctype is not None:
+        lock_specs.extend(
+            (child_doctype, item["source_row"], payload["source_name"])
+            for item in sorted(payload["items"], key=lambda value: value["source_row"])
+        )
+    else:
+        lock_specs.append((parent_doctype or "", payload["source_name"], None))
     acquired: list[str] = []
     try:
-        for item in sorted(payload["items"], key=lambda value: value["source_row"]):
+        for lock_doctype, source_name, parent_name in lock_specs:
             lock_name = (
                 "synora-p2p-"
                 + hashlib.sha256(
-                    f"{child_doctype}:{payload['source_name']}:{item['source_row']}".encode()
+                    f"{lock_doctype}:{source_name}:{parent_name or ''}".encode()
                 ).hexdigest()[:52]
             )
             result = frappe.db.sql("SELECT GET_LOCK(%s, %s)", (lock_name, 30))
@@ -468,14 +723,20 @@ def _lock_p2p_source(action: Any) -> list[str]:
 
             # Keep the existing current-row check as evidence that the named
             # lock is bound to the reviewed parent/child identity.
+            table = f"tab{lock_doctype}"
+            where = "name = %s"
+            params: tuple[str, ...] = (source_name,)
+            if parent_name is not None:
+                where += " AND parent = %s"
+                params += (parent_name,)
             rows = frappe.db.sql(
                 f"""
                 SELECT name
                 FROM `{table}`
-                WHERE name = %s AND parent = %s
+                WHERE {where}
                 FOR UPDATE
                 """,
-                (item["source_row"], payload["source_name"]),
+                params,
                 as_dict=True,
             )
             if not rows:

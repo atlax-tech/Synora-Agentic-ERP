@@ -397,12 +397,23 @@ def _permission(action: Any, actor: str) -> GateResult:
         # permission at decision and execution time.
         if action.approval_class == "INDEPENDENT_APPROVER" and actor == action.initiator:
             required_permission = "read"
+        is_independent_initiator = (
+            action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT"
+            and action.approval_class == "INDEPENDENT_APPROVER"
+            and actor == action.initiator
+        )
         required: tuple[tuple[str, str], ...] = (
-            (target, "read"),
-            (target, required_permission),
             ("Company", "read"),
             ("Warehouse", "read"),
         )
+        # A buyer can propose a Payment Entry from a visible submitted
+        # Purchase Invoice even though the fixed ERPNext role grants Payment
+        # Entry access only to Accounts Users.  The independent approver and
+        # executor still need the target read/write permission below; the
+        # initiator's source and account reads are checked by the deterministic
+        # gate.  Do not broaden this exception to any other write action.
+        if not is_independent_initiator:
+            required += ((target, required_permission), (target, "read"))
         if operation.startswith("CREATE_"):
             required += (("Item", "read"),)
         if target == "Purchase Order":
@@ -446,6 +457,90 @@ def _visible_supplier(name: str, actor: str) -> Any | None:
         limit=1,
     )
     return rows[0] if rows else None
+
+
+def _visible_account(name: str, company: str, actor: str) -> Any | None:
+    frappe = _frappe()
+    rows = frappe.get_list(
+        "Account",
+        filters={"name": name, "company": company, "is_group": 0, "disabled": 0},
+        fields=["name", "account_type", "account_currency", "is_group", "disabled"],
+        user=actor,
+        limit=1,
+    )
+    return rows[0] if rows else None
+
+
+def _payment_entry_source_gate(source: Any, company: str, actor: str) -> GateResult:
+    """Revalidate a Payment Entry draft and its live invoice allocation."""
+
+    frappe = _frappe()
+    if str(getattr(source, "party_type", "") or "") != "Supplier":
+        return GateResult("FAIL", "Payment Entry party type must be Supplier")
+    if str(getattr(source, "payment_type", "") or "") != "Pay":
+        return GateResult("FAIL", "Payment Entry must be a Pay transaction")
+    paid = Decimal(str(getattr(source, "paid_amount", 0) or 0))
+    received = Decimal(str(getattr(source, "received_amount", 0) or 0))
+    allocated_total = Decimal(str(getattr(source, "total_allocated_amount", 0) or 0))
+    unallocated = Decimal(str(getattr(source, "unallocated_amount", 0) or 0))
+    if paid <= 0 or received != paid or allocated_total != paid or unallocated != 0:
+        return GateResult("FAIL", "Payment Entry amounts or allocation are inconsistent")
+    for account_field, allowed_types in (
+        ("paid_from", {"Bank", "Cash"}),
+        ("paid_to", {"Payable"}),
+    ):
+        account = _visible_account(str(getattr(source, account_field, "") or ""), company, actor)
+        if account is None or str(getattr(account, "account_type", "") or "") not in allowed_types:
+            return GateResult("FAIL", f"Payment Entry {account_field} is unavailable")
+        account_currency = str(
+            getattr(account, "account_currency", "")
+            or frappe.db.get_value("Company", company, "default_currency")
+            or ""
+        )
+        entry_currency = str(
+            getattr(
+                source,
+                "paid_from_account_currency"
+                if account_field == "paid_from"
+                else "paid_to_account_currency",
+                "",
+            )
+            or ""
+        )
+        if entry_currency and account_currency != entry_currency:
+            return GateResult("FAIL", f"Payment Entry {account_field} currency is inconsistent")
+    references = frappe.get_all(
+        "Payment Entry Reference",
+        filters={"parent": str(source.name), "parenttype": "Payment Entry"},
+        fields=["reference_doctype", "reference_name", "allocated_amount"],
+        limit_page_length=100,
+    )
+    if len(references) != 1:
+        return GateResult("FAIL", "Payment Entry must allocate exactly one Purchase Invoice")
+    reference = references[0]
+    if str(reference.reference_doctype) != "Purchase Invoice":
+        return GateResult("FAIL", "Payment Entry reference must be a Purchase Invoice")
+    allocated = Decimal(str(reference.allocated_amount or 0))
+    if allocated != paid:
+        return GateResult("FAIL", "Payment Entry allocation does not match paid amount")
+    invoice_rows = frappe.get_list(
+        "Purchase Invoice",
+        filters={"name": reference.reference_name, "company": company},
+        fields=["name", "supplier", "docstatus", "status", "outstanding_amount"],
+        user=actor,
+        limit=1,
+    )
+    if not invoice_rows:
+        return GateResult("FAIL", "referenced Purchase Invoice is unavailable")
+    invoice = invoice_rows[0]
+    outstanding = Decimal(str(getattr(invoice, "outstanding_amount", 0) or 0))
+    if int(getattr(invoice, "docstatus", 0) or 0) != 1 or outstanding <= 0:
+        return GateResult("FAIL", "referenced Purchase Invoice is not payable")
+    if str(getattr(invoice, "supplier", "") or "") != str(getattr(source, "party", "") or ""):
+        return GateResult("FAIL", "Payment Entry party does not match its invoice")
+    if allocated > outstanding:
+        return GateResult("FAIL", "Payment Entry allocation exceeds invoice outstanding amount")
+    return GateResult("PASS", "Payment Entry draft and live invoice allocation are valid")
 
 
 def _purchase_price_rate(
@@ -715,10 +810,32 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
     source_doctype = str(payload.get("source_doctype") or "")
     source_name = str(payload.get("source_name") or "")
     try:
-        source_fields = ["name", "company", "docstatus", "supplier"]
+        source_fields = ["name", "company", "docstatus"]
+        if source_doctype in {"Purchase Order", "Purchase Receipt", "Purchase Invoice"}:
+            source_fields.append("supplier")
         if action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
-            source_fields.append("outstanding_amount")
-        if source_doctype in {"Purchase Order", "Purchase Receipt"}:
+            source_fields.extend(["outstanding_amount", "currency", "status", "posting_date"])
+        if action.action_type == "SUBMIT_PAYMENT_ENTRY":
+            source_fields.extend(
+                [
+                    "party_type",
+                    "party",
+                    "payment_type",
+                    "paid_from",
+                    "paid_to",
+                    "paid_from_account_currency",
+                    "paid_to_account_currency",
+                    "paid_amount",
+                    "received_amount",
+                    "total_allocated_amount",
+                    "unallocated_amount",
+                ]
+            )
+        if (
+            source_doctype
+            in {"Purchase Order", "Purchase Receipt", "Purchase Invoice", "Payment Entry"}
+            and "status" not in source_fields
+        ):
             source_fields.append("status")
         source_rows = frappe.get_list(
             source_doctype,
@@ -750,6 +867,76 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
             and str(getattr(source, "status", "") or "") == "Cancelled"
         ):
             return GateResult("FAIL", "Purchase Receipt is cancelled")
+        if action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
+            if docstatus != 1:
+                return GateResult("FAIL", "Purchase Invoice must be submitted before payment")
+            if str(getattr(source, "status", "") or "") == "Cancelled":
+                return GateResult("FAIL", "Purchase Invoice is cancelled")
+            if payload["party_type"] != "Supplier" or payload["payment_type"] != "Pay":
+                return GateResult("FAIL", "supplier payments must use Payment Entry Pay")
+            if str(payload["party"]) != str(getattr(source, "supplier", "") or ""):
+                return GateResult("FAIL", "payment party does not match the Purchase Invoice")
+            references = payload["references"]
+            if len(references) != 1 or str(references[0]["reference_name"]) != source_name:
+                return GateResult(
+                    "FAIL", "payment must allocate exactly the source Purchase Invoice"
+                )
+            outstanding = Decimal(str(getattr(source, "outstanding_amount", 0) or 0))
+            paid = Decimal(str(payload["paid_amount"]))
+            received = Decimal(str(payload["received_amount"]))
+            allocated = Decimal(str(references[0]["allocated_amount"]))
+            if outstanding <= 0 or paid > outstanding or allocated > outstanding:
+                return GateResult("FAIL", "payment exceeds the current outstanding amount")
+            if paid != received or allocated != paid:
+                return GateResult("FAIL", "payment amounts and allocation must match")
+            source_currency = str(getattr(source, "currency", "") or "")
+            open_draft = frappe.db.sql(
+                """
+                SELECT COALESCE(SUM(per.allocated_amount), 0)
+                FROM `tabPayment Entry Reference` per
+                INNER JOIN `tabPayment Entry` pe ON pe.name = per.parent
+                WHERE per.reference_doctype = 'Purchase Invoice'
+                  AND per.reference_name = %s AND pe.docstatus = 0
+                """,
+                (source_name,),
+            )[0][0]
+            if Decimal(str(open_draft or 0)) > 0:
+                return GateResult("FAIL", "source invoice already has an open Payment Entry draft")
+            for account_field in ("paid_from", "paid_to"):
+                account = _visible_account(str(payload[account_field]), payload["company"], actor)
+                if (
+                    account is None
+                    or bool(getattr(account, "is_group", 0))
+                    or bool(getattr(account, "disabled", 0))
+                ):
+                    return GateResult("FAIL", f"{account_field} is unavailable")
+            paid_from = _visible_account(str(payload["paid_from"]), payload["company"], actor)
+            paid_to = _visible_account(str(payload["paid_to"]), payload["company"], actor)
+            if str(getattr(paid_from, "account_type", "") or "") not in {"Bank", "Cash"}:
+                return GateResult("FAIL", "paid_from must be a Bank or Cash account")
+            if str(getattr(paid_to, "account_type", "") or "") != "Payable":
+                return GateResult("FAIL", "paid_to must be a Payable account")
+            company_currency = str(
+                frappe.db.get_value("Company", payload["company"], "default_currency") or ""
+            )
+            source_currency = source_currency or company_currency
+            paid_from_currency = str(getattr(paid_from, "account_currency", "") or company_currency)
+            paid_to_currency = str(getattr(paid_to, "account_currency", "") or company_currency)
+            if paid_from_currency != source_currency or paid_to_currency != source_currency:
+                return GateResult(
+                    "FAIL",
+                    "payment account currency does not match the Purchase Invoice currency",
+                )
+            if payload.get("source_currency") and payload["source_currency"] != source_currency:
+                return GateResult("FAIL", "payment source currency does not match the invoice")
+            if payload.get("target_currency") and payload["target_currency"] != paid_to_currency:
+                return GateResult(
+                    "FAIL", "payment target currency does not match the payable account"
+                )
+        if action.action_type == "SUBMIT_PAYMENT_ENTRY":
+            payment_gate = _payment_entry_source_gate(source, payload["company"], actor)
+            if payment_gate.status != "PASS":
+                return payment_gate
         bill_rejected_setting = None
         if action.action_type == "CREATE_PI_DRAFT":
             bill_rejected_setting = frappe.db.get_single_value(
@@ -757,14 +944,6 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
             )
             if bill_rejected_setting is None:
                 return GateResult("UNKNOWN", "Buying Settings billing rule is unavailable")
-        if action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
-            outstanding = Decimal(str(getattr(source, "outstanding_amount", 0) or 0))
-            paid = Decimal(str(payload["paid_amount"]))
-            allocated = sum(Decimal(str(ref["allocated_amount"])) for ref in payload["references"])
-            if outstanding <= 0 or paid > outstanding or allocated > outstanding:
-                return GateResult("FAIL", "payment exceeds the current outstanding amount")
-            if allocated != paid:
-                return GateResult("FAIL", "payment references do not match paid amount")
         if action.action_type in {"CREATE_PR_DRAFT", "CREATE_PI_DRAFT"}:
             child = (
                 "Purchase Order Item"
@@ -998,7 +1177,12 @@ def _action_response(action: Any, doc: Any) -> dict[str, Any]:
         from synora_agentic_erp.governance.execution_contracts import purchase_order_calculation
 
         result["calculation"] = purchase_order_calculation(action)
-    elif action.action_type in {"CREATE_PI_DRAFT", "SUBMIT_PI"}:
+    elif action.action_type in {
+        "CREATE_PI_DRAFT",
+        "SUBMIT_PI",
+        "CREATE_PAYMENT_ENTRY_DRAFT",
+        "SUBMIT_PAYMENT_ENTRY",
+    }:
         from synora_agentic_erp.governance.p2p_execution import p2p_action_calculation
 
         result["calculation"] = p2p_action_calculation(action)

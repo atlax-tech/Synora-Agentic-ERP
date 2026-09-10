@@ -21,6 +21,12 @@ _PI_MUTABLE_RECEIPT_FIELDS = frozenset(
         "outstanding_amount",
     }
 )
+_PAYMENT_MUTABLE_RECEIPT_FIELDS = frozenset(
+    {
+        "purchase_invoice_status",
+        "purchase_invoice_outstanding_amount",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -394,12 +400,62 @@ def p2p_read_back(action: ProposedAction, doc: object) -> dict[str, Any]:
         actual_paid = _decimal(_value(doc, "paid_amount"), "paid_amount")
         if actual_paid != _decimal(payload["paid_amount"], "paid_amount"):
             raise ReadBackMismatch("paid_amount does not match")
+        actual_received = _decimal(_value(doc, "received_amount"), "received_amount")
+        if actual_received != _decimal(payload["received_amount"], "received_amount"):
+            raise ReadBackMismatch("received_amount does not match")
+        actual_allocated_total = _decimal(
+            _value(doc, "total_allocated_amount"), "total_allocated_amount"
+        )
+        if actual_allocated_total != actual_paid:
+            raise ReadBackMismatch("total_allocated_amount does not match paid_amount")
+        actual_unallocated = _decimal(_value(doc, "unallocated_amount"), "unallocated_amount")
+        if actual_unallocated != 0:
+            raise ReadBackMismatch("unallocated_amount must be zero")
+        actual_references = list(_value(doc, "references", []) or [])
+        expected_references = list(payload["references"])
+        if len(actual_references) != len(expected_references):
+            raise ReadBackMismatch("payment reference count does not match")
+        expected_by_name = {str(item["reference_name"]): item for item in expected_references}
+        seen_references: set[str] = set()
+        for index, reference in enumerate(actual_references):
+            reference_name = str(_value(reference, "reference_name") or "")
+            expected_reference = expected_by_name.get(reference_name)
+            if expected_reference is None or reference_name in seen_references:
+                raise ReadBackMismatch("payment references do not match")
+            seen_references.add(reference_name)
+            _same_text(
+                _value(reference, "reference_doctype"),
+                expected_reference["reference_doctype"],
+                f"reference_{index}.reference_doctype",
+            )
+            actual_allocated = _decimal(
+                _value(reference, "allocated_amount"), f"reference_{index}.allocated_amount"
+            )
+            if actual_allocated != _decimal(
+                expected_reference["allocated_amount"], f"reference_{index}.allocated_amount"
+            ):
+                raise ReadBackMismatch(f"reference_{index}.allocated_amount does not match")
+        if seen_references != set(expected_by_name):
+            raise ReadBackMismatch("payment references do not match")
         verified.update(
             {
                 "party_type": str(_value(doc, "party_type")),
                 "party": str(_value(doc, "party")),
                 "payment_type": str(_value(doc, "payment_type")),
+                "paid_from": str(_value(doc, "paid_from")),
+                "paid_to": str(_value(doc, "paid_to")),
                 "paid_amount": format(actual_paid.normalize(), "f"),
+                "received_amount": format(actual_received.normalize(), "f"),
+                "total_allocated_amount": format(actual_allocated_total.normalize(), "f"),
+                "unallocated_amount": format(actual_unallocated.normalize(), "f"),
+                "reference_name": str(actual_references[0].reference_name),
+                "reference_allocated_amount": format(
+                    _decimal(
+                        _value(actual_references[0], "allocated_amount"),
+                        "reference_allocated_amount",
+                    ).normalize(),
+                    "f",
+                ),
                 "references_count": len(payload["references"]),
             }
         )
@@ -419,14 +475,20 @@ def p2p_receipt_evidence_matches(
     mutable values stay in the receipt as the historical post-submit snapshot.
     """
 
-    if action.action_type != "SUBMIT_PI":
+    if action.action_type not in {"SUBMIT_PI", "SUBMIT_PAYMENT_ENTRY"}:
         return dict(recorded) == dict(current)
+
+    mutable_fields = (
+        _PI_MUTABLE_RECEIPT_FIELDS
+        if action.action_type == "SUBMIT_PI"
+        else _PAYMENT_MUTABLE_RECEIPT_FIELDS
+    )
 
     def stable(items: Mapping[str, Any]) -> dict[str, Any]:
         return {
             key: value
             for key, value in items.items()
-            if key not in _PI_MUTABLE_RECEIPT_FIELDS
+            if key not in mutable_fields
             and not key.endswith((".pr_billed_amt", ".pr_per_billed", ".po_per_billed"))
         }
 
