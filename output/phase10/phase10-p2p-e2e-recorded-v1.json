@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "phase": "P10.8",
+  "status": "PASS",
+  "recorded_at": "2026-09-10T12:35:25Z",
+  "source_revision_parent": "cebdff9",
+  "binding_mode": "source-file-sha256-plus-parent-revision-before-commit",
+  "fixed_upstream": {
+    "frappe": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+    "erpnext": "11e0ba0a1c45f217e2e73e885f699102d06da325"
+  },
+  "source_files": {
+    "synora_agentic_erp/governance/p2p_execution.py": "d541a547fdd43409af0a4346b582e1b693165efa51798d3e87be87c13b1d9618",
+    "synora_agentic_erp/governance/execution.py": "82d20fca50d7cc3e5d7275b2caad89b0b00943620ab8701451272597a495b59d",
+    "synora_agentic_erp/governance/execution_contracts.py": "0d9c35e5348eb98cbf3ae05048ec5bd525737eeb5617af1433d1b77a6f758054",
+    "synora_agentic_erp/tests/test_phase10_e2e.py": "db9ab194ef23afb2a63b3ebcba914cf5cebe526fcfc5d4e0bc5c52dbaeeaec01"
+  },
+  "test_command": "bench --site dev.localhost run-tests --module synora_agentic_erp.tests.test_phase10_e2e",
+  "test_exit_code": 0,
+  "tests_run": 3,
+  "run_state": "SUCCEEDED",
+  "run_id_prefix": "a1d259b2-fc1",
+  "action_count": 15,
+  "po": {
+    "name": "PUR-ORD-2026-02030",
+    "per_received": 100.0,
+    "per_billed": 100.0
+  },
+  "receipts": [
+    "MAT-PRE-2026-00358",
+    "MAT-PRE-2026-00359"
+  ],
+  "invoices": [
+    {
+      "name": "ACC-PINV-2026-00221",
+      "status": "Paid"
+    },
+    {
+      "name": "ACC-PINV-2026-00222",
+      "status": "Paid"
+    }
+  ],
+  "payment_entries": [
+    "ACC-PAY-2026-00076",
+    "ACC-PAY-2026-00077",
+    "ACC-PAY-2026-00078"
+  ],
+  "fault_injections": [
+    {
+      "scenario": "response_loss_after_committed_submit",
+      "result": "UNCERTAIN_RESULT",
+      "recovery": "replay_reads_same_receipt_without_duplicate_PO"
+    },
+    {
+      "scenario": "committed_native_submit_without_receipt",
+      "result": "UNCERTAIN_RESULT",
+      "recovery": "run_freezes_RECONCILIATION_REQUIRED_and_resume_is_read_only"
+    }
+  ],
+  "browser_evidence": {
+    "actor": "Administrator (System Manager)",
+    "url": "http://127.0.0.1:8000/desk/runs",
+    "read_only": true,
+    "console_errors": 0,
+    "console_warnings": 3,
+    "screenshots": [
+      "output/playwright/phase10-p2p-e2e-a1d259b2.png",
+      "output/playwright/phase10-p2p-unknown-9ce932fa.png"
+    ],
+    "observed": [
+      "P2P chain status SUCCEEDED with all 15 steps SUCCEEDED and Receipt evidence visible",
+      "unknown-result Run status RECONCILIATION_REQUIRED with UNCERTAIN_RESULT Receipt and manual recovery copy"
+    ]
+  },
+  "safety": {
+    "secrets_recorded": false,
+    "cookies_recorded": false,
+    "bank_transfer_performed": false,
+    "history_deleted": false,
+    "test_documents_preserved": true
+  },
+  "limitations": [
+    "The real ERP batch uses the isolated development site and test identities; it is not production deployment evidence.",
+    "The binding is source-file hashes plus the parent revision because this artifact is prepared before the P10.8 commit; the final commit is recorded in the stage-close manifest."
+  ]
+}

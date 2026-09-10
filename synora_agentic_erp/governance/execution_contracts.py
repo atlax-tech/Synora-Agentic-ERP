@@ -299,8 +299,16 @@ def p2p_values(action: ProposedAction) -> dict[str, Any]:
     raise GatewayFault("INVALID_INPUT", "action does not create a P2P draft", 400)
 
 
-def p2p_read_back(action: ProposedAction, doc: object) -> dict[str, Any]:
-    """Verify a P2P target using only fields in the approved action."""
+def p2p_read_back(
+    action: ProposedAction, doc: object, *, allow_later_docstatus: bool = False
+) -> dict[str, Any]:
+    """Verify a P2P target using only fields in the approved action.
+
+    A draft Receipt is a historical fact even after its target is legitimately
+    submitted or cancelled by a later governed Action.  Callers that read a
+    historical draft Receipt may allow that status progression; Submit and
+    Cancel actions keep the strict status check.
+    """
 
     expected_target = TARGET_DOCTYPES[action.action_type]
     actual_doctype = str(_value(doc, "doctype", expected_target) or expected_target)
@@ -311,7 +319,10 @@ def p2p_read_back(action: ProposedAction, doc: object) -> dict[str, Any]:
         expected_status = 1
     if action.action_type.startswith("CANCEL_"):
         expected_status = 2
-    if _value(doc, "docstatus") != expected_status:
+    actual_docstatus = _value(doc, "docstatus")
+    if actual_docstatus != expected_status and not (
+        allow_later_docstatus and expected_status == 0 and actual_docstatus in {1, 2}
+    ):
         raise ReadBackMismatch("target status does not match action")
     payload = action.payload
     for field in ("company",):

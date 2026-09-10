@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "phase": "P10.8",
+  "recorded_at": "2026-09-10T12:32:25Z",
+  "commit_binding": "source hashes in output/phase10/phase10-p2p-e2e-recorded-v1.json; parent cebdff9 before P10.8 commit",
+  "url": "http://127.0.0.1:8000/desk/runs",
+  "browser_surface": "playwright-cli headed browser",
+  "actor": "Administrator (System Manager)",
+  "read_only": true,
+  "write_interactions": [],
+  "console": {"errors": 0, "warnings": 3},
+  "cases": [
+    {
+      "name": "completed_p2p_chain",
+      "run_prefix": "a1d259b2",
+      "target": "Phase 10 E2E P2P batch PUR-ORD-2026-02030",
+      "status": "已成功",
+      "p2p_chain": "链路已完成",
+      "steps": 15,
+      "receipts": "all SUCCEEDED / ERP_SUCCESS",
+      "screenshot": "output/playwright/phase10-p2p-e2e-a1d259b2.png"
+    },
+    {
+      "name": "committed_submit_without_receipt",
+      "run_prefix": "9ce932fa",
+      "target": "Phase 10 E2E unknown result PUR-ORD-2026-02029",
+      "status": "需要对账",
+      "p2p_chain": "需要对账",
+      "receipt": "RECONCILIATION_REQUIRED / UNCERTAIN_RESULT",
+      "manual_recovery_copy_visible": true,
+      "screenshot": "output/playwright/phase10-p2p-unknown-9ce932fa.png"
+    }
+  ],
+  "credential_handling": "No passwords, cookies, local storage, tokens, or provider responses were read or recorded."
+}

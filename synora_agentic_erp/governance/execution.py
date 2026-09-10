@@ -453,7 +453,15 @@ def _serialize_receipt_for_actor(
 
                     verifier = p2p_read_back_with_financials
                 else:
-                    verifier = p2p_read_back
+
+                    def verify_p2p_draft(current_action: Any, target: Any) -> dict[str, Any]:
+                        return p2p_read_back(
+                            current_action,
+                            target,
+                            allow_later_docstatus=True,
+                        )
+
+                    verifier = verify_p2p_draft
             elif expected_doctype == TARGET_DOCTYPE:
                 verifier = verify_material_request_read_back
             elif expected_doctype == "Purchase Order":
@@ -466,7 +474,10 @@ def _serialize_receipt_for_actor(
                     action,
                     receipt_target_name,
                     actor,
-                    strict_status=receipt_doc.final_state in {"SUCCEEDED", "RECONCILED_SUCCESS"},
+                    strict_status=(
+                        receipt_doc.final_state in {"SUCCEEDED", "RECONCILED_SUCCESS"}
+                        and not action.action_type.startswith("CREATE_")
+                    ),
                 )
                 if is_p2p
                 else _load_readable_target(action, receipt_target_name, actor)

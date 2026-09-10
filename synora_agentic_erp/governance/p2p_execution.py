@@ -1173,6 +1173,12 @@ def _finalize_failure(
             response_category="UNCERTAIN_RESULT" if uncertain else category,
             failure_category=failure,
         )
+        if uncertain and str(run.run_state) == "EXECUTING":
+            # An ERP write whose acknowledgement or Receipt is uncertain must
+            # freeze the Run before any downstream scheduler can resume it.
+            # The Reservation/Receipt remain the side-effect facts; this Run
+            # transition is the durable scheduling gate around them.
+            _set_run_state(run, "RECONCILIATION_REQUIRED")
         if str(action_doc.state) == "APPROVED":
             transition_action_state(
                 action.action_id,
