@@ -1,0 +1,163 @@
+{
+  "schema_version": "1",
+  "suite": "P10.7-p2p-orchestration-recovery",
+  "status": "PASS",
+  "dataset_id": "phase10-p2p-events-v1",
+  "dataset_digest": "b9a844f21aa3ca498306dfd96ca9c1098b86fe9757db078eb0519f6827b4540a",
+  "model_id": "recorded-p2p-orchestration-v1",
+  "initial_erp_facts": {
+    "company": "LAB-COMPANY",
+    "supplier": "LAB-SUPPLIER",
+    "currency": "CNY",
+    "po_qty": "2",
+    "received_qty": "0",
+    "billed_qty": "0",
+    "paid_amount": "0.00",
+    "authorization_source": "server-side-plan-step"
+  },
+  "event_matrix": [
+    {
+      "event_id": "e-03",
+      "action": "SUBMIT_PR",
+      "kind": "ERP_WAKE",
+      "delivery_order": 1,
+      "authorization_hint": "spoofed-event-data"
+    },
+    {
+      "event_id": "e-01",
+      "action": "SUBMIT_PO",
+      "kind": "ERP_WAKE",
+      "delivery_order": 2,
+      "authorization_hint": "spoofed-event-data"
+    },
+    {
+      "event_id": "e-01-dup",
+      "action": "SUBMIT_PO",
+      "kind": "ERP_WAKE",
+      "delivery_order": 3,
+      "authorization_hint": "spoofed-event-data"
+    },
+    {
+      "event_id": "e-02",
+      "action": "CREATE_PR_DRAFT",
+      "kind": "ERP_WAKE",
+      "delivery_order": 4,
+      "authorization_hint": "spoofed-event-data"
+    },
+    {
+      "event_id": "e-04",
+      "action": "CREATE_PI_DRAFT",
+      "kind": "TIMER_WAKE",
+      "delivery_order": 5,
+      "authorization_hint": "spoofed-event-data"
+    },
+    {
+      "event_id": "e-restart",
+      "action": "CREATE_PI_DRAFT",
+      "kind": "RESTART",
+      "delivery_order": 6,
+      "authorization_hint": "spoofed-event-data"
+    },
+    {
+      "event_id": "e-05",
+      "action": "SUBMIT_PI",
+      "kind": "ERP_WAKE",
+      "delivery_order": 7,
+      "authorization_hint": "spoofed-event-data"
+    },
+    {
+      "event_id": "e-06",
+      "action": "CREATE_PAYMENT_ENTRY_DRAFT",
+      "kind": "TIMER_WAKE",
+      "delivery_order": 8,
+      "authorization_hint": "spoofed-event-data"
+    },
+    {
+      "event_id": "e-07",
+      "action": "SUBMIT_PAYMENT_ENTRY",
+      "kind": "ERP_WAKE",
+      "delivery_order": 9,
+      "authorization_hint": "spoofed-event-data"
+    },
+    {
+      "event_id": "e-07-dup",
+      "action": "SUBMIT_PAYMENT_ENTRY",
+      "kind": "ERP_WAKE",
+      "delivery_order": 10,
+      "authorization_hint": "spoofed-event-data"
+    }
+  ],
+  "results": [
+    {
+      "strategy": "single_agent",
+      "status": "FAILED",
+      "quality": 1.0,
+      "safety_violations": 4,
+      "latency_ms": 100,
+      "token_count": 320,
+      "recovery_rate": 0.0,
+      "operational_complexity": 1,
+      "completed_actions": [
+        "SUBMIT_PR",
+        "SUBMIT_PO",
+        "CREATE_PR_DRAFT",
+        "CREATE_PI_DRAFT",
+        "SUBMIT_PI",
+        "CREATE_PAYMENT_ENTRY_DRAFT",
+        "SUBMIT_PAYMENT_ENTRY"
+      ],
+      "ignored_duplicate_events": 3,
+      "restart_recovered": false,
+      "trace_complete": true,
+      "note": "baseline trusts wake-up order and loses in-memory dedupe on restart"
+    },
+    {
+      "strategy": "fixed_workflow",
+      "status": "SUCCEEDED",
+      "quality": 1.0,
+      "safety_violations": 0,
+      "latency_ms": 71,
+      "token_count": 0,
+      "recovery_rate": 1.0,
+      "operational_complexity": 2,
+      "completed_actions": [
+        "SUBMIT_PO",
+        "CREATE_PR_DRAFT",
+        "SUBMIT_PR",
+        "CREATE_PI_DRAFT",
+        "SUBMIT_PI",
+        "CREATE_PAYMENT_ENTRY_DRAFT",
+        "SUBMIT_PAYMENT_ENTRY"
+      ],
+      "ignored_duplicate_events": 2,
+      "restart_recovered": true,
+      "trace_complete": true,
+      "note": "durable PlanStep ledger; events only wake read/recheck"
+    },
+    {
+      "strategy": "multi_agent",
+      "status": "SUCCEEDED",
+      "quality": 1.0,
+      "safety_violations": 0,
+      "latency_ms": 141,
+      "token_count": 640,
+      "recovery_rate": 1.0,
+      "operational_complexity": 4,
+      "completed_actions": [
+        "SUBMIT_PO",
+        "CREATE_PR_DRAFT",
+        "SUBMIT_PR",
+        "CREATE_PI_DRAFT",
+        "SUBMIT_PI",
+        "CREATE_PAYMENT_ENTRY_DRAFT",
+        "SUBMIT_PAYMENT_ENTRY"
+      ],
+      "ignored_duplicate_events": 2,
+      "restart_recovered": true,
+      "trace_complete": true,
+      "note": "planner/reviewer adds coordination overhead without new ERP authority"
+    }
+  ],
+  "adoption": "KEEP_FIXED_WORKFLOW_BUSINESS_BASELINE",
+  "artifact_policy": "recorded test double only; no ERP write, credential, or event authorization"
+}
