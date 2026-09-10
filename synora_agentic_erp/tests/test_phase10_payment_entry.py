@@ -215,9 +215,7 @@ class TestPhase10PaymentEntry(FrappeTestCase):  # type: ignore[misc]
 
     def _review_and_approve(self, proposal: dict[str, Any]) -> dict[str, Any]:
         approver = (
-            PAYMENT_APPROVER
-            if proposal["action_type"] == "SUBMIT_PAYMENT_ENTRY"
-            else ACCOUNTANT
+            PAYMENT_APPROVER if proposal["action_type"] == "SUBMIT_PAYMENT_ENTRY" else ACCOUNTANT
         )
         frappe.set_user(str(proposal["initiator"]))
         reviewed = cast(dict[str, Any], evaluate_proposal(proposal))
@@ -239,9 +237,7 @@ class TestPhase10PaymentEntry(FrappeTestCase):  # type: ignore[misc]
     def _approve_and_execute(self, proposal: dict[str, Any]) -> dict[str, Any]:
         reviewed = self._review_and_approve(proposal)
         executor = (
-            PAYMENT_APPROVER
-            if proposal["action_type"] == "SUBMIT_PAYMENT_ENTRY"
-            else ACCOUNTANT
+            PAYMENT_APPROVER if proposal["action_type"] == "SUBMIT_PAYMENT_ENTRY" else ACCOUNTANT
         )
         frappe.set_user(executor)
         response = cast(

@@ -239,9 +239,7 @@ class TestPhase10Cancellation(FrappeTestCase):  # type: ignore[misc]
         frappe.get_doc("Purchase Invoice", _pi_name).cancel()
         frappe.get_doc("Purchase Receipt", _pr_name).cancel()
         frappe.db.commit()
-        proposal = self._proposal(
-            "CANCEL_PO", "Purchase Order", po_name, initiator=BUYER
-        )
+        proposal = self._proposal("CANCEL_PO", "Purchase Order", po_name, initiator=BUYER)
         reviewed, response = self._execute(proposal, APPROVER)
         self.assertEqual(response["action"]["calculation"]["status"], "Cancelled")
         self.assertEqual(response["target"]["docstatus"], 2)
@@ -314,9 +312,7 @@ class TestPhase10Cancellation(FrappeTestCase):  # type: ignore[misc]
         self.assertEqual(pi_verified["gl_net_debit_minus_credit"], "0")
         self.assertEqual(frappe.db.get_value("Purchase Receipt", pr_name, "per_billed"), 0)
 
-        pr_proposal = self._proposal(
-            "CANCEL_PR", "Purchase Receipt", pr_name, initiator=RECEIVER
-        )
+        pr_proposal = self._proposal("CANCEL_PR", "Purchase Receipt", pr_name, initiator=RECEIVER)
         pr_reviewed, pr_response = self._execute(pr_proposal, BUYER)
         self.assertEqual(pr_response["target"]["docstatus"], 2)
         pr_verified = pr_response["receipt"]["verified_fields"]
