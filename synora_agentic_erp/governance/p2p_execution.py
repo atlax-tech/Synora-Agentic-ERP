@@ -84,6 +84,12 @@ SOURCE_CHILD_DOCTYPES = {
 }
 PARENT_SOURCE_ACTIONS = {
     "CREATE_PAYMENT_ENTRY_DRAFT": "Purchase Invoice",
+    "SUBMIT_PO": "Purchase Order",
+    "CANCEL_PO": "Purchase Order",
+    "SUBMIT_PR": "Purchase Receipt",
+    "CANCEL_PR": "Purchase Receipt",
+    "SUBMIT_PI": "Purchase Invoice",
+    "CANCEL_PI": "Purchase Invoice",
     "SUBMIT_PAYMENT_ENTRY": "Payment Entry",
     "CANCEL_PAYMENT_ENTRY": "Payment Entry",
 }
@@ -127,6 +133,29 @@ def p2p_action_calculation(action: Any) -> dict[str, Any]:
     """Build safe approval-display amounts from current ERP-readable fields."""
 
     payload = action.payload
+    if action.action_type.startswith("CANCEL_"):
+        target = TARGET_DOCTYPES[action.action_type]
+        rows = frappe.get_list(
+            target,
+            filters={"name": payload["source_name"], "company": payload["company"]},
+            fields=["docstatus", "status"],
+            user=frappe.session.user,
+            limit=1,
+        )
+        if not rows:
+            return {
+                "status": "未知",
+                "accounting_state": "当前 ERP 单据不可见, 审批前必须重新读取",
+                "basis": "当前 ERP 单据不可见",
+            }
+        return {
+            "status": str(getattr(rows[0], "status", "") or "未知"),
+            "docstatus": int(getattr(rows[0], "docstatus", 0) or 0),
+            "accounting_state": (
+                "取消仅由 ERP 原生 controller 执行; 下游依赖和库存/会计逆向结果以回执为准"
+            ),
+            "basis": f"读取当前 {target}; 不级联取消、不执行数据库回滚",
+        }
     if action.action_type == "CREATE_PI_DRAFT":
         total = Decimal("0")
         line_amounts: list[str] = []
@@ -393,10 +422,224 @@ def _payment_entry_read_back(action: Any, doc: Any, verified: dict[str, Any]) ->
     return verified
 
 
+def _ledger_totals(
+    voucher_type: str, voucher_no: str, table: str, amount_field: str
+) -> tuple[int, Decimal]:
+    """Return all ledger rows and their signed net for a cancelled voucher."""
+
+    rows = frappe.db.sql(
+        f"""
+        SELECT COUNT(*), COALESCE(SUM({amount_field}), 0)
+        FROM `{table}`
+        WHERE voucher_type = %s AND voucher_no = %s
+        """,
+        (voucher_type, voucher_no),
+    )
+    return int(rows[0][0] or 0), _financial_decimal(rows[0][1], f"{table}.net_{amount_field}")
+
+
+def _cancel_purchase_order_read_back(doc: Any, verified: dict[str, Any]) -> dict[str, Any]:
+    status = _financial_text(getattr(doc, "status", ""), "status")
+    if status != "Cancelled":
+        raise ReadBackMismatch("Purchase Order status is not Cancelled")
+    per_received = _financial_decimal(getattr(doc, "per_received", 0), "per_received")
+    per_billed = _financial_decimal(getattr(doc, "per_billed", 0), "per_billed")
+    if per_received != 0 or per_billed != 0:
+        raise ReadBackMismatch("cancelled Purchase Order still has received or billed progress")
+    verified.update(
+        {
+            "status": status,
+            "per_received": _financial_number(per_received),
+            "per_billed": _financial_number(per_billed),
+        }
+    )
+    return verified
+
+
+def _cancel_purchase_receipt_read_back(doc: Any, verified: dict[str, Any]) -> dict[str, Any]:
+    status = _financial_text(getattr(doc, "status", ""), "status")
+    if status != "Cancelled":
+        raise ReadBackMismatch("Purchase Receipt status is not Cancelled")
+
+    stock_item_seen = False
+    for index, item in enumerate(getattr(doc, "items", []) or []):
+        po_name = str(getattr(item, "purchase_order", "") or "")
+        po_item_name = str(getattr(item, "purchase_order_item", "") or "")
+        if not po_name or not po_item_name:
+            continue
+        po_item = frappe.db.get_value(
+            "Purchase Order Item", po_item_name, ["parent", "received_qty"], as_dict=True
+        )
+        if not po_item or str(po_item.parent) != po_name:
+            raise ReadBackMismatch(f"item_{index} Purchase Order source is inconsistent")
+        remaining_rows = frappe.db.sql(
+            """
+            SELECT COALESCE(SUM(pri.qty), 0)
+            FROM `tabPurchase Receipt Item` pri
+            INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent
+            WHERE pri.purchase_order = %s
+              AND pri.purchase_order_item = %s
+              AND pr.docstatus = 1
+            """,
+            (po_name, po_item_name),
+        )
+        expected_received = _financial_decimal(remaining_rows[0][0], "expected_received_qty")
+        actual_received = _financial_decimal(po_item.received_qty, "po_received_qty")
+        if actual_received != expected_received:
+            raise ReadBackMismatch(
+                f"item_{index} Purchase Order received quantity is inconsistent"
+            )
+        po_progress = frappe.db.get_value(
+            "Purchase Order", po_name, ["company", "per_received"], as_dict=True
+        )
+        if not po_progress or str(po_progress.company) != str(getattr(doc, "company", "") or ""):
+            raise ReadBackMismatch(f"item_{index} Purchase Order is outside the receipt company")
+        per_received = _financial_decimal(po_progress.per_received, "po_per_received")
+        if per_received < 0 or per_received > 100:
+            raise ReadBackMismatch(f"item_{index} Purchase Order progress is invalid")
+        verified[f"item_{index}.purchase_order"] = po_name
+        verified[f"item_{index}.purchase_order_item"] = po_item_name
+        verified[f"item_{index}.po_received_qty"] = _financial_number(actual_received)
+        verified[f"item_{index}.po_per_received"] = _financial_number(per_received)
+        stock_item_seen = stock_item_seen or bool(
+            frappe.db.get_value("Item", getattr(item, "item_code", ""), "is_stock_item")
+        )
+
+    if stock_item_seen:
+        count, net = _ledger_totals(
+            "Purchase Receipt",
+            str(getattr(doc, "name", "") or ""),
+            "tabStock Ledger Entry",
+            "actual_qty",
+        )
+        if count < 2 or net != 0:
+            raise ReadBackMismatch("cancelled Purchase Receipt stock ledger is not reversed")
+        verified["stock_ledger_entry_count"] = count
+        verified["stock_actual_qty_net"] = _financial_number(net)
+    verified["status"] = status
+    return verified
+
+
+def _cancel_purchase_invoice_read_back(doc: Any, verified: dict[str, Any]) -> dict[str, Any]:
+    status = _financial_text(getattr(doc, "status", ""), "status")
+    if status != "Cancelled":
+        raise ReadBackMismatch("Purchase Invoice status is not Cancelled")
+    grand_total = _financial_decimal(getattr(doc, "grand_total", 0), "grand_total")
+    outstanding = _financial_decimal(getattr(doc, "outstanding_amount", 0), "outstanding_amount")
+    if grand_total < 0 or outstanding < 0:
+        raise ReadBackMismatch("cancelled Purchase Invoice accounting totals are invalid")
+
+    gl_count, gl_net = _ledger_totals(
+        "Purchase Invoice", str(getattr(doc, "name", "") or ""), "tabGL Entry", "debit - credit"
+    )
+    if gl_count < 2 or gl_net != 0:
+        raise ReadBackMismatch("cancelled Purchase Invoice GL entries are not reversed")
+    for index, item in enumerate(getattr(doc, "items", []) or []):
+        pr_name = str(getattr(item, "purchase_receipt", "") or "")
+        if pr_name:
+            pr = frappe.db.get_value(
+                "Purchase Receipt", pr_name, ["company", "per_billed"], as_dict=True
+            )
+            if not pr or str(pr.company) != str(getattr(doc, "company", "") or ""):
+                raise ReadBackMismatch(f"item_{index} Purchase Receipt is outside invoice company")
+            pr_per_billed = _financial_decimal(pr.per_billed, "pr_per_billed")
+            if pr_per_billed < 0 or pr_per_billed > 100:
+                raise ReadBackMismatch(f"item_{index} Purchase Receipt billing progress is invalid")
+            verified[f"item_{index}.purchase_receipt"] = pr_name
+            verified[f"item_{index}.pr_per_billed"] = _financial_number(pr_per_billed)
+        po_name = str(getattr(item, "purchase_order", "") or "")
+        if not po_name and pr_name and getattr(item, "pr_detail", None):
+            po_name = str(
+                frappe.db.get_value("Purchase Receipt Item", item.pr_detail, "purchase_order") or ""
+            )
+        if po_name:
+            po = frappe.db.get_value(
+                "Purchase Order", po_name, ["company", "per_billed"], as_dict=True
+            )
+            if not po or str(po.company) != str(getattr(doc, "company", "") or ""):
+                raise ReadBackMismatch(f"item_{index} Purchase Order is outside invoice company")
+            po_per_billed = _financial_decimal(po.per_billed, "po_per_billed")
+            if po_per_billed < 0 or po_per_billed > 100:
+                raise ReadBackMismatch(f"item_{index} Purchase Order billing progress is invalid")
+            verified[f"item_{index}.purchase_order"] = po_name
+            verified[f"item_{index}.po_per_billed"] = _financial_number(po_per_billed)
+    verified.update(
+        {
+            "status": status,
+            "grand_total": _financial_number(grand_total),
+            "outstanding_amount": _financial_number(outstanding),
+            "gl_entry_count": gl_count,
+            "gl_net_debit_minus_credit": _financial_number(gl_net),
+        }
+    )
+    return verified
+
+
+def _cancel_payment_entry_read_back(doc: Any, verified: dict[str, Any]) -> dict[str, Any]:
+    status = _financial_text(getattr(doc, "status", ""), "status")
+    if status != "Cancelled":
+        raise ReadBackMismatch("Payment Entry status is not Cancelled")
+    references = list(getattr(doc, "references", []) or [])
+    if len(references) != 1:
+        raise ReadBackMismatch("cancelled Payment Entry must retain one invoice reference")
+    reference = references[0]
+    if str(getattr(reference, "reference_doctype", "") or "") != "Purchase Invoice":
+        raise ReadBackMismatch("cancelled Payment Entry reference is not a Purchase Invoice")
+    reference_name = _financial_text(getattr(reference, "reference_name", ""), "reference_name")
+    paid = _financial_decimal(getattr(doc, "paid_amount", 0), "paid_amount")
+    allocated = _financial_decimal(getattr(reference, "allocated_amount", 0), "allocated_amount")
+    if paid <= 0 or allocated != paid:
+        raise ReadBackMismatch("cancelled Payment Entry allocation is invalid")
+
+    invoice = frappe.db.get_value(
+        "Purchase Invoice",
+        reference_name,
+        ["company", "status", "docstatus", "grand_total", "outstanding_amount"],
+        as_dict=True,
+    )
+    if not invoice or str(invoice.company) != str(getattr(doc, "company", "") or ""):
+        raise ReadBackMismatch("cancelled Payment Entry invoice is outside current company")
+    invoice_status = _financial_text(invoice.status, "purchase_invoice.status")
+    invoice_outstanding = _financial_decimal(
+        invoice.outstanding_amount, "purchase_invoice.outstanding_amount"
+    )
+    invoice_total = _financial_decimal(invoice.grand_total, "purchase_invoice.grand_total")
+    if invoice_total < 0 or invoice_outstanding < 0:
+        raise ReadBackMismatch("cancelled Payment Entry invoice outstanding is invalid")
+    gl_count, gl_net = _ledger_totals(
+        "Payment Entry", str(getattr(doc, "name", "") or ""), "tabGL Entry", "debit - credit"
+    )
+    if gl_count < 2 or gl_net != 0:
+        raise ReadBackMismatch("cancelled Payment Entry GL entries are not reversed")
+    verified.update(
+        {
+            "status": status,
+            "paid_amount": _financial_number(paid),
+            "reference_name": reference_name,
+            "reference_allocated_amount": _financial_number(allocated),
+            "purchase_invoice_status": invoice_status,
+            "purchase_invoice_docstatus": int(invoice.docstatus or 0),
+            "purchase_invoice_grand_total": _financial_number(invoice_total),
+            "purchase_invoice_outstanding_amount": _financial_number(invoice_outstanding),
+            "gl_entry_count": gl_count,
+            "gl_net_debit_minus_credit": _financial_number(gl_net),
+        }
+    )
+    return verified
+
+
 def p2p_read_back_with_financials(action: Any, doc: Any) -> dict[str, Any]:
     """Read back P2P fields plus authoritative financial evidence."""
 
     verified = p2p_read_back(action, doc)
+    if action.action_type == "CANCEL_PO":
+        return _cancel_purchase_order_read_back(doc, verified)
+    if action.action_type == "CANCEL_PR":
+        return _cancel_purchase_receipt_read_back(doc, verified)
+    if action.action_type == "CANCEL_PI":
+        return _cancel_purchase_invoice_read_back(doc, verified)
+    if action.action_type == "CANCEL_PAYMENT_ENTRY":
+        return _cancel_payment_entry_read_back(doc, verified)
     if action.action_type == "SUBMIT_PAYMENT_ENTRY":
         return _payment_entry_read_back(action, doc, verified)
     if action.action_type != "SUBMIT_PI":
@@ -867,11 +1110,48 @@ def _finalize_failure(
         persisted_target = target
         if target is not None:
             target_name = str(getattr(target, "name", "") or "")
-            if not target_name or not frappe.db.exists(
-                TARGET_DOCTYPES[action.action_type], target_name
-            ):
+            target_doctype = TARGET_DOCTYPES[action.action_type]
+            if target_name and frappe.db.exists(target_doctype, target_name):
+                # Re-read after rollback.  A native controller can commit a
+                # business cancellation before a surrounding response or
+                # read-back failure; the recovery record must state what the
+                # database actually shows rather than trusting the in-memory
+                # object from the failed call.
+                try:
+                    persisted_target = frappe.get_doc(target_doctype, target_name)
+                except Exception:
+                    persisted_target = target
+            else:
                 persisted_target = None
         final_state = "RECONCILIATION_REQUIRED" if uncertain else "FAILED"
+        recovery_evidence = None
+        if uncertain or action.action_type.startswith("CANCEL_"):
+            observed_docstatus = (
+                int(getattr(persisted_target, "docstatus", 0) or 0)
+                if persisted_target is not None
+                else None
+            )
+            expected_docstatus = 2 if action.action_type.startswith("CANCEL_") else 1
+            side_effect_state = (
+                "APPLIED_BUT_RESPONSE_FAILED"
+                if observed_docstatus == expected_docstatus and uncertain
+                else "NOT_APPLIED"
+                if not uncertain
+                else "UNKNOWN"
+            )
+            recovery_evidence = {
+                "operation": "cancel" if action.action_type.startswith("CANCEL_") else "p2p_write",
+                "side_effect_state": side_effect_state,
+                "target_observed": persisted_target is not None,
+                "target_docstatus": observed_docstatus,
+                "manual_intervention": bool(uncertain),
+                "recovery_action": (
+                    "read_only_reconcile_then_manual_intervention"
+                    if uncertain
+                    else "inspect_failure_and_repropose_after_state_recheck"
+                ),
+                "reason": failure,
+            }
         stored = _persist_receipt(
             action,
             run,
@@ -881,7 +1161,7 @@ def _finalize_failure(
             failure_category=failure,
             target=persisted_target,
             verified_fields={},
-            evidence={"reason": failure} if uncertain else None,
+            evidence=recovery_evidence,
         )
         _update_reservation(
             reservation,

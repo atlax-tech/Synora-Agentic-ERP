@@ -44,12 +44,16 @@ P2P_ACTION_TYPES = frozenset(ACTION_TYPES - {"CREATE_MR_DRAFT", "CREATE_PO_DRAFT
 ENABLED_P2P_ACTION_TYPES = frozenset(
     {
         "SUBMIT_PO",
+        "CANCEL_PO",
         "CREATE_PR_DRAFT",
         "SUBMIT_PR",
+        "CANCEL_PR",
         "CREATE_PI_DRAFT",
         "SUBMIT_PI",
+        "CANCEL_PI",
         "CREATE_PAYMENT_ENTRY_DRAFT",
         "SUBMIT_PAYMENT_ENTRY",
+        "CANCEL_PAYMENT_ENTRY",
     }
 )
 RISK_CLASSES = frozenset({"LOW", "MEDIUM", "HIGH"})

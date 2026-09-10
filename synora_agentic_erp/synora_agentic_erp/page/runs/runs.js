@@ -664,11 +664,14 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				finance.push(labels[key] + ": " + esc(verified[key]));
 			}
 		});
-		return esc(receipt.final_state || "—") + " · " + esc(receipt.response_category || "—") +
-			(receipt.target_name ? " · " + esc(receipt.target_doctype || "ERP") + ": " + esc(receipt.target_name) : "") +
-			(amount ? " · " + __("首行金额") + ": " + esc(amount) : "") +
-			(finance.length ? " · " + finance.join(" · ") : "") +
-			(receipt.failure_category ? "<br><span class=\"text-danger\">" + esc(receipt.failure_category) + "</span>" : "");
+			return esc(receipt.final_state || "—") + " · " + esc(receipt.response_category || "—") +
+				(receipt.target_name ? " · " + esc(receipt.target_doctype || "ERP") + ": " + esc(receipt.target_name) : "") +
+				(amount ? " · " + __("首行金额") + ": " + esc(amount) : "") +
+				(finance.length ? " · " + finance.join(" · ") : "") +
+				(receipt.failure_category ? "<br><span class=\"text-danger\">" + esc(receipt.failure_category) + "</span>" : "") +
+				(receipt.reconciliation_evidence && receipt.reconciliation_evidence.recovery_action
+					? "<br><span class=\"text-warning\">" + __("恢复建议") + ": " + esc(receipt.reconciliation_evidence.recovery_action) + "</span>"
+					: "");
 	}
 
 	function build_governance_panel(governance, run) {

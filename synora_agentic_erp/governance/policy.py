@@ -852,6 +852,10 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
             return GateResult("FAIL", "source document is not a Draft")
         if action.action_type.startswith("CANCEL_") and docstatus != 1:
             return GateResult("FAIL", "only a submitted document can be cancelled")
+        if action.action_type.startswith("CANCEL_"):
+            blocker = _p2p_cancel_dependency_gate(action.action_type, source_name, actor)
+            if blocker is not None:
+                return blocker
         if action.action_type == "CREATE_PR_DRAFT" and docstatus != 1:
             return GateResult("FAIL", "Purchase Order must be submitted before receipt")
         if action.action_type == "CREATE_PR_DRAFT" and str(getattr(source, "status", "") or "") in {
@@ -1066,10 +1070,88 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
                             "FAIL", "source row already has an open Purchase Receipt draft"
                         )
         return GateResult("PASS", "source status, scope, and bounded quantities passed")
-    except InvalidOperation, TypeError, ValueError, KeyError:
+    except (InvalidOperation, TypeError, ValueError, KeyError):
         return GateResult("FAIL", "P2P deterministic checks failed")
     except Exception:
         return GateResult("UNKNOWN", "current ERP source state could not be verified")
+
+
+def _p2p_cancel_dependency_gate(
+    action_type: str, source_name: str, actor: str
+) -> GateResult | None:
+    """Return a bounded downstream blocker before an ERP cancel controller call.
+
+    Frappe's native ``Document.cancel`` performs a broad link scan, but doing
+    the same dependency check in policy gives the reviewer a useful, scoped
+    reason and prevents an approved cancellation from reaching the controller
+    after a known downstream document has already been submitted.  Only
+    submitted downstream parents are blockers; drafts remain visible to the
+    native controller and can be handled by the operator.
+    """
+
+    frappe = _frappe()
+
+    def submitted_parents(
+        child_doctype: str,
+        child_field: str,
+        parent_doctype: str,
+        *,
+        extra_filters: dict[str, Any] | None = None,
+    ) -> list[str]:
+        filters: dict[str, Any] = {child_field: source_name}
+        if extra_filters:
+            filters.update(extra_filters)
+        child_rows = frappe.get_list(
+            child_doctype,
+            filters=filters,
+            fields=["parent"],
+            user=actor,
+            parent_doctype=parent_doctype,
+            limit_page_length=50,
+        )
+        parents = sorted({str(row.parent) for row in child_rows if getattr(row, "parent", None)})
+        if not parents:
+            return []
+        rows = frappe.get_list(
+            parent_doctype,
+            filters={"name": ["in", parents], "docstatus": 1},
+            fields=["name"],
+            user=actor,
+            limit_page_length=50,
+        )
+        return sorted({str(row.name) for row in rows if getattr(row, "name", None)})
+
+    if action_type == "CANCEL_PO":
+        receipts = submitted_parents(
+            "Purchase Receipt Item", "purchase_order", "Purchase Receipt"
+        )
+        invoices = submitted_parents(
+            "Purchase Invoice Item", "purchase_order", "Purchase Invoice"
+        )
+        blockers = [
+            *(f"Purchase Receipt {name}" for name in receipts),
+            *(f"Purchase Invoice {name}" for name in invoices),
+        ]
+    elif action_type == "CANCEL_PR":
+        invoices = submitted_parents(
+            "Purchase Invoice Item", "purchase_receipt", "Purchase Invoice"
+        )
+        blockers = [f"Purchase Invoice {name}" for name in invoices]
+    elif action_type == "CANCEL_PI":
+        payments = submitted_parents(
+            "Payment Entry Reference", "reference_name", "Payment Entry",
+            extra_filters={"reference_doctype": "Purchase Invoice"},
+        )
+        blockers = [f"Payment Entry {name}" for name in payments]
+    else:
+        blockers = []
+
+    if not blockers:
+        return None
+    shown = ", ".join(blockers[:8])
+    if len(blockers) > 8:
+        shown += f", and {len(blockers) - 8} more"
+    return GateResult("FAIL", f"submitted downstream documents block cancellation: {shown}")
 
 
 def _workflow_policy(action: Any, actor: str) -> GateResult:
@@ -1180,8 +1262,12 @@ def _action_response(action: Any, doc: Any) -> dict[str, Any]:
     elif action.action_type in {
         "CREATE_PI_DRAFT",
         "SUBMIT_PI",
+        "CANCEL_PI",
         "CREATE_PAYMENT_ENTRY_DRAFT",
         "SUBMIT_PAYMENT_ENTRY",
+        "CANCEL_PAYMENT_ENTRY",
+        "CANCEL_PO",
+        "CANCEL_PR",
     }:
         from synora_agentic_erp.governance.p2p_execution import p2p_action_calculation
 

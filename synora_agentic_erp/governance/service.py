@@ -446,8 +446,12 @@ def serialize_action(doc: Any, *, allowed_actor: str | None = None) -> dict[str,
     elif action.action_type in {
         "CREATE_PI_DRAFT",
         "SUBMIT_PI",
+        "CANCEL_PI",
         "CREATE_PAYMENT_ENTRY_DRAFT",
         "SUBMIT_PAYMENT_ENTRY",
+        "CANCEL_PAYMENT_ENTRY",
+        "CANCEL_PO",
+        "CANCEL_PR",
     }:
         from synora_agentic_erp.governance.p2p_execution import p2p_action_calculation
 

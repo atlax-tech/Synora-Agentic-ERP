@@ -27,6 +27,21 @@ _PAYMENT_MUTABLE_RECEIPT_FIELDS = frozenset(
         "purchase_invoice_outstanding_amount",
     }
 )
+_CANCEL_MUTABLE_RECEIPT_FIELDS = {
+    # Cancelling a lower-level document legitimately changes cumulative
+    # received/billed percentages on its parents.  Keep the cancellation
+    # target, status, and ledger evidence stable while allowing those parent
+    # progress counters to move during a later legal cancellation step.
+    "CANCEL_PR": frozenset(),
+    "CANCEL_PI": frozenset(),
+    "CANCEL_PAYMENT_ENTRY": frozenset(
+        {
+            "purchase_invoice_status",
+            "purchase_invoice_outstanding_amount",
+        }
+    ),
+    "CANCEL_PO": frozenset(),
+}
 
 
 @dataclass(frozen=True)
@@ -474,6 +489,21 @@ def p2p_receipt_evidence_matches(
     source links, and balanced GL evidence still have to remain present; the
     mutable values stay in the receipt as the historical post-submit snapshot.
     """
+
+    if action.action_type.startswith("CANCEL_"):
+        mutable_fields = _CANCEL_MUTABLE_RECEIPT_FIELDS.get(action.action_type, frozenset())
+
+        def stable_cancel(items: Mapping[str, Any]) -> dict[str, Any]:
+            return {
+                key: value
+                for key, value in items.items()
+                if key not in mutable_fields
+                and not key.endswith(
+                    (".po_received_qty", ".po_per_received", ".pr_per_billed", ".po_per_billed")
+                )
+            }
+
+        return stable_cancel(recorded) == stable_cancel(current)
 
     if action.action_type not in {"SUBMIT_PI", "SUBMIT_PAYMENT_ENTRY"}:
         return dict(recorded) == dict(current)
