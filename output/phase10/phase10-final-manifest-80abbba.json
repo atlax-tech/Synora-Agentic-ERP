@@ -1,0 +1,156 @@
+{
+  "schema_version": "1",
+  "suite": "phase10-final-manifest-r105",
+  "status": "COMPLETED_PASS_PENDING_PROTECTED_SYNC",
+  "generated_at": "2026-09-10T20:22:31Z",
+  "implementation_head": "80abbbafba6ec4f443bab3f86f43356dee5bf9c0",
+  "upstream": {
+    "FDP_REV_FRAPPE": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+    "FDP_REV_ERP_NEXT": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+    "dirty_worktrees": "0/0"
+  },
+  "history": {
+    "previous_report": "output/phase10/phase10-stage-report-draft-3512f96.md",
+    "previous_manifest": "output/phase10/phase10-final-manifest-3512f96.json",
+    "previous_status": "COMPLETED_PASS_PENDING_PROTECTED_SYNC",
+    "history_preserved": true
+  },
+  "commits": [
+    {
+      "step": "R10.4",
+      "revision": "52ad17f",
+      "subject": "test(p2p): close Phase 10 fault and browser evidence"
+    },
+    {
+      "step": "R10.5 gate fix",
+      "revision": "80abbba",
+      "subject": "fix(phase10): close final validation gates"
+    }
+  ],
+  "evidence_binding": {
+    "r104_source_revision": "4381d47fb488751c2e4596285e27153c0e31acb9",
+    "r104_worktree_diff_sha256": "234dba35e371a842da1a80210edd097918c37adf28918ecf716b809d0b4e2a55",
+    "r104_committed_revision": "52ad17f",
+    "r105_current_revision": "80abbbafba6ec4f443bab3f86f43356dee5bf9c0",
+    "r105_scope": "Runtime type guard plus test/contract/pagination stability; no P2P governance, ERP write or page business-path change"
+  },
+  "artifacts": {
+    "stage_report": {
+      "path": "output/phase10/phase10-stage-report-draft-80abbba.md",
+      "sha256": "80056d38d8b45cfaee989134c08ce24074ab656e596cb344290893804bc2a3ca"
+    },
+    "harness_sync_proposal": {
+      "path": "output/phase10/phase10-harness-sync-proposal-80abbba.md",
+      "sha256": "0d83dc681f0390395dcbe827ec9dfee37bc859bd747d23a21646531f6c039ba4"
+    },
+    "r104_fault_matrix": {
+      "path": "output/phase10/phase10-r104-real-fault-matrix-v1.json",
+      "sha256": "7e1e7846ffc5a908926964b9ebf42241211c76a5d62ab4b6a5397864f372e0eb",
+      "cases": 28,
+      "status": "PASS"
+    },
+    "r104_fault_report": {
+      "path": "output/phase10/phase10-r104-real-fault-matrix-v1.md",
+      "sha256": "dfbe866e831c55d8a0d79acc9838a4cbe810c9ca4bfefa7f0e30b1c3a0039e5c"
+    },
+    "r104_browser": {
+      "path": "output/phase10/phase10-r104-browser-acceptance-v2.json",
+      "sha256": "3d138402ca5ef97d1a70a05ae40ccfd86fb3b7f9a2ea700034bc88a33b2fc0a7",
+      "run_id": "50693541-627c-4593-a4aa-1cf3c45b98a8",
+      "status": "SUCCEEDED",
+      "capability_status": "REVOKED"
+    },
+    "r104_final_screenshot": {
+      "path": "output/playwright/phase10-r104-browser-payment-operator-v2-final.png",
+      "sha256": "792b717856c65ad2d36ad78ccd7b63b5787e4c8009ece105d1aa23f28a6038b6"
+    },
+    "r103_real_comparison": {
+      "path": "output/phase10/phase10-p2p-orchestration-real-glm-v1.json",
+      "sha256": "4accbbb38cb0ad8f29325cecd231520fa710b8a49c6e101a28a4ab998f20546e"
+    },
+    "p10_e2e_history": {
+      "path": "output/phase10/phase10-p2p-e2e-recorded-v1.json",
+      "sha256": "4ea7000683ab81e45e34dcd19c9d12402723e4bd84f527221e4343f3a54d7514"
+    }
+  },
+  "business_acceptance": {
+    "lifecycle": [
+      "SUBMIT_PO",
+      "CREATE_PR_DRAFT",
+      "SUBMIT_PR",
+      "CREATE_PI_DRAFT",
+      "SUBMIT_PI",
+      "CREATE_PAYMENT_ENTRY_DRAFT",
+      "SUBMIT_PAYMENT_ENTRY"
+    ],
+    "fault_matrix": "7 action types x 4 boundaries = 28/28; process exit/restart and readback recorded",
+    "browser_roles": "initiator + receiver + accountant + payment approver + unauthorized viewer",
+    "latest_frappe_integration": "248 tests OK; current 80abbba",
+    "latest_p2p_e2e": "15 actions, two Paid invoices, SUCCEEDED Run"
+  },
+  "checks": {
+    "format": {"command": "make format-check", "exit_code": 0, "result": "390 files already formatted"},
+    "lint": {"command": "make lint", "exit_code": 0, "result": "All checks passed"},
+    "type": {"command": "make type", "exit_code": 0, "result": "120 source files, no issues"},
+    "unit": {"command": "make unit", "exit_code": 0, "result": "856 passed; 55 upstream deprecation warnings"},
+    "integration": {"command": "make integration", "exit_code": 0, "result": "248 Frappe tests OK"},
+    "harness_structure": {"exit_code": 0, "valid": true, "issues": 0, "references_checked": 724},
+    "harness_manifest": {"exit_code": 0, "valid": true, "errors": 0, "warnings": 0},
+    "harness_references": {"exit_code": 0, "checked": 724, "broken": 0, "scan_truncated": false},
+    "harness_drift": {"exit_code": 1, "expected": true, "drift_paths": 10, "reason": "protected docs/PLAN.md plus 8 source fingerprints"},
+    "harness_health": {"exit_code": 0, "score": 79.0, "grade": "C", "read_only": true},
+    "ponytail_audit": {"result": "Lean already. Ship."},
+    "ponytail_debt": {"markers": 1, "no_trigger": 0},
+    "git_diff_check": {"exit_code": 0}
+  },
+  "review": {
+    "status": "PASS",
+    "reviewed_head": "80abbbafba6ec4f443bab3f86f43356dee5bf9c0",
+    "rounds_completed": 2,
+    "round_results": [
+      {
+        "round": 1,
+        "status": "PASS",
+        "finding": "Evidence paths and SHA values matched; old R10.4 source binding was explicitly preserved; no protected file entered the diff"
+      },
+      {
+        "round": 2,
+        "status": "PASS",
+        "finding": "After report/manifest status update, hashes, pending-sync state and capability/run-state distinction remained consistent"
+      }
+    ],
+    "allowed_results": ["PASS", "CHANGES_REQUIRED", "BLOCKED"],
+    "scope": "final implementation diff, evidence binding, gates, D1-D9, risks and protected-file proposal"
+  },
+  "protected_sync": {
+    "status": "PENDING_USER_OR_HARNESS_OWNER_CONFIRMATION",
+    "proposal": "output/phase10/phase10-harness-sync-proposal-80abbba.md",
+    "proposal_sha256": "0d83dc681f0390395dcbe827ec9dfee37bc859bd747d23a21646531f6c039ba4",
+    "unresolved_json": "NO_CHANGE",
+    "plan_user_diff": "PRESERVED_UNSTAGED"
+  },
+  "rubric": {
+    "D1_requirements_business_correctness": 4,
+    "D2_identity_permissions_scope": 4,
+    "D3_state_concurrency_idempotency_recovery": 4,
+    "D4_agent_trust_cost": 3,
+    "D5_security_data_protection": 4,
+    "D6_ui_accessibility_bilingual": 3,
+    "D7_testing_real_integration_reproducibility": 4,
+    "D8_governance_traceability_nonfiction": 4,
+    "D9_simplicity_operability": 3,
+    "total": "33/36",
+    "average": 3.67,
+    "p0_count": 0,
+    "p1_count": 0
+  },
+  "risks": [
+    {"id": "R-P10-HARNESS-SYNC", "level": "P2", "owner": "user/Harness maintainer", "status": "OPEN_PENDING_APPROVAL", "next_gate": "approve file-level proposal, apply managed fingerprints, rerun drift"},
+    {"id": "R-P10-PLAN-USER-DIFF", "level": "P2", "owner": "user", "status": "PRESERVED_UNSTAGED", "next_gate": "handle through user-maintained PLAN workflow"},
+    {"id": "R-P10-DEV-HISTORY", "level": "P2", "owner": "ERP/DevOps", "status": "OPEN", "next_gate": "governed cleanup after evidence acceptance; retain immutable evidence"},
+    {"id": "R-P10-LAB-METRICS", "level": "P2", "owner": "Runtime/Eval", "status": "OPEN", "next_gate": "do not use LAB_ONLY latency/tokens as production claim"},
+    {"id": "R-P10-A11Y", "level": "P3", "owner": "UI", "status": "OPEN", "next_gate": "full keyboard/aria/empty/error/permission audit later"},
+    {"id": "R-P10-RUNTIME-503", "level": "P2", "owner": "Runtime", "status": "OPEN", "next_gate": "keep Runtime unavailable path fail-closed and investigate separately"}
+  ],
+  "next_state": "Independent review PASS; after separate protected-file approval, apply the proposal and rerun Harness drift. Only then may a maintainer decide whether to write READY FOR THE NEXT PHASE."
+}
