@@ -226,7 +226,7 @@ def persist_execution_receipt(
         doc.insert(ignore_permissions=True)
     except (frappe.DuplicateEntryError, frappe.UniqueValidationError) as error:
         raise GatewayFault("CONFLICT", "execution receipt already exists", 409) from error
-    return serialize_receipt(doc)
+    return serialize_receipt(doc, allowed_actor=actor)
 
 
 def transition_execution_receipt(
@@ -282,7 +282,7 @@ def transition_execution_receipt(
         doc.save(ignore_permissions=True)
     except frappe.TimestampMismatchError as error:
         raise GatewayFault("CONFLICT", "execution receipt changed concurrently", 409) from error
-    return serialize_receipt(doc)
+    return serialize_receipt(doc, allowed_actor=actor)
 
 
 def _load_action(action_id: str) -> ProposedAction:
@@ -380,7 +380,29 @@ def transition_action_state(
                     403,
                 )
     elif actor != row.initiator and "System Manager" not in frappe.get_roles(actor):
-        raise GatewayFault("PERMISSION_DENIED", "governed action is not available", 403)
+        # An independently approved action is executed by the approving user,
+        # so the executor must be allowed to close that same action.  The
+        # digest and approval row bind this exception to the exact approval;
+        # it cannot be used to move an arbitrary action into a terminal state.
+        action = _load_action(action_id)
+        approval_bound_execution = (
+            target in {"EXECUTED", "EXPIRED"}
+            and action.approval_class == "INDEPENDENT_APPROVER"
+            and approval_digest == row.proposal_digest
+            and bool(
+                frappe.db.exists(
+                    "Synora Approval Decision",
+                    {
+                        "action": action_id,
+                        "proposal_digest": row.proposal_digest,
+                        "actor": actor,
+                        "decision": "ALLOW",
+                    },
+                )
+            )
+        )
+        if not approval_bound_execution:
+            raise GatewayFault("PERMISSION_DENIED", "governed action is not available", 403)
     new_state, new_version = transition_state(
         str(row.state),
         target,
@@ -478,8 +500,8 @@ def serialize_approval_decision(doc: Any) -> dict[str, Any]:
     }
 
 
-def serialize_receipt(doc: Any) -> dict[str, Any]:
-    _read_action_owner(doc.action)
+def serialize_receipt(doc: Any, *, allowed_actor: str | None = None) -> dict[str, Any]:
+    _read_action_owner(doc.action, allowed_actor=allowed_actor)
     return {
         "receipt_id": doc.receipt_id,
         "action_id": doc.action,

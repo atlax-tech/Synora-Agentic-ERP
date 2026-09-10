@@ -14,7 +14,7 @@
  ],
  "fields": [
   {"fieldname": "schema_version", "fieldtype": "Data", "label": "Schema Version", "read_only": 1, "reqd": 1, "set_only_once": 1},
-  {"fieldname": "action_type", "fieldtype": "Select", "label": "Action Type", "options": "CREATE_MR_DRAFT\nCREATE_PO_DRAFT", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "action_type", "fieldtype": "Select", "label": "Action Type", "options": "CREATE_MR_DRAFT\nCREATE_PO_DRAFT\nSUBMIT_PO\nCANCEL_PO\nCREATE_PR_DRAFT\nSUBMIT_PR\nCANCEL_PR\nCREATE_PI_DRAFT\nSUBMIT_PI\nCANCEL_PI\nCREATE_PAYMENT_ENTRY_DRAFT\nSUBMIT_PAYMENT_ENTRY\nCANCEL_PAYMENT_ENTRY", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1},
   {"fieldname": "action_id", "fieldtype": "Data", "label": "Action ID", "read_only": 1, "reqd": 1, "set_only_once": 1, "unique": 1},
   {"fieldname": "initiator", "fieldtype": "Link", "label": "Initiator", "options": "User", "read_only": 1, "reqd": 1, "set_only_once": 1},

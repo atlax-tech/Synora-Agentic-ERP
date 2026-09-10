@@ -16,12 +16,16 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from synora_agentic_erp.gateway.contract import GatewayFault, bounded_text, canonical_uuid
+from synora_agentic_erp.governance.contracts import (
+    ENABLED_P2P_ACTION_TYPES,
+    P2P_ACTION_TYPES,
+    TARGET_DOCTYPES,
+)
 
 RULE_ID = "P6-MAP-20260827-v1"
 RULE_VERSION = "1"
 GATE_ORDER = ("identity", "scope", "permission", "deterministic", "workflow_policy")
 GATE_STATUSES = frozenset({"PASS", "FAIL", "UNKNOWN"})
-TARGET_DOCTYPES = frozenset({"Material Request", "Purchase Order"})
 
 
 def _frappe() -> Any:
@@ -175,9 +179,7 @@ def _safe_reason(value: object) -> str:
 
 
 def _safe_target(action: Any) -> str:
-    target = {"CREATE_MR_DRAFT": "Material Request", "CREATE_PO_DRAFT": "Purchase Order"}.get(
-        action.action_type
-    )
+    target = TARGET_DOCTYPES.get(action.action_type)
     if target is None:
         raise GatewayFault("INVALID_INPUT", "action_type is invalid")
     return target
@@ -300,15 +302,57 @@ def _run_identity(
 
 
 def _scope_identity(action: Any, run: Any, actor: str) -> GateResult:
+    frappe = _frappe()
     payload = action.payload
     if payload.get("company") != run.company_scope:
         return GateResult("FAIL", "company scope does not match the Run")
     warehouses = [str(item.get("warehouse", "")) for item in payload.get("items", [])]
+    if action.action_type in P2P_ACTION_TYPES and not warehouses:
+        # Existing-document actions derive warehouse scope from the source
+        # document.  The source is read through the current actor and is never
+        # accepted from a client-supplied arbitrary child field.
+        target = str(payload.get("source_doctype") or "")
+        source = str(payload.get("source_name") or "")
+        if not target or not source:
+            return GateResult("FAIL", "source document scope is incomplete")
+        try:
+            visible = frappe.get_list(
+                target,
+                filters={"name": source, "company": run.company_scope},
+                fields=["name"],
+                user=actor,
+                limit=1,
+            )
+        except Exception:
+            return GateResult("UNKNOWN", "source document scope could not be verified")
+        if not visible:
+            return GateResult("FAIL", "source document is outside the current user scope")
+        if run.warehouse_scope:
+            child = {
+                "Purchase Order": "Purchase Order Item",
+                "Purchase Receipt": "Purchase Receipt Item",
+                "Purchase Invoice": "Purchase Invoice Item",
+                "Payment Entry": None,
+            }.get(target)
+            if child:
+                try:
+                    rows = frappe.get_list(
+                        child,
+                        filters={"parent": source, "warehouse": run.warehouse_scope},
+                        fields=["name"],
+                        user=actor,
+                        parent_doctype=target,
+                        limit=1,
+                    )
+                except Exception:
+                    return GateResult("UNKNOWN", "source warehouse scope could not be verified")
+                if not rows:
+                    return GateResult("FAIL", "source document is outside the Run warehouse scope")
+        return GateResult("PASS", "source document company and scope match current permissions")
     if not warehouses or any(not value for value in warehouses):
         return GateResult("FAIL", "warehouse scope is incomplete")
     if run.warehouse_scope and any(value != run.warehouse_scope for value in warehouses):
         return GateResult("FAIL", "warehouse scope does not match the Run")
-    frappe = _frappe()
     try:
         company = frappe.get_list(
             "Company",
@@ -342,19 +386,30 @@ def _permission(action: Any, actor: str) -> GateResult:
     frappe = _frappe()
     target = _safe_target(action)
     try:
+        operation = action.action_type
+        required_permission = (
+            "create"
+            if operation.startswith("CREATE_")
+            else ("submit" if operation.startswith("SUBMIT_") else "cancel")
+        )
         required: tuple[tuple[str, str], ...] = (
             (target, "read"),
-            (target, "create"),
+            (target, required_permission),
             ("Company", "read"),
             ("Warehouse", "read"),
-            ("Item", "read"),
         )
+        if operation.startswith("CREATE_"):
+            required += (("Item", "read"),)
         if target == "Purchase Order":
             required += (
                 ("Supplier", "read"),
                 ("Currency", "read"),
                 ("Price List", "read"),
             )
+        if target in {"Purchase Receipt", "Purchase Invoice"}:
+            required += (("Supplier", "read"),)
+        if target == "Payment Entry":
+            required += (("Account", "read"), ("Supplier", "read"), ("Purchase Invoice", "read"))
         if any(
             not frappe.has_permission(doctype, ptype, user=actor) for doctype, ptype in required
         ):
@@ -530,6 +585,8 @@ def _deterministic(action: Any, actor: str) -> GateResult:
     frappe = _frappe()
     payload = action.payload
     target = _safe_target(action)
+    if action.action_type in P2P_ACTION_TYPES:
+        return _deterministic_p2p(action, actor)
     try:
         transaction_date = datetime.strptime(payload["transaction_date"], "%Y-%m-%d").date()
         price_list_currency: str | None = None
@@ -643,6 +700,86 @@ def _deterministic(action: Any, actor: str) -> GateResult:
     return GateResult("PASS", "quantity, object, prerequisite, and duplicate checks passed")
 
 
+def _deterministic_p2p(action: Any, actor: str) -> GateResult:
+    """Validate source state and bounded quantities without mutating ERP."""
+
+    frappe = _frappe()
+    if action.action_type not in ENABLED_P2P_ACTION_TYPES:
+        return GateResult("FAIL", "P2P action is not enabled in the current Phase 10 increment")
+    payload = action.payload
+    source_doctype = str(payload.get("source_doctype") or "")
+    source_name = str(payload.get("source_name") or "")
+    try:
+        source_fields = ["name", "company", "docstatus", "supplier"]
+        if action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
+            source_fields.append("outstanding_amount")
+        source_rows = frappe.get_list(
+            source_doctype,
+            filters={"name": source_name, "company": payload["company"]},
+            fields=source_fields,
+            user=actor,
+            limit=1,
+        )
+        if not source_rows:
+            return GateResult("FAIL", "source document is unavailable")
+        source = source_rows[0]
+        docstatus = int(getattr(source, "docstatus", 0) or 0)
+        if action.action_type.startswith("SUBMIT_") and docstatus != 0:
+            return GateResult("FAIL", "source document is not a Draft")
+        if action.action_type.startswith("CANCEL_") and docstatus != 1:
+            return GateResult("FAIL", "only a submitted document can be cancelled")
+        if action.action_type == "CREATE_PR_DRAFT" and docstatus != 1:
+            return GateResult("FAIL", "Purchase Order must be submitted before receipt")
+        if action.action_type == "CREATE_PI_DRAFT" and docstatus != 1:
+            return GateResult("FAIL", "Purchase Receipt must be submitted before invoice")
+        if action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
+            outstanding = Decimal(str(getattr(source, "outstanding_amount", 0) or 0))
+            paid = Decimal(str(payload["paid_amount"]))
+            allocated = sum(Decimal(str(ref["allocated_amount"])) for ref in payload["references"])
+            if outstanding <= 0 or paid > outstanding or allocated > outstanding:
+                return GateResult("FAIL", "payment exceeds the current outstanding amount")
+            if allocated != paid:
+                return GateResult("FAIL", "payment references do not match paid amount")
+        if action.action_type in {"CREATE_PR_DRAFT", "CREATE_PI_DRAFT"}:
+            child = (
+                "Purchase Order Item"
+                if action.action_type == "CREATE_PR_DRAFT"
+                else "Purchase Receipt Item"
+            )
+            remaining_field = (
+                "received_qty" if action.action_type == "CREATE_PR_DRAFT" else "billed_qty"
+            )
+            for item in payload["items"]:
+                rows = frappe.get_list(
+                    child,
+                    filters={"name": item["source_row"], "parent": source_name},
+                    fields=["name", "item_code", "qty", remaining_field, "warehouse", "uom"],
+                    user=actor,
+                    parent_doctype=source_doctype,
+                    limit=1,
+                )
+                if not rows:
+                    return GateResult("FAIL", "source item row is unavailable")
+                row = rows[0]
+                if str(getattr(row, "item_code", "")) != item["item_code"]:
+                    return GateResult("FAIL", "source item does not match payload")
+                remaining = Decimal(str(getattr(row, "qty", 0) or 0)) - Decimal(
+                    str(getattr(row, remaining_field, 0) or 0)
+                )
+                if Decimal(str(item["qty"])) > remaining or remaining <= 0:
+                    return GateResult("FAIL", "requested quantity exceeds the remaining quantity")
+                if (
+                    action.action_type == "CREATE_PR_DRAFT"
+                    and str(getattr(row, "warehouse", "") or "") != item["warehouse"]
+                ):
+                    return GateResult("FAIL", "warehouse does not match the source row")
+        return GateResult("PASS", "source status, scope, and bounded quantities passed")
+    except InvalidOperation, TypeError, ValueError, KeyError:
+        return GateResult("FAIL", "P2P deterministic checks failed")
+    except Exception:
+        return GateResult("UNKNOWN", "current ERP source state could not be verified")
+
+
 def _workflow_policy(action: Any, actor: str) -> GateResult:
     del actor
     frappe = _frappe()
@@ -676,7 +813,16 @@ def _latest_policy(action_id: str, digest: str) -> Any | None:
     rows = frappe.get_all(
         "Synora Policy Decision",
         filters={"action": action_id, "proposal_digest": digest, "outcome": "ALLOW"},
-        fields=["name", "decision_id", "actor", "snapshot_ref", "expires_at", "correlation_id"],
+        fields=[
+            "name",
+            "decision_id",
+            "actor",
+            "matched_rule",
+            "rule_version",
+            "snapshot_ref",
+            "expires_at",
+            "correlation_id",
+        ],
         order_by="decided_at desc, creation desc",
         limit=1,
     )
@@ -821,8 +967,13 @@ def _approver_allowed(action: Any, actor: str) -> None:
         )
     target = _safe_target(action)
     try:
+        permission = (
+            "create"
+            if action.action_type.startswith("CREATE_")
+            else ("submit" if action.action_type.startswith("SUBMIT_") else "cancel")
+        )
         if not frappe.has_permission(target, "read", user=actor) or not frappe.has_permission(
-            target, "create", user=actor
+            target, permission, user=actor
         ):
             raise GatewayFault("PERMISSION_DENIED", "approver permission is insufficient", 403)
     except GatewayFault:
@@ -862,6 +1013,15 @@ def decide_action(
     if not _expiry_passes(action.expires_at) or str(run.status) != "ACTIVE" or bool(run.revoked):
         raise GatewayFault("CONFLICT", "governed action has expired", 409)
     _approver_allowed(action, actor)
+    if action.approval_class == "INDEPENDENT_APPROVER":
+        scope = _scope_identity(action, run, actor)
+        permission = _permission(action, actor)
+        if scope.status != "PASS" or permission.status != "PASS":
+            raise GatewayFault(
+                "PERMISSION_DENIED",
+                "approver scope or permission is insufficient",
+                403,
+            )
     # Policy belongs to the proposal's Run initiator.  An independent
     # approver is checked separately below; using the approver as the policy
     # actor here would incorrectly fail every separation-of-duties action at
@@ -873,6 +1033,13 @@ def decide_action(
     if (
         policy is None
         or policy.snapshot_ref != action.snapshot_ref
+        or (
+            action.action_type in P2P_ACTION_TYPES
+            and (
+                str(policy.matched_rule) != RULE_ID
+                or str(policy.rule_version) != RULE_VERSION
+            )
+        )
         or not _expiry_passes(str(policy.expires_at))
     ):
         raise GatewayFault("CONFLICT", "approved policy is stale", 409)
@@ -945,6 +1112,15 @@ def pre_execute_recheck(
     actor = _actor()
     run = _lock_run_for_action(safe_action_id)
     doc, action, locked = _lock_action(safe_action_id)
+    if (
+        action.action_type in P2P_ACTION_TYPES
+        and action.action_type not in ENABLED_P2P_ACTION_TYPES
+    ):
+        raise GatewayFault(
+            "CONFLICT",
+            "P2P action is not enabled in the current Phase 10 increment",
+            409,
+        )
     if action.run_id != run.name or action.proposal_digest != safe_digest:
         raise GatewayFault("CONFLICT", "execution digest or Run conflicts", 409)
     if action.idempotency_key != safe_key:
@@ -957,6 +1133,13 @@ def pre_execute_recheck(
     if (
         policy is None
         or policy.snapshot_ref != action.snapshot_ref
+        or (
+            action.action_type in P2P_ACTION_TYPES
+            and (
+                str(policy.matched_rule) != RULE_ID
+                or str(policy.rule_version) != RULE_VERSION
+            )
+        )
         or not _expiry_passes(str(policy.expires_at))
     ):
         raise GatewayFault("CONFLICT", "policy is missing or stale", 409)
@@ -1016,6 +1199,66 @@ def get_action(action_id: object) -> dict[str, Any]:
     return _action_response(action, doc)
 
 
+def list_pending_approvals(limit: int = 50) -> list[dict[str, Any]]:
+    """List only independent actions the current session can approve.
+
+    The query starts from pending actions and every returned row is rechecked
+    against the current document scope and operation permission.  A user's
+    approval access therefore never grants access to the owning Run.
+    """
+
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1 or limit > 200:
+        raise GatewayFault("INVALID_INPUT", "approval list limit is invalid", 400)
+    actor = _actor()
+    frappe = _frappe()
+    rows = frappe.get_all(
+        "Synora Proposed Action",
+        filters={"approval_class": "INDEPENDENT_APPROVER"},
+        fields=["name"],
+        order_by="creation asc",
+        limit_page_length=limit,
+        ignore_permissions=True,
+    )
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            doc, action, _ = _lock_action_for_read(str(row.name))
+            state = str(doc.state)
+            if action.action_type not in ENABLED_P2P_ACTION_TYPES:
+                continue
+            _approver_allowed(action, actor)
+            run = _load_run(action.run_id)
+            if (
+                state == "AWAITING_APPROVAL"
+                and (
+                    not _expiry_passes(action.expires_at)
+                    or str(run.status) != "ACTIVE"
+                    or bool(run.revoked)
+                )
+            ):
+                continue
+            if state == "APPROVED":
+                approval = _latest_approval(action.action_id, action.proposal_digest, "ALLOW")
+                if (
+                    approval is None
+                    or str(approval.actor) != actor
+                    or not _expiry_passes(str(approval.expires_at))
+                ):
+                    continue
+            elif state != "AWAITING_APPROVAL":
+                continue
+            if _scope_identity(action, run, actor).status != "PASS":
+                continue
+            if _permission(action, actor).status != "PASS":
+                continue
+            result.append(_action_response(action, doc))
+        except GatewayFault:
+            # Pending actions outside current scope or with changed permissions
+            # are intentionally omitted instead of exposing their existence.
+            continue
+    return result
+
+
 def _lock_action_for_read(action_id: str) -> tuple[Any, Any, dict[str, Any]]:
     # Reads do not need a lock; this helper shares the strict parser with the
     # mutating paths but avoids a write-looking API call.
@@ -1041,6 +1284,7 @@ __all__ = [
     "evaluate_gate_sequence",
     "evaluate_proposal",
     "get_action",
+    "list_pending_approvals",
     "pre_execute_recheck",
     "stricter_outcome",
 ]

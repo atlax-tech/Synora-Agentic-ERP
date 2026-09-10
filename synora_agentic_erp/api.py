@@ -69,6 +69,12 @@ from synora_agentic_erp.governance.execution import (
 from synora_agentic_erp.governance.execution import (
     reconcile_material_request as reconcile_material_request_impl,
 )
+from synora_agentic_erp.governance.p2p_execution import (
+    execute_p2p_action as execute_p2p_action_impl,
+)
+from synora_agentic_erp.governance.p2p_execution import (
+    reconcile_p2p_action as reconcile_p2p_action_impl,
+)
 from synora_agentic_erp.governance.policy import (
     decide_action as decide_governed_action_impl,
 )
@@ -77,6 +83,9 @@ from synora_agentic_erp.governance.policy import (
 )
 from synora_agentic_erp.governance.policy import (
     get_action as get_governed_action_impl,
+)
+from synora_agentic_erp.governance.policy import (
+    list_pending_approvals as list_pending_approvals_impl,
 )
 from synora_agentic_erp.governance.purchase_order_execution import (
     execute_purchase_order as execute_purchase_order_impl,
@@ -1468,6 +1477,31 @@ def get_governed_action(action_id: object) -> dict[str, Any]:
         return error_response(fault)
 
 
+@frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def list_pending_approvals(limit: object = None) -> dict[str, Any]:
+    """List independently approvable actions without exposing their Runs."""
+
+    try:
+        reject_mixed_user_credentials()
+        if limit is None:
+            safe_limit = 50
+        else:
+            safe_limit = positive_int(limit, "limit", 200)
+            if safe_limit == 0:
+                raise GatewayFault("INVALID_INPUT", "limit is invalid")
+        approvals = list_pending_approvals_impl(safe_limit)
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "approvals": approvals,
+            "count": len(approvals),
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault)
+
+
 @frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
 @do_not_record  # type: ignore[untyped-decorator]
 def execute_material_request(
@@ -1554,6 +1588,54 @@ def reconcile_purchase_order(
         reject_mixed_user_credentials()
         safe_correlation_id = validate_correlation_id(correlation_id)
         return reconcile_purchase_order_impl(
+            action_id,
+            expected_proposal_digest,
+            idempotency_key,
+            safe_correlation_id,
+        )
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def execute_p2p_action(
+    action_id: object,
+    expected_proposal_digest: object,
+    idempotency_key: object,
+    correlation_id: object,
+) -> dict[str, Any]:
+    """Execute one approved Phase 10 P2P action through ERPNext."""
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        return execute_p2p_action_impl(
+            action_id,
+            expected_proposal_digest,
+            idempotency_key,
+            safe_correlation_id,
+        )
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def reconcile_p2p_action(
+    action_id: object,
+    expected_proposal_digest: object,
+    idempotency_key: object,
+    correlation_id: object,
+) -> dict[str, Any]:
+    """Classify one uncertain Phase 10 P2P action without retrying it."""
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        return reconcile_p2p_action_impl(
             action_id,
             expected_proposal_digest,
             idempotency_key,

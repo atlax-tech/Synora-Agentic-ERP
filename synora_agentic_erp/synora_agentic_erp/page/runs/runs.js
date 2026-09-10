@@ -34,6 +34,17 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 	const GOVERNANCE_ACTION_COPY = {
 		CREATE_MR_DRAFT: __("创建 Material Request 草稿"),
 		CREATE_PO_DRAFT: __("创建 Purchase Order 草稿"),
+		SUBMIT_PO: __("提交 Purchase Order"),
+		CANCEL_PO: __("取消 Purchase Order"),
+		CREATE_PR_DRAFT: __("创建 Purchase Receipt 草稿"),
+		SUBMIT_PR: __("提交 Purchase Receipt"),
+		CANCEL_PR: __("取消 Purchase Receipt"),
+		CREATE_PI_DRAFT: __("创建 Purchase Invoice 草稿"),
+		SUBMIT_PI: __("提交 Purchase Invoice"),
+		CANCEL_PI: __("取消 Purchase Invoice"),
+		CREATE_PAYMENT_ENTRY_DRAFT: __("创建 Payment Entry 草稿"),
+		SUBMIT_PAYMENT_ENTRY: __("提交 Payment Entry"),
+		CANCEL_PAYMENT_ENTRY: __("取消 Payment Entry"),
 	};
 	const GOVERNANCE_STATUS_COPY = {
 		DRAFT: __("待评估"),
@@ -563,6 +574,35 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			}).join("") + "</tbody><tfoot><tr><th colspan=\"3\" scope=\"row\">" + __("合计") + "</th><td>" + esc(total) + (currency ? " " + esc(currency) : "") + "</td><td></td></tr></tfoot></table></div>";
 	}
 
+	function is_p2p_action(action_type) {
+		return action_type && action_type !== "CREATE_MR_DRAFT" && action_type !== "CREATE_PO_DRAFT";
+	}
+
+	function governance_execute_copy(action) {
+		if (action.action_type === "SUBMIT_PO") {
+			return __("提交 ERP Purchase Order");
+		}
+		if (action.action_type.indexOf("CANCEL_") === 0) {
+			return __("取消 ERP 单据");
+		}
+		return is_p2p_action(action.action_type) ? __("执行 ERP P2P 动作") : __("创建 ERP 草稿");
+	}
+
+	function governance_consequence(action, reservation) {
+		if (action.action_type === "SUBMIT_PO") {
+			return __("执行会提交来源 Purchase Order；成功必须经过 ERP 状态读回，失败或不确定不会自动重试。");
+		}
+		if (action.action_type.indexOf("CANCEL_") === 0) {
+			return __("取消会经过 ERP 原生依赖校验，并留下独立取消回执；不会级联撤销下游单据。");
+		}
+		if (reservation && reservation.status === "RECONCILIATION_REQUIRED") {
+			return __("对账只读取 ERP，不会再次创建、提交或取消业务单据。");
+		}
+		return is_p2p_action(action.action_type)
+			? __("执行会使用已批准的来源和数量；ERP 负责业务校验，结果以回执为准。")
+			: __("执行只会创建 Draft，成功必须经过 ERP 读回；失败或不确定不会自动重试。");
+	}
+
 	function governance_policy_summary(policy) {
 		if (!policy) {
 			return '<span class="text-muted">' + __("尚无策略决定") + "</span>";
@@ -631,7 +671,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				  '<button type="button" class="btn btn-outline-secondary governance-decide" data-action="' + esc(action_id) + '" data-decision="CHANGES_REQUESTED" data-digest="' + esc(digest) + '" data-run="' + esc(run.run_id) + '" aria-describedby="' + card_id + '-consequence">' + __("请求修改") + "</button></div>"
 				: "";
 			const execute_button = can_execute
-				? '<button type="button" class="btn btn-primary btn-sm governance-execute" data-action="' + esc(action_id) + '" data-digest="' + esc(digest) + '" data-key="' + esc(action.idempotency_key || "") + '" data-type="' + esc(action.action_type || "") + '" data-run="' + esc(run.run_id) + '" aria-describedby="' + card_id + '-consequence">' + __("创建 ERP 草稿") + "</button>"
+				? '<button type="button" class="btn btn-primary btn-sm governance-execute" data-action="' + esc(action_id) + '" data-digest="' + esc(digest) + '" data-key="' + esc(action.idempotency_key || "") + '" data-type="' + esc(action.action_type || "") + '" data-run="' + esc(run.run_id) + '" aria-describedby="' + card_id + '-consequence">' + governance_execute_copy(action) + "</button>"
 				: "";
 			const reconcile_button = can_reconcile
 				? '<button type="button" class="btn btn-warning btn-sm governance-reconcile" data-action="' + esc(action_id) + '" data-digest="' + esc(digest) + '" data-key="' + esc(action.idempotency_key || "") + '" data-type="' + esc(action.action_type || "") + '" data-run="' + esc(run.run_id) + '" aria-describedby="' + card_id + '-consequence">' + __("只读对账") + "</button>"
@@ -649,6 +689,8 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					(payload.currency ? __("币种") + ": " + esc(payload.currency) + " · " : "") +
 					(payload.buying_price_list ? __("采购价目表") + ": " + esc(payload.buying_price_list) + " · " : "") +
 					(payload.company ? __("公司") + ": " + esc(payload.company) : "") +
+					(payload.source_doctype && payload.source_name ? "<br>" + __("来源单据") + ": " + esc(payload.source_doctype) + " / " + esc(payload.source_name) : "") +
+					(payload.reason ? "<br>" + __("原因") + ": " + esc(payload.reason) : "") +
 					"<br>" + __("交易日") + ": " + governance_time(payload.transaction_date) +
 					" · " + __("交期") + ": " + governance_time(payload.schedule_date) +
 					"<br>" + governance_items(payload, calculation) + "</div>" +
@@ -660,9 +702,9 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				'<div class="small mb-2"><b>' + __("执行 Reservation") + "</b> · " + reservation_summary + "</div>" +
 				'<div class="small mb-2"><b>' + __("Receipt") + "</b> · " + governance_receipt_summary(receipt) + "</div>" +
 				'<div id="' + card_id + '-consequence" class="small text-muted mb-2" aria-live="polite">' +
-					(state === "AWAITING_APPROVAL" ? __("确认会消耗当前批准并允许创建一张 Draft；拒绝或请求修改不会创建 ERP 单据。") : "") +
-					(state === "APPROVED" ? __("执行只会创建 Draft，成功必须经过 ERP 读回；失败或不确定不会自动重试。") : "") +
-					(reservation && reservation.status === "RECONCILIATION_REQUIRED" ? __("对账只读取 ERP，不会再次创建或提交 Purchase Order。") : "") +
+					(state === "AWAITING_APPROVAL" ? __("确认会消耗当前批准并允许执行这一个已绑定来源的 ERP 动作；拒绝或请求修改不会写入 ERP。") : "") +
+					(state === "APPROVED" ? governance_consequence(action, reservation) : "") +
+					(reservation && reservation.status === "RECONCILIATION_REQUIRED" ? governance_consequence(action, reservation) : "") +
 				"</div>" +
 				'<div class="governance-actions">' + buttons + '</div></article>';
 		}).join("");
@@ -682,9 +724,13 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			args: args,
 			callback: function (r) {
 				if (r.message && r.message.ok) {
-					dialog.hide();
+					if (dialog) {
+						dialog.hide();
+					}
 					refresh();
-					show_detail(run_id);
+					if (run_id) {
+						show_detail(run_id);
+					}
 					return;
 				}
 				button.attr("disabled", false).html(original).trigger("focus");
@@ -721,7 +767,9 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			const type = String(button.data("type"));
 			governance_call(
 				button,
-				type === "CREATE_PO_DRAFT" ? "synora_agentic_erp.api.execute_purchase_order" : "synora_agentic_erp.api.execute_material_request",
+				is_p2p_action(type)
+					? "synora_agentic_erp.api.execute_p2p_action"
+					: type === "CREATE_PO_DRAFT" ? "synora_agentic_erp.api.execute_purchase_order" : "synora_agentic_erp.api.execute_material_request",
 				{
 					action_id: button.data("action"),
 					expected_proposal_digest: button.data("digest"),
@@ -738,7 +786,9 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			const type = String(button.data("type"));
 			governance_call(
 				button,
-				type === "CREATE_PO_DRAFT" ? "synora_agentic_erp.api.reconcile_purchase_order" : "synora_agentic_erp.api.reconcile_material_request",
+				is_p2p_action(type)
+					? "synora_agentic_erp.api.reconcile_p2p_action"
+					: type === "CREATE_PO_DRAFT" ? "synora_agentic_erp.api.reconcile_purchase_order" : "synora_agentic_erp.api.reconcile_material_request",
 				{
 					action_id: button.data("action"),
 					expected_proposal_digest: button.data("digest"),
@@ -752,13 +802,91 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		});
 	}
 
+	function render_approval_queue(approvals) {
+		if (!Array.isArray(approvals) || !approvals.length) {
+			return "";
+		}
+		const cards = approvals.map(function (action, index) {
+			const payload = action.payload || {};
+			const id = "approval-queue-" + index;
+			const state = String(action.state || "AWAITING_APPROVAL");
+			const controls = state === "APPROVED"
+				? '<button type="button" class="btn btn-primary approval-queue-execute" data-action="' + esc(action.action_id) + '" data-digest="' + esc(action.proposal_digest) + '" data-key="' + esc(action.idempotency_key || "") + '" data-type="' + esc(action.action_type || "") + '">' + governance_execute_copy(action) + '</button>'
+				: '<button type="button" class="btn btn-success approval-queue-decide" data-action="' + esc(action.action_id) + '" data-decision="ALLOW" data-digest="' + esc(action.proposal_digest) + '">' + __("批准") + '</button>' +
+					'<button type="button" class="btn btn-outline-danger approval-queue-decide" data-action="' + esc(action.action_id) + '" data-decision="DECLINE" data-digest="' + esc(action.proposal_digest) + '">' + __("拒绝") + '</button>' +
+					'<button type="button" class="btn btn-outline-secondary approval-queue-decide" data-action="' + esc(action.action_id) + '" data-decision="CHANGES_REQUESTED" data-digest="' + esc(action.proposal_digest) + '">' + __("请求修改") + '</button>';
+			const state_copy = state === "APPROVED"
+				? __("已批准：当前审批人可以执行这一项 ERP 动作。")
+				: __("独立审批：审批人与发起人必须是不同用户；批准只绑定这一份 digest。");
+			return '<article class="border rounded p-3 mb-2" aria-labelledby="' + id + '-label">' +
+				'<h6 id="' + id + '-label">' + governance_action_copy(action) + '</h6>' +
+				'<div class="small mb-2">' +
+					(payload.company ? __("公司") + ": " + esc(payload.company) + " · " : "") +
+					(payload.source_doctype && payload.source_name ? __("来源单据") + ": " + esc(payload.source_doctype) + " / " + esc(payload.source_name) : "") +
+					"<br>" + __("风险") + ": " + esc(action.risk_class || "—") +
+				'</div><div class="small text-muted mb-2" aria-live="polite">' + state_copy +
+				'</div><div class="btn-group btn-group-sm" role="group" aria-label="' + esc(__("独立审批操作")) + '">' + controls +
+				'</div></article>';
+		}).join("");
+		return '<section class="approval-queue mt-3" aria-labelledby="approval-queue-label">' +
+			'<h5 id="approval-queue-label">' + __("独立审批队列") + '</h5>' +
+			'<div class="small text-muted mb-2">' + __("这里只显示当前用户有权审批的动作，不开放发起人的 Run 详情。") + '</div>' + cards + '</section>';
+	}
+
+	function bind_approval_actions(wrapper) {
+		wrapper.find(".approval-queue-decide").on("click", function () {
+			const button = $(this);
+			const decision = String(button.data("decision"));
+			governance_call(
+				button,
+				"synora_agentic_erp.api.decide_action",
+				{
+					action_id: button.data("action"),
+					decision: decision,
+					proposal_digest: button.data("digest"),
+					reason: decision === "ALLOW" ? __("通过独立审批队列确认") : decision === "DECLINE" ? __("通过独立审批队列拒绝") : __("通过独立审批队列请求修改"),
+					correlation_id: crypto.randomUUID(),
+				},
+				__("提交审批中"),
+				null,
+				null
+			);
+		});
+		wrapper.find(".approval-queue-execute").on("click", function () {
+			const button = $(this);
+			governance_call(
+				button,
+				"synora_agentic_erp.api.execute_p2p_action",
+				{
+					action_id: button.data("action"),
+					expected_proposal_digest: button.data("digest"),
+					idempotency_key: button.data("key"),
+					correlation_id: crypto.randomUUID(),
+				},
+				__("执行中"),
+				null,
+				null
+			);
+		});
+	}
+
 	function refresh() {
 		container.html('<div class="text-muted text-center py-5"><span class="spinner-border spinner-border-sm"></span> ' + __("加载中…") + "</div>");
 		frappe.call({
 			method: "synora_agentic_erp.api.list_runs",
 			type: "GET",
 			callback: function (r) {
-				render((r.message && r.message.runs) || []);
+				const runs = (r.message && r.message.runs) || [];
+				frappe.call({
+					method: "synora_agentic_erp.api.list_pending_approvals",
+					type: "GET",
+					callback: function (approval_response) {
+						render(runs, (approval_response.message && approval_response.message.approvals) || []);
+					},
+					error: function () {
+						render(runs, []);
+					},
+				});
 			},
 			error: function () {
 				container.html('<div class="text-danger text-center py-5">' + __("加载运行列表失败，请刷新重试。") + "</div>");
@@ -766,15 +894,17 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		});
 	}
 
-	function render(runs) {
+	function render(runs, approvals) {
+		const approval_queue = render_approval_queue(approvals);
 		if (!runs.length) {
 			container.html(
-				'<div class="text-muted text-center py-5">' +
+				approval_queue + '<div class="text-muted text-center py-5">' +
 					__("尚无采购分析。前往 New Run 输入交付或补货目标开始。") +
 					'<br><a class="btn btn-primary btn-sm mt-2" href="#new-run">' +
 					__("新建运行") +
 					"</a></div>"
 			);
+			bind_approval_actions(container);
 			return;
 		}
 	const rows = runs
@@ -859,7 +989,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 			.join("");
 
 		container.html(
-			'<table class="table table-hover table-sm" aria-describedby="runs-table-caption">' +
+			approval_queue + '<table class="table table-hover table-sm" aria-describedby="runs-table-caption">' +
 				'<caption id="runs-table-caption" class="sr-only">' + __("运行历史列表") + "</caption>" +
 				"<thead><tr>" +
 				"<th scope=\"col\">" +
@@ -889,6 +1019,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				rows +
 				"</tbody></table>"
 		);
+		bind_approval_actions(container);
 
 		container.find(".cancel-run").on("click", function (event) {
 			event.stopPropagation();

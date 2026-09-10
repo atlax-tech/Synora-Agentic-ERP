@@ -26,7 +26,13 @@ STATUSES = {
     "RECONCILED_FAILURE",
     "MANUAL_INTERVENTION",
 }
-TARGET_DOCTYPES = {"Material Request", "Purchase Order"}
+TARGET_DOCTYPES = {
+    "Material Request",
+    "Purchase Order",
+    "Purchase Receipt",
+    "Purchase Invoice",
+    "Payment Entry",
+}
 TRANSITIONS = {
     "STARTED": {"SUCCEEDED", "FAILED", "RECONCILIATION_REQUIRED"},
     "RECONCILIATION_REQUIRED": {

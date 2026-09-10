@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from synora_agentic_erp.gateway.contract import GatewayFault
-from synora_agentic_erp.governance.contracts import ProposedAction
+from synora_agentic_erp.governance.contracts import TARGET_DOCTYPES, ProposedAction
 
 
 class ReadBackMismatch(ValueError):
@@ -190,23 +190,150 @@ def purchase_order_calculation(action: ProposedAction) -> dict[str, Any]:
 def execution_key(action: ProposedAction) -> ExecutionKey:
     """Return the action/scope/digest tuple used by reservation uniqueness."""
 
-    if action.action_type not in {"CREATE_MR_DRAFT", "CREATE_PO_DRAFT"}:
+    if action.action_type not in TARGET_DOCTYPES:
         raise GatewayFault("INVALID_INPUT", "unsupported governed action", 400)
-    items = action.payload["items"]
-    warehouses = {str(item["warehouse"]) for item in items}
-    if len(warehouses) != 1:
-        raise GatewayFault("INVALID_INPUT", "MR execution requires one warehouse scope", 400)
+    items = action.payload.get("items", [])
+    warehouses = {str(item["warehouse"]) for item in items if item.get("warehouse")}
+    source_ref = str(action.payload.get("source_name") or "")
+    if not warehouses and not source_ref:
+        raise GatewayFault("INVALID_INPUT", "execution scope is incomplete", 400)
+    if len(warehouses) > 1:
+        raise GatewayFault("INVALID_INPUT", "execution requires one warehouse scope", 400)
     return ExecutionKey(
         action_type=action.action_type,
-        target_doctype={
-            "CREATE_MR_DRAFT": "Material Request",
-            "CREATE_PO_DRAFT": "Purchase Order",
-        }[action.action_type],
+        target_doctype=TARGET_DOCTYPES[action.action_type],
         company=str(action.payload["company"]),
-        warehouse=next(iter(warehouses)),
+        warehouse=next(iter(warehouses), source_ref),
         proposal_digest=action.proposal_digest,
         idempotency_key=action.idempotency_key,
     )
+
+
+def p2p_values(action: ProposedAction) -> dict[str, Any]:
+    """Build whitelisted ERP values for a P2P draft action.
+
+    Source links are persisted in the child rows so ERPNext remains the
+    authority for quantities, taxes, accounting and stock effects.
+    """
+
+    payload = action.payload
+    if action.action_type == "CREATE_PR_DRAFT":
+        return {
+            "doctype": "Purchase Receipt",
+            "company": payload["company"],
+            "posting_date": payload["transaction_date"],
+            "items": [
+                {
+                    "item_code": item["item_code"],
+                    "qty": item["qty"],
+                    "uom": item["uom"],
+                    "warehouse": item["warehouse"],
+                    "purchase_order": payload["source_name"],
+                    "po_detail": item["source_row"],
+                }
+                for item in payload["items"]
+            ],
+        }
+    if action.action_type == "CREATE_PI_DRAFT":
+        return {
+            "doctype": "Purchase Invoice",
+            "company": payload["company"],
+            "posting_date": payload["transaction_date"],
+            "supplier": payload.get("supplier") or "",
+            "items": [
+                {
+                    "item_code": item["item_code"],
+                    "qty": item["qty"],
+                    "rate": item["rate"],
+                    "purchase_receipt": payload["source_name"],
+                    "pr_detail": item["source_row"],
+                }
+                for item in payload["items"]
+            ],
+        }
+    if action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
+        return {
+            "doctype": "Payment Entry",
+            "company": payload["company"],
+            "payment_type": payload["payment_type"],
+            "posting_date": payload["posting_date"],
+            "party_type": payload["party_type"],
+            "party": payload["party"],
+            "paid_from": payload["paid_from"],
+            "paid_to": payload["paid_to"],
+            "paid_amount": payload["paid_amount"],
+            "received_amount": payload["received_amount"],
+            "source_exchange_rate": 1,
+            "target_exchange_rate": 1,
+            "references": payload["references"],
+        }
+    raise GatewayFault("INVALID_INPUT", "action does not create a P2P draft", 400)
+
+
+def p2p_read_back(action: ProposedAction, doc: object) -> dict[str, Any]:
+    """Verify a P2P target using only fields in the approved action."""
+
+    expected_target = TARGET_DOCTYPES[action.action_type]
+    actual_doctype = str(_value(doc, "doctype", expected_target) or expected_target)
+    if actual_doctype != expected_target:
+        raise ReadBackMismatch("target DocType does not match action")
+    expected_status = 0
+    if action.action_type.startswith("SUBMIT_"):
+        expected_status = 1
+    if action.action_type.startswith("CANCEL_"):
+        expected_status = 2
+    if _value(doc, "docstatus") != expected_status:
+        raise ReadBackMismatch("target status does not match action")
+    payload = action.payload
+    for field in ("company",):
+        _same_text(_value(doc, field), payload[field], field)
+    verified: dict[str, Any] = {
+        "doctype": expected_target,
+        "docstatus": expected_status,
+        "company": str(_value(doc, "company")),
+    }
+    if action.action_type in {"SUBMIT_PO", "CANCEL_PO"}:
+        verified["source_name"] = str(payload["source_name"])
+    elif action.action_type in {
+        "SUBMIT_PR",
+        "CANCEL_PR",
+        "SUBMIT_PI",
+        "CANCEL_PI",
+        "SUBMIT_PAYMENT_ENTRY",
+        "CANCEL_PAYMENT_ENTRY",
+    }:
+        verified["source_name"] = str(payload["source_name"])
+    elif action.action_type in {"CREATE_PR_DRAFT", "CREATE_PI_DRAFT"}:
+        rows = _value(doc, "items", [])
+        if not isinstance(rows, (list, tuple)) or len(rows) != len(payload["items"]):
+            raise ReadBackMismatch("P2P draft item count does not match")
+        verified["source_name"] = str(payload["source_name"])
+        verified["items_count"] = len(rows)
+        for index, (actual, expected) in enumerate(zip(rows, payload["items"], strict=True)):
+            actual_code = str(_value(actual, "item_code") or "")
+            if actual_code != expected["item_code"]:
+                raise ReadBackMismatch(f"item_{index}.item_code does not match")
+            actual_qty = _decimal(_value(actual, "qty"), f"item_{index}.qty")
+            if actual_qty != _decimal(expected["qty"], f"item_{index}.qty"):
+                raise ReadBackMismatch(f"item_{index}.qty does not match")
+            verified[f"item_{index}.item_code"] = actual_code
+            verified[f"item_{index}.qty"] = format(actual_qty.normalize(), "f")
+    elif action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
+        for field in ("party_type", "party", "payment_type", "paid_from", "paid_to"):
+            _same_text(_value(doc, field), payload[field], field)
+        actual_paid = _decimal(_value(doc, "paid_amount"), "paid_amount")
+        if actual_paid != _decimal(payload["paid_amount"], "paid_amount"):
+            raise ReadBackMismatch("paid_amount does not match")
+        verified.update(
+            {
+                "party_type": str(_value(doc, "party_type")),
+                "party": str(_value(doc, "party")),
+                "payment_type": str(_value(doc, "payment_type")),
+                "paid_amount": format(actual_paid.normalize(), "f"),
+                "references_count": len(payload["references"]),
+            }
+        )
+    return verified
 
 
 def _value(source: object, field: str, default: object = None) -> object:
@@ -385,6 +512,7 @@ def map_execution_error(error: BaseException) -> tuple[str, str, int]:
         "InvalidStatusError",
         "UniqueValidationError",
         "ReadBackMismatch",
+        "TimestampMismatchError",
     }:
         return "ERP_VALIDATION_ERROR", name, 422
     return "UNCERTAIN_RESULT", "UNEXPECTED_EXECUTION_ERROR", 503

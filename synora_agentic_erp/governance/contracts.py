@@ -20,7 +20,28 @@ from uuid import UUID
 from synora_agentic_erp.gateway.contract import GatewayFault
 
 SCHEMA_VERSION = "1"
-ACTION_TYPES = frozenset({"CREATE_MR_DRAFT", "CREATE_PO_DRAFT"})
+P2P_SCHEMA_VERSION = "2"
+ACTION_TYPES = frozenset(
+    {
+        "CREATE_MR_DRAFT",
+        "CREATE_PO_DRAFT",
+        "SUBMIT_PO",
+        "CANCEL_PO",
+        "CREATE_PR_DRAFT",
+        "SUBMIT_PR",
+        "CANCEL_PR",
+        "CREATE_PI_DRAFT",
+        "SUBMIT_PI",
+        "CANCEL_PI",
+        "CREATE_PAYMENT_ENTRY_DRAFT",
+        "SUBMIT_PAYMENT_ENTRY",
+        "CANCEL_PAYMENT_ENTRY",
+    }
+)
+P2P_ACTION_TYPES = frozenset(ACTION_TYPES - {"CREATE_MR_DRAFT", "CREATE_PO_DRAFT"})
+# Contracts are versioned before their writers land.  Keep future actions
+# parseable while the current increment fails closed for unsupported writes.
+ENABLED_P2P_ACTION_TYPES = frozenset({"SUBMIT_PO"})
 RISK_CLASSES = frozenset({"LOW", "MEDIUM", "HIGH"})
 APPROVAL_CLASSES = frozenset({"INITIATOR_CONFIRMATION", "INDEPENDENT_APPROVER"})
 DRAFT_APPROVAL_CLASS = "INITIATOR_CONFIRMATION"
@@ -28,7 +49,24 @@ REVALIDATION_RULE = "FULL_PRE_EXECUTE_RECHECK_V1"
 TARGET_DOCTYPES = {
     "CREATE_MR_DRAFT": "Material Request",
     "CREATE_PO_DRAFT": "Purchase Order",
+    "SUBMIT_PO": "Purchase Order",
+    "CANCEL_PO": "Purchase Order",
+    "CREATE_PR_DRAFT": "Purchase Receipt",
+    "SUBMIT_PR": "Purchase Receipt",
+    "CANCEL_PR": "Purchase Receipt",
+    "CREATE_PI_DRAFT": "Purchase Invoice",
+    "SUBMIT_PI": "Purchase Invoice",
+    "CANCEL_PI": "Purchase Invoice",
+    "CREATE_PAYMENT_ENTRY_DRAFT": "Payment Entry",
+    "SUBMIT_PAYMENT_ENTRY": "Payment Entry",
+    "CANCEL_PAYMENT_ENTRY": "Payment Entry",
 }
+ACTION_SCHEMA_VERSIONS = {
+    "CREATE_MR_DRAFT": SCHEMA_VERSION,
+    "CREATE_PO_DRAFT": SCHEMA_VERSION,
+    **{action_type: P2P_SCHEMA_VERSION for action_type in P2P_ACTION_TYPES},
+}
+P2P_REVALIDATION_RULE = "FULL_PRE_EXECUTE_RECHECK_P2P_V1"
 RECEIPT_STATES = frozenset(
     {
         "SUCCEEDED",
@@ -202,6 +240,8 @@ def _parse_payload(action_type: str, value: object) -> dict[str, Any]:
             "items",
         }
         required = fields
+    elif action_type in P2P_ACTION_TYPES:
+        return _parse_p2p_payload(action_type, value)
     else:
         raise _invalid("action_type is invalid")
     raw = _object(value, fields, required, "payload")
@@ -234,6 +274,199 @@ def _parse_payload(action_type: str, value: object) -> dict[str, Any]:
             }
         )
     return parsed
+
+
+def _parse_source_payload(action_type: str, value: object) -> dict[str, Any]:
+    """Parse a state-changing action against one existing ERP document."""
+
+    raw = _object(
+        value,
+        {"company", "source_doctype", "source_name", "reason"},
+        {"company", "source_doctype", "source_name"},
+        "payload",
+    )
+    expected = TARGET_DOCTYPES[action_type]
+    source_doctype = _required_text(raw["source_doctype"], "source_doctype", 80)
+    if source_doctype != expected:
+        raise _invalid("source_doctype is invalid")
+    result: dict[str, Any] = {
+        "company": _required_text(raw["company"], "company"),
+        "source_doctype": source_doctype,
+        "source_name": _required_text(raw["source_name"], "source_name", 140),
+    }
+    if raw.get("reason") is not None:
+        result["reason"] = _required_text(raw["reason"], "reason", 2_000)
+    return result
+
+
+def _parse_line_items(value: object, action_type: str) -> list[dict[str, Any]]:
+    raw_items = _list(value, "items", maximum=100)
+    result: list[dict[str, Any]] = []
+    source_rows: set[str] = set()
+    for index, raw in enumerate(raw_items):
+        fields = {
+            "source_row",
+            "item_code",
+            "qty",
+            "uom",
+            "warehouse",
+            "rate",
+            "description",
+        }
+        required = {"source_row", "item_code", "qty"}
+        if action_type == "CREATE_PR_DRAFT":
+            required |= {"warehouse"}
+        if action_type == "CREATE_PI_DRAFT":
+            required |= {"rate"}
+        item = _object(raw, fields, required, f"payload.items[{index}]")
+        source_row = _required_text(item["source_row"], "source_row", 140)
+        if source_row in source_rows:
+            raise _invalid("source_row must be unique")
+        source_rows.add(source_row)
+        parsed: dict[str, Any] = {
+            "source_row": source_row,
+            "item_code": _required_text(item["item_code"], "item_code"),
+            "qty": _decimal(item["qty"], "qty", minimum=Decimal("1e-18")),
+        }
+        for optional in ("uom", "warehouse", "description"):
+            if item.get(optional) is not None:
+                parsed[optional] = _required_text(
+                    item[optional], optional, 2_000 if optional == "description" else 140
+                )
+        if action_type == "CREATE_PI_DRAFT":
+            parsed["rate"] = _decimal(item["rate"], "rate", minimum=Decimal("1e-18"))
+        if action_type == "CREATE_PR_DRAFT" and "uom" not in parsed:
+            raise _invalid("uom is required for Purchase Receipt items")
+        result.append(parsed)
+    return result
+
+
+def _parse_draft_payload(action_type: str, value: object) -> dict[str, Any]:
+    raw = _object(
+        value,
+        {"company", "source_doctype", "source_name", "transaction_date", "items", "reason"},
+        {"company", "source_doctype", "source_name", "transaction_date", "items"},
+        "payload",
+    )
+    source_doctype = _required_text(raw["source_doctype"], "source_doctype", 80)
+    if source_doctype not in {"Purchase Order", "Purchase Receipt"}:
+        raise _invalid("source_doctype is invalid")
+    if action_type == "CREATE_PR_DRAFT" and source_doctype != "Purchase Order":
+        raise _invalid("source_doctype is invalid")
+    if action_type == "CREATE_PI_DRAFT" and source_doctype != "Purchase Receipt":
+        raise _invalid("source_doctype is invalid")
+    result: dict[str, Any] = {
+        "company": _required_text(raw["company"], "company"),
+        "source_doctype": source_doctype,
+        "source_name": _required_text(raw["source_name"], "source_name", 140),
+        "transaction_date": _date(raw["transaction_date"], "transaction_date"),
+        "items": _parse_line_items(raw["items"], action_type),
+    }
+    if raw.get("reason") is not None:
+        result["reason"] = _required_text(raw["reason"], "reason", 2_000)
+    return result
+
+
+def _parse_payment_payload(action_type: str, value: object) -> dict[str, Any]:
+    fields = {
+        "company",
+        "source_doctype",
+        "source_name",
+        "party_type",
+        "party",
+        "payment_type",
+        "posting_date",
+        "paid_from",
+        "paid_to",
+        "paid_amount",
+        "received_amount",
+        "source_currency",
+        "target_currency",
+        "references",
+        "reason",
+    }
+    required = {
+        "company",
+        "source_doctype",
+        "source_name",
+        "party_type",
+        "party",
+        "payment_type",
+        "posting_date",
+        "paid_from",
+        "paid_to",
+        "paid_amount",
+        "received_amount",
+        "references",
+    }
+    raw = _object(value, fields, required, "payload")
+    source_doctype = _required_text(raw["source_doctype"], "source_doctype", 80)
+    if source_doctype != "Purchase Invoice":
+        raise _invalid("source_doctype is invalid")
+    payment_type = _required_text(raw["payment_type"], "payment_type", 40)
+    if payment_type not in {"Pay", "Receive", "Internal Transfer"}:
+        raise _invalid("payment_type is invalid")
+    refs = _list(raw["references"], "references", maximum=100)
+    parsed_refs: list[dict[str, Any]] = []
+    for index, reference in enumerate(refs):
+        item = _object(
+            reference,
+            {"reference_doctype", "reference_name", "allocated_amount"},
+            {"reference_doctype", "reference_name", "allocated_amount"},
+            f"payload.references[{index}]",
+        )
+        if item["reference_doctype"] != "Purchase Invoice":
+            raise _invalid("reference_doctype is invalid")
+        parsed_refs.append(
+            {
+                "reference_doctype": "Purchase Invoice",
+                "reference_name": _required_text(item["reference_name"], "reference_name", 140),
+                "allocated_amount": _decimal(
+                    item["allocated_amount"], "allocated_amount", minimum=Decimal("1e-18")
+                ),
+            }
+        )
+    result: dict[str, Any] = {
+        "company": _required_text(raw["company"], "company"),
+        "source_doctype": source_doctype,
+        "source_name": _required_text(raw["source_name"], "source_name", 140),
+        "party_type": _required_text(raw["party_type"], "party_type", 40),
+        "party": _required_text(raw["party"], "party"),
+        "payment_type": payment_type,
+        "posting_date": _date(raw["posting_date"], "posting_date"),
+        "paid_from": _required_text(raw["paid_from"], "paid_from"),
+        "paid_to": _required_text(raw["paid_to"], "paid_to"),
+        "paid_amount": _decimal(raw["paid_amount"], "paid_amount", minimum=Decimal("1e-18")),
+        "received_amount": _decimal(
+            raw["received_amount"], "received_amount", minimum=Decimal("1e-18")
+        ),
+        "references": parsed_refs,
+    }
+    for optional in ("source_currency", "target_currency"):
+        if raw.get(optional) is not None:
+            result[optional] = _required_text(raw[optional], optional, 3).upper()
+    if raw.get("reason") is not None:
+        result["reason"] = _required_text(raw["reason"], "reason", 2_000)
+    return result
+
+
+def _parse_p2p_payload(action_type: str, value: object) -> dict[str, Any]:
+    if action_type in {
+        "SUBMIT_PO",
+        "CANCEL_PO",
+        "SUBMIT_PR",
+        "CANCEL_PR",
+        "SUBMIT_PI",
+        "CANCEL_PI",
+        "SUBMIT_PAYMENT_ENTRY",
+        "CANCEL_PAYMENT_ENTRY",
+    }:
+        return _parse_source_payload(action_type, value)
+    if action_type in {"CREATE_PR_DRAFT", "CREATE_PI_DRAFT"}:
+        return _parse_draft_payload(action_type, value)
+    if action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
+        return _parse_payment_payload(action_type, value)
+    raise _invalid("action_type is invalid")
 
 
 def _reject_constant(value: str) -> None:
@@ -364,15 +597,18 @@ def build_proposed_action(value: object) -> ProposedAction:
     )
     unknown = set(raw) - _ACTION_FIELDS
     missing = _ACTION_REQUIRED - set(raw)
-    if unknown or missing or raw.get("schema_version") != SCHEMA_VERSION:
+    if unknown or missing:
         raise _invalid("proposed action fields or schema version are invalid")
     action_type = raw.get("action_type")
     if action_type not in ACTION_TYPES:
         raise _invalid("action_type is invalid")
+    expected_schema = ACTION_SCHEMA_VERSIONS[action_type]
+    if raw.get("schema_version") != expected_schema:
+        raise _invalid("proposed action fields or schema version are invalid")
     summary = "" if raw.get("summary") is None else _required_text(raw["summary"], "summary", 2_000)
     idempotency_key = _idempotency_key(raw["idempotency_key"])
     action = ProposedAction(
-        schema_version=SCHEMA_VERSION,
+        schema_version=expected_schema,
         action_type=action_type,
         run_id=_uuid(raw["run_id"], "run_id"),
         action_id=_uuid(raw["action_id"], "action_id"),
@@ -396,13 +632,19 @@ def build_proposed_action(value: object) -> ProposedAction:
     )
     if action.risk_class not in RISK_CLASSES or action.approval_class not in APPROVAL_CLASSES:
         raise _invalid("risk_class or approval_class is invalid")
-    # Independent approval is reserved for future Submit/P2P actions.  The
-    # Phase 6 action allowlist contains Draft writes only, so accepting it here
-    # would create an approval that the current executor state machine cannot
-    # safely complete.
-    if action.approval_class != DRAFT_APPROVAL_CLASS:
-        raise _invalid("current Draft actions require initiator confirmation")
-    if action.revalidation_rule != REVALIDATION_RULE:
+    expected_approval = (
+        DRAFT_APPROVAL_CLASS
+        if action_type in {"CREATE_MR_DRAFT", "CREATE_PO_DRAFT"}
+        else "INDEPENDENT_APPROVER"
+    )
+    if action.approval_class != expected_approval:
+        raise _invalid(
+            "Draft actions require initiator confirmation; P2P actions require independent approval"
+        )
+    expected_rule = (
+        REVALIDATION_RULE if action_type not in P2P_ACTION_TYPES else P2P_REVALIDATION_RULE
+    )
+    if action.revalidation_rule != expected_rule:
         raise _invalid("revalidation_rule is invalid")
     computed = proposal_digest(action)
     supplied = raw.get("proposal_digest")
@@ -596,7 +838,7 @@ def create_execution_receipt(value: object) -> ExecutionReceipt:
         raise _invalid("receipt state or response category is invalid")
     target_doctype = raw["target_doctype"]
     target_name = raw["target_name"]
-    if target_doctype is not None and target_doctype not in {"Material Request", "Purchase Order"}:
+    if target_doctype is not None and target_doctype not in set(TARGET_DOCTYPES.values()):
         raise _invalid("receipt target doctype is invalid")
     if target_name is not None:
         target_name = _required_text(target_name, "target_name", 140)

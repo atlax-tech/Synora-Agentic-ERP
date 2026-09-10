@@ -20,7 +20,12 @@ from synora_agentic_erp.agent.service import _set_run_state
 from synora_agentic_erp.agent.state_machine import validate_transition as validate_run_transition
 from synora_agentic_erp.gateway.contract import GatewayFault, canonical_uuid
 from synora_agentic_erp.gateway.security import RunContext, record_gateway_audit
-from synora_agentic_erp.governance.contracts import ExecutionReceipt, create_execution_receipt
+from synora_agentic_erp.governance.contracts import (
+    P2P_ACTION_TYPES,
+    TARGET_DOCTYPES,
+    ExecutionReceipt,
+    create_execution_receipt,
+)
 from synora_agentic_erp.governance.execution_contracts import (
     ExecutionKey,
     ReadBackMismatch,
@@ -29,6 +34,7 @@ from synora_agentic_erp.governance.execution_contracts import (
     execution_key,
     map_execution_error,
     material_request_values,
+    p2p_read_back,
     verify_material_request_read_back,
     verify_purchase_order_read_back,
 )
@@ -54,10 +60,7 @@ TARGET_DOCTYPE = "Material Request"
 WRITER_NAME = "governed.material_request.create"
 WRITER_VERSION = "1"
 LEASE_SECONDS = 300
-ACTION_TARGET_DOCTYPES = {
-    "CREATE_MR_DRAFT": "Material Request",
-    "CREATE_PO_DRAFT": "Purchase Order",
-}
+ACTION_TARGET_DOCTYPES = dict(TARGET_DOCTYPES)
 
 
 def _now_timestamp() -> str:
@@ -327,6 +330,79 @@ def _load_readable_target(action: Any, target_name: str, actor: str) -> Any:
         ) from error
 
 
+def _load_p2p_readable_target(
+    action: Any,
+    target_name: str,
+    actor: str,
+    *,
+    strict_status: bool = True,
+) -> Any:
+    """Read one P2P target through current parent and child scope checks."""
+
+    target_doctype = ACTION_TARGET_DOCTYPES.get(str(action.action_type))
+    if target_doctype is None or action.action_type not in P2P_ACTION_TYPES:
+        raise GatewayFault("INVALID_INPUT", "unsupported governed P2P target", 400)
+    payload = action.payload
+    if not frappe.has_permission(target_doctype, "read", user=actor):
+        raise GatewayFault("PERMISSION_DENIED", "current ERP permission is insufficient", 403)
+    expected_docstatus = (
+        1
+        if action.action_type.startswith("SUBMIT_")
+        else 2
+        if action.action_type.startswith("CANCEL_")
+        else 0
+    )
+    parent_filters: dict[str, Any] = {
+        "name": target_name,
+        "company": payload["company"],
+    }
+    if strict_status:
+        parent_filters["docstatus"] = expected_docstatus
+    parent_rows = frappe.get_list(
+        target_doctype,
+        filters=parent_filters,
+        fields=["name"],
+        user=actor,
+        limit=1,
+    )
+    if not parent_rows:
+        raise GatewayFault("PERMISSION_DENIED", "target is outside current ERP scope", 403)
+    company_rows = frappe.get_list(
+        "Company",
+        pluck="name",
+        filters={"name": payload["company"]},
+        user=actor,
+        limit=1,
+    )
+    if not company_rows:
+        raise GatewayFault("PERMISSION_DENIED", "target company is outside current ERP scope", 403)
+    for item in payload.get("items", []):
+        warehouse = item.get("warehouse")
+        if not warehouse:
+            continue
+        warehouse_rows = frappe.get_list(
+            "Warehouse",
+            pluck="name",
+            filters={
+                "name": warehouse,
+                "company": payload["company"],
+                "disabled": 0,
+            },
+            user=actor,
+            limit=1,
+        )
+        if not warehouse_rows:
+            raise GatewayFault(
+                "PERMISSION_DENIED", "target warehouse is outside current ERP scope", 403
+            )
+    try:
+        return frappe.get_doc(target_doctype, target_name)
+    except frappe.DoesNotExistError as error:
+        raise GatewayFault(
+            "UNCERTAIN_RESULT", "verified ERP outcome is unavailable", 503
+        ) from error
+
+
 def _serialize_receipt_for_actor(
     action: Any,
     reservation: Any | None,
@@ -364,16 +440,32 @@ def _serialize_receipt_for_actor(
                 "verified Receipt conflicts with reservation",
                 503,
             )
+        is_p2p = action.action_type in P2P_ACTION_TYPES
         if verifier is None:
-            if expected_doctype == TARGET_DOCTYPE:
+            if is_p2p:
+                verifier = p2p_read_back
+            elif expected_doctype == TARGET_DOCTYPE:
                 verifier = verify_material_request_read_back
             elif expected_doctype == "Purchase Order":
                 verifier = verify_purchase_order_read_back
             else:  # pragma: no cover - ACTION_TARGET_DOCTYPES is closed above.
                 raise GatewayFault("UNCERTAIN_RESULT", "verified Receipt target is invalid", 503)
         try:
-            target = _load_readable_target(action, receipt_target_name, actor)
-            verified = verifier(action, target)
+            target = (
+                _load_p2p_readable_target(
+                    action,
+                    receipt_target_name,
+                    actor,
+                    strict_status=receipt_doc.final_state
+                    in {"SUCCEEDED", "RECONCILED_SUCCESS"},
+                )
+                if is_p2p
+                else _load_readable_target(action, receipt_target_name, actor)
+            )
+            if not is_p2p or receipt_doc.final_state in {"SUCCEEDED", "RECONCILED_SUCCESS"}:
+                verified = verifier(action, target)
+            else:
+                verified = None
         except ReadBackMismatch as error:
             raise GatewayFault(
                 "UNCERTAIN_RESULT", "ERP read-back no longer matches Receipt", 503
@@ -384,10 +476,10 @@ def _serialize_receipt_for_actor(
             raise GatewayFault(
                 "UNCERTAIN_RESULT", "verified Receipt evidence is invalid", 503
             ) from error
-        if recorded != verified:
+        if verified is not None and recorded != verified:
             raise GatewayFault("UNCERTAIN_RESULT", "ERP read-back no longer matches Receipt", 503)
     try:
-        return serialize_receipt(receipt_doc)
+        return serialize_receipt(receipt_doc, allowed_actor=actor)
     except (TypeError, ValueError) as error:
         raise GatewayFault(
             "UNCERTAIN_RESULT", "verified Receipt evidence is invalid", 503
@@ -400,6 +492,8 @@ def _move_run_to_executing(run: Any) -> Any:
         validate_run_transition(current, "AWAITING_APPROVAL")
         _set_run_state(run, "AWAITING_APPROVAL")
         current = str(run.run_state)
+    if current == "EXECUTING":
+        return run
     if current != "AWAITING_APPROVAL":
         raise GatewayFault("CONFLICT", "Run is not ready for governed execution", 409)
     validate_run_transition(current, "EXECUTING")
