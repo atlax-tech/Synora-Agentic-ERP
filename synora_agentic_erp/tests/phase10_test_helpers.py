@@ -5,6 +5,25 @@ from __future__ import annotations
 import frappe
 
 
+def _cancel_if_submitted(doctype: str, name: str) -> None:
+    """Cancel only a currently submitted document, using a fresh DB status."""
+
+    if int(frappe.db.get_value(doctype, name, "docstatus") or 0) != 1:
+        return
+    doc = frappe.get_doc(doctype, name)
+    if int(doc.docstatus or 0) != 1:
+        return
+    try:
+        doc.cancel()
+    except frappe.TimestampMismatchError:
+        # A previous controller cancellation can refresh linked documents in
+        # the same transaction. Re-read before retrying; never hide a new
+        # business error or issue a second cancel for an already-cancelled doc.
+        if int(frappe.db.get_value(doctype, name, "docstatus") or 0) != 1:
+            return
+        frappe.get_doc(doctype, name).cancel()
+
+
 def cancel_p10_test_documents() -> None:
     """Cancel generated P2P fixtures while preserving their ERP history."""
 
@@ -16,6 +35,20 @@ def cancel_p10_test_documents() -> None:
     )
     if not item_codes:
         return
+    invoice_names = sorted(
+        {
+            row.parent
+            for row in frappe.get_all(
+                "Purchase Invoice Item",
+                filters={"item_code": ["in", item_codes]},
+                fields=["parent"],
+                limit=1000,
+            )
+        }
+    )
+    for name in invoice_names:
+        _cancel_if_submitted("Purchase Invoice", name)
+    frappe.db.commit()
     receipt_names = sorted(
         {
             row.parent
@@ -28,9 +61,8 @@ def cancel_p10_test_documents() -> None:
         }
     )
     for name in receipt_names:
-        receipt = frappe.get_doc("Purchase Receipt", name)
-        if int(receipt.docstatus or 0) == 1:
-            receipt.cancel()
+        _cancel_if_submitted("Purchase Receipt", name)
+    frappe.db.commit()
     order_names = sorted(
         {
             row.parent
@@ -43,7 +75,5 @@ def cancel_p10_test_documents() -> None:
         }
     )
     for name in order_names:
-        order = frappe.get_doc("Purchase Order", name)
-        if int(order.docstatus or 0) == 1:
-            order.cancel()
+        _cancel_if_submitted("Purchase Order", name)
     frappe.db.commit()

@@ -74,6 +74,8 @@ def _base(action_type: str, payload: dict[str, object]) -> dict[str, object]:
                         "source_row": "row-1",
                         "item_code": "ITEM-1",
                         "qty": "2",
+                        "uom": "Nos",
+                        "warehouse": "Stores - A",
                         "rate": "10",
                     }
                 ],

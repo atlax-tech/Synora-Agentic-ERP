@@ -543,6 +543,35 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		return visible + (refs.length > 20 ? " · …" : "");
 	}
 
+	function governance_financial_summary(calculation) {
+		if (!calculation || typeof calculation !== "object") {
+			return "";
+		}
+		const bits = [];
+		if (calculation.status) {
+			bits.push(__("状态") + ": " + esc(calculation.status));
+		}
+		if (calculation.tax_amount !== undefined) {
+			bits.push(__("税额") + ": " + esc(calculation.tax_amount));
+		}
+		if (calculation.grand_total !== undefined) {
+			bits.push(__("合计") + ": " + esc(calculation.grand_total));
+		}
+		if (calculation.outstanding_amount !== undefined) {
+			bits.push(__("应付余额") + ": " + esc(calculation.outstanding_amount));
+		}
+		if (calculation.accounting_state) {
+			bits.push(__("会计") + ": " + esc(calculation.accounting_state));
+		}
+		return bits.length
+			? '<div class="small text-muted mt-2" aria-live="polite"><b>' +
+				  __("财务预览") +
+				  "</b> · " +
+				  bits.join(" · ") +
+				  "</div>"
+			: "";
+	}
+
 	function governance_action_copy(action) {
 		return GOVERNANCE_ACTION_COPY[action.action_type] || esc(action.action_type || __("未知动作"));
 	}
@@ -572,7 +601,8 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					"<td>" + esc(amount) + (currency ? " " + esc(currency) : "") + "</td>" +
 					"<td>" + esc(item.warehouse) + " / " + governance_time(item.schedule_date) + "</td>" +
 					"</tr>";
-			}).join("") + "</tbody><tfoot><tr><th colspan=\"4\" scope=\"row\">" + __("合计") + "</th><td>" + esc(total) + (currency ? " " + esc(currency) : "") + "</td><td></td></tr></tfoot></table></div>";
+			}).join("") + "</tbody><tfoot><tr><th colspan=\"4\" scope=\"row\">" + __("合计") + "</th><td>" + esc(total) + (currency ? " " + esc(currency) : "") + "</td><td></td></tr></tfoot></table></div>" +
+			governance_financial_summary(calculation);
 	}
 
 	function is_p2p_action(action_type) {
@@ -622,9 +652,22 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		}
 		const verified = receipt.verified_fields || {};
 		const amount = verified["item_0.amount"];
+		const finance = [];
+		["status", "total_taxes_and_charges", "grand_total", "outstanding_amount"].forEach(function (key) {
+			if (verified[key] !== undefined) {
+				const labels = {
+					status: __("状态"),
+					total_taxes_and_charges: __("税额"),
+					grand_total: __("合计"),
+					outstanding_amount: __("应付余额"),
+				};
+				finance.push(labels[key] + ": " + esc(verified[key]));
+			}
+		});
 		return esc(receipt.final_state || "—") + " · " + esc(receipt.response_category || "—") +
 			(receipt.target_name ? " · " + esc(receipt.target_doctype || "ERP") + ": " + esc(receipt.target_name) : "") +
 			(amount ? " · " + __("首行金额") + ": " + esc(amount) : "") +
+			(finance.length ? " · " + finance.join(" · ") : "") +
 			(receipt.failure_category ? "<br><span class=\"text-danger\">" + esc(receipt.failure_category) + "</span>" : "");
 	}
 
@@ -809,6 +852,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		}
 		const cards = approvals.map(function (action, index) {
 			const payload = action.payload || {};
+			const calculation = action.calculation || null;
 			const id = "approval-queue-" + index;
 			const state = String(action.state || "AWAITING_APPROVAL");
 			const controls = state === "APPROVED"
@@ -825,7 +869,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					(payload.company ? __("公司") + ": " + esc(payload.company) + " · " : "") +
 					(payload.source_doctype && payload.source_name ? __("来源单据") + ": " + esc(payload.source_doctype) + " / " + esc(payload.source_name) : "") +
 					"<br>" + __("风险") + ": " + esc(action.risk_class || "—") +
-				'</div><div class="small text-muted mb-2" aria-live="polite">' + state_copy +
+				'</div>' + governance_financial_summary(calculation) + '<div class="small text-muted mb-2" aria-live="polite">' + state_copy +
 				'</div><div class="btn-group btn-group-sm" role="group" aria-label="' + esc(__("独立审批操作")) + '">' + controls +
 				'</div></article>';
 		}).join("");

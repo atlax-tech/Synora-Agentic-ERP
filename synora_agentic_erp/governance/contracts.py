@@ -46,6 +46,8 @@ ENABLED_P2P_ACTION_TYPES = frozenset(
         "SUBMIT_PO",
         "CREATE_PR_DRAFT",
         "SUBMIT_PR",
+        "CREATE_PI_DRAFT",
+        "SUBMIT_PI",
     }
 )
 RISK_CLASSES = frozenset({"LOW", "MEDIUM", "HIGH"})
@@ -320,8 +322,8 @@ def _parse_line_items(value: object, action_type: str) -> list[dict[str, Any]]:
             "description",
         }
         required = {"source_row", "item_code", "qty"}
-        if action_type == "CREATE_PR_DRAFT":
-            required |= {"warehouse"}
+        if action_type in {"CREATE_PR_DRAFT", "CREATE_PI_DRAFT"}:
+            required |= {"uom", "warehouse"}
         if action_type == "CREATE_PI_DRAFT":
             required |= {"rate"}
         item = _object(raw, fields, required, f"payload.items[{index}]")
@@ -341,8 +343,6 @@ def _parse_line_items(value: object, action_type: str) -> list[dict[str, Any]]:
                 )
         if action_type == "CREATE_PI_DRAFT":
             parsed["rate"] = _decimal(item["rate"], "rate", minimum=Decimal("1e-18"))
-        if action_type == "CREATE_PR_DRAFT" and "uom" not in parsed:
-            raise _invalid("uom is required for Purchase Receipt items")
         result.append(parsed)
     return result
 

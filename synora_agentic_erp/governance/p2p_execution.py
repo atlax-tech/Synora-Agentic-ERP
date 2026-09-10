@@ -7,7 +7,9 @@ separation-of-duties checks, a durable reservation, and a read-back Receipt.
 
 from __future__ import annotations
 
+import hashlib
 import json
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
 
@@ -41,6 +43,7 @@ from synora_agentic_erp.governance.execution_contracts import (
     execution_key,
     map_execution_error,
     p2p_read_back,
+    p2p_receipt_evidence_matches,
     p2p_values,
 )
 from synora_agentic_erp.governance.policy import (
@@ -92,6 +95,215 @@ KNOWN_CONTROLLER_FAILURES = frozenset(
         "DoesNotExistError",
     }
 )
+PI_STATUSES = frozenset({"Unpaid", "Partly Paid", "Paid", "Overdue"})
+
+
+def _financial_decimal(value: object, field: str) -> Decimal:
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as error:
+        raise ReadBackMismatch(f"{field} is not numeric") from error
+    if not number.is_finite():
+        raise ReadBackMismatch(f"{field} is not finite")
+    return number
+
+
+def _financial_text(value: object, field: str) -> str:
+    text = str(value or "")
+    if not text:
+        raise ReadBackMismatch(f"{field} is missing")
+    return text
+
+
+def _financial_number(value: Decimal) -> str:
+    return format(value.normalize(), "f")
+
+
+def p2p_action_calculation(action: Any) -> dict[str, Any]:
+    """Build safe approval-display amounts from current ERP-readable fields."""
+
+    payload = action.payload
+    if action.action_type == "CREATE_PI_DRAFT":
+        total = Decimal("0")
+        line_amounts: list[str] = []
+        for item in payload["items"]:
+            amount = _financial_decimal(item["qty"], "qty") * _financial_decimal(
+                item["rate"], "rate"
+            )
+            line_amounts.append(_financial_number(amount))
+            total += amount
+        source = frappe.get_list(
+            "Purchase Receipt",
+            filters={"name": payload["source_name"], "company": payload["company"]},
+            fields=["currency"],
+            user=frappe.session.user,
+            limit=1,
+        )
+        currency = str(getattr(source[0], "currency", "") or "") if source else ""
+        return {
+            "currency": currency or "—",
+            "line_amounts": line_amounts,
+            "total_amount": _financial_number(total),
+            "tax_amount": "—",
+            "grand_total": "—",
+            "outstanding_amount": "—",
+            "status": "Draft",
+            "accounting_state": "待 ERP controller 计算税额、科目和应付",
+            "basis": "批准数量 x PR 费率; 税额、科目和总额由 ERPNext 计算",
+        }
+    if action.action_type == "SUBMIT_PI":
+        rows = frappe.get_list(
+            "Purchase Invoice",
+            filters={"name": payload["source_name"], "company": payload["company"]},
+            fields=[
+                "currency",
+                "total",
+                "grand_total",
+                "total_taxes_and_charges",
+                "outstanding_amount",
+                "status",
+            ],
+            user=frappe.session.user,
+            limit=1,
+        )
+        if not rows:
+            return {
+                "currency": "—",
+                "line_amounts": [],
+                "total_amount": "—",
+                "tax_amount": "—",
+                "grand_total": "—",
+                "outstanding_amount": "—",
+                "status": "未知",
+                "accounting_state": "当前 ERP 发票不可见, 审批前必须重新读取",
+                "basis": "当前 ERP 单据不可见",
+            }
+        row = rows[0]
+        total = _financial_decimal(getattr(row, "total", None), "total")
+        grand_total = _financial_decimal(getattr(row, "grand_total", None), "grand_total")
+        taxes = _financial_decimal(
+            getattr(row, "total_taxes_and_charges", None), "total_taxes_and_charges"
+        )
+        outstanding = _financial_decimal(
+            getattr(row, "outstanding_amount", None), "outstanding_amount"
+        )
+        return {
+            "currency": str(getattr(row, "currency", "") or "—"),
+            "line_amounts": [],
+            "total_amount": _financial_number(total),
+            "tax_amount": _financial_number(taxes),
+            "grand_total": _financial_number(grand_total),
+            "outstanding_amount": _financial_number(outstanding),
+            "status": str(getattr(row, "status", "") or "未知"),
+            "accounting_state": "提交前预览; 提交后以 ERP 会计回执为准",
+            "basis": "读取当前 Purchase Invoice; ERP controller 负责最终税额、科目和应付",
+        }
+    raise GatewayFault("INVALID_INPUT", "action does not have a P2P calculation", 400)
+
+
+def p2p_read_back_with_financials(action: Any, doc: Any) -> dict[str, Any]:
+    """Read back P2P fields plus authoritative PI accounting evidence."""
+
+    verified = p2p_read_back(action, doc)
+    if action.action_type != "SUBMIT_PI":
+        return verified
+
+    status = _financial_text(getattr(doc, "status", ""), "status")
+    if status not in PI_STATUSES:
+        raise ReadBackMismatch("Purchase Invoice status is not a settled ERP status")
+    currency = _financial_text(getattr(doc, "currency", ""), "currency")
+    total = _financial_decimal(getattr(doc, "total", None), "total")
+    grand_total = _financial_decimal(getattr(doc, "grand_total", None), "grand_total")
+    taxes = _financial_decimal(
+        getattr(doc, "total_taxes_and_charges", None), "total_taxes_and_charges"
+    )
+    outstanding = _financial_decimal(getattr(doc, "outstanding_amount", None), "outstanding_amount")
+    if grand_total <= 0 or outstanding < 0 or outstanding > grand_total:
+        raise ReadBackMismatch("Purchase Invoice accounting totals are outside valid bounds")
+    if status == "Paid" and outstanding != 0:
+        raise ReadBackMismatch("Paid Purchase Invoice has a non-zero outstanding amount")
+    if status in {"Unpaid", "Overdue"} and outstanding <= 0:
+        raise ReadBackMismatch("unpaid Purchase Invoice has no outstanding amount")
+    if status == "Partly Paid" and not 0 < outstanding < grand_total:
+        raise ReadBackMismatch(
+            "partly paid Purchase Invoice has an inconsistent outstanding amount"
+        )
+
+    gl_rows = frappe.db.sql(
+        """
+        SELECT COUNT(*), COALESCE(SUM(debit), 0), COALESCE(SUM(credit), 0)
+        FROM `tabGL Entry`
+        WHERE voucher_type = 'Purchase Invoice'
+          AND voucher_no = %s
+          AND is_cancelled = 0
+        """,
+        (str(getattr(doc, "name", "") or ""),),
+    )
+    gl_count = int(gl_rows[0][0] or 0)
+    gl_debit = _financial_decimal(gl_rows[0][1], "gl_debit_total")
+    gl_credit = _financial_decimal(gl_rows[0][2], "gl_credit_total")
+    if gl_count <= 0 or abs(gl_debit - gl_credit) > Decimal("0.00000001"):
+        raise ReadBackMismatch("Purchase Invoice GL entries are missing or unbalanced")
+
+    for index, row in enumerate(getattr(doc, "items", []) or []):
+        pr_name = _financial_text(
+            getattr(row, "purchase_receipt", ""), f"item_{index}.purchase_receipt"
+        )
+        pr_detail = _financial_text(getattr(row, "pr_detail", ""), f"item_{index}.pr_detail")
+        pr_item = frappe.db.get_value(
+            "Purchase Receipt Item",
+            pr_detail,
+            ["parent", "purchase_order", "purchase_order_item", "billed_amt"],
+            as_dict=True,
+        )
+        if not pr_item or str(pr_item.parent) != pr_name:
+            raise ReadBackMismatch(f"item_{index} Purchase Receipt source is inconsistent")
+        pr = frappe.db.get_value(
+            "Purchase Receipt", pr_name, ["company", "per_billed"], as_dict=True
+        )
+        if not pr or str(pr.company) != str(getattr(doc, "company", "") or ""):
+            raise ReadBackMismatch(f"item_{index} Purchase Receipt is outside the invoice company")
+        pr_billed_amt = _financial_decimal(pr_item.billed_amt, f"item_{index}.pr_billed_amt")
+        pr_per_billed = _financial_decimal(pr.per_billed, f"item_{index}.pr_per_billed")
+        if pr_billed_amt < 0 or pr_per_billed < 0 or pr_per_billed > 100:
+            raise ReadBackMismatch(f"item_{index} Purchase Receipt billing result is invalid")
+        po_name = str(getattr(row, "purchase_order", "") or "") or str(
+            getattr(pr_item, "purchase_order", "") or ""
+        )
+        po_per_billed: Decimal | None = None
+        if po_name:
+            po = frappe.db.get_value(
+                "Purchase Order", po_name, ["company", "per_billed"], as_dict=True
+            )
+            if not po or str(po.company) != str(getattr(doc, "company", "") or ""):
+                raise ReadBackMismatch(
+                    f"item_{index} Purchase Order is outside the invoice company"
+                )
+            po_per_billed = _financial_decimal(po.per_billed, f"item_{index}.po_per_billed")
+            if po_per_billed < 0 or po_per_billed > 100:
+                raise ReadBackMismatch(f"item_{index} Purchase Order billing result is invalid")
+        verified[f"item_{index}.pr_billed_amt"] = _financial_number(pr_billed_amt)
+        verified[f"item_{index}.pr_per_billed"] = _financial_number(pr_per_billed)
+        verified[f"item_{index}.purchase_receipt"] = pr_name
+        verified[f"item_{index}.pr_detail"] = pr_detail
+        verified[f"item_{index}.purchase_order"] = po_name
+        if po_per_billed is not None:
+            verified[f"item_{index}.po_per_billed"] = _financial_number(po_per_billed)
+
+    verified.update(
+        {
+            "status": status,
+            "currency": currency,
+            "total": _financial_number(total),
+            "grand_total": _financial_number(grand_total),
+            "total_taxes_and_charges": _financial_number(taxes),
+            "outstanding_amount": _financial_number(outstanding),
+            "gl_entry_count": gl_count,
+            "gl_debit_total": _financial_number(gl_debit),
+            "gl_credit_total": _financial_number(gl_credit),
+        }
+    )
+    return verified
 
 
 def _audit(run: Any, correlation_id: str, outcome: str, error_code: str | None = None) -> None:
@@ -184,6 +396,14 @@ def _build_pi(action: Any) -> Any:
             raise GatewayFault("CONFLICT", "mapped invoice contains an unapproved source row", 409)
         row.qty = item["qty"]
         row.rate = item["rate"]
+        if str(getattr(row, "uom", "") or "") != item["uom"]:
+            raise GatewayFault(
+                "CONFLICT", "mapped invoice UOM differs from the approved source row", 409
+            )
+        if str(getattr(row, "warehouse", "") or "") != item["warehouse"]:
+            raise GatewayFault(
+                "CONFLICT", "mapped invoice warehouse differs from the approved source row", 409
+            )
     target.posting_date = action.payload["transaction_date"]
     return target
 
@@ -205,27 +425,65 @@ def _load_source_target(action: Any) -> Any:
     return _load_target(action, expected_docstatus=0 if is_submit else 1)
 
 
-def _lock_p2p_source(action: Any) -> None:
-    """Serialize competing draft conversions on the reviewed source row."""
+def _release_p2p_source_locks(lock_names: list[str]) -> None:
+    """Release connection-scoped source locks without hiding the primary error."""
+
+    for lock_name in reversed(lock_names):
+        try:
+            frappe.db.sql("SELECT RELEASE_LOCK(%s)", (lock_name,))
+        except Exception:
+            # A connection close also releases named locks.  Cleanup must not
+            # replace an ERP/controller failure with a secondary DB error.
+            continue
+
+
+def _lock_p2p_source(action: Any) -> list[str]:
+    """Serialize competing draft conversions on the reviewed source row.
+
+    Frappe test and worker connections keep autocommit enabled while a
+    controller call is in progress, so a row-level ``FOR UPDATE`` alone does
+    not provide a reliable reservation boundary.  MariaDB named locks are
+    connection-scoped and remain held across the explicit governance commits;
+    the lock name is hashed to a bounded, non-sensitive value.
+    """
 
     child_doctype = SOURCE_CHILD_DOCTYPES.get(str(action.action_type))
     if child_doctype is None:
-        return
+        return []
     payload = action.payload
     table = f"tab{child_doctype}"
-    for item in sorted(payload["items"], key=lambda value: value["source_row"]):
-        rows = frappe.db.sql(
-            f"""
-            SELECT name
-            FROM `{table}`
-            WHERE name = %s AND parent = %s
-            FOR UPDATE
-            """,
-            (item["source_row"], payload["source_name"]),
-            as_dict=True,
-        )
-        if not rows:
-            raise GatewayFault("CONFLICT", "reviewed source row is no longer available", 409)
+    acquired: list[str] = []
+    try:
+        for item in sorted(payload["items"], key=lambda value: value["source_row"]):
+            lock_name = (
+                "synora-p2p-"
+                + hashlib.sha256(
+                    f"{child_doctype}:{payload['source_name']}:{item['source_row']}".encode()
+                ).hexdigest()[:52]
+            )
+            result = frappe.db.sql("SELECT GET_LOCK(%s, %s)", (lock_name, 30))
+            if not result or int(result[0][0] or 0) != 1:
+                raise GatewayFault("CONFLICT", "source row is busy with another P2P action", 409)
+            acquired.append(lock_name)
+
+            # Keep the existing current-row check as evidence that the named
+            # lock is bound to the reviewed parent/child identity.
+            rows = frappe.db.sql(
+                f"""
+                SELECT name
+                FROM `{table}`
+                WHERE name = %s AND parent = %s
+                FOR UPDATE
+                """,
+                (item["source_row"], payload["source_name"]),
+                as_dict=True,
+            )
+            if not rows:
+                raise GatewayFault("CONFLICT", "reviewed source row is no longer available", 409)
+    except Exception:
+        _release_p2p_source_locks(acquired)
+        raise
+    return acquired
 
 
 def _apply_source_action(action: Any, target: Any) -> Any:
@@ -315,9 +573,9 @@ def _replay(action_doc: Any, action: Any, run: Any, reservation: Any, actor: str
         if action.action_type in SOURCE_ACTIONS
         else _load_replay_target(action, target_name, actor)
     )
-    verified = p2p_read_back(action, target)
+    verified = p2p_read_back_with_financials(action, target)
     recorded = json.loads(receipt_doc.verified_fields_json)
-    if recorded != verified:
+    if not p2p_receipt_evidence_matches(action, recorded, verified):
         raise GatewayFault("UNCERTAIN_RESULT", "ERP read-back no longer matches Receipt", 503)
     _audit(run, str(reservation.correlation_id), "CACHED")
     return _success_response(
@@ -447,11 +705,16 @@ def execute_p2p_action(
 
     operation_started = False
     target: Any | None = None
+    source_locks: list[str] = []
     try:
+        # Acquire source-row locks before the first post-reservation read.  A
+        # waiting connection must establish its read snapshot only after the
+        # winner has committed its draft, otherwise REPEATABLE READ could
+        # revalidate against stale remaining quantities.
+        source_locks = _lock_p2p_source(action)
         pre_execute_recheck(safe_action_id, safe_digest, safe_key)
         run = _lock_run_for_action(safe_action_id)
         action_doc, action, locked = _lock_action(safe_action_id)
-        _lock_p2p_source(action)
         if action.action_type in CREATE_ACTIONS:
             # The source row lock serializes two stale approvals.  Re-run the
             # quantity/open-draft checks after the winner commits its target.
@@ -467,7 +730,7 @@ def execute_p2p_action(
             operation_started = True
             target.insert()
         target = frappe.get_doc(TARGET_DOCTYPES[action.action_type], target.name)
-        verified = p2p_read_back(action, target)
+        verified = p2p_read_back_with_financials(action, target)
         stored_receipt = _persist_receipt(
             action,
             run,
@@ -517,6 +780,8 @@ def execute_p2p_action(
             "governed P2P execution failed",
             503 if uncertain else status,
         ) from error
+    finally:
+        _release_p2p_source_locks(source_locks)
 
 
 def reconcile_p2p_action(
@@ -632,7 +897,7 @@ def reconcile_p2p_action(
                 if action.action_type in SOURCE_ACTIONS
                 else _load_replay_target(action, target_name, actor)
             )
-            verified = p2p_read_back(action, target)
+            verified = p2p_read_back_with_financials(action, target)
         except ReadBackMismatch:
             target = None
             verified = {}
@@ -646,9 +911,7 @@ def reconcile_p2p_action(
     final_state = "RECONCILED_SUCCESS" if reconciled else "MANUAL_INTERVENTION"
     response_category = "ERP_SUCCESS" if reconciled else "UNCERTAIN_RESULT"
     failure_category = (
-        None
-        if reconciled
-        else str(reservation.failure_category or "AMBIGUOUS_P2P_RESULT")
+        None if reconciled else str(reservation.failure_category or "AMBIGUOUS_P2P_RESULT")
     )
     evidence = {
         "reason": "one reviewed P2P target read back"

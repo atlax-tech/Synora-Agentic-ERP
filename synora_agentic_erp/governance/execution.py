@@ -35,6 +35,7 @@ from synora_agentic_erp.governance.execution_contracts import (
     map_execution_error,
     material_request_values,
     p2p_read_back,
+    p2p_receipt_evidence_matches,
     verify_material_request_read_back,
     verify_purchase_order_read_back,
 )
@@ -443,7 +444,16 @@ def _serialize_receipt_for_actor(
         is_p2p = action.action_type in P2P_ACTION_TYPES
         if verifier is None:
             if is_p2p:
-                verifier = p2p_read_back
+                if action.action_type == "SUBMIT_PI":
+                    # Import lazily to keep the shared execution module free
+                    # of a p2p_execution import cycle.
+                    from synora_agentic_erp.governance.p2p_execution import (
+                        p2p_read_back_with_financials,
+                    )
+
+                    verifier = p2p_read_back_with_financials
+                else:
+                    verifier = p2p_read_back
             elif expected_doctype == TARGET_DOCTYPE:
                 verifier = verify_material_request_read_back
             elif expected_doctype == "Purchase Order":
@@ -456,8 +466,7 @@ def _serialize_receipt_for_actor(
                     action,
                     receipt_target_name,
                     actor,
-                    strict_status=receipt_doc.final_state
-                    in {"SUCCEEDED", "RECONCILED_SUCCESS"},
+                    strict_status=receipt_doc.final_state in {"SUCCEEDED", "RECONCILED_SUCCESS"},
                 )
                 if is_p2p
                 else _load_readable_target(action, receipt_target_name, actor)
@@ -476,7 +485,14 @@ def _serialize_receipt_for_actor(
             raise GatewayFault(
                 "UNCERTAIN_RESULT", "verified Receipt evidence is invalid", 503
             ) from error
-        if verified is not None and recorded != verified:
+        evidence_matches = True
+        if verified is not None:
+            evidence_matches = (
+                p2p_receipt_evidence_matches(action, recorded, verified)
+                if is_p2p
+                else recorded == verified
+            )
+        if not evidence_matches:
             raise GatewayFault("UNCERTAIN_RESULT", "ERP read-back no longer matches Receipt", 503)
     try:
         return serialize_receipt(receipt_doc, allowed_actor=actor)

@@ -443,6 +443,10 @@ def serialize_action(doc: Any, *, allowed_actor: str | None = None) -> dict[str,
     result = action.to_dict()
     if action.action_type == "CREATE_PO_DRAFT":
         result["calculation"] = purchase_order_calculation(action)
+    elif action.action_type in {"CREATE_PI_DRAFT", "SUBMIT_PI"}:
+        from synora_agentic_erp.governance.p2p_execution import p2p_action_calculation
+
+        result["calculation"] = p2p_action_calculation(action)
     result.update(
         {
             "state": doc.state,

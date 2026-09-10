@@ -392,6 +392,11 @@ def _permission(action: Any, actor: str) -> GateResult:
             if operation.startswith("CREATE_")
             else ("submit" if operation.startswith("SUBMIT_") else "cancel")
         )
+        # An independent-approval initiator may prepare a proposal with read
+        # access; the separate approver and executor must hold the write
+        # permission at decision and execution time.
+        if action.approval_class == "INDEPENDENT_APPROVER" and actor == action.initiator:
+            required_permission = "read"
         required: tuple[tuple[str, str], ...] = (
             (target, "read"),
             (target, required_permission),
@@ -732,12 +737,26 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
             return GateResult("FAIL", "only a submitted document can be cancelled")
         if action.action_type == "CREATE_PR_DRAFT" and docstatus != 1:
             return GateResult("FAIL", "Purchase Order must be submitted before receipt")
-        if action.action_type == "CREATE_PR_DRAFT" and str(
-            getattr(source, "status", "") or ""
-        ) in {"Closed", "On Hold", "Cancelled"}:
+        if action.action_type == "CREATE_PR_DRAFT" and str(getattr(source, "status", "") or "") in {
+            "Closed",
+            "On Hold",
+            "Cancelled",
+        }:
             return GateResult("FAIL", "Purchase Order is closed or on hold")
         if action.action_type == "CREATE_PI_DRAFT" and docstatus != 1:
             return GateResult("FAIL", "Purchase Receipt must be submitted before invoice")
+        if (
+            action.action_type == "CREATE_PI_DRAFT"
+            and str(getattr(source, "status", "") or "") == "Cancelled"
+        ):
+            return GateResult("FAIL", "Purchase Receipt is cancelled")
+        bill_rejected_setting = None
+        if action.action_type == "CREATE_PI_DRAFT":
+            bill_rejected_setting = frappe.db.get_single_value(
+                "Buying Settings", "bill_for_rejected_quantity_in_purchase_invoice"
+            )
+            if bill_rejected_setting is None:
+                return GateResult("UNKNOWN", "Buying Settings billing rule is unavailable")
         if action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
             outstanding = Decimal(str(getattr(source, "outstanding_amount", 0) or 0))
             paid = Decimal(str(payload["paid_amount"]))
@@ -752,13 +771,14 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
                 if action.action_type == "CREATE_PR_DRAFT"
                 else "Purchase Receipt Item"
             )
-            remaining_field = (
-                "received_qty" if action.action_type == "CREATE_PR_DRAFT" else "billed_qty"
-            )
             for item in payload["items"]:
-                fields = ["name", "item_code", "qty", remaining_field, "warehouse", "uom"]
+                fields = ["name", "item_code", "qty", "warehouse", "uom", "rate"]
                 if child == "Purchase Order Item":
+                    fields.append("received_qty")
                     fields.append("delivered_by_supplier")
+                else:
+                    fields.extend(["received_qty", "rejected_qty"])
+                    fields.append("billed_amt")
                 rows = frappe.get_list(
                     child,
                     filters={"name": item["source_row"], "parent": source_name},
@@ -779,9 +799,70 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
                         )
                     if str(getattr(row, "uom", "") or "") != str(item.get("uom") or ""):
                         return GateResult("FAIL", "UOM does not match the source row")
-                remaining = Decimal(str(getattr(row, "qty", 0) or 0)) - Decimal(
-                    str(getattr(row, remaining_field, 0) or 0)
-                )
+                if action.action_type == "CREATE_PR_DRAFT":
+                    remaining = Decimal(str(getattr(row, "qty", 0) or 0)) - Decimal(
+                        str(getattr(row, "received_qty", 0) or 0)
+                    )
+                else:
+                    if str(getattr(row, "uom", "") or "") != str(item.get("uom") or ""):
+                        return GateResult("FAIL", "UOM does not match the source row")
+                    if str(getattr(row, "warehouse", "") or "") != str(item.get("warehouse") or ""):
+                        return GateResult("FAIL", "warehouse does not match the source row")
+                    source_rate = Decimal(str(getattr(row, "rate", 0) or 0))
+                    requested_rate = Decimal(str(item["rate"]))
+                    if source_rate != requested_rate:
+                        return GateResult("FAIL", "rate does not match the Purchase Receipt")
+                    invoiced = frappe.db.sql(
+                        """
+                        SELECT COALESCE(SUM(pii.qty), 0)
+                        FROM `tabPurchase Invoice Item` pii
+                        INNER JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent
+                        WHERE pii.pr_detail = %s AND pi.docstatus = 1
+                        """,
+                        (item["source_row"],),
+                    )[0][0]
+                    returned = frappe.db.sql(
+                        """
+                        SELECT COALESCE(SUM(ABS(pri.qty)), 0)
+                        FROM `tabPurchase Receipt Item` pri
+                        INNER JOIN `tabPurchase Receipt` returned_pr
+                          ON returned_pr.name = pri.parent
+                        WHERE pri.purchase_receipt_item = %s
+                          AND returned_pr.return_against = %s
+                          AND returned_pr.is_return = 1
+                          AND returned_pr.docstatus = 1
+                        """,
+                        (item["source_row"], source_name),
+                    )[0][0]
+                    open_draft = frappe.db.sql(
+                        """
+                        SELECT COALESCE(SUM(pii.qty), 0)
+                        FROM `tabPurchase Invoice Item` pii
+                        INNER JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent
+                        WHERE pii.pr_detail = %s AND pi.docstatus = 0
+                        """,
+                        (item["source_row"],),
+                    )[0][0]
+                    if Decimal(str(open_draft or 0)) > 0:
+                        return GateResult(
+                            "FAIL", "source row already has an open Purchase Invoice draft"
+                        )
+                    # Mirror ERPNext's fixed ``get_pending_qty`` mapper:
+                    # enabling rejected-quantity billing switches the base to
+                    # received_qty and ignores returns; disabling it starts
+                    # from the ordered qty and applies the upstream return /
+                    # rejected-qty adjustment below.
+                    billable_qty = (
+                        Decimal(str(getattr(row, "received_qty", 0) or 0))
+                        if bool(bill_rejected_setting)
+                        else Decimal(str(getattr(row, "qty", 0) or 0))
+                    )
+                    returned_qty = Decimal(str(returned or 0))
+                    if not bool(bill_rejected_setting):
+                        rejected_qty = Decimal(str(getattr(row, "rejected_qty", 0) or 0))
+                        if rejected_qty and returned_qty:
+                            returned_qty = max(Decimal("0"), returned_qty - rejected_qty)
+                    remaining = billable_qty - Decimal(str(invoiced or 0)) - returned_qty
                 if Decimal(str(item["qty"])) > remaining or remaining <= 0:
                     return GateResult("FAIL", "requested quantity exceeds the remaining quantity")
                 if (
@@ -917,6 +998,10 @@ def _action_response(action: Any, doc: Any) -> dict[str, Any]:
         from synora_agentic_erp.governance.execution_contracts import purchase_order_calculation
 
         result["calculation"] = purchase_order_calculation(action)
+    elif action.action_type in {"CREATE_PI_DRAFT", "SUBMIT_PI"}:
+        from synora_agentic_erp.governance.p2p_execution import p2p_action_calculation
+
+        result["calculation"] = p2p_action_calculation(action)
     result.update(
         {
             "state": str(doc.state),
@@ -1067,10 +1152,7 @@ def decide_action(
         or policy.snapshot_ref != action.snapshot_ref
         or (
             action.action_type in P2P_ACTION_TYPES
-            and (
-                str(policy.matched_rule) != RULE_ID
-                or str(policy.rule_version) != RULE_VERSION
-            )
+            and (str(policy.matched_rule) != RULE_ID or str(policy.rule_version) != RULE_VERSION)
         )
         or not _expiry_passes(str(policy.expires_at))
     ):
@@ -1167,10 +1249,7 @@ def pre_execute_recheck(
         or policy.snapshot_ref != action.snapshot_ref
         or (
             action.action_type in P2P_ACTION_TYPES
-            and (
-                str(policy.matched_rule) != RULE_ID
-                or str(policy.rule_version) != RULE_VERSION
-            )
+            and (str(policy.matched_rule) != RULE_ID or str(policy.rule_version) != RULE_VERSION)
         )
         or not _expiry_passes(str(policy.expires_at))
     ):
@@ -1260,13 +1339,10 @@ def list_pending_approvals(limit: int = 50) -> list[dict[str, Any]]:
                 continue
             _approver_allowed(action, actor)
             run = _load_run(action.run_id)
-            if (
-                state == "AWAITING_APPROVAL"
-                and (
-                    not _expiry_passes(action.expires_at)
-                    or str(run.status) != "ACTIVE"
-                    or bool(run.revoked)
-                )
+            if state == "AWAITING_APPROVAL" and (
+                not _expiry_passes(action.expires_at)
+                or str(run.status) != "ACTIVE"
+                or bool(run.revoked)
             ):
                 continue
             if state == "APPROVED":

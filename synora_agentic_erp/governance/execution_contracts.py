@@ -15,6 +15,14 @@ class ReadBackMismatch(ValueError):
     """The ERP document does not match the approved critical fields."""
 
 
+_PI_MUTABLE_RECEIPT_FIELDS = frozenset(
+    {
+        "status",
+        "outstanding_amount",
+    }
+)
+
+
 @dataclass(frozen=True)
 class ExecutionKey:
     """The immutable tuple that identifies one logical governed write."""
@@ -323,19 +331,24 @@ def p2p_read_back(action: ProposedAction, doc: object) -> dict[str, Any]:
         verified["posting_date"] = str(_value(doc, "posting_date"))
         verified["items_count"] = len(rows)
         source_link = (
-            "purchase_order_item"
-            if action.action_type == "CREATE_PR_DRAFT"
-            else "pr_detail"
+            "purchase_order_item" if action.action_type == "CREATE_PR_DRAFT" else "pr_detail"
         )
         parent_link = (
             "purchase_order" if action.action_type == "CREATE_PR_DRAFT" else "purchase_receipt"
         )
-        for index, (actual, expected) in enumerate(zip(rows, payload["items"], strict=True)):
+        expected_by_source = {item["source_row"]: item for item in payload["items"]}
+        seen_sources: set[str] = set()
+        for index, actual in enumerate(rows):
+            source_row = str(_value(actual, source_link) or "")
+            expected = expected_by_source.get(source_row)
+            if expected is None or source_row in seen_sources:
+                raise ReadBackMismatch("P2P draft source rows do not match")
+            seen_sources.add(source_row)
             actual_code = str(_value(actual, "item_code") or "")
             if actual_code != expected["item_code"]:
                 raise ReadBackMismatch(f"item_{index}.item_code does not match")
             _same_text(
-                _value(actual, source_link),
+                source_row,
                 expected["source_row"],
                 f"item_{index}.{source_link}",
             )
@@ -361,6 +374,20 @@ def p2p_read_back(action: ProposedAction, doc: object) -> dict[str, Any]:
             verified[f"item_{index}.{parent_link}"] = str(_value(actual, parent_link))
             verified[f"item_{index}.warehouse"] = str(_value(actual, "warehouse") or "")
             verified[f"item_{index}.uom"] = str(_value(actual, "uom") or "")
+            if action.action_type == "CREATE_PI_DRAFT":
+                actual_rate = _decimal(_value(actual, "rate"), f"item_{index}.rate")
+                expected_rate = _decimal(expected["rate"], f"item_{index}.rate")
+                if actual_rate != expected_rate:
+                    raise ReadBackMismatch(f"item_{index}.rate does not match")
+                actual_amount = _decimal(_value(actual, "amount"), f"item_{index}.amount")
+                if actual_amount != actual_qty * actual_rate:
+                    raise ReadBackMismatch(
+                        f"item_{index}.amount does not match qty multiplied by rate"
+                    )
+                verified[f"item_{index}.rate"] = format(actual_rate.normalize(), "f")
+                verified[f"item_{index}.amount"] = format(actual_amount.normalize(), "f")
+        if seen_sources != set(expected_by_source):
+            raise ReadBackMismatch("P2P draft source rows do not match")
     elif action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
         for field in ("party_type", "party", "payment_type", "paid_from", "paid_to"):
             _same_text(_value(doc, field), payload[field], field)
@@ -377,6 +404,35 @@ def p2p_read_back(action: ProposedAction, doc: object) -> dict[str, Any]:
             }
         )
     return verified
+
+
+def p2p_receipt_evidence_matches(
+    action: ProposedAction,
+    recorded: Mapping[str, Any],
+    current: Mapping[str, Any],
+) -> bool:
+    """Compare a receipt with a fresh read while allowing later P2P progress.
+
+    Invoice outstanding and cumulative source billing change when a later
+    payment or invoice is legitimately posted.  The immutable PI totals,
+    source links, and balanced GL evidence still have to remain present; the
+    mutable values stay in the receipt as the historical post-submit snapshot.
+    """
+
+    if action.action_type != "SUBMIT_PI":
+        return dict(recorded) == dict(current)
+
+    def stable(items: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in items.items()
+            if key not in _PI_MUTABLE_RECEIPT_FIELDS
+            and not key.endswith((".pr_billed_amt", ".pr_per_billed", ".po_per_billed"))
+        }
+
+    recorded_stable = stable(recorded)
+    current_stable = stable(current)
+    return recorded_stable == current_stable
 
 
 def _value(source: object, field: str, default: object = None) -> object:
@@ -569,6 +625,7 @@ __all__ = [
     "execution_key",
     "map_execution_error",
     "material_request_values",
+    "p2p_receipt_evidence_matches",
     "purchase_order_values",
     "verify_material_request_read_back",
     "verify_purchase_order_read_back",
