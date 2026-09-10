@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from agent_runtime.providers import ProviderError
+
+from labs.p2p_orchestration import phase10_comparison as comparison
 from labs.p2p_orchestration.phase10_comparison import (
     ACTIONS,
     EVENT_MATRIX,
+    REAL_CASES,
+    STRATEGIES,
     report_as_json,
     run_phase10_comparison,
 )
@@ -49,3 +54,40 @@ def test_report_json_is_bounded_and_does_not_contain_credentials_or_prompts() ->
     assert "capability" not in rendered.lower()
     assert "password" not in rendered.lower()
     assert "prompt" not in rendered.lower()
+
+
+def test_real_report_keeps_fixed_matrix_and_blocks_missing_provider(monkeypatch) -> None:
+    def unavailable(_role):
+        raise ProviderError("provider unavailable", failure_code="INVALID_CONFIGURATION")
+
+    monkeypatch.setattr(comparison, "provider_for_role", unavailable)
+    report = run_phase10_comparison(mode="real")
+
+    assert report.status == "BLOCKED"
+    assert report.mode == "real"
+    assert len(report.trials) == len(REAL_CASES) * len(STRATEGIES)
+    assert [trial.case_id for trial in report.trials[:3]] == [
+        REAL_CASES[0].case_id,
+        REAL_CASES[0].case_id,
+        REAL_CASES[0].case_id,
+    ]
+    assert [trial.strategy for trial in report.trials[:3]] == [
+        "single_agent",
+        "fixed_workflow",
+        "multi_agent",
+    ]
+    assert all(
+        trial.status == "BLOCKED_CONFIGURATION"
+        for trial in report.trials
+        if trial.strategy != "fixed_workflow"
+    )
+    assert all(
+        trial.prompt_tokens is None
+        and trial.completion_tokens is None
+        and trial.reasoning_tokens is None
+        for trial in report.trials
+        if trial.strategy != "fixed_workflow"
+    )
+    fixed = next(row for row in report.results if row.strategy == "fixed_workflow")
+    assert fixed.token_count == 0
+    assert report.adoption == "KEEP_FIXED_WORKFLOW_BUSINESS_BASELINE"
