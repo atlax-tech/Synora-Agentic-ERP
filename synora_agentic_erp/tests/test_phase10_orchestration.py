@@ -9,6 +9,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from synora_agentic_erp.api import cancel_p2p_run, finalize_p2p_run, issue_run, resume_p2p_run
+from synora_agentic_erp.gateway.contract import GatewayFault
 from synora_agentic_erp.governance.p2p_orchestration import (
     chain_from_entries,
     derive_step_views,
@@ -128,7 +129,7 @@ class TestPhase10OrchestrationProjection(FrappeTestCase):  # type: ignore[misc]
         views = derive_step_views([entry])
         self.assertEqual(views[0].state, "EXECUTING")
 
-    def test_only_verified_receipts_can_close_the_run(self) -> None:
+    def test_verified_receipts_alone_cannot_close_without_a_business_goal(self) -> None:
         entries = [
             _entry(
                 "SUBMIT_PO", "a-po", state="EXECUTED", receipt_state="SUCCEEDED", created_at="1"
@@ -143,9 +144,89 @@ class TestPhase10OrchestrationProjection(FrappeTestCase):  # type: ignore[misc]
         ]
 
         chain = chain_from_entries("EXECUTING", entries)
-        self.assertEqual(chain["status"], "SUCCEEDED")
-        self.assertTrue(chain["completion_ready"])
+        self.assertEqual(chain["status"], "WAITING_GOAL_CONFIRMATION")
+        self.assertFalse(chain["completion_ready"])
         self.assertIsNone(chain["next_step_id"])
+
+    def test_normalize_p2p_goal_canonicalizes_decimal_targets(self) -> None:
+        from synora_agentic_erp.governance.p2p_orchestration import normalize_p2p_goal
+
+        goal = normalize_p2p_goal(
+            {
+                "source_doctype": "Purchase Order",
+                "source_name": "PO-1",
+                "source_rows": [
+                    {"source_row": "row-1", "item_code": "ITEM-1", "target_qty": "2.00"}
+                ],
+            }
+        )
+        self.assertEqual(goal["schema_version"], "1")
+        self.assertEqual(goal["source_rows"][0]["target_qty"], "2")
+        self.assertEqual(goal["settlement_endpoint"], "RECEIVED_BILLED_PAID")
+        with self.assertRaises(GatewayFault):
+            normalize_p2p_goal(
+                {
+                    "source_doctype": "Purchase Order",
+                    "source_name": "PO-1",
+                    "source_rows": [
+                        {
+                            "source_row": "row-1",
+                            "item_code": "ITEM-1",
+                            "target_qty": "2",
+                            "target_amount": "1",
+                        }
+                    ],
+                }
+            )
+
+    def test_business_progress_stays_open_after_all_actions_have_receipts(self) -> None:
+        entries = [
+            _entry("SUBMIT_PO", "a-po", state="EXECUTED", receipt_state="SUCCEEDED", created_at="1")
+        ]
+        chain = chain_from_entries(
+            "EXECUTING",
+            entries,
+            goal={
+                "source_doctype": "Purchase Order",
+                "source_name": "PO-1",
+                "source_rows": [{"source_row": "row-1", "item_code": "ITEM-1", "target_qty": "2"}],
+            },
+            business_progress={
+                "goal_state": "CONFIRMED",
+                "goal_version": 1,
+                "goal_digest": "digest",
+                "complete": False,
+                "target_qty": "2",
+                "received_qty": "1",
+                "remaining_qty": "1",
+                "target_amount": "20",
+                "billed_amount": "10",
+                "outstanding_amount": "10",
+                "blocked_reasons": ["target still has one unit outstanding"],
+            },
+        )
+        self.assertEqual(chain["status"], "WAITING_BUSINESS_FACTS")
+        self.assertFalse(chain["completion_ready"])
+        self.assertIn("target still has one unit outstanding", chain["blocked_reasons"])
+
+    def test_stale_goal_requires_reinvestigation_even_when_steps_succeeded(self) -> None:
+        entry = _entry(
+            "SUBMIT_PO", "a-po", state="EXECUTED", receipt_state="SUCCEEDED", created_at="1"
+        )
+        chain = chain_from_entries(
+            "EXECUTING",
+            [entry],
+            goal={"source_name": "PO-1"},
+            business_progress={
+                "goal_state": "STALE",
+                "goal_version": 1,
+                "goal_digest": "digest",
+                "complete": True,
+                "blocked_reasons": ["source Purchase Order changed"],
+            },
+        )
+        self.assertEqual(chain["status"], "REINVESTIGATION_REQUIRED")
+        self.assertFalse(chain["completion_ready"])
 
     def test_terminal_run_state_is_preserved_when_projection_has_no_steps(self) -> None:
         cancelled = chain_from_entries("CANCELLED", [])

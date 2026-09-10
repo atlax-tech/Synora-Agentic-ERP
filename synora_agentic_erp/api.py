@@ -79,6 +79,9 @@ from synora_agentic_erp.governance.p2p_orchestration import (
     cancel_p2p_run as cancel_p2p_run_impl,
 )
 from synora_agentic_erp.governance.p2p_orchestration import (
+    confirm_p2p_goal as confirm_p2p_goal_impl,
+)
+from synora_agentic_erp.governance.p2p_orchestration import (
     finalize_p2p_run as finalize_p2p_run_impl,
 )
 from synora_agentic_erp.governance.p2p_orchestration import (
@@ -818,6 +821,9 @@ def _run_summary(run: Any) -> dict[str, Any]:
         "company_scope": run.company_scope,
         "warehouse_scope": run.warehouse_scope or None,
         "time_window_days": run.time_window_days,
+        "p2p_goal_state": getattr(run, "p2p_goal_state", "MISSING") or "MISSING",
+        "p2p_goal_version": int(getattr(run, "p2p_goal_version", 0) or 0),
+        "p2p_goal_digest": getattr(run, "p2p_goal_digest", None) or None,
         "expires_at": str(run.expires_at),
         "workflow_expires_at": str(workflow_deadline) if workflow_deadline else None,
         "workflow_status": None,
@@ -871,6 +877,9 @@ def list_runs(limit: int | None = None, offset: int | None = None) -> dict[str, 
             "company_scope",
             "warehouse_scope",
             "time_window_days",
+            "p2p_goal_state",
+            "p2p_goal_version",
+            "p2p_goal_digest",
             "creation",
         ],
         order_by="creation desc",
@@ -1124,6 +1133,28 @@ def get_run(run_id: str) -> dict[str, Any]:
         "governance": governed,
         "p2p_chain": get_p2p_chain(safe_run_id, run_state=str(run.run_state)),
     }
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def confirm_p2p_goal(run_id: object, goal: object, correlation_id: object) -> dict[str, Any]:
+    """Confirm an explicit PO/row target before a P2P Run may close."""
+
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        result = confirm_p2p_goal_impl(safe_run_id, goal, safe_correlation_id)
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": safe_correlation_id,
+            "run": result,
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
 
 
 @frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]

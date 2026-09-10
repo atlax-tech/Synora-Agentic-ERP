@@ -11,6 +11,7 @@ import hashlib
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import frappe
@@ -25,8 +26,11 @@ from synora_agentic_erp.governance.contracts import (
     TARGET_DOCTYPES,
     build_proposed_action,
 )
+from synora_agentic_erp.governance.service import transition_action_state
 
 P2P_STEP_SCHEMA_VERSION = "1"
+P2P_GOAL_SCHEMA_VERSION = "1"
+P2P_SETTLEMENT_ENDPOINT = "RECEIVED_BILLED_PAID"
 P2P_STEP_SERVICE_FLAG = "synora_p2p_orchestration_service"
 SUCCESS_RECEIPT_STATES = frozenset({"SUCCEEDED", "RECONCILED_SUCCESS"})
 UNCERTAIN_RECEIPT_STATES = frozenset({"RECONCILIATION_REQUIRED", "MANUAL_INTERVENTION"})
@@ -65,6 +69,497 @@ class P2PPlanStepView:
     depends_on: tuple[str, ...]
     blocked_reason: str | None = None
     reinvestigation_required: bool = False
+
+
+def _goal_json(value: object) -> object:
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise GatewayFault("INVALID_INPUT", "P2P goal JSON is invalid", 400) from error
+    return value
+
+
+def _goal_text(value: object, field: str, maximum: int = 140) -> str:
+    if not isinstance(value, str) or not value.strip() or len(value) > maximum:
+        raise GatewayFault("INVALID_INPUT", f"P2P goal {field} is invalid", 400)
+    return value
+
+
+def _goal_decimal(value: object, field: str) -> str:
+    if isinstance(value, bool) or isinstance(value, float) or not isinstance(value, (str, int)):
+        raise GatewayFault("INVALID_INPUT", f"P2P goal {field} is invalid", 400)
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as error:
+        raise GatewayFault("INVALID_INPUT", f"P2P goal {field} is invalid", 400) from error
+    if not number.is_finite() or number <= 0:
+        raise GatewayFault("INVALID_INPUT", f"P2P goal {field} is invalid", 400)
+    return format(number.normalize(), "f")
+
+
+def normalize_p2p_goal(value: object) -> dict[str, Any]:
+    """Normalize the small, explicit business target used by a P2P Run.
+
+    Natural-language Run goals are never parsed here.  The caller must submit
+    the source Purchase Order and exact source rows after the initiator has
+    reviewed the proposed scope.  Decimal values are serialized as strings so
+    a browser or model cannot change precision by using a floating point value.
+    """
+
+    raw = _goal_json(value)
+    if not isinstance(raw, dict):
+        raise GatewayFault("INVALID_INPUT", "P2P goal must be an object", 400)
+    allowed = {
+        "schema_version",
+        "source_doctype",
+        "source_name",
+        "source_rows",
+        "settlement_endpoint",
+    }
+    if (
+        set(raw) - allowed
+        or not {"source_doctype", "source_name", "source_rows"}.issubset(raw)
+        or raw.get("schema_version", P2P_GOAL_SCHEMA_VERSION) != P2P_GOAL_SCHEMA_VERSION
+    ):
+        raise GatewayFault("INVALID_INPUT", "P2P goal fields are invalid", 400)
+    source_doctype = _goal_text(raw["source_doctype"], "source_doctype", 80)
+    if source_doctype != "Purchase Order":
+        raise GatewayFault("INVALID_INPUT", "P2P goal source_doctype is invalid", 400)
+    source_name = _goal_text(raw["source_name"], "source_name")
+    endpoint = raw.get("settlement_endpoint", P2P_SETTLEMENT_ENDPOINT)
+    if endpoint != P2P_SETTLEMENT_ENDPOINT:
+        raise GatewayFault("INVALID_INPUT", "P2P goal settlement endpoint is invalid", 400)
+    rows = raw["source_rows"]
+    if not isinstance(rows, list) or not rows or len(rows) > 100:
+        raise GatewayFault("INVALID_INPUT", "P2P goal source_rows are invalid", 400)
+    normalized_rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise GatewayFault("INVALID_INPUT", f"P2P goal source_rows[{index}] is invalid", 400)
+        allowed_row = {"source_row", "item_code", "target_qty"}
+        required_row = {"source_row", "item_code", "target_qty"}
+        if set(row) - allowed_row or not required_row.issubset(row):
+            raise GatewayFault("INVALID_INPUT", f"P2P goal source_rows[{index}] is invalid", 400)
+        source_row = _goal_text(row["source_row"], "source_row")
+        if source_row in seen:
+            raise GatewayFault("INVALID_INPUT", "P2P goal source_rows contain duplicates", 400)
+        seen.add(source_row)
+        normalized: dict[str, str] = {
+            "source_row": source_row,
+            "item_code": _goal_text(row["item_code"], "item_code"),
+            "target_qty": _goal_decimal(row["target_qty"], "target_qty"),
+        }
+        normalized_rows.append(normalized)
+    return {
+        "schema_version": P2P_GOAL_SCHEMA_VERSION,
+        "source_doctype": source_doctype,
+        "source_name": source_name,
+        "source_rows": normalized_rows,
+        "settlement_endpoint": P2P_SETTLEMENT_ENDPOINT,
+    }
+
+
+def _goal_digest(goal: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json(goal).encode("utf-8")).hexdigest()
+
+
+def _stored_p2p_goal(run: Any) -> dict[str, Any]:
+    raw = getattr(run, "p2p_goal_json", None)
+    state = str(getattr(run, "p2p_goal_state", "MISSING") or "MISSING")
+    try:
+        version = int(getattr(run, "p2p_goal_version", 0) or 0)
+    except TypeError, ValueError:
+        version = 0
+    digest = str(getattr(run, "p2p_goal_digest", "") or "")
+    if not raw or state == "MISSING" or version <= 0:
+        return {
+            "schema_version": P2P_GOAL_SCHEMA_VERSION,
+            "state": "MISSING",
+            "version": version,
+            "digest": digest or None,
+            "goal": None,
+        }
+    try:
+        goal = normalize_p2p_goal(raw)
+    except GatewayFault:
+        return {
+            "schema_version": P2P_GOAL_SCHEMA_VERSION,
+            "state": "INVALID",
+            "version": version,
+            "digest": digest or None,
+            "goal": None,
+        }
+    if str(getattr(run, "p2p_goal_schema_version", "1") or "1") != P2P_GOAL_SCHEMA_VERSION:
+        state = "INVALID"
+    elif not digest or digest != _goal_digest(goal):
+        state = "INVALID"
+    return {
+        "schema_version": P2P_GOAL_SCHEMA_VERSION,
+        "state": state if state in {"CONFIRMED", "STALE", "INVALID"} else "INVALID",
+        "version": version,
+        "digest": digest or None,
+        "goal": goal,
+    }
+
+
+def _source_goal_facts(goal: dict[str, Any], run: Any) -> tuple[dict[str, Any], list[str]]:
+    """Read only the current PO facts needed for deterministic completion."""
+
+    reasons: list[str] = []
+    source_name = str(goal["source_name"])
+    actor = str(getattr(frappe.session, "user", "Guest") or "Guest")
+    if not frappe.has_permission("Purchase Order", "read", doc=source_name, user=actor):
+        return {}, ["current Purchase Order read permission is unavailable"]
+    source = frappe.db.get_value(
+        "Purchase Order",
+        source_name,
+        ["name", "company", "docstatus", "per_received", "per_billed", "status"],
+        as_dict=True,
+    )
+    if not source:
+        return {}, ["source Purchase Order is unavailable"]
+    if str(source.company) != str(run.company_scope):
+        return {}, ["source Purchase Order is outside the Run company scope"]
+    row_names = [str(row["source_row"]) for row in goal["source_rows"]]
+    rows = frappe.get_all(
+        "Purchase Order Item",
+        filters={"parent": source_name, "name": ["in", row_names]},
+        fields=[
+            "name",
+            "item_code",
+            "qty",
+            "uom",
+            "warehouse",
+            "received_qty",
+            "billed_amt",
+            "rate",
+        ],
+        ignore_permissions=True,
+        limit_page_length=100,
+    )
+    by_name = {str(row.name): row for row in rows}
+    row_facts: list[dict[str, str]] = []
+    for target in goal["source_rows"]:
+        row = by_name.get(str(target["source_row"]))
+        if row is None:
+            reasons.append(f"source row {target['source_row']} is unavailable")
+            continue
+        if str(row.item_code) != str(target["item_code"]):
+            reasons.append(f"source row {target['source_row']} item changed")
+            continue
+        try:
+            ordered = Decimal(str(row.qty or 0))
+            target_qty = Decimal(str(target["target_qty"]))
+            received = Decimal(str(row.received_qty or 0))
+            billed_amount = Decimal(str(row.billed_amt or 0))
+            rate = Decimal(str(row.rate or 0))
+        except InvalidOperation, TypeError, ValueError:
+            reasons.append(f"source row {target['source_row']} has non-numeric ERP facts")
+            continue
+        if target_qty > ordered:
+            reasons.append(f"source row {target['source_row']} target exceeds ordered quantity")
+        target_amount = target_qty * rate
+        billed_qty = billed_amount / rate if rate > 0 else Decimal("0")
+        row_facts.append(
+            {
+                "source_row": str(row.name),
+                "item_code": str(row.item_code),
+                "target_qty": format(target_qty.normalize(), "f"),
+                "ordered_qty": format(ordered.normalize(), "f"),
+                "received_qty": format(received.normalize(), "f"),
+                "billed_amount": format(billed_amount.normalize(), "f"),
+                "billed_qty": format(billed_qty.normalize(), "f"),
+                "target_amount": format(target_amount.normalize(), "f"),
+            }
+        )
+    return {
+        "source": {
+            "doctype": "Purchase Order",
+            "name": source_name,
+            "company": str(source.company),
+            "docstatus": int(source.docstatus or 0),
+            "per_received": str(source.per_received),
+            "per_billed": str(source.per_billed),
+            "status": str(source.status or ""),
+        },
+        "rows": row_facts,
+    }, reasons
+
+
+def _linked_invoice_facts(
+    source_name: str, row_names: list[str]
+) -> tuple[list[dict[str, Any]], list[str]]:
+    reasons: list[str] = []
+    target_rows = {str(row_name) for row_name in row_names}
+    links: list[Any] = []
+    try:
+        direct_links = frappe.get_all(
+            "Purchase Invoice Item",
+            filters={"purchase_order": source_name},
+            fields=[
+                "name",
+                "parent",
+                "purchase_order",
+                "po_detail",
+                "purchase_receipt",
+                "pr_detail",
+                "qty",
+                "amount",
+            ],
+            ignore_permissions=True,
+            limit_page_length=200,
+        )
+        links.extend(
+            row for row in direct_links if str(getattr(row, "po_detail", "") or "") in target_rows
+        )
+        receipt_rows = frappe.get_all(
+            "Purchase Receipt Item",
+            filters={"purchase_order": source_name, "purchase_order_item": ["in", row_names]},
+            fields=["name", "parent"],
+            ignore_permissions=True,
+            limit_page_length=200,
+        )
+        receipt_names = sorted({str(row.parent) for row in receipt_rows if row.parent})
+        receipt_item_names = {str(row.name) for row in receipt_rows if getattr(row, "name", None)}
+        if receipt_names:
+            receipt_links = frappe.get_all(
+                "Purchase Invoice Item",
+                filters={"purchase_receipt": ["in", receipt_names]},
+                fields=[
+                    "name",
+                    "parent",
+                    "purchase_order",
+                    "po_detail",
+                    "purchase_receipt",
+                    "pr_detail",
+                    "qty",
+                    "amount",
+                ],
+                ignore_permissions=True,
+                limit_page_length=200,
+            )
+            links.extend(
+                row
+                for row in receipt_links
+                if str(getattr(row, "pr_detail", "") or "") in receipt_item_names
+            )
+    except Exception:
+        return [], ["linked Purchase Invoice facts are unavailable"]
+    unique_links = {
+        (str(getattr(link, "parent", "")), str(getattr(link, "name", ""))): link
+        for link in links
+        if getattr(link, "parent", None)
+    }
+    invoice_names = sorted({parent for parent, _name in unique_links})
+    invoices: list[dict[str, Any]] = []
+    for name in invoice_names:
+        row = frappe.db.get_value(
+            "Purchase Invoice",
+            name,
+            ["name", "docstatus", "status", "grand_total", "outstanding_amount", "currency"],
+            as_dict=True,
+        )
+        if not row or int(row.docstatus or 0) != 1:
+            reasons.append(f"linked Purchase Invoice {name} is not submitted")
+            continue
+        try:
+            grand_total = Decimal(str(row.grand_total or 0))
+            outstanding = Decimal(str(row.outstanding_amount or 0))
+        except InvalidOperation, TypeError, ValueError:
+            reasons.append(f"linked Purchase Invoice {name} has non-numeric accounting facts")
+            continue
+        if outstanding < 0 or outstanding > grand_total:
+            reasons.append(f"linked Purchase Invoice {name} outstanding is invalid")
+        invoices.append(
+            {
+                "name": name,
+                "status": str(row.status or ""),
+                "grand_total": format(grand_total.normalize(), "f"),
+                "outstanding_amount": format(outstanding.normalize(), "f"),
+                "currency": str(row.currency or ""),
+            }
+        )
+    return invoices, reasons
+
+
+def p2p_goal_progress(run: Any, entries: Iterable[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Return deterministic target progress and completion conditions."""
+
+    record = _stored_p2p_goal(run)
+    base: dict[str, Any] = {
+        "goal_state": record["state"],
+        "goal_version": record["version"],
+        "goal_digest": record["digest"],
+        "settlement_endpoint": P2P_SETTLEMENT_ENDPOINT,
+        "complete": False,
+        "target_qty": "0",
+        "received_qty": "0",
+        "remaining_qty": "0",
+        "target_amount": "0",
+        "billed_amount": "0",
+        "remaining_amount": "0",
+        "outstanding_amount": "0",
+        "invoices": [],
+        "blocked_reasons": [],
+    }
+    if record["state"] != "CONFIRMED" or not record["goal"]:
+        base["blocked_reasons"] = ["P2P business goal requires initiator confirmation"]
+        return base
+    facts, reasons = _source_goal_facts(record["goal"], run)
+    row_facts = facts.get("rows", []) if facts else []
+    target_qty = sum((Decimal(row["target_qty"]) for row in row_facts), Decimal("0"))
+    received_qty = sum(
+        (min(Decimal(row["received_qty"]), Decimal(row["target_qty"])) for row in row_facts),
+        Decimal("0"),
+    )
+    target_amount = sum((Decimal(row["target_amount"]) for row in row_facts), Decimal("0"))
+    billed_amount = sum(
+        (min(Decimal(row["billed_amount"]), Decimal(row["target_amount"])) for row in row_facts),
+        Decimal("0"),
+    )
+    row_names = [str(row["source_row"]) for row in record["goal"]["source_rows"]]
+    invoices, invoice_reasons = _linked_invoice_facts(record["goal"]["source_name"], row_names)
+    outstanding = sum((Decimal(row["outstanding_amount"]) for row in invoices), Decimal("0"))
+    reasons.extend(invoice_reasons)
+    if not invoices:
+        reasons.append("no submitted Purchase Invoice is linked to the target rows")
+    base["goal_state"] = "STALE" if reasons else record["state"]
+    complete = (
+        not reasons
+        and len(row_facts) == len(record["goal"]["source_rows"])
+        and received_qty >= target_qty
+        and billed_amount >= target_amount
+        and outstanding == 0
+    )
+    base.update(
+        {
+            "source": facts.get("source") if facts else None,
+            "rows": row_facts,
+            "target_qty": format(target_qty.normalize(), "f"),
+            "received_qty": format(received_qty.normalize(), "f"),
+            "remaining_qty": format(max(target_qty - received_qty, Decimal("0")).normalize(), "f"),
+            "target_amount": format(target_amount.normalize(), "f"),
+            "billed_amount": format(billed_amount.normalize(), "f"),
+            "remaining_amount": format(
+                max(target_amount - billed_amount, Decimal("0")).normalize(), "f"
+            ),
+            "outstanding_amount": format(outstanding.normalize(), "f"),
+            "invoices": invoices,
+            "complete": complete,
+            "blocked_reasons": sorted(set(reasons)),
+        }
+    )
+    return base
+
+
+def get_p2p_goal(run_id: str) -> dict[str, Any]:
+    if not frappe.db.exists("Synora Agent Run", run_id):
+        raise GatewayFault("RUN_REJECTED", "run is not available", 404)
+    run = frappe.get_doc("Synora Agent Run", run_id)
+    record = _stored_p2p_goal(run)
+    return {
+        "schema_version": P2P_GOAL_SCHEMA_VERSION,
+        "state": record["state"],
+        "version": record["version"],
+        "digest": record["digest"],
+        "goal": record["goal"],
+    }
+
+
+def _invalidate_pending_p2p_actions(run_id: str, reason: str, correlation_id: str) -> int:
+    rows = frappe.get_all(
+        "Synora Proposed Action",
+        filters={"run": run_id, "action_type": ["in", sorted(P2P_ACTION_TYPES)]},
+        fields=["name", "state", "state_version", "proposal_digest"],
+        order_by="creation asc",
+        limit_page_length=200,
+        ignore_permissions=True,
+    )
+    changed = 0
+    for row in rows:
+        state = str(row.state)
+        if state not in {"DRAFT", "AWAITING_APPROVAL", "APPROVED"}:
+            continue
+        target = "INVALID" if state == "DRAFT" else "EXPIRED"
+        transition_action_state(
+            str(row.name),
+            target,
+            expected_version=int(row.state_version),
+            reason=reason[:2_000],
+            correlation_id=correlation_id,
+            approval_digest=str(row.proposal_digest),
+        )
+        changed += 1
+    return changed
+
+
+def confirm_p2p_goal(run_id: str, goal: object, correlation_id: str) -> dict[str, Any]:
+    """Persist an initiator-confirmed goal and invalidate stale candidates."""
+
+    run = _authorized_run(run_id, lock=True)
+    if str(run.status) != "ACTIVE" or bool(run.revoked):
+        raise GatewayFault("CONFLICT", "P2P Run is no longer active", 409)
+    if str(run.run_state) in {"SUCCEEDED", "CANCELLED", "EXPIRED", "FAILED"}:
+        raise GatewayFault("CONFLICT", "P2P Run is already terminal", 409)
+    normalized = normalize_p2p_goal(goal)
+    facts, reasons = _source_goal_facts(normalized, run)
+    if reasons or not facts:
+        raise GatewayFault(
+            "CONFLICT",
+            "; ".join(reasons[:3]) or "P2P goal source is unavailable",
+            409,
+        )
+    for row in normalized["source_rows"]:
+        fact = next(
+            (item for item in facts["rows"] if item["source_row"] == row["source_row"]),
+            None,
+        )
+        if fact is None:
+            raise GatewayFault("CONFLICT", f"source row {row['source_row']} is unavailable", 409)
+        if Decimal(row["target_qty"]) > Decimal(fact["ordered_qty"]):
+            raise GatewayFault(
+                "CONFLICT",
+                f"source row {row['source_row']} target exceeds ordered quantity",
+                409,
+            )
+    next_digest = _goal_digest(normalized)
+    previous_state = str(getattr(run, "p2p_goal_state", "MISSING") or "MISSING")
+    previous_digest = str(getattr(run, "p2p_goal_digest", "") or "")
+    if previous_state == "CONFIRMED" and previous_digest == next_digest:
+        return {
+            "run_id": run_id,
+            "goal": get_p2p_goal(run_id),
+            "invalidated_actions": 0,
+        }
+    try:
+        current_version = int(getattr(run, "p2p_goal_version", 0) or 0)
+    except TypeError, ValueError:
+        current_version = 0
+    next_version = current_version + 1
+    run.p2p_goal_schema_version = P2P_GOAL_SCHEMA_VERSION
+    run.p2p_goal_json = _canonical_json(normalized)
+    run.p2p_goal_version = next_version
+    run.p2p_goal_digest = next_digest
+    run.p2p_goal_state = "CONFIRMED"
+    run.p2p_goal_confirmed_by = str(frappe.session.user)
+    run.p2p_goal_confirmed_at = now_datetime()
+    run.flags.synora_p2p_goal_update = True
+    run.save(ignore_permissions=True)
+    invalidated_actions = 0
+    if previous_digest and previous_digest != run.p2p_goal_digest:
+        invalidated_actions = _invalidate_pending_p2p_actions(
+            run_id,
+            f"P2P goal version changed to {next_version}; candidate requires regeneration",
+            correlation_id,
+        )
+    frappe.db.commit()
+    return {
+        "run_id": run_id,
+        "goal": get_p2p_goal(run_id),
+        "invalidated_actions": invalidated_actions,
+    }
 
 
 def _canonical_json(value: object) -> str:
@@ -376,7 +871,13 @@ def derive_step_views(entries: Iterable[dict[str, Any]]) -> tuple[P2PPlanStepVie
     return tuple(views)
 
 
-def _overall_status(run_state: str, views: tuple[P2PPlanStepView, ...]) -> str:
+def _overall_status(
+    run_state: str,
+    views: tuple[P2PPlanStepView, ...],
+    *,
+    goal_state: str = "MISSING",
+    business_complete: bool = False,
+) -> str:
     if run_state in {"CANCELLED", "EXPIRED"}:
         return run_state
     if run_state in {"FAILED", "SUCCEEDED"} and not views:
@@ -392,6 +893,12 @@ def _overall_status(run_state: str, views: tuple[P2PPlanStepView, ...]) -> str:
     if any(view.state == "FAILED" for view in views):
         return "FAILED"
     if views and all(view.state == "SUCCEEDED" for view in views):
+        if goal_state == "MISSING":
+            return "WAITING_GOAL_CONFIRMATION"
+        if goal_state != "CONFIRMED":
+            return "REINVESTIGATION_REQUIRED"
+        if not business_complete:
+            return "WAITING_BUSINESS_FACTS"
         return "SUCCEEDED"
     if any(view.state == "WAITING_APPROVAL" for view in views):
         return "WAITING_APPROVAL"
@@ -399,10 +906,23 @@ def _overall_status(run_state: str, views: tuple[P2PPlanStepView, ...]) -> str:
         return "WAITING_DEPENDENCY"
     if any(view.state == "EXECUTING" for view in views):
         return "EXECUTING"
+    if not views:
+        if goal_state == "MISSING":
+            return "WAITING_GOAL_CONFIRMATION"
+        if goal_state != "CONFIRMED":
+            return "REINVESTIGATION_REQUIRED"
+        if not business_complete:
+            return "WAITING_BUSINESS_FACTS"
     return "PLANNED" if not views else "IN_PROGRESS"
 
 
-def chain_from_entries(run_state: str, entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
+def chain_from_entries(
+    run_state: str,
+    entries: Iterable[dict[str, Any]],
+    *,
+    goal: dict[str, Any] | None = None,
+    business_progress: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     views = derive_step_views(entries)
     entries_by_id = {str(entry["action_id"]): entry for entry in entries}
     timeline: list[dict[str, Any]] = []
@@ -422,9 +942,26 @@ def chain_from_entries(run_state: str, entries: Iterable[dict[str, Any]]) -> dic
                 "receipt_state": _receipt_state(entry),
             }
         )
-    status = _overall_status(run_state, views)
+    progress = business_progress or {
+        "goal_state": "CONFIRMED" if goal else "MISSING",
+        "goal_version": 1 if goal else 0,
+        "goal_digest": None,
+        "settlement_endpoint": P2P_SETTLEMENT_ENDPOINT,
+        "complete": bool(goal),
+        "blocked_reasons": [] if goal else ["P2P business goal requires initiator confirmation"],
+    }
+    goal_state = str(progress.get("goal_state") or "MISSING")
+    business_complete = bool(progress.get("complete"))
+    status = _overall_status(
+        run_state,
+        views,
+        goal_state=goal_state,
+        business_complete=business_complete,
+    )
     blocked_reasons = [view.blocked_reason for view in views if view.blocked_reason]
-    completion_ready = bool(views) and all(view.state == "SUCCEEDED" for view in views)
+    blocked_reasons.extend(str(reason) for reason in progress.get("blocked_reasons", []) if reason)
+    steps_complete = bool(views) and all(view.state == "SUCCEEDED" for view in views)
+    completion_ready = steps_complete and goal_state == "CONFIRMED" and business_complete
     next_step = next(
         (
             view.step_id
@@ -437,6 +974,16 @@ def chain_from_entries(run_state: str, entries: Iterable[dict[str, Any]]) -> dic
         "schema_version": P2P_STEP_SCHEMA_VERSION,
         "status": status,
         "completion_ready": completion_ready,
+        "steps_complete": steps_complete,
+        "business_goal_complete": business_complete,
+        "goal": {
+            "schema_version": P2P_GOAL_SCHEMA_VERSION,
+            "state": goal_state,
+            "version": int(progress.get("goal_version") or 0),
+            "digest": progress.get("goal_digest"),
+            "target": goal,
+        },
+        "business_progress": progress,
         "needs_reinvestigation": status == "REINVESTIGATION_REQUIRED",
         "next_step_id": next_step,
         "blocked_reasons": blocked_reasons,
@@ -491,8 +1038,13 @@ def _ensure_step_doc(entry: dict[str, Any], view: P2PPlanStepView) -> Any:
 
 def sync_p2p_plan_steps(run_id: str) -> dict[str, Any]:
     entries = _entries_for_run(run_id)
+    run = frappe.get_doc("Synora Agent Run", run_id)
+    goal_record = _stored_p2p_goal(run)
     chain = chain_from_entries(
-        str(frappe.db.get_value("Synora Agent Run", run_id, "run_state") or ""), entries
+        str(run.run_state or ""),
+        entries,
+        goal=goal_record["goal"],
+        business_progress=p2p_goal_progress(run, entries),
     )
     views = derive_step_views(entries)
     for entry, view in zip(
@@ -533,8 +1085,33 @@ def get_p2p_chain(
     run_id: str, *, entries: Iterable[dict[str, Any]] | None = None, run_state: str | None = None
 ) -> dict[str, Any]:
     resolved_entries = list(entries) if entries is not None else _entries_for_run(run_id)
-    state = run_state or str(frappe.db.get_value("Synora Agent Run", run_id, "run_state") or "")
-    chain = chain_from_entries(state, resolved_entries)
+    run = None
+    try:
+        run = frappe.get_doc("Synora Agent Run", run_id)
+    except Exception:
+        run = None
+    state = run_state or str(getattr(run, "run_state", "") or "")
+    goal_record = _stored_p2p_goal(run) if run is not None else {"goal": None}
+    progress = (
+        p2p_goal_progress(run, resolved_entries)
+        if run is not None
+        else {
+            "goal_state": "CONFIRMED" if goal_record["goal"] else "MISSING",
+            "goal_version": 1 if goal_record["goal"] else 0,
+            "goal_digest": None,
+            "settlement_endpoint": P2P_SETTLEMENT_ENDPOINT,
+            "complete": False,
+            "blocked_reasons": (
+                [] if goal_record["goal"] else ["P2P business goal requires initiator confirmation"]
+            ),
+        }
+    )
+    chain = chain_from_entries(
+        state,
+        resolved_entries,
+        goal=goal_record["goal"],
+        business_progress=progress,
+    )
     stored = frappe.get_all(
         "Synora P2P Plan Step",
         filters={"run": run_id},
@@ -717,15 +1294,29 @@ def _mark_terminal(run: Any, target: str, correlation_id: str) -> None:
 
 
 def finalize_p2p_run(run_id: str, correlation_id: str) -> dict[str, Any]:
-    """Close a P2P Run only when every persisted step has a verified Receipt."""
+    """Close a P2P Run only after the target and every ERP fact are verified."""
 
     run = _authorized_run(run_id, lock=True)
     if str(run.run_state) == "SUCCEEDED":
         return _run_result(run, get_p2p_chain(run_id, run_state=str(run.run_state)))
     if str(run.status) != "ACTIVE" or bool(run.revoked):
         raise GatewayFault("CONFLICT", "P2P Run is no longer active", 409)
+    active = _active_reservations(run_id)
+    if active:
+        raise GatewayFault(
+            "UNCERTAIN_RESULT",
+            "P2P Run has an active or uncertain side effect; reconcile before closing",
+            503,
+        )
     entries = _entries_for_run(run_id)
-    chain = chain_from_entries(str(run.run_state), entries)
+    goal_record = _stored_p2p_goal(run)
+    progress = p2p_goal_progress(run, entries)
+    chain = chain_from_entries(
+        str(run.run_state),
+        entries,
+        goal=goal_record["goal"],
+        business_progress=progress,
+    )
     if not chain["completion_ready"]:
         reason = "; ".join(chain["blocked_reasons"][:3]) or str(chain["status"])
         raise GatewayFault("CONFLICT", f"P2P Run is not ready to close: {reason}", 409)
@@ -733,7 +1324,15 @@ def finalize_p2p_run(run_id: str, correlation_id: str) -> dict[str, Any]:
         raise GatewayFault("CONFLICT", "P2P Run is not in an executable lifecycle state", 409)
     _mark_terminal(run, "SUCCEEDED", correlation_id)
     frappe.db.commit()
-    return _run_result(run, chain_from_entries("SUCCEEDED", entries))
+    return _run_result(
+        run,
+        chain_from_entries(
+            "SUCCEEDED",
+            entries,
+            goal=goal_record["goal"],
+            business_progress=progress,
+        ),
+    )
 
 
 def cancel_p2p_run(run_id: str, correlation_id: str) -> dict[str, Any]:

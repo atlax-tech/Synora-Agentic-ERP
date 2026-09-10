@@ -62,10 +62,12 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		SUCCEEDED: __("执行成功"),
 		FAILED: __("执行失败"),
 	};
-	const P2P_CHAIN_STATUS_COPY = {
-		PLANNED: __("等待编排"),
-		IN_PROGRESS: __("跨单据处理中"),
-		WAITING_APPROVAL: __("等待独立审批"),
+		const P2P_CHAIN_STATUS_COPY = {
+			PLANNED: __("等待编排"),
+			IN_PROGRESS: __("跨单据处理中"),
+			WAITING_GOAL_CONFIRMATION: __("等待确认业务目标"),
+			WAITING_BUSINESS_FACTS: __("等待业务事实完成"),
+			WAITING_APPROVAL: __("等待独立审批"),
 		WAITING_DEPENDENCY: __("等待前置单据"),
 		EXECUTING: __("正在执行 ERP 动作"),
 		BLOCKED: __("前置动作阻塞"),
@@ -711,7 +713,14 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 	}
 
 	function build_p2p_chain_panel(chain, run) {
-		if (!chain || !Array.isArray(chain.steps) || !chain.steps.length) {
+		if (!chain || !Array.isArray(chain.steps)) {
+			return "";
+		}
+		const goal = chain.goal || {};
+		const target = goal.target || {};
+		const progress = chain.business_progress || {};
+		const has_goal = String(goal.state || run.p2p_goal_state || "MISSING") !== "MISSING";
+		if (!chain.steps.length && !has_goal) {
 			return "";
 		}
 		const panel_id = "p2p-chain-panel-" + String(run.run_id).replace(/[^a-zA-Z0-9_-]/g, "");
@@ -720,6 +729,24 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		const can_resume = owner && !terminal;
 		const can_finalize = owner && !terminal && Boolean(chain.completion_ready);
 		const can_cancel = owner && !terminal && !Boolean(chain.completion_ready);
+		const target_rows = Array.isArray(target.source_rows) ? target.source_rows : [];
+		const goal_summary = target.source_name
+			? __("目标") + ": " + esc(target.source_doctype || "Purchase Order") + " / " + esc(target.source_name) +
+				" · " + __("目标版本") + ": " + esc(goal.version || 0) +
+				" · " + __("目标状态") + ": " + esc(goal.state || "MISSING")
+			: __("尚未确认来源 Purchase Order 和目标行；确认前不能收口。");
+		const progress_summary = progress.target_qty !== undefined
+			? __("收货数量") + ": " + esc(progress.received_qty || "0") + " / " + esc(progress.target_qty || "0") +
+				" · " + __("剩余数量") + ": " + esc(progress.remaining_qty || "0") +
+				" · " + __("已开票金额") + ": " + esc(progress.billed_amount || "0") + " / " + esc(progress.target_amount || "0") +
+				" · " + __("未付余额") + ": " + esc(progress.outstanding_amount || "0")
+			: "";
+		const target_rows_summary = target_rows.length
+			? '<div class="small text-muted mb-2">' + __("目标行") + ": " +
+				target_rows.map(function (row) {
+					return esc(row.source_row) + " / " + esc(row.item_code) + " · " + __("数量") + ": " + esc(row.target_qty);
+				}).join("；") + "</div>"
+			: "";
 		const reasons = (chain.blocked_reasons || []).filter(Boolean).map(function (reason) {
 			return "<li>" + esc(reason) + "</li>";
 		}).join("");
@@ -744,13 +771,15 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		const actions = (can_resume ? '<button type="button" class="btn btn-outline-primary btn-sm p2p-run-resume" data-run="' + esc(run.run_id) + '">' + __("重新调查 / 恢复") + "</button>" : "") +
 			(can_finalize ? '<button type="button" class="btn btn-primary btn-sm p2p-run-finalize" data-run="' + esc(run.run_id) + '">' + __("确认链路完成") + "</button>" : "") +
 			(can_cancel ? '<button type="button" class="btn btn-outline-danger btn-sm p2p-run-cancel" data-run="' + esc(run.run_id) + '">' + __("停止后续调度") + "</button>" : "");
-		return '<section class="p2p-chain-panel mt-3" aria-labelledby="' + panel_id + '-label" data-p2p-run="' + esc(run.run_id) + '">' +
-			'<h5 id="' + panel_id + '-label">' + __("P2P 跨单据编排") + "</h5>" +
-			'<div class="small text-muted mb-2 p2p-chain-status" role="status" aria-live="polite">' +
-				__("链路状态") + ": <b>" + p2p_chain_status_copy(chain.status) + "</b> · " +
-				__("完成条件") + ": " + (chain.completion_ready ? __("所有步骤都有成功 Receipt") : __("尚未满足")) +
-				(chain.next_step_id ? " · " + __("下一步") + ": " + esc(chain.next_step_id) : "") + "</div>" +
-			'<div class="small mb-2">' + __("每个 ERP 副作用都单独审批、执行和读回；前一步失败或未知时，后续步骤会停在这里。") + "</div>" +
+			return '<section class="p2p-chain-panel mt-3" aria-labelledby="' + panel_id + '-label" data-p2p-run="' + esc(run.run_id) + '">' +
+				'<h5 id="' + panel_id + '-label">' + __("P2P 跨单据编排") + "</h5>" +
+				'<div class="small text-muted mb-2 p2p-chain-status" role="status" aria-live="polite">' +
+					__("链路状态") + ": <b>" + p2p_chain_status_copy(chain.status) + "</b> · " +
+					__("完成条件") + ": " + (chain.completion_ready ? __("目标范围已收货、已开票、余额为零且每个步骤都有成功 Receipt") : __("目标范围、ERP 当前事实和成功 Receipt 尚未全部满足")) +
+					(chain.next_step_id ? " · " + __("下一步") + ": " + esc(chain.next_step_id) : "") + "</div>" +
+				'<div class="small mb-2"><b>' + goal_summary + "</b>" + (progress_summary ? "<br>" + progress_summary : "") + "</div>" +
+				target_rows_summary +
+				'<div class="small mb-2">' + __("每个 ERP 副作用都单独审批、执行和读回；前一步失败或未知时，后续步骤会停在这里。") + "</div>" +
 			(reasons ? '<div class="small text-danger mb-2"><b>' + __("待处理原因") + "</b><ul class=\"mb-0\">" + reasons + "</ul></div>" : "") +
 			'<div class="table-responsive"><table class="table table-sm table-striped"><caption class="sr-only">' + __("P2P 步骤与回执") + "</caption><thead><tr>" +
 				"<th scope=\"col\">" + __("序号") + "</th><th scope=\"col\">" + __("动作 / 单据") + "</th><th scope=\"col\">" + __("状态") + "</th><th scope=\"col\">" + __("前置步骤") + "</th><th scope=\"col\">Receipt</th>" +

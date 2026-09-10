@@ -11,6 +11,13 @@
   "time_window_days",
   "company_scope",
   "warehouse_scope",
+  "p2p_goal_schema_version",
+  "p2p_goal_json",
+  "p2p_goal_version",
+  "p2p_goal_digest",
+  "p2p_goal_state",
+  "p2p_goal_confirmed_by",
+  "p2p_goal_confirmed_at",
   "capability_digest",
   "capability_audience",
   "issued_at",
@@ -125,6 +132,59 @@
    "fieldtype": "Check",
    "label": "Revoked",
    "read_only": 1
+  },
+  {
+   "fieldname": "p2p_goal_schema_version",
+   "fieldtype": "Data",
+   "label": "P2P Goal Schema Version",
+   "read_only": 1,
+   "set_only_once": 0
+  },
+  {
+   "fieldname": "p2p_goal_json",
+   "fieldtype": "Long Text",
+   "label": "P2P Goal JSON",
+   "read_only": 1,
+   "set_only_once": 0
+  },
+  {
+   "default": "0",
+   "fieldname": "p2p_goal_version",
+   "fieldtype": "Int",
+   "label": "P2P Goal Version",
+   "read_only": 1,
+   "set_only_once": 0
+  },
+  {
+   "fieldname": "p2p_goal_digest",
+   "fieldtype": "Data",
+   "label": "P2P Goal Digest",
+   "read_only": 1,
+   "set_only_once": 0
+  },
+  {
+   "default": "MISSING",
+   "fieldname": "p2p_goal_state",
+   "fieldtype": "Select",
+   "label": "P2P Goal State",
+   "options": "MISSING\nCONFIRMED\nSTALE\nINVALID",
+   "read_only": 1,
+   "set_only_once": 0
+  },
+  {
+   "fieldname": "p2p_goal_confirmed_by",
+   "fieldtype": "Link",
+   "label": "P2P Goal Confirmed By",
+   "options": "User",
+   "read_only": 1,
+   "set_only_once": 0
+  },
+  {
+   "fieldname": "p2p_goal_confirmed_at",
+   "fieldtype": "Datetime",
+   "label": "P2P Goal Confirmed At",
+   "read_only": 1,
+   "set_only_once": 0
   },
   {
    "fieldname": "status",

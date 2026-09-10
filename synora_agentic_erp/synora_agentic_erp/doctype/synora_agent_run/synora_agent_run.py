@@ -15,6 +15,15 @@ IMMUTABLE_FIELDS = {
     "workflow_expires_at",
     "correlation_id",
 }
+P2P_GOAL_FIELDS = {
+    "p2p_goal_schema_version",
+    "p2p_goal_json",
+    "p2p_goal_version",
+    "p2p_goal_digest",
+    "p2p_goal_state",
+    "p2p_goal_confirmed_by",
+    "p2p_goal_confirmed_at",
+}
 CAPABILITY_FIELDS = {"capability_digest", "issued_at", "expires_at"}
 LIFECYCLE_FIELDS = {
     "revoked",
@@ -42,11 +51,14 @@ class SynoraAgentRun(Document):  # type: ignore[misc]
         ):
             frappe.throw("Synora Agent Run identity and scope are immutable")
         lifecycle_changed = any(self.has_value_changed(field) for field in LIFECYCLE_FIELDS)
+        goal_changed = any(self.has_value_changed(field) for field in P2P_GOAL_FIELDS)
         controlled = (
             self.flags.synora_revocation
             or self.flags.synora_state_change
             or self.flags.synora_capability_rotation
         )
+        if goal_changed and not self.flags.synora_p2p_goal_update:
+            frappe.throw("Synora Agent Run P2P goal changes require the governed goal service")
         if lifecycle_changed and not controlled:
             frappe.throw(
                 "Synora Agent Run lifecycle changes require the controlled transition path"

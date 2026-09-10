@@ -17,6 +17,7 @@ from frappe.tests.utils import FrappeTestCase
 
 from synora_agentic_erp.api import (
     analyze_run,
+    confirm_p2p_goal,
     decide_action,
     evaluate_proposal,
     execute_p2p_action,
@@ -265,6 +266,34 @@ class TestPhase10RealP2PEndToEnd(FrappeTestCase):  # type: ignore[misc]
     def test_full_p2p_lifecycle_stays_in_one_run_and_reconciles_accounts(self) -> None:
         po_name, po_item_name, item_code = self._draft_po()
         run_id = self._new_run(f"Phase 10 E2E P2P batch {po_name}")
+        frappe.set_user(E2E_OWNER)
+        confirmed = confirm_p2p_goal(
+            run_id,
+            {
+                "source_doctype": "Purchase Order",
+                "source_name": po_name,
+                "source_rows": [
+                    {"source_row": po_item_name, "item_code": item_code, "target_qty": 2}
+                ],
+            },
+            str(uuid4()),
+        )
+        self.assertTrue(confirmed["ok"], confirmed)
+        self.assertEqual(confirmed["run"]["goal"]["state"], "CONFIRMED")
+        repeated = confirm_p2p_goal(
+            run_id,
+            {
+                "source_doctype": "Purchase Order",
+                "source_name": po_name,
+                "source_rows": [
+                    {"source_row": po_item_name, "item_code": item_code, "target_qty": "2.0"}
+                ],
+            },
+            str(uuid4()),
+        )
+        self.assertTrue(repeated["ok"], repeated)
+        self.assertEqual(repeated["run"]["goal"]["version"], 1)
+        self.assertEqual(repeated["run"]["invalidated_actions"], 0)
 
         _po_review, po_response = self._approve_and_execute(
             self._proposal(run_id, "SUBMIT_PO", "Purchase Order", po_name),
@@ -509,6 +538,54 @@ class TestPhase10RealP2PEndToEnd(FrappeTestCase):  # type: ignore[misc]
                 sort_keys=True,
             )
         )
+
+    def test_goal_revision_invalidates_pending_candidate_without_rewriting_history(self) -> None:
+        po_name, po_item_name, item_code = self._draft_po()
+        run_id = self._new_run(f"Phase 10 E2E goal revision {po_name}")
+        frappe.set_user(E2E_OWNER)
+        first = confirm_p2p_goal(
+            run_id,
+            {
+                "source_doctype": "Purchase Order",
+                "source_name": po_name,
+                "source_rows": [
+                    {"source_row": po_item_name, "item_code": item_code, "target_qty": 2}
+                ],
+            },
+            str(uuid4()),
+        )
+        self.assertTrue(first["ok"], first)
+        proposal = self._proposal(run_id, "SUBMIT_PO", "Purchase Order", po_name)
+        pending = cast(dict[str, Any], evaluate_proposal(proposal))
+        self.assertTrue(pending["ok"], pending)
+        self.assertEqual(pending["action"]["state"], "AWAITING_APPROVAL")
+
+        revised = confirm_p2p_goal(
+            run_id,
+            {
+                "source_doctype": "Purchase Order",
+                "source_name": po_name,
+                "source_rows": [
+                    {"source_row": po_item_name, "item_code": item_code, "target_qty": 1}
+                ],
+            },
+            str(uuid4()),
+        )
+        self.assertTrue(revised["ok"], revised)
+        self.assertEqual(revised["run"]["goal"]["version"], 2)
+        self.assertEqual(revised["run"]["invalidated_actions"], 1)
+        self.assertEqual(
+            frappe.db.get_value("Synora Proposed Action", proposal["action_id"], "state"),
+            "EXPIRED",
+        )
+        old_detail = get_run(run_id)
+        self.assertTrue(old_detail["ok"], old_detail)
+        old_action = next(
+            row
+            for row in old_detail["governance"]
+            if row["action"]["action_id"] == proposal["action_id"]
+        )
+        self.assertEqual(old_action["action"]["state"], "EXPIRED")
 
     def test_response_loss_replays_without_duplicate_and_blocks_unknown_downstream(self) -> None:
         po_name, po_item_name, item_code = self._draft_po()
