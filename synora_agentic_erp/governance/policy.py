@@ -713,6 +713,8 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
         source_fields = ["name", "company", "docstatus", "supplier"]
         if action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
             source_fields.append("outstanding_amount")
+        if source_doctype in {"Purchase Order", "Purchase Receipt"}:
+            source_fields.append("status")
         source_rows = frappe.get_list(
             source_doctype,
             filters={"name": source_name, "company": payload["company"]},
@@ -730,6 +732,10 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
             return GateResult("FAIL", "only a submitted document can be cancelled")
         if action.action_type == "CREATE_PR_DRAFT" and docstatus != 1:
             return GateResult("FAIL", "Purchase Order must be submitted before receipt")
+        if action.action_type == "CREATE_PR_DRAFT" and str(
+            getattr(source, "status", "") or ""
+        ) in {"Closed", "On Hold", "Cancelled"}:
+            return GateResult("FAIL", "Purchase Order is closed or on hold")
         if action.action_type == "CREATE_PI_DRAFT" and docstatus != 1:
             return GateResult("FAIL", "Purchase Receipt must be submitted before invoice")
         if action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
@@ -750,10 +756,13 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
                 "received_qty" if action.action_type == "CREATE_PR_DRAFT" else "billed_qty"
             )
             for item in payload["items"]:
+                fields = ["name", "item_code", "qty", remaining_field, "warehouse", "uom"]
+                if child == "Purchase Order Item":
+                    fields.append("delivered_by_supplier")
                 rows = frappe.get_list(
                     child,
                     filters={"name": item["source_row"], "parent": source_name},
-                    fields=["name", "item_code", "qty", remaining_field, "warehouse", "uom"],
+                    fields=fields,
                     user=actor,
                     parent_doctype=source_doctype,
                     limit=1,
@@ -763,6 +772,13 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
                 row = rows[0]
                 if str(getattr(row, "item_code", "")) != item["item_code"]:
                     return GateResult("FAIL", "source item does not match payload")
+                if action.action_type == "CREATE_PR_DRAFT":
+                    if bool(getattr(row, "delivered_by_supplier", 0)):
+                        return GateResult(
+                            "FAIL", "supplier-delivered source rows cannot be received"
+                        )
+                    if str(getattr(row, "uom", "") or "") != str(item.get("uom") or ""):
+                        return GateResult("FAIL", "UOM does not match the source row")
                 remaining = Decimal(str(getattr(row, "qty", 0) or 0)) - Decimal(
                     str(getattr(row, remaining_field, 0) or 0)
                 )
@@ -773,6 +789,22 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
                     and str(getattr(row, "warehouse", "") or "") != item["warehouse"]
                 ):
                     return GateResult("FAIL", "warehouse does not match the source row")
+                if action.action_type == "CREATE_PR_DRAFT":
+                    open_draft = frappe.db.sql(
+                        """
+                        SELECT COALESCE(SUM(pri.qty), 0)
+                        FROM `tabPurchase Receipt Item` pri
+                        INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent
+                        WHERE pri.purchase_order = %s
+                          AND pri.purchase_order_item = %s
+                          AND pr.docstatus = 0
+                        """,
+                        (source_name, item["source_row"]),
+                    )[0][0]
+                    if Decimal(str(open_draft or 0)) > 0:
+                        return GateResult(
+                            "FAIL", "source row already has an open Purchase Receipt draft"
+                        )
         return GateResult("PASS", "source status, scope, and bounded quantities passed")
     except InvalidOperation, TypeError, ValueError, KeyError:
         return GateResult("FAIL", "P2P deterministic checks failed")
@@ -1215,7 +1247,7 @@ def list_pending_approvals(limit: int = 50) -> list[dict[str, Any]]:
         "Synora Proposed Action",
         filters={"approval_class": "INDEPENDENT_APPROVER"},
         fields=["name"],
-        order_by="creation asc",
+        order_by="creation desc",
         limit_page_length=limit,
         ignore_permissions=True,
     )

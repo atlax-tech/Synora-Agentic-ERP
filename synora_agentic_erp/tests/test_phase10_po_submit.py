@@ -18,6 +18,7 @@ from synora_agentic_erp.api import (
     issue_run,
     list_pending_approvals,
 )
+from synora_agentic_erp.tests.phase10_test_helpers import cancel_p10_test_documents
 
 BUYER = "synora-p1-buyer@dev.localhost"
 APPROVER = "synora-p1-approver@dev.localhost"
@@ -32,6 +33,7 @@ STOCK_UOM = "Unit"
 class TestPhase10PurchaseOrderSubmit(FrappeTestCase):  # type: ignore[misc]
     def tearDown(self) -> None:
         frappe.set_user("Administrator")
+        cancel_p10_test_documents()
         super().tearDown()
 
     def _draft_po(self) -> str:

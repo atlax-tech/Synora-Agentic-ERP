@@ -560,18 +560,19 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		const total = calculation && calculation.total_amount ? calculation.total_amount : "—";
 		const currency = calculation && calculation.currency ? calculation.currency : (payload.currency || "");
 		return '<div class="table-responsive"><table class="table table-sm table-striped" aria-label="' + esc(__("批准物料行")) + '">' +
-			"<thead><tr><th scope=\"col\">" + __("物料") + "</th><th scope=\"col\">" + __("数量 / UOM") + "</th><th scope=\"col\">" + __("单价") + "</th><th scope=\"col\">" + __("金额") + "</th><th scope=\"col\">" + __("仓库 / 交期") + "</th></tr></thead><tbody>" +
+			"<thead><tr><th scope=\"col\">" + __("来源行") + "</th><th scope=\"col\">" + __("物料") + "</th><th scope=\"col\">" + __("数量 / UOM") + "</th><th scope=\"col\">" + __("单价") + "</th><th scope=\"col\">" + __("金额") + "</th><th scope=\"col\">" + __("仓库 / 交期") + "</th></tr></thead><tbody>" +
 			items.map(function (item, index) {
 				const rate = item.rate === undefined ? "—" : item.rate;
 				const amount = amounts[index] === undefined ? "—" : amounts[index];
 				return "<tr>" +
+					"<td><code>" + esc(item.source_row || "—") + "</code></td>" +
 					"<td>" + esc(item.item_code) + "</td>" +
 					"<td>" + esc(item.qty) + " / " + esc(item.uom || "—") + "</td>" +
 					"<td>" + esc(rate) + "</td>" +
 					"<td>" + esc(amount) + (currency ? " " + esc(currency) : "") + "</td>" +
 					"<td>" + esc(item.warehouse) + " / " + governance_time(item.schedule_date) + "</td>" +
 					"</tr>";
-			}).join("") + "</tbody><tfoot><tr><th colspan=\"3\" scope=\"row\">" + __("合计") + "</th><td>" + esc(total) + (currency ? " " + esc(currency) : "") + "</td><td></td></tr></tfoot></table></div>";
+			}).join("") + "</tbody><tfoot><tr><th colspan=\"4\" scope=\"row\">" + __("合计") + "</th><td>" + esc(total) + (currency ? " " + esc(currency) : "") + "</td><td></td></tr></tfoot></table></div>";
 	}
 
 	function is_p2p_action(action_type) {

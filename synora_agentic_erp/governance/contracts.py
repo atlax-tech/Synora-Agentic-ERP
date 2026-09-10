@@ -41,7 +41,13 @@ ACTION_TYPES = frozenset(
 P2P_ACTION_TYPES = frozenset(ACTION_TYPES - {"CREATE_MR_DRAFT", "CREATE_PO_DRAFT"})
 # Contracts are versioned before their writers land.  Keep future actions
 # parseable while the current increment fails closed for unsupported writes.
-ENABLED_P2P_ACTION_TYPES = frozenset({"SUBMIT_PO"})
+ENABLED_P2P_ACTION_TYPES = frozenset(
+    {
+        "SUBMIT_PO",
+        "CREATE_PR_DRAFT",
+        "SUBMIT_PR",
+    }
+)
 RISK_CLASSES = frozenset({"LOW", "MEDIUM", "HIGH"})
 APPROVAL_CLASSES = frozenset({"INITIATOR_CONFIRMATION", "INDEPENDENT_APPROVER"})
 DRAFT_APPROVAL_CLASS = "INITIATOR_CONFIRMATION"

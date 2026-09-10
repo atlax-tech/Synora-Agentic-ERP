@@ -292,6 +292,13 @@ def p2p_read_back(action: ProposedAction, doc: object) -> dict[str, Any]:
         "docstatus": expected_status,
         "company": str(_value(doc, "company")),
     }
+    actual_name = str(_value(doc, "name") or "")
+    if (
+        actual_name
+        and action.action_type.startswith(("SUBMIT_", "CANCEL_"))
+        and actual_name != str(payload.get("source_name") or "")
+    ):
+        raise ReadBackMismatch("target name does not match source document")
     if action.action_type in {"SUBMIT_PO", "CANCEL_PO"}:
         verified["source_name"] = str(payload["source_name"])
     elif action.action_type in {
@@ -307,17 +314,53 @@ def p2p_read_back(action: ProposedAction, doc: object) -> dict[str, Any]:
         rows = _value(doc, "items", [])
         if not isinstance(rows, (list, tuple)) or len(rows) != len(payload["items"]):
             raise ReadBackMismatch("P2P draft item count does not match")
+        _same_text(
+            _value(doc, "posting_date"),
+            payload["transaction_date"],
+            "posting_date",
+        )
         verified["source_name"] = str(payload["source_name"])
+        verified["posting_date"] = str(_value(doc, "posting_date"))
         verified["items_count"] = len(rows)
+        source_link = (
+            "purchase_order_item"
+            if action.action_type == "CREATE_PR_DRAFT"
+            else "pr_detail"
+        )
+        parent_link = (
+            "purchase_order" if action.action_type == "CREATE_PR_DRAFT" else "purchase_receipt"
+        )
         for index, (actual, expected) in enumerate(zip(rows, payload["items"], strict=True)):
             actual_code = str(_value(actual, "item_code") or "")
             if actual_code != expected["item_code"]:
                 raise ReadBackMismatch(f"item_{index}.item_code does not match")
+            _same_text(
+                _value(actual, source_link),
+                expected["source_row"],
+                f"item_{index}.{source_link}",
+            )
+            _same_text(
+                _value(actual, parent_link),
+                payload["source_name"],
+                f"item_{index}.{parent_link}",
+            )
+            if expected.get("warehouse") is not None:
+                _same_text(
+                    _value(actual, "warehouse"),
+                    expected["warehouse"],
+                    f"item_{index}.warehouse",
+                )
+            if expected.get("uom") is not None:
+                _same_text(_value(actual, "uom"), expected["uom"], f"item_{index}.uom")
             actual_qty = _decimal(_value(actual, "qty"), f"item_{index}.qty")
             if actual_qty != _decimal(expected["qty"], f"item_{index}.qty"):
                 raise ReadBackMismatch(f"item_{index}.qty does not match")
             verified[f"item_{index}.item_code"] = actual_code
             verified[f"item_{index}.qty"] = format(actual_qty.normalize(), "f")
+            verified[f"item_{index}.{source_link}"] = str(_value(actual, source_link))
+            verified[f"item_{index}.{parent_link}"] = str(_value(actual, parent_link))
+            verified[f"item_{index}.warehouse"] = str(_value(actual, "warehouse") or "")
+            verified[f"item_{index}.uom"] = str(_value(actual, "uom") or "")
     elif action.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
         for field in ("party_type", "party", "payment_type", "paid_from", "paid_to"):
             _same_text(_value(doc, field), payload[field], field)

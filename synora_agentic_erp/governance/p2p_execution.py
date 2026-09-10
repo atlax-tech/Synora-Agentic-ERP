@@ -76,6 +76,10 @@ CREATE_ACTIONS = {
     "CREATE_PI_DRAFT",
     "CREATE_PAYMENT_ENTRY_DRAFT",
 }
+SOURCE_CHILD_DOCTYPES = {
+    "CREATE_PR_DRAFT": "Purchase Order Item",
+    "CREATE_PI_DRAFT": "Purchase Receipt Item",
+}
 KNOWN_CONTROLLER_FAILURES = frozenset(
     {
         "ValidationError",
@@ -160,6 +164,7 @@ def _build_pr(action: Any) -> Any:
         if item is None:
             raise GatewayFault("CONFLICT", "mapped receipt contains an unapproved source row", 409)
         row.qty = item["qty"]
+    target.posting_date = action.payload["transaction_date"]
     return target
 
 
@@ -179,6 +184,7 @@ def _build_pi(action: Any) -> Any:
             raise GatewayFault("CONFLICT", "mapped invoice contains an unapproved source row", 409)
         row.qty = item["qty"]
         row.rate = item["rate"]
+    target.posting_date = action.payload["transaction_date"]
     return target
 
 
@@ -197,6 +203,29 @@ def _build_target(action: Any) -> Any:
 def _load_source_target(action: Any) -> Any:
     is_submit = action.action_type.startswith("SUBMIT_")
     return _load_target(action, expected_docstatus=0 if is_submit else 1)
+
+
+def _lock_p2p_source(action: Any) -> None:
+    """Serialize competing draft conversions on the reviewed source row."""
+
+    child_doctype = SOURCE_CHILD_DOCTYPES.get(str(action.action_type))
+    if child_doctype is None:
+        return
+    payload = action.payload
+    table = f"tab{child_doctype}"
+    for item in sorted(payload["items"], key=lambda value: value["source_row"]):
+        rows = frappe.db.sql(
+            f"""
+            SELECT name
+            FROM `{table}`
+            WHERE name = %s AND parent = %s
+            FOR UPDATE
+            """,
+            (item["source_row"], payload["source_name"]),
+            as_dict=True,
+        )
+        if not rows:
+            raise GatewayFault("CONFLICT", "reviewed source row is no longer available", 409)
 
 
 def _apply_source_action(action: Any, target: Any) -> Any:
@@ -316,6 +345,13 @@ def _finalize_failure(
         action = _load_action_from_doc(action_doc)
         if str(reservation.status) != "STARTED":
             return
+        persisted_target = target
+        if target is not None:
+            target_name = str(getattr(target, "name", "") or "")
+            if not target_name or not frappe.db.exists(
+                TARGET_DOCTYPES[action.action_type], target_name
+            ):
+                persisted_target = None
         final_state = "RECONCILIATION_REQUIRED" if uncertain else "FAILED"
         stored = _persist_receipt(
             action,
@@ -324,14 +360,14 @@ def _finalize_failure(
             final_state=final_state,
             response_category="UNCERTAIN_RESULT" if uncertain else category,
             failure_category=failure,
-            target=target,
+            target=persisted_target,
             verified_fields={},
             evidence={"reason": failure} if uncertain else None,
         )
         _update_reservation(
             reservation,
             final_state,
-            target_name=str(target.name) if target is not None else None,
+            target_name=str(persisted_target.name) if persisted_target is not None else None,
             receipt_id=stored["receipt_id"],
             response_category="UNCERTAIN_RESULT" if uncertain else category,
             failure_category=failure,
@@ -415,6 +451,13 @@ def execute_p2p_action(
         pre_execute_recheck(safe_action_id, safe_digest, safe_key)
         run = _lock_run_for_action(safe_action_id)
         action_doc, action, locked = _lock_action(safe_action_id)
+        _lock_p2p_source(action)
+        if action.action_type in CREATE_ACTIONS:
+            # The source row lock serializes two stale approvals.  Re-run the
+            # quantity/open-draft checks after the winner commits its target.
+            pre_execute_recheck(safe_action_id, safe_digest, safe_key)
+            run = _lock_run_for_action(safe_action_id)
+            action_doc, action, locked = _lock_action(safe_action_id)
         if action.action_type in SOURCE_ACTIONS:
             target = _load_source_target(action)
             operation_started = True
