@@ -1,0 +1,293 @@
+{
+  "schema_version": "1",
+  "suite": "phase10-final-manifest",
+  "status": "COMPLETED_PASS_PENDING_PROTECTED_SYNC",
+  "generated_at": "2026-09-10T13:02:01.789092+00:00",
+  "implementation_head": "3512f9635d2dd04febce610f9ce9a2c00077f012",
+  "upstream": {
+    "FDP_REV_FRAPPE": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+    "FDP_REV_ERP_NEXT": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+    "dirty_worktrees": "0/0"
+  },
+  "commits": [
+    {
+      "step": "P10.1",
+      "short": "cd148ab",
+      "revision": "cd148abccecac5c1872ca52496251b95dcc227de",
+      "subject": "feat(p2p): add independently approved purchase order submission"
+    },
+    {
+      "step": "P10.2",
+      "short": "141106b",
+      "revision": "141106bb95583b58af7811eb235ffb77232148e9",
+      "subject": "feat(p2p): add governed partial purchase receipts"
+    },
+    {
+      "step": "P10.3",
+      "short": "324c8d6",
+      "revision": "324c8d65989561dcedf05e60ffd257ba3a14005b",
+      "subject": "feat(p2p): add governed partial purchase invoices"
+    },
+    {
+      "step": "P10.4",
+      "short": "ef260a8",
+      "revision": "ef260a8804c1044a4be9943b7b6a1365c8345ebf",
+      "subject": "feat(p2p): add governed payment entry settlement"
+    },
+    {
+      "step": "P10.5",
+      "short": "f411c4e",
+      "revision": "f411c4e3976d357eb6dcbc0966d7f90ec773bf67",
+      "subject": "feat(p2p): add governed cancellation and recovery"
+    },
+    {
+      "step": "P10.6",
+      "short": "717ef65",
+      "revision": "717ef65eba2c4d94f7308dd9e83b13a58e1cc898",
+      "subject": "feat(p2p): orchestrate durable procure-to-pay runs"
+    },
+    {
+      "step": "P10.7",
+      "short": "cebdff9",
+      "revision": "cebdff99427a97060f8a3f13b741fe4fa408b55d",
+      "subject": "test(p2p): compare orchestration and recovery strategies"
+    },
+    {
+      "step": "P10.8",
+      "short": "15e1656",
+      "revision": "15e1656c464b01760a05e1390ef8b947ba3c59c5",
+      "subject": "test(p2p): verify real ERP lifecycle and fault recovery"
+    },
+    {
+      "step": "P10.9 gate fix",
+      "short": "3512f96",
+      "revision": "3512f9635d2dd04febce610f9ce9a2c00077f012",
+      "subject": "test(phase10): cover governed cancellation transitions"
+    }
+  ],
+  "business_scope": {
+    "lifecycle": [
+      "SUBMIT_PO",
+      "CREATE_PR_DRAFT",
+      "SUBMIT_PR",
+      "CREATE_PI_DRAFT",
+      "SUBMIT_PI",
+      "CREATE_PAYMENT_ENTRY_DRAFT",
+      "SUBMIT_PAYMENT_ENTRY"
+    ],
+    "cancellation": [
+      "CANCEL_PO",
+      "CANCEL_PR",
+      "CANCEL_PI",
+      "CANCEL_PAYMENT_ENTRY"
+    ],
+    "approval": "every new write action has an independent authorized approver; legacy MR/PO Draft confirmation remains compatible",
+    "payment_boundary": "ERP Payment Entry accounting only; no bank or cash transfer",
+    "runtime_boundary": "Runtime, model, retrieval and lab events have no ERP write capability"
+  },
+  "real_e2e": {
+    "artifact": "output/phase10/phase10-p2p-e2e-recorded-v1.json",
+    "artifact_sha256": "4ea7000683ab81e45e34dcd19c9d12402723e4bd84f527221e4343f3a54d7514",
+    "test_command": "docker compose -f env/dev/docker-compose.yml exec -T bench ... bench --site dev.localhost run-tests --module synora_agentic_erp.tests.test_phase10_e2e",
+    "exit_code": 0,
+    "tests_run": 3,
+    "run_id_prefix": "a1d259b2-fc1",
+    "action_count": 15,
+    "po": "PUR-ORD-2026-02030",
+    "po_per_received": 100.0,
+    "po_per_billed": 100.0,
+    "receipts": [
+      "MAT-PRE-2026-00358",
+      "MAT-PRE-2026-00359"
+    ],
+    "invoices": [
+      {
+        "name": "ACC-PINV-2026-00221",
+        "status": "Paid"
+      },
+      {
+        "name": "ACC-PINV-2026-00222",
+        "status": "Paid"
+      }
+    ],
+    "payment_entries": [
+      "ACC-PAY-2026-00076",
+      "ACC-PAY-2026-00077",
+      "ACC-PAY-2026-00078"
+    ],
+    "run_state": "SUCCEEDED",
+    "fault_cases": [
+      {
+        "scenario": "response_loss_after_committed_submit",
+        "result": "UNCERTAIN_RESULT",
+        "recovery": "same idempotency key reads existing receipt; no duplicate PO"
+      },
+      {
+        "scenario": "committed_native_submit_without_receipt",
+        "result": "UNCERTAIN_RESULT",
+        "recovery": "Run freezes RECONCILIATION_REQUIRED; resume is read-only"
+      }
+    ]
+  },
+  "browser": {
+    "artifact": "output/playwright/phase10-p2p-e2e-browser-acceptance.json",
+    "artifact_sha256": "dffdfec8ffbab84c1593466eb132f979c27c24ff936666ab2848acc021c675a7",
+    "surface": "playwright-cli headed browser",
+    "url": "http://127.0.0.1:8000/desk/runs",
+    "actor": "Administrator (System Manager)",
+    "read_only": true,
+    "console_errors": 0,
+    "console_warnings": 3,
+    "warning_scope": "upstream icon preload warnings",
+    "screenshots": [
+      {
+        "path": "output/playwright/phase10-p2p-e2e-a1d259b2.png",
+        "sha256": "9c92f55324ba2ea01f7fcf9b80797c27101bdd9a1814c338dfcdde2ceb02e0c8"
+      },
+      {
+        "path": "output/playwright/phase10-p2p-unknown-9ce932fa.png",
+        "sha256": "4314b9a56a18ea0ab240c1d01433fd2cd741fcae6549ed8ccd40b28d4b2fd73c"
+      }
+    ]
+  },
+  "lab": {
+    "artifact": "output/phase10/phase10-p2p-orchestration-recorded-v1.json",
+    "artifact_sha256": "14c12d98cc7dd902ed093a11fd4f2e7aa3b22419103aac690dcc7c01f4224543",
+    "dataset_digest": "b9a844f21aa3ca498306dfd96ca9c1098b86fe9757db078eb0519f6827b4540a",
+    "status": "PASS",
+    "adoption": "KEEP_FIXED_WORKFLOW_BUSINESS_BASELINE",
+    "policy": "LAB_ONLY; no ERP write, credential or event authorization"
+  },
+  "command_exit_codes": {
+    "make_format_check": 0,
+    "make_lint": 0,
+    "make_type": 0,
+    "make_unit": 0,
+    "make_integration": 0,
+    "phase10_lab_pytest": 0,
+    "phase10_lab_script": 0,
+    "harness_validate_structure": 0,
+    "harness_validate_manifest": 0,
+    "harness_check_references": 0,
+    "harness_score_health": 0,
+    "harness_detect_drift": 1,
+    "ponytail_audit": 0,
+    "ponytail_debt": 0
+  },
+  "test_results": {
+    "format_files": 385,
+    "unit_passed": 853,
+    "unit_warnings": 55,
+    "integration_tests": 239,
+    "lab_tests": 3,
+    "harness_references_checked": 673,
+    "harness_references_broken": 0,
+    "harness_health_score": 79,
+    "harness_health_grade": "C",
+    "drift_paths": [
+      "docs/PLAN.md",
+      "synora_agentic_erp/agent/state_machine.py",
+      "synora_agentic_erp/api.py",
+      "synora_agentic_erp/synora_agentic_erp/page/runs/runs.js"
+    ]
+  },
+  "rubric": {
+    "D1_requirements_business_correctness": 4,
+    "D2_identity_permissions_scope": 4,
+    "D3_state_concurrency_idempotency_recovery": 4,
+    "D4_agent_trust_cost": 3,
+    "D5_security_data_protection": 4,
+    "D6_ui_accessibility_bilingual": 3,
+    "D7_testing_real_integration_reproducibility": 4,
+    "D8_governance_traceability_nonfiction": 4,
+    "D9_simplicity_operability": 3,
+    "total": "33/36",
+    "average": 3.67,
+    "p0_count": 0,
+    "p1_count": 0
+  },
+  "risks": [
+    {
+      "id": "R-P10-HARNESS-SYNC",
+      "level": "P2",
+      "owner": "user/Harness maintainer",
+      "status": "OPEN_PENDING_APPROVAL",
+      "next_gate": "approve P10-HARNESS-CLOSE-20260910-v1; apply managed fingerprint update; rerun drift"
+    },
+    {
+      "id": "R-P10-DEV-HISTORY",
+      "level": "P2",
+      "owner": "ERP/DevOps",
+      "status": "OPEN",
+      "next_gate": "governed cleanup after evidence acceptance; keep immutable evidence"
+    },
+    {
+      "id": "R-P10-A11Y",
+      "level": "P3",
+      "owner": "UI",
+      "status": "OPEN",
+      "next_gate": "full keyboard/aria/empty/error/permission audit in later UI gate"
+    },
+    {
+      "id": "R-P10-LAB-METRICS",
+      "level": "P2",
+      "owner": "Runtime/Eval",
+      "status": "OPEN",
+      "next_gate": "do not use LAB_ONLY latency/tokens as production claim; measure separately if needed"
+    }
+  ],
+  "protected_sync": {
+    "status": "PENDING_USER_OR_HARNESS_OWNER_CONFIRMATION",
+    "proposal": "output/phase10/phase10-harness-sync-proposal.md",
+    "proposal_sha256": "5afbce6987c9da879009d0658bc37904a7bbc4b2054cee5ccb76fa3721f97c75",
+    "unresolved_json": "NO_CHANGE",
+    "plan_user_diff": "PRESERVED_UNSTAGED"
+  },
+  "review": {
+    "status": "PASS",
+    "reviewed_head": "3512f9635d2dd04febce610f9ce9a2c00077f012",
+    "rounds_completed": 2,
+    "round_results": [
+      {
+        "round": 1,
+        "status": "CHANGES_REQUIRED",
+        "finding": "出口日志中的 manifest/proposal SHA 过期，pending review 与 hash-update flag 不一致",
+        "resolution": "重算 SHA；pending 时将 report_hash_is_updated_after_final_review 设为 false"
+      },
+      {
+        "round": 2,
+        "status": "PASS",
+        "finding": "出口材料、业务证据、风险和受保护文件边界一致"
+      }
+    ],
+    "allowed_results": [
+      "PASS",
+      "CHANGES_REQUIRED",
+      "BLOCKED"
+    ],
+    "scope": "final Phase 10 diff, reports, artifacts, gates, risks and protected-file proposal"
+  },
+  "report": {
+    "path": "output/phase10/phase10-stage-report-draft-3512f96.md",
+    "sha256": "6552785edc7fe8d39aff2e8c06d2a324f34503fa53ce8777c4e85a96d31a4b55",
+    "status": "COMPLETED / PASS / PENDING PROTECTED FILE SYNC"
+  },
+  "safety": {
+    "secrets_recorded": false,
+    "cookies_recorded": false,
+    "bank_transfer_performed": false,
+    "history_deleted": false,
+    "upstream_modified": false,
+    "plan_user_diff_staged": false,
+    "learning_notes_written": false,
+    "codex_with_chatgpt_used": false,
+    "production_claim": false
+  },
+  "binding": {
+    "implementation_head": "3512f9635d2dd04febce610f9ce9a2c00077f012",
+    "manifest_self_digest": "excluded to avoid circular digest",
+    "report_hash_is_updated_after_final_review": true,
+    "close_commit": "the commit containing this manifest/report/log; recorded in final response after commit",
+    "final_review_recorded_without_code_change": true
+  }
+}
