@@ -131,6 +131,10 @@ class TestPhase10PurchaseOrderSubmit(FrappeTestCase):  # type: ignore[misc]
         reviewed = cast(dict[str, Any], evaluate_proposal(proposal))
         self.assertTrue(reviewed["ok"], reviewed)
         self.assertEqual(reviewed["action"]["state"], "AWAITING_APPROVAL")
+        self.assertEqual(
+            frappe.db.get_value("Synora P2P Plan Step", {"action": proposal["action_id"]}, "state"),
+            "WAITING_APPROVAL",
+        )
 
         frappe.set_user(APPROVER)
         pending = cast(dict[str, Any], list_pending_approvals())
@@ -203,6 +207,10 @@ class TestPhase10PurchaseOrderSubmit(FrappeTestCase):  # type: ignore[misc]
         self.assertEqual(response["target"]["docstatus"], 1)
         self.assertEqual(response["receipt"]["approver"], APPROVER)
         self.assertEqual(response["run"]["run_state"], "EXECUTING")
+        self.assertEqual(
+            frappe.db.get_value("Synora P2P Plan Step", {"action": proposal["action_id"]}, "state"),
+            "SUCCEEDED",
+        )
 
         replay = cast(
             dict[str, Any],

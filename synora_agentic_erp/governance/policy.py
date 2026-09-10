@@ -1070,7 +1070,7 @@ def _deterministic_p2p(action: Any, actor: str) -> GateResult:
                             "FAIL", "source row already has an open Purchase Receipt draft"
                         )
         return GateResult("PASS", "source status, scope, and bounded quantities passed")
-    except (InvalidOperation, TypeError, ValueError, KeyError):
+    except (InvalidOperation, TypeError, ValueError, KeyError):  # fmt: skip
         return GateResult("FAIL", "P2P deterministic checks failed")
     except Exception:
         return GateResult("UNKNOWN", "current ERP source state could not be verified")
@@ -1122,12 +1122,8 @@ def _p2p_cancel_dependency_gate(
         return sorted({str(row.name) for row in rows if getattr(row, "name", None)})
 
     if action_type == "CANCEL_PO":
-        receipts = submitted_parents(
-            "Purchase Receipt Item", "purchase_order", "Purchase Receipt"
-        )
-        invoices = submitted_parents(
-            "Purchase Invoice Item", "purchase_order", "Purchase Invoice"
-        )
+        receipts = submitted_parents("Purchase Receipt Item", "purchase_order", "Purchase Receipt")
+        invoices = submitted_parents("Purchase Invoice Item", "purchase_order", "Purchase Invoice")
         blockers = [
             *(f"Purchase Receipt {name}" for name in receipts),
             *(f"Purchase Invoice {name}" for name in invoices),
@@ -1139,7 +1135,9 @@ def _p2p_cancel_dependency_gate(
         blockers = [f"Purchase Invoice {name}" for name in invoices]
     elif action_type == "CANCEL_PI":
         payments = submitted_parents(
-            "Payment Entry Reference", "reference_name", "Payment Entry",
+            "Payment Entry Reference",
+            "reference_name",
+            "Payment Entry",
             extra_filters={"reference_doctype": "Purchase Invoice"},
         )
         blockers = [f"Payment Entry {name}" for name in payments]
@@ -1337,6 +1335,14 @@ def evaluate_proposal(value: object) -> dict[str, Any]:
         reason=decision.reason,
         correlation_id=action.correlation_id,
     )
+    if action.action_type in P2P_ACTION_TYPES:
+        # The PlanStep projection is created only after the Action has passed
+        # through the normal policy state transition.  It is a projection,
+        # never an authorization source, so a failed insert rolls back this
+        # proposal transaction.
+        from synora_agentic_erp.governance.p2p_orchestration import sync_p2p_plan_steps
+
+        sync_p2p_plan_steps(action.run_id)
     return {"action": stored_action, "policy": stored_policy}
 
 
@@ -1442,6 +1448,10 @@ def decide_action(
     )
     stored_approval = persist_approval_decision(approval)
     if safe_decision == "CHANGES_REQUESTED":
+        if action.action_type in P2P_ACTION_TYPES:
+            from synora_agentic_erp.governance.p2p_orchestration import sync_p2p_plan_steps
+
+            sync_p2p_plan_steps(action.run_id)
         return {
             "action": _action_response(action, doc),
             "approval": stored_approval,
@@ -1455,6 +1465,10 @@ def decide_action(
         correlation_id=safe_correlation,
         approval_digest=action.proposal_digest,
     )
+    if action.action_type in P2P_ACTION_TYPES:
+        from synora_agentic_erp.governance.p2p_orchestration import sync_p2p_plan_steps
+
+        sync_p2p_plan_steps(action.run_id)
     return {"action": stored_action, "approval": stored_approval}
 
 

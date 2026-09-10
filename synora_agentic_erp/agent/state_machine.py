@@ -27,10 +27,15 @@ RUN_STATES: tuple[str, ...] = (
 _TRANSITIONS: dict[str, frozenset[str]] = {
     "CREATED": frozenset({"ANALYZING", "CANCELLED", "EXPIRED"}),
     "ANALYZING": frozenset({"PROPOSED", "FAILED", "CANCELLED", "CREATED", "EXPIRED"}),
-    "PROPOSED": frozenset({"AWAITING_APPROVAL", "SUCCEEDED"}),
-    "AWAITING_APPROVAL": frozenset({"DECLINED", "EXPIRED", "EXECUTING"}),
-    "EXECUTING": frozenset({"SUCCEEDED", "FAILED", "RECONCILIATION_REQUIRED"}),
-    "RECONCILIATION_REQUIRED": frozenset({"SUCCEEDED", "FAILED"}),
+    "PROPOSED": frozenset({"AWAITING_APPROVAL", "SUCCEEDED", "CANCELLED", "EXPIRED"}),
+    "AWAITING_APPROVAL": frozenset({"DECLINED", "EXPIRED", "EXECUTING", "CANCELLED"}),
+    # P2P cancellation stops future scheduling; it never rolls back a
+    # submitted ERP document.  The dedicated API performs the reservation
+    # check before using this transition.
+    "EXECUTING": frozenset(
+        {"SUCCEEDED", "FAILED", "RECONCILIATION_REQUIRED", "CANCELLED", "EXPIRED"}
+    ),
+    "RECONCILIATION_REQUIRED": frozenset({"SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"}),
     "SUCCEEDED": frozenset(),
     "FAILED": frozenset(),
     "CANCELLED": frozenset(),

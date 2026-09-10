@@ -45,6 +45,10 @@ from synora_agentic_erp.governance.execution_contracts import (
     p2p_read_back,
     p2p_receipt_evidence_matches,
 )
+from synora_agentic_erp.governance.p2p_orchestration import (
+    assert_p2p_action_dependencies,
+    sync_p2p_plan_steps,
+)
 from synora_agentic_erp.governance.policy import (
     _actor,
     _latest_approval,
@@ -486,9 +490,7 @@ def _cancel_purchase_receipt_read_back(doc: Any, verified: dict[str, Any]) -> di
         expected_received = _financial_decimal(remaining_rows[0][0], "expected_received_qty")
         actual_received = _financial_decimal(po_item.received_qty, "po_received_qty")
         if actual_received != expected_received:
-            raise ReadBackMismatch(
-                f"item_{index} Purchase Order received quantity is inconsistent"
-            )
+            raise ReadBackMismatch(f"item_{index} Purchase Order received quantity is inconsistent")
         po_progress = frappe.db.get_value(
             "Purchase Order", po_name, ["company", "per_received"], as_dict=True
         )
@@ -1213,6 +1215,10 @@ def execute_p2p_action(
         raise GatewayFault("CONFLICT", "execution digest or Run conflicts", 409)
     if action.idempotency_key != safe_key:
         raise GatewayFault("CONFLICT", "idempotency key conflicts", 409)
+    # A downstream write cannot reserve a side effect while its predecessor is
+    # pending, failed, or uncertain.  The guard is repeated after the source
+    # lock/recheck below so a concurrent predecessor cannot be skipped.
+    assert_p2p_action_dependencies(action.action_id)
     key = execution_key(action)
     existing = _reservation_by_key(safe_key, lock=True)
     if existing is not None:
@@ -1256,6 +1262,7 @@ def execute_p2p_action(
         pre_execute_recheck(safe_action_id, safe_digest, safe_key)
         run = _lock_run_for_action(safe_action_id)
         action_doc, action, locked = _lock_action(safe_action_id)
+        assert_p2p_action_dependencies(action.action_id)
         if action.action_type in CREATE_ACTIONS:
             # The source row lock serializes two stale approvals.  Re-run the
             # quantity/open-draft checks after the winner commits its target.
@@ -1298,6 +1305,7 @@ def execute_p2p_action(
             response_category="ERP_SUCCESS",
         )
         _audit(run, safe_correlation, "SUCCEEDED")
+        sync_p2p_plan_steps(run.name)
         frappe.db.commit()
         stored_action_doc = frappe.get_doc("Synora Proposed Action", action.action_id)
         return _success_response(stored_action_doc, run, reservation, stored_receipt, target)
@@ -1316,6 +1324,13 @@ def execute_p2p_action(
             uncertain=uncertain,
             target=target,
         )
+        try:
+            sync_p2p_plan_steps(run.name)
+        except Exception:
+            # The Receipt and reservation are already durable.  A projection
+            # failure must not turn an ERP failure into an apparent retryable
+            # write; the next Run read can rebuild the projection.
+            pass
         raise GatewayFault(
             "UNCERTAIN_RESULT" if uncertain else category,
             "governed P2P execution failed",
@@ -1550,6 +1565,7 @@ def reconcile_p2p_action(
         )
         if str(run.run_state) == "EXECUTING":
             _set_run_state(run, "RECONCILIATION_REQUIRED")
+    sync_p2p_plan_steps(run.name)
     _audit(run, safe_correlation, "CACHED" if reconciled else "REJECTED", final_state)
     frappe.db.commit()
     action_doc = frappe.get_doc("Synora Proposed Action", action.action_id)

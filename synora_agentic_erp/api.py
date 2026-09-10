@@ -75,6 +75,18 @@ from synora_agentic_erp.governance.p2p_execution import (
 from synora_agentic_erp.governance.p2p_execution import (
     reconcile_p2p_action as reconcile_p2p_action_impl,
 )
+from synora_agentic_erp.governance.p2p_orchestration import (
+    cancel_p2p_run as cancel_p2p_run_impl,
+)
+from synora_agentic_erp.governance.p2p_orchestration import (
+    finalize_p2p_run as finalize_p2p_run_impl,
+)
+from synora_agentic_erp.governance.p2p_orchestration import (
+    get_p2p_chain,
+)
+from synora_agentic_erp.governance.p2p_orchestration import (
+    resume_p2p_run as resume_p2p_run_impl,
+)
 from synora_agentic_erp.governance.policy import (
     decide_action as decide_governed_action_impl,
 )
@@ -1110,7 +1122,74 @@ def get_run(run_id: str) -> dict[str, Any]:
         "analyses": analyses,
         "plan": plan,
         "governance": governed,
+        "p2p_chain": get_p2p_chain(safe_run_id, run_state=str(run.run_state)),
     }
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def resume_p2p_run(run_id: object, correlation_id: object) -> dict[str, Any]:
+    """Re-read a durable P2P Run after restart or manual ERP changes."""
+
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        result = resume_p2p_run_impl(safe_run_id, safe_correlation_id)
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": safe_correlation_id,
+            "run": result,
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def finalize_p2p_run(run_id: object, correlation_id: object) -> dict[str, Any]:
+    """Close a P2P Run only after every Action has a verified Receipt."""
+
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        result = finalize_p2p_run_impl(safe_run_id, safe_correlation_id)
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": safe_correlation_id,
+            "run": result,
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def cancel_p2p_run(run_id: object, correlation_id: object) -> dict[str, Any]:
+    """Stop future P2P scheduling without cancelling ERP business documents."""
+
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        result = cancel_p2p_run_impl(safe_run_id, safe_correlation_id)
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": safe_correlation_id,
+            "run": result,
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
 
 
 def _history_scope_readable(run: Any, actor: str) -> bool:

@@ -62,6 +62,34 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		SUCCEEDED: __("执行成功"),
 		FAILED: __("执行失败"),
 	};
+	const P2P_CHAIN_STATUS_COPY = {
+		PLANNED: __("等待编排"),
+		IN_PROGRESS: __("跨单据处理中"),
+		WAITING_APPROVAL: __("等待独立审批"),
+		WAITING_DEPENDENCY: __("等待前置单据"),
+		EXECUTING: __("正在执行 ERP 动作"),
+		BLOCKED: __("前置动作阻塞"),
+		RECONCILIATION_REQUIRED: __("需要对账"),
+		REINVESTIGATION_REQUIRED: __("需要重新调查"),
+		FAILED: __("链路失败"),
+		SUCCEEDED: __("链路已完成"),
+		CANCELLED: __("编排已取消"),
+		EXPIRED: __("编排已过期"),
+	};
+	const P2P_STEP_STATE_COPY = {
+		PLANNED: __("待安排"),
+		WAITING_APPROVAL: __("等待审批"),
+		WAITING_DEPENDENCY: __("等待前置步骤"),
+		READY: __("就绪"),
+		EXECUTING: __("执行中"),
+		SUCCEEDED: __("已完成"),
+		FAILED: __("失败"),
+		BLOCKED: __("阻塞"),
+		RECONCILIATION_REQUIRED: __("需要对账"),
+		REINVESTIGATION_REQUIRED: __("需要重新调查"),
+		CANCELLED: __("已取消"),
+		EXPIRED: __("已过期"),
+	};
 	const EXECUTION_MODE_COPY = {
 		DETERMINISTIC: __("确定性分析"),
 		AGENT: __("Agent 动态分析"),
@@ -674,6 +702,64 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					: "");
 	}
 
+	function p2p_chain_status_copy(state) {
+		return P2P_CHAIN_STATUS_COPY[String(state || "")] || esc(state || "—");
+	}
+
+	function p2p_step_state_copy(state) {
+		return P2P_STEP_STATE_COPY[String(state || "")] || esc(state || "—");
+	}
+
+	function build_p2p_chain_panel(chain, run) {
+		if (!chain || !Array.isArray(chain.steps) || !chain.steps.length) {
+			return "";
+		}
+		const panel_id = "p2p-chain-panel-" + String(run.run_id).replace(/[^a-zA-Z0-9_-]/g, "");
+		const terminal = ["SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"].indexOf(String(run.run_state)) >= 0;
+		const owner = String(run.initiator || "") === String(current_user || "");
+		const can_resume = owner && !terminal;
+		const can_finalize = owner && !terminal && Boolean(chain.completion_ready);
+		const can_cancel = owner && !terminal && !Boolean(chain.completion_ready);
+		const reasons = (chain.blocked_reasons || []).filter(Boolean).map(function (reason) {
+			return "<li>" + esc(reason) + "</li>";
+		}).join("");
+		const rows = chain.steps.map(function (step) {
+			const timeline = (chain.timeline || []).find(function (item) {
+				return String(item.step_id) === String(step.step_id);
+			}) || {};
+			const depends = Array.isArray(step.depends_on) && step.depends_on.length
+				? step.depends_on.map(function (id) { return esc(String(id).slice(0, 12)) + "…"; }).join(", ")
+				: '<span class="text-muted">' + __("无") + "</span>";
+			const receipt = timeline.receipt_state || "—";
+			return "<tr>" +
+				"<td>" + esc(step.order) + "</td>" +
+				"<td>" + governance_action_copy({ action_type: timeline.action_type || "" }) +
+					(timeline.target_name ? "<br><span class=\"small text-muted\">" + esc(timeline.target_doctype || "ERP") + ": " + esc(timeline.target_name) + "</span>" : "") + "</td>" +
+				"<td><span class=\"badge badge-light\">" + p2p_step_state_copy(step.state) + "</span>" +
+					(step.blocked_reason ? "<br><span class=\"small text-danger\">" + esc(step.blocked_reason) + "</span>" : "") + "</td>" +
+				"<td class=\"small\"><code>" + depends + "</code></td>" +
+				"<td class=\"small\">" + esc(receipt) + "</td>" +
+				"</tr>";
+		}).join("");
+		const actions = (can_resume ? '<button type="button" class="btn btn-outline-primary btn-sm p2p-run-resume" data-run="' + esc(run.run_id) + '">' + __("重新调查 / 恢复") + "</button>" : "") +
+			(can_finalize ? '<button type="button" class="btn btn-primary btn-sm p2p-run-finalize" data-run="' + esc(run.run_id) + '">' + __("确认链路完成") + "</button>" : "") +
+			(can_cancel ? '<button type="button" class="btn btn-outline-danger btn-sm p2p-run-cancel" data-run="' + esc(run.run_id) + '">' + __("停止后续调度") + "</button>" : "");
+		return '<section class="p2p-chain-panel mt-3" aria-labelledby="' + panel_id + '-label" data-p2p-run="' + esc(run.run_id) + '">' +
+			'<h5 id="' + panel_id + '-label">' + __("P2P 跨单据编排") + "</h5>" +
+			'<div class="small text-muted mb-2 p2p-chain-status" role="status" aria-live="polite">' +
+				__("链路状态") + ": <b>" + p2p_chain_status_copy(chain.status) + "</b> · " +
+				__("完成条件") + ": " + (chain.completion_ready ? __("所有步骤都有成功 Receipt") : __("尚未满足")) +
+				(chain.next_step_id ? " · " + __("下一步") + ": " + esc(chain.next_step_id) : "") + "</div>" +
+			'<div class="small mb-2">' + __("每个 ERP 副作用都单独审批、执行和读回；前一步失败或未知时，后续步骤会停在这里。") + "</div>" +
+			(reasons ? '<div class="small text-danger mb-2"><b>' + __("待处理原因") + "</b><ul class=\"mb-0\">" + reasons + "</ul></div>" : "") +
+			'<div class="table-responsive"><table class="table table-sm table-striped"><caption class="sr-only">' + __("P2P 步骤与回执") + "</caption><thead><tr>" +
+				"<th scope=\"col\">" + __("序号") + "</th><th scope=\"col\">" + __("动作 / 单据") + "</th><th scope=\"col\">" + __("状态") + "</th><th scope=\"col\">" + __("前置步骤") + "</th><th scope=\"col\">Receipt</th>" +
+				"</tr></thead><tbody>" + rows + "</tbody></table></div>" +
+			(actions ? '<div class="p2p-chain-actions btn-group btn-group-sm" role="group" aria-label="' + esc(__('P2P 编排操作')) + '">' + actions + "</div>" : "") +
+			(!owner && !terminal ? '<div class="small text-muted mt-2">' + __("只有 Run 发起人可以恢复、完成或停止这条编排；审批仍按每个 Action 的独立权限执行。") + "</div>" : "") +
+			"</section>";
+	}
+
 	function build_governance_panel(governance, run) {
 		const panel_id = "governance-panel-" + String(run.run_id).replace(/[^a-zA-Z0-9_-]/g, "");
 		if (!Array.isArray(governance) || !governance.length) {
@@ -790,6 +876,35 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		});
 	}
 
+	function p2p_run_call(button, method, busy_copy, run_id, dialog) {
+		const original = button.html();
+		const panel = button.closest(".p2p-chain-panel");
+		const status_area = panel.find("[aria-live]").first();
+		const correlation_id = crypto.randomUUID();
+		button.attr("disabled", true).html('<span class="spinner-border spinner-border-sm"></span> ' + esc(busy_copy));
+		status_area.removeClass("text-danger").text(busy_copy + "…");
+		frappe.call({
+			method: method,
+			args: { run_id: run_id, correlation_id: correlation_id },
+			callback: function (r) {
+				if (r.message && r.message.ok) {
+					if (dialog) {
+						dialog.hide();
+					}
+					refresh();
+					show_detail(run_id);
+					return;
+				}
+				button.attr("disabled", false).html(original).trigger("focus");
+				status_area.addClass("text-danger").text(api_failure_copy(busy_copy, r.message, __("请求被拒绝。"), correlation_id));
+			},
+			error: function (xhr) {
+				button.attr("disabled", false).html(original).trigger("focus");
+				status_area.addClass("text-danger").text(api_failure_copy(busy_copy, xhr, __("请求失败，请刷新后重试。"), correlation_id));
+			},
+		});
+	}
+
 	function bind_governance_actions(wrapper, run_id, dialog) {
 		wrapper.find(".governance-decide").on("click", function () {
 			const button = $(this);
@@ -846,6 +961,18 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				run_id,
 				dialog
 			);
+		});
+	}
+
+	function bind_p2p_chain_actions(wrapper, run_id, dialog) {
+		wrapper.find(".p2p-run-resume").on("click", function () {
+			p2p_run_call($(this), "synora_agentic_erp.api.resume_p2p_run", __("重新调查中"), run_id, dialog);
+		});
+		wrapper.find(".p2p-run-finalize").on("click", function () {
+			p2p_run_call($(this), "synora_agentic_erp.api.finalize_p2p_run", __("确认完成中"), run_id, dialog);
+		});
+		wrapper.find(".p2p-run-cancel").on("click", function () {
+			p2p_run_call($(this), "synora_agentic_erp.api.cancel_p2p_run", __("停止调度中"), run_id, dialog);
 		});
 	}
 
@@ -1263,6 +1390,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				const run = data.run;
 				const analyses = data.analyses || [];
 				const plan = data.plan;
+				const p2p_chain_panel = build_p2p_chain_panel(data.p2p_chain || null, run);
 				const governance_panel = build_governance_panel(data.governance || [], run);
 				let rows_html = "";
 				if (plan && plan.findings) {
@@ -1384,6 +1512,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 						"</div>" +
 						rows_html +
 						coach_panel +
+					p2p_chain_panel +
 						governance_panel +
 					trace_panel +
 					workflow_panel
@@ -1403,6 +1532,7 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					}
 				});
 					bind_governance_actions(content_wrapper, run.run_id, dialog);
+					bind_p2p_chain_actions(content_wrapper, run.run_id, dialog);
 					dialog.show();
 					load_coach_detail(run.run_id, content_wrapper.find(".coach-detail-content"));
 				},

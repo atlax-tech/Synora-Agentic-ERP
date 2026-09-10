@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "autoname": "field:action",
+ "creation": "2026-09-10 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "run", "action", "step_id", "step_order", "depends_on_json", "state",
+  "target_doctype", "target_name", "source_doctype", "source_name",
+  "blocked_reason", "reinvestigation_required", "observed_digest",
+  "correlation_id", "last_evaluated_at"
+ ],
+ "fields": [
+  {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Synora Agent Run", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "action", "fieldtype": "Link", "label": "Action", "options": "Synora Proposed Action", "read_only": 1, "reqd": 1, "set_only_once": 1, "unique": 1},
+  {"fieldname": "step_id", "fieldtype": "Data", "label": "Step ID", "read_only": 1, "reqd": 1, "set_only_once": 1, "unique": 1},
+  {"fieldname": "step_order", "fieldtype": "Int", "label": "Step Order", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "depends_on_json", "fieldtype": "Long Text", "label": "Dependencies JSON", "read_only": 1, "reqd": 1},
+  {"fieldname": "state", "fieldtype": "Select", "label": "State", "options": "PLANNED\nWAITING_APPROVAL\nWAITING_DEPENDENCY\nREADY\nEXECUTING\nSUCCEEDED\nFAILED\nBLOCKED\nRECONCILIATION_REQUIRED\nREINVESTIGATION_REQUIRED\nCANCELLED\nEXPIRED", "read_only": 1, "reqd": 1},
+  {"fieldname": "target_doctype", "fieldtype": "Data", "label": "Target DocType", "read_only": 1},
+  {"fieldname": "target_name", "fieldtype": "Data", "label": "Target Name", "read_only": 1},
+  {"fieldname": "source_doctype", "fieldtype": "Data", "label": "Source DocType", "read_only": 1},
+  {"fieldname": "source_name", "fieldtype": "Data", "label": "Source Name", "read_only": 1},
+  {"fieldname": "blocked_reason", "fieldtype": "Small Text", "label": "Blocked Reason", "read_only": 1},
+  {"fieldname": "reinvestigation_required", "fieldtype": "Check", "label": "Reinvestigation Required", "read_only": 1},
+  {"fieldname": "observed_digest", "fieldtype": "Data", "label": "Observed Digest", "read_only": 1},
+  {"fieldname": "correlation_id", "fieldtype": "Data", "label": "Correlation ID", "read_only": 1, "reqd": 1, "set_only_once": 1},
+  {"fieldname": "last_evaluated_at", "fieldtype": "Datetime", "label": "Last Evaluated At", "read_only": 1}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Synora Agentic ERP",
+ "name": "Synora P2P Plan Step",
+ "owner": "Administrator",
+ "permissions": [{"read": 1, "role": "System Manager"}],
+ "sort_field": "step_order",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}
