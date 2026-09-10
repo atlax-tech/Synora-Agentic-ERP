@@ -47,6 +47,8 @@ from agent_runtime.workflow.checkpoint import (
 )
 from agent_runtime.workflow.runtime import (
     WorkflowCancelRequest,
+    WorkflowGovernedActionCompleteRequest,
+    WorkflowP2PPlanRequest,
     WorkflowResponse,
     WorkflowResumeRequest,
     WorkflowRuntime,
@@ -405,6 +407,18 @@ async def workflow_resume(
         raise _workflow_error(error) from error
 
 
+@app.post("/workflow/p2p/plan", response_model=WorkflowResponse)
+async def workflow_p2p_plan(
+    request: WorkflowP2PPlanRequest, http_request: Request
+) -> WorkflowResponse:
+    """Checkpoint one typed P2P candidate; Runtime never touches ERP."""
+    _require_runtime_token(http_request)
+    try:
+        return await WorkflowRuntime().plan_governed_action(request)
+    except Exception as error:
+        raise _workflow_error(error) from error
+
+
 @app.post("/workflow/cancel", response_model=WorkflowResponse)
 async def workflow_cancel(
     request: WorkflowCancelRequest, http_request: Request
@@ -413,6 +427,18 @@ async def workflow_cancel(
     _require_runtime_token(http_request)
     try:
         return WorkflowRuntime().cancel(request)
+    except Exception as error:
+        raise _workflow_error(error) from error
+
+
+@app.post("/workflow/complete-governed-action", response_model=WorkflowResponse)
+def workflow_complete_governed_action(
+    request: WorkflowGovernedActionCompleteRequest, http_request: Request
+) -> WorkflowResponse:
+    """Record a Frappe Receipt for a waiting, typed governed-action step."""
+    _require_runtime_token(http_request)
+    try:
+        return WorkflowRuntime().complete_governed_action(request)
     except Exception as error:
         raise _workflow_error(error) from error
 

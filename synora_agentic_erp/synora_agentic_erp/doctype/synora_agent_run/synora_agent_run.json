@@ -7,6 +7,7 @@
  "field_order": [
   "initiator",
   "goal",
+  "purpose",
   "execution_mode",
   "time_window_days",
   "company_scope",
@@ -46,6 +47,16 @@
    "fieldname": "goal",
    "fieldtype": "Text",
    "label": "Goal",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "default": "ANALYSIS",
+   "fieldname": "purpose",
+   "fieldtype": "Select",
+   "label": "Purpose",
+   "options": "ANALYSIS\nP2P_EXECUTION",
    "read_only": 1,
    "reqd": 1,
    "set_only_once": 1

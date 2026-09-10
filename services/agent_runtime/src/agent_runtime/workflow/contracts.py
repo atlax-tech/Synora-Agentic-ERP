@@ -53,7 +53,7 @@ ReplanReason = Literal[
     "NO_PROGRESS",
 ]
 
-StepType = Literal["TOOL", "CLARIFICATION", "FINALIZE"]
+StepType = Literal["TOOL", "CLARIFICATION", "GOVERNED_ACTION", "FINALIZE"]
 AnswerType = Literal["TEXT", "CHOICE", "BOOLEAN", "NUMBER"]
 
 
@@ -122,6 +122,39 @@ class ClarificationRequest(StrictModel):
         return self
 
 
+class GovernedActionIntent(StrictModel):
+    """Typed, write-free intent returned while a governed ERP action is pending."""
+
+    schema_version: Literal["1"] = WORKFLOW_SCHEMA_VERSION
+    run_id: Annotated[UUID, Field(strict=False)]
+    goal_version: int = Field(ge=0, le=1_000_000)
+    run_version: int = Field(ge=0, le=1_000_000)
+    action_type: str = Field(min_length=1, max_length=80)
+    source_doctype: str = Field(min_length=1, max_length=80)
+    source_name: str = Field(min_length=1, max_length=140)
+    items: Annotated[tuple[dict[str, JsonValue], ...], BeforeValidator(_tuple_from_wire)] = Field(
+        default=(), max_length=100
+    )
+    payment: dict[str, JsonValue] | None = None
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator("items")
+    @classmethod
+    def validate_items(
+        cls, value: tuple[dict[str, JsonValue], ...]
+    ) -> tuple[dict[str, JsonValue], ...]:
+        for item in value:
+            _check_json_mapping(item)
+        return value
+
+    @field_validator("payment")
+    @classmethod
+    def validate_payment(cls, value: dict[str, JsonValue] | None) -> dict[str, JsonValue] | None:
+        if value is not None:
+            _check_json_mapping(value)
+        return value
+
+
 class PlanStep(StrictModel):
     """One deterministic node in a workflow DAG."""
 
@@ -137,6 +170,7 @@ class PlanStep(StrictModel):
     )
     tool_name: ToolName | None = None
     clarification: ClarificationRequest | None = None
+    governed_action: GovernedActionIntent | None = None
     parameters: dict[str, JsonValue] = Field(default_factory=dict)
     status: StepStatus = "PENDING"
     observation_digest: str | None = None
@@ -174,17 +208,22 @@ class PlanStep(StrictModel):
                 raise ValueError("tool step requires tool_name")
             if self.tool_name not in self.allowed_tools:
                 raise ValueError("tool_name must be in allowed_tools")
-            if self.clarification is not None:
-                raise ValueError("tool step cannot declare clarification")
+            if self.clarification is not None or self.governed_action is not None:
+                raise ValueError("tool step cannot declare a wait contract")
         elif self.type == "CLARIFICATION":
             if self.clarification is None:
                 raise ValueError("clarification step requires clarification")
-            if self.tool_name is not None or self.allowed_tools:
-                raise ValueError("clarification step cannot declare tools")
+            if self.tool_name is not None or self.allowed_tools or self.governed_action is not None:
+                raise ValueError("clarification step cannot declare tools or governed actions")
+        elif self.type == "GOVERNED_ACTION":
+            if self.governed_action is None:
+                raise ValueError("governed action step requires an intent")
+            if self.tool_name is not None or self.allowed_tools or self.clarification is not None:
+                raise ValueError("governed action step cannot declare tools or clarification")
         elif self.tool_name is not None or self.allowed_tools:
             raise ValueError("only tool steps may declare tools")
-        elif self.clarification is not None:
-            raise ValueError("only clarification steps may declare clarification")
+        elif self.clarification is not None or self.governed_action is not None:
+            raise ValueError("finalize steps cannot declare a wait contract")
         if self.status == "SUCCEEDED" and self.observation_digest is None:
             raise ValueError("succeeded step requires observation_digest")
         if self.status == "SUCCEEDED" and self.completed_at is None:

@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from uuid import uuid4
 
 import frappe
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime, today
 
 from synora_agentic_erp.agent.service import _set_run_state
 from synora_agentic_erp.agent.state_machine import validate_transition
@@ -31,6 +34,7 @@ from synora_agentic_erp.governance.service import transition_action_state
 P2P_STEP_SCHEMA_VERSION = "1"
 P2P_GOAL_SCHEMA_VERSION = "1"
 P2P_SETTLEMENT_ENDPOINT = "RECEIVED_BILLED_PAID"
+P2P_CANDIDATE_SCHEMA_VERSION = "1"
 P2P_STEP_SERVICE_FLAG = "synora_p2p_orchestration_service"
 SUCCESS_RECEIPT_STATES = frozenset({"SUCCEEDED", "RECONCILED_SUCCESS"})
 UNCERTAIN_RECEIPT_STATES = frozenset({"RECONCILIATION_REQUIRED", "MANUAL_INTERVENTION"})
@@ -69,6 +73,35 @@ class P2PPlanStepView:
     depends_on: tuple[str, ...]
     blocked_reason: str | None = None
     reinvestigation_required: bool = False
+
+
+@dataclass(frozen=True)
+class P2PCandidateIntent:
+    """Typed, non-authorizing intent returned by one investigation pass."""
+
+    run_id: str
+    goal_version: int
+    run_version: int
+    action_type: str
+    source_doctype: str
+    source_name: str
+    items: tuple[dict[str, str], ...] = ()
+    payment: dict[str, str] | None = None
+    reason: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": P2P_CANDIDATE_SCHEMA_VERSION,
+            "run_id": self.run_id,
+            "goal_version": self.goal_version,
+            "run_version": self.run_version,
+            "action_type": self.action_type,
+            "source_doctype": self.source_doctype,
+            "source_name": self.source_name,
+            "items": [dict(item) for item in self.items],
+            "payment": dict(self.payment) if self.payment else None,
+            "reason": self.reason,
+        }
 
 
 def _goal_json(value: object) -> object:
@@ -272,6 +305,9 @@ def _source_goal_facts(goal: dict[str, Any], run: Any) -> tuple[dict[str, Any], 
                 "billed_amount": format(billed_amount.normalize(), "f"),
                 "billed_qty": format(billed_qty.normalize(), "f"),
                 "target_amount": format(target_amount.normalize(), "f"),
+                "uom": str(row.uom or ""),
+                "warehouse": str(row.warehouse or ""),
+                "rate": format(rate.normalize(), "f"),
             }
         )
     return {
@@ -289,7 +325,10 @@ def _source_goal_facts(goal: dict[str, Any], run: Any) -> tuple[dict[str, Any], 
 
 
 def _linked_invoice_facts(
-    source_name: str, row_names: list[str]
+    source_name: str,
+    row_names: list[str],
+    *,
+    ignored_draft_names: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     reasons: list[str] = []
     target_rows = {str(row_name) for row_name in row_names}
@@ -354,6 +393,7 @@ def _linked_invoice_facts(
     }
     invoice_names = sorted({parent for parent, _name in unique_links})
     invoices: list[dict[str, Any]] = []
+    ignored_draft_names = ignored_draft_names or set()
     for name in invoice_names:
         row = frappe.db.get_value(
             "Purchase Invoice",
@@ -362,6 +402,8 @@ def _linked_invoice_facts(
             as_dict=True,
         )
         if not row or int(row.docstatus or 0) != 1:
+            if name in ignored_draft_names:
+                continue
             reasons.append(f"linked Purchase Invoice {name} is not submitted")
             continue
         try:
@@ -420,10 +462,21 @@ def p2p_goal_progress(run: Any, entries: Iterable[dict[str, Any]] | None = None)
         Decimal("0"),
     )
     row_names = [str(row["source_row"]) for row in record["goal"]["source_rows"]]
-    invoices, invoice_reasons = _linked_invoice_facts(record["goal"]["source_name"], row_names)
+    governed_draft_names = {
+        str(getattr(entry.get("receipt"), "target_name", "") or "")
+        for entry in (entries or [])
+        if entry.get("action_type") == "CREATE_PI_DRAFT"
+        and _receipt_state(entry) in SUCCESS_RECEIPT_STATES
+        and getattr(entry.get("receipt"), "target_name", None)
+    }
+    invoices, invoice_reasons = _linked_invoice_facts(
+        record["goal"]["source_name"],
+        row_names,
+        ignored_draft_names=governed_draft_names,
+    )
     outstanding = sum((Decimal(row["outstanding_amount"]) for row in invoices), Decimal("0"))
     reasons.extend(invoice_reasons)
-    if not invoices:
+    if billed_amount >= target_amount and not invoices:
         reasons.append("no submitted Purchase Invoice is linked to the target rows")
     base["goal_state"] = "STALE" if reasons else record["state"]
     complete = (
@@ -466,6 +519,70 @@ def get_p2p_goal(run_id: str) -> dict[str, Any]:
         "digest": record["digest"],
         "goal": record["goal"],
     }
+
+
+def get_p2p_goal_options(run_id: str) -> dict[str, Any]:
+    """List only PO rows the Run initiator may use to confirm a target."""
+
+    run = _authorized_run(run_id)
+    filters: dict[str, Any] = {
+        "company": str(run.company_scope),
+        "docstatus": ["in", [0, 1]],
+    }
+    orders = frappe.get_list(
+        "Purchase Order",
+        filters=filters,
+        fields=["name", "supplier", "transaction_date", "status", "docstatus"],
+        order_by="modified desc, name desc",
+        limit=50,
+        user=str(run.initiator),
+    )
+    options: list[dict[str, Any]] = []
+    for order in orders:
+        rows = frappe.get_all(
+            "Purchase Order Item",
+            filters={"parent": order.name, "parenttype": "Purchase Order"},
+            fields=[
+                "name",
+                "item_code",
+                "qty",
+                "uom",
+                "warehouse",
+                "received_qty",
+                "billed_amt",
+                "rate",
+            ],
+            order_by="idx asc",
+            limit_page_length=100,
+            ignore_permissions=True,
+        )
+        visible_rows = [
+            {
+                "source_row": str(row.name),
+                "item_code": str(row.item_code or ""),
+                "qty": str(row.qty or 0),
+                "uom": str(row.uom or ""),
+                "warehouse": str(row.warehouse or ""),
+                "received_qty": str(row.received_qty or 0),
+                "billed_amount": str(row.billed_amt or 0),
+                "rate": str(row.rate or 0),
+            }
+            for row in rows
+            if not run.warehouse_scope or str(row.warehouse or "") == str(run.warehouse_scope)
+        ]
+        if visible_rows:
+            options.append(
+                {
+                    "source_doctype": "Purchase Order",
+                    "source_name": str(order.name),
+                    "supplier": str(order.supplier or ""),
+                    "transaction_date": str(order.transaction_date or ""),
+                    "status": str(order.status or ""),
+                    "docstatus": int(order.docstatus or 0),
+                    "rows": visible_rows,
+                }
+            )
+    return {"schema_version": P2P_GOAL_SCHEMA_VERSION, "options": options}
 
 
 def _invalidate_pending_p2p_actions(run_id: str, reason: str, correlation_id: str) -> int:
@@ -547,6 +664,8 @@ def confirm_p2p_goal(run_id: str, goal: object, correlation_id: str) -> dict[str
     run.p2p_goal_confirmed_at = now_datetime()
     run.flags.synora_p2p_goal_update = True
     run.save(ignore_permissions=True)
+    if str(run.run_state) == "CREATED":
+        _set_run_state(run, "PROPOSED")
     invalidated_actions = 0
     if previous_digest and previous_digest != run.p2p_goal_digest:
         invalidated_actions = _invalidate_pending_p2p_actions(
@@ -570,6 +689,577 @@ def _canonical_json(value: object) -> str:
         sort_keys=True,
         separators=(",", ":"),
     )
+
+
+def _candidate_expiry(run: Any) -> str:
+    """Bound a candidate's expiry by the current Run deadline."""
+
+    now = now_datetime()
+    try:
+        deadline = get_datetime(getattr(run, "expires_at", None))
+    except Exception as error:
+        raise GatewayFault("CONFLICT", "P2P Run deadline is unavailable", 409) from error
+    if deadline is None:
+        raise GatewayFault("CONFLICT", "P2P Run deadline is unavailable", 409)
+    if deadline.tzinfo is not None:
+        deadline = deadline.replace(tzinfo=None)
+    expiry = min(deadline, now + timedelta(hours=1)).replace(microsecond=0)
+    if expiry <= now:
+        raise GatewayFault("CONFLICT", "P2P Run has expired", 409)
+    return expiry.isoformat(timespec="seconds") + "Z"
+
+
+def _current_candidate(entries: Iterable[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the one durable candidate that still needs a user decision."""
+
+    ordered = sorted(
+        entries,
+        key=lambda entry: (
+            str(entry.get("created_at") or ""),
+            str(entry.get("action_id") or ""),
+        ),
+        reverse=True,
+    )
+    for entry in ordered:
+        state = str(entry.get("state") or "")
+        reservation = entry.get("reservation") or {}
+        receipt_state = _receipt_state(entry)
+        if not (
+            state in {"DRAFT", "AWAITING_APPROVAL", "APPROVED"}
+            or str(reservation.get("status") or "") in {"STARTED", "RECONCILIATION_REQUIRED"}
+            or receipt_state in UNCERTAIN_RECEIPT_STATES
+        ):
+            continue
+        action = entry["action"]
+        receipt = entry.get("receipt")
+        runtime_checkpoint = _runtime_checkpoint(entry)
+        return {
+            "action": action.to_dict(),
+            "state": state,
+            "state_version": int(entry.get("state_version") or 0),
+            "state_reason": str(entry.get("state_reason") or ""),
+            "requires_approval": state == "AWAITING_APPROVAL",
+            "recovery_required": receipt_state in UNCERTAIN_RECEIPT_STATES
+            or str(reservation.get("status") or "") in {"STARTED", "RECONCILIATION_REQUIRED"},
+            "receipt_id": (
+                str(getattr(receipt, "receipt_id", "") or getattr(receipt, "name", ""))
+                if receipt is not None
+                else None
+            ),
+            "runtime": runtime_checkpoint,
+        }
+    return None
+
+
+def _runtime_checkpoint(entry: dict[str, Any]) -> dict[str, Any] | None:
+    revision: int | None = None
+    step_id: str | None = None
+    for value in getattr(entry.get("action"), "calculation_refs", ()) or ():
+        text = str(value)
+        if text.startswith("p2p-runtime-revision:"):
+            try:
+                revision = int(text.split(":", 1)[1])
+            except ValueError:
+                revision = None
+        elif text.startswith("p2p-runtime-step:"):
+            step_id = text.split(":", 1)[1]
+    if revision is None or not step_id:
+        return None
+    return {"revision": revision, "step_id": step_id}
+
+
+def _receipt_observation_digest(receipt: Any) -> str:
+    value = {
+        "receipt_id": str(getattr(receipt, "receipt_id", "") or ""),
+        "final_state": str(getattr(receipt, "final_state", "") or ""),
+        "target_doctype": str(getattr(receipt, "target_doctype", "") or ""),
+        "target_name": str(getattr(receipt, "target_name", "") or ""),
+        "verified_fields_json": str(getattr(receipt, "verified_fields_json", "") or ""),
+    }
+    return hashlib.sha256(_canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def _complete_runtime_for_entries(entries: list[dict[str, Any]]) -> None:
+    """Advance the sidecar only from a durable, successful Frappe Receipt."""
+    if not os.environ.get("SYNORA_RUNTIME_TOKEN", "").strip():
+        return
+    successful = [
+        entry
+        for entry in reversed(entries)
+        if _receipt_state(entry) in SUCCESS_RECEIPT_STATES
+        and _runtime_checkpoint(entry) is not None
+        and entry.get("receipt") is not None
+    ]
+    if not successful:
+        return
+    entry = successful[0]
+    checkpoint = _runtime_checkpoint(entry)
+    receipt = entry["receipt"]
+    if checkpoint is None:
+        return
+    from synora_agentic_erp.agent.service import (
+        complete_p2p_candidate_runtime,
+        get_p2p_candidate_runtime_status,
+    )
+
+    status = get_p2p_candidate_runtime_status(str(entry["run_id"]))
+    matching = next(
+        (
+            step
+            for step in status.get("steps", [])
+            if isinstance(step, dict) and step.get("step_id") == checkpoint["step_id"]
+        ),
+        None,
+    )
+    if isinstance(matching, dict) and matching.get("status") == "SUCCEEDED":
+        return
+    if not isinstance(matching, dict) or matching.get("status") != "WAITING":
+        raise GatewayFault("CONFLICT", "P2P Runtime checkpoint is not awaiting its Receipt", 409)
+    complete_p2p_candidate_runtime(
+        str(entry["run_id"]),
+        int(status["revision"]),
+        str(checkpoint["step_id"]),
+        _receipt_observation_digest(receipt),
+    )
+
+
+def _candidate_intent(
+    run: Any,
+    goal_record: dict[str, Any],
+    action_type: str,
+    source_doctype: str,
+    source_name: str,
+    *,
+    items: Iterable[dict[str, str]] = (),
+    payment: dict[str, str] | None = None,
+    reason: str,
+) -> P2PCandidateIntent:
+    return P2PCandidateIntent(
+        run_id=str(run.name),
+        goal_version=int(goal_record["version"]),
+        run_version=int(getattr(run, "state_version", 0) or 0),
+        action_type=action_type,
+        source_doctype=source_doctype,
+        source_name=source_name,
+        items=tuple(dict(item) for item in items),
+        payment=dict(payment) if payment else None,
+        reason=reason,
+    )
+
+
+def _pending_draft_intent(
+    entries: list[dict[str, Any]],
+    run: Any,
+    goal_record: dict[str, Any],
+    *,
+    draft_action_type: str,
+    submit_action_type: str,
+    target_doctype: str,
+) -> P2PCandidateIntent | None:
+    """Promote an already-created draft before creating another draft."""
+
+    for entry in entries:
+        if entry.get("action_type") != draft_action_type:
+            continue
+        if _receipt_state(entry) not in SUCCESS_RECEIPT_STATES:
+            continue
+        receipt = entry.get("receipt")
+        target_name = str(getattr(receipt, "target_name", "") or "") if receipt else ""
+        if not target_name:
+            continue
+        target = frappe.db.get_value(
+            target_doctype, target_name, ["name", "docstatus"], as_dict=True
+        )
+        if not target or int(target.docstatus or 0) != 0:
+            continue
+        submitted = any(
+            item.get("action_type") == submit_action_type
+            and str(item["action"].payload.get("source_name") or "") == target_name
+            and _receipt_state(item) in SUCCESS_RECEIPT_STATES
+            for item in entries
+        )
+        if submitted:
+            continue
+        return _candidate_intent(
+            run,
+            goal_record,
+            submit_action_type,
+            target_doctype,
+            target_name,
+            reason=f"submit the existing {target_doctype} draft before continuing",
+        )
+    return None
+
+
+def _invoiceable_receipt_intent(
+    run: Any,
+    goal_record: dict[str, Any],
+    progress: dict[str, Any],
+) -> tuple[P2PCandidateIntent | None, list[str]]:
+    target_rows = {str(row["source_row"]): row for row in progress.get("rows", [])}
+    if not target_rows:
+        return None, ["target Purchase Order rows are unavailable for invoice planning"]
+    pr_rows = frappe.get_all(
+        "Purchase Receipt Item",
+        filters={"purchase_order_item": ["in", sorted(target_rows)]},
+        fields=[
+            "name",
+            "parent",
+            "purchase_order_item",
+            "item_code",
+            "qty",
+            "uom",
+            "warehouse",
+            "rate",
+        ],
+        ignore_permissions=True,
+        limit_page_length=200,
+    )
+    if not pr_rows:
+        return None, ["no submitted Purchase Receipt is available for the remaining target"]
+    parent_names = sorted({str(row.parent) for row in pr_rows if row.parent})
+    submitted_parents = frappe.get_all(
+        "Purchase Receipt",
+        filters={
+            "name": ["in", parent_names],
+            "docstatus": 1,
+            "company": run.company_scope,
+        },
+        fields=["name"],
+        order_by="posting_date asc, name asc",
+        ignore_permissions=True,
+        limit_page_length=200,
+    )
+    submitted_names = {str(row.name) for row in submitted_parents}
+    pr_rows = [row for row in pr_rows if str(row.parent) in submitted_names]
+    if not pr_rows:
+        return None, ["target Purchase Receipt facts are not submitted"]
+    invoice_rows = frappe.get_all(
+        "Purchase Invoice Item",
+        filters={"pr_detail": ["in", [str(row.name) for row in pr_rows]]},
+        fields=["pr_detail", "qty", "parent"],
+        ignore_permissions=True,
+        limit_page_length=500,
+    )
+    invoice_names = sorted({str(row.parent) for row in invoice_rows if row.parent})
+    submitted_invoice_names = {
+        str(row.name)
+        for row in frappe.get_all(
+            "Purchase Invoice",
+            filters={"name": ["in", invoice_names], "docstatus": 1},
+            fields=["name"],
+            ignore_permissions=True,
+            limit_page_length=500,
+        )
+    }
+    billed_by_pr = {
+        str(row.pr_detail): sum(
+            (
+                Decimal(str(item.qty or 0))
+                for item in invoice_rows
+                if str(item.pr_detail) == str(row.pr_detail)
+                and str(item.parent) in submitted_invoice_names
+            ),
+            Decimal("0"),
+        )
+        for row in pr_rows
+    }
+    billed_by_po = {
+        po_row: sum(
+            (
+                billed_by_pr.get(str(row.name), Decimal("0"))
+                for row in pr_rows
+                if str(row.purchase_order_item) == po_row
+            ),
+            Decimal("0"),
+        )
+        for po_row in target_rows
+    }
+    parent_rows: dict[str, list[Any]] = {}
+    for row in pr_rows:
+        parent_rows.setdefault(str(row.parent), []).append(row)
+    for parent_name in sorted(parent_rows):
+        candidate_items: list[dict[str, str]] = []
+        remaining_by_po = {
+            po_row: max(
+                Decimal(target_rows[po_row]["target_qty"]) - billed_by_po.get(po_row, Decimal("0")),
+                Decimal("0"),
+            )
+            for po_row in target_rows
+        }
+        for row in sorted(parent_rows[parent_name], key=lambda value: str(value.name)):
+            po_row = str(row.purchase_order_item or "")
+            if po_row not in remaining_by_po:
+                continue
+            qty = Decimal(str(row.qty or 0)) - billed_by_pr.get(str(row.name), Decimal("0"))
+            qty = min(max(qty, Decimal("0")), remaining_by_po[po_row])
+            if qty <= 0:
+                continue
+            remaining_by_po[po_row] -= qty
+            candidate_items.append(
+                {
+                    "source_row": str(row.name),
+                    "item_code": str(row.item_code or ""),
+                    "qty": format(qty.normalize(), "f"),
+                    "uom": str(row.uom or ""),
+                    "warehouse": str(row.warehouse or ""),
+                    "rate": format(Decimal(str(row.rate or 0)).normalize(), "f"),
+                }
+            )
+        if candidate_items:
+            return (
+                _candidate_intent(
+                    run,
+                    goal_record,
+                    "CREATE_PI_DRAFT",
+                    "Purchase Receipt",
+                    parent_name,
+                    items=candidate_items,
+                    reason="invoice the submitted receipt quantity still missing from the target",
+                ),
+                [],
+            )
+    return None, ["submitted receipts have no invoiceable quantity for the target"]
+
+
+def _payment_intent(
+    run: Any, goal_record: dict[str, Any], progress: dict[str, Any]
+) -> tuple[P2PCandidateIntent | None, list[str]]:
+    company = frappe.db.get_value(
+        "Company",
+        run.company_scope,
+        ["default_bank_account", "default_cash_account"],
+        as_dict=True,
+    )
+    paid_from = str(
+        (company.default_bank_account or company.default_cash_account) if company else ""
+    )
+    if not paid_from:
+        return None, ["company has no default bank or cash account for settlement"]
+    invoice_names = [str(row.get("name") or "") for row in progress.get("invoices", [])]
+    for invoice_name in invoice_names:
+        invoice = frappe.db.get_value(
+            "Purchase Invoice",
+            invoice_name,
+            [
+                "name",
+                "company",
+                "supplier",
+                "currency",
+                "credit_to",
+                "outstanding_amount",
+                "docstatus",
+            ],
+            as_dict=True,
+        )
+        if not invoice or int(invoice.docstatus or 0) != 1:
+            continue
+        outstanding = Decimal(str(invoice.outstanding_amount or 0))
+        paid_to = str(invoice.credit_to or "")
+        if outstanding <= 0:
+            continue
+        if not paid_to:
+            return None, [f"Purchase Invoice {invoice_name} has no payable account"]
+        currency = str(invoice.currency or "")
+        payment = {
+            "party_type": "Supplier",
+            "party": str(invoice.supplier or ""),
+            "payment_type": "Pay",
+            "posting_date": today(),
+            "paid_from": paid_from,
+            "paid_to": paid_to,
+            "paid_amount": format(outstanding.normalize(), "f"),
+            "received_amount": format(outstanding.normalize(), "f"),
+            "source_currency": currency,
+            "target_currency": currency,
+            "reference_name": invoice_name,
+            "allocated_amount": format(outstanding.normalize(), "f"),
+        }
+        return (
+            _candidate_intent(
+                run,
+                goal_record,
+                "CREATE_PAYMENT_ENTRY_DRAFT",
+                "Purchase Invoice",
+                invoice_name,
+                payment=payment,
+                reason="settle the current outstanding amount on the target invoice",
+            ),
+            [],
+        )
+    return None, ["target invoices have no current outstanding amount to settle"]
+
+
+def _next_candidate_intent(
+    run: Any,
+    goal_record: dict[str, Any],
+    progress: dict[str, Any],
+    entries: list[dict[str, Any]],
+) -> tuple[P2PCandidateIntent | None, list[str]]:
+    if goal_record["state"] != "CONFIRMED" or not goal_record["goal"]:
+        return None, ["P2P business goal requires initiator confirmation"]
+    if progress.get("goal_state") != "CONFIRMED":
+        return None, [str(reason) for reason in progress.get("blocked_reasons", [])]
+    for draft_action_type, submit_action_type, target_doctype in (
+        ("CREATE_PR_DRAFT", "SUBMIT_PR", "Purchase Receipt"),
+        ("CREATE_PI_DRAFT", "SUBMIT_PI", "Purchase Invoice"),
+        ("CREATE_PAYMENT_ENTRY_DRAFT", "SUBMIT_PAYMENT_ENTRY", "Payment Entry"),
+    ):
+        pending = _pending_draft_intent(
+            entries,
+            run,
+            goal_record,
+            draft_action_type=draft_action_type,
+            submit_action_type=submit_action_type,
+            target_doctype=target_doctype,
+        )
+        if pending is not None:
+            return pending, []
+    source = progress.get("source") or {}
+    source_name = str(source.get("name") or goal_record["goal"]["source_name"])
+    if int(source.get("docstatus") or 0) != 1:
+        return (
+            _candidate_intent(
+                run,
+                goal_record,
+                "SUBMIT_PO",
+                "Purchase Order",
+                source_name,
+                reason="submit the confirmed source Purchase Order before downstream work",
+            ),
+            [],
+        )
+    rows = progress.get("rows", [])
+    receipt_items = [
+        {
+            "source_row": str(row["source_row"]),
+            "item_code": str(row["item_code"]),
+            "qty": format(
+                max(Decimal(row["target_qty"]) - Decimal(row["received_qty"]), Decimal("0")),
+                "f",
+            ),
+            "uom": str(row.get("uom") or ""),
+            "warehouse": str(row.get("warehouse") or ""),
+        }
+        for row in rows
+        if Decimal(row["received_qty"]) < Decimal(row["target_qty"])
+    ]
+    if receipt_items:
+        return (
+            _candidate_intent(
+                run,
+                goal_record,
+                "CREATE_PR_DRAFT",
+                "Purchase Order",
+                source_name,
+                items=receipt_items,
+                reason="receive the remaining quantity in the confirmed target rows",
+            ),
+            [],
+        )
+    target_amount = Decimal(str(progress.get("target_amount") or 0))
+    billed_amount = Decimal(str(progress.get("billed_amount") or 0))
+    if billed_amount < target_amount:
+        return _invoiceable_receipt_intent(run, goal_record, progress)
+    outstanding = Decimal(str(progress.get("outstanding_amount") or 0))
+    if outstanding > 0:
+        return _payment_intent(run, goal_record, progress)
+    if progress.get("complete"):
+        return None, []
+    return None, ["current ERP facts do not yet prove the confirmed settlement target"]
+
+
+def _candidate_payload(intent: P2PCandidateIntent, run: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "company": str(run.company_scope),
+        "source_doctype": intent.source_doctype,
+        "source_name": intent.source_name,
+    }
+    if intent.action_type == "CREATE_PR_DRAFT":
+        payload.update({"transaction_date": today(), "items": list(intent.items)})
+    elif intent.action_type == "CREATE_PI_DRAFT":
+        payload.update({"transaction_date": today(), "items": list(intent.items)})
+    elif intent.action_type == "CREATE_PAYMENT_ENTRY_DRAFT":
+        if intent.payment is None:
+            raise GatewayFault("CONFLICT", "payment candidate facts are incomplete", 409)
+        payment = intent.payment
+        payload.update(
+            {
+                key: payment[key]
+                for key in (
+                    "party_type",
+                    "party",
+                    "payment_type",
+                    "posting_date",
+                    "paid_from",
+                    "paid_to",
+                    "paid_amount",
+                    "received_amount",
+                    "source_currency",
+                    "target_currency",
+                )
+                if payment.get(key) is not None
+            }
+        )
+        payload["references"] = [
+            {
+                "reference_doctype": "Purchase Invoice",
+                "reference_name": payment["reference_name"],
+                "allocated_amount": payment["allocated_amount"],
+            }
+        ]
+    return payload
+
+
+def _candidate_proposal(
+    intent: P2PCandidateIntent,
+    run: Any,
+    goal_record: dict[str, Any],
+    entries: list[dict[str, Any]],
+    correlation_id: str,
+    runtime_checkpoint: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = _candidate_payload(intent, run)
+    payload_digest = hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
+    goal_digest = str(goal_record["digest"] or "")
+    calculation_refs = [
+        f"p2p-candidate:{intent.action_type}:{payload_digest}",
+        f"p2p-run-version:{intent.run_version}",
+    ]
+    if runtime_checkpoint is not None:
+        calculation_refs.extend(
+            [
+                f"p2p-runtime-revision:{int(runtime_checkpoint['revision'])}",
+                f"p2p-runtime-step:{runtime_checkpoint['step_id']!s}",
+            ]
+        )
+    return {
+        "schema_version": "2",
+        "action_type": intent.action_type,
+        "run_id": str(run.name),
+        "action_id": str(uuid4()),
+        "initiator": str(run.initiator),
+        "payload": payload,
+        "evidence_refs": [
+            f"p2p-goal:{intent.goal_version}:{goal_digest}",
+            f"erp:{intent.source_doctype}:{intent.source_name}",
+        ],
+        "calculation_refs": calculation_refs,
+        "risk_class": "HIGH",
+        "approval_class": "INDEPENDENT_APPROVER",
+        "snapshot_ref": (
+            f"p2p-goal-v{intent.goal_version}:{goal_digest}:"
+            f"run-v{intent.run_version}:{payload_digest[:16]}"
+        ),
+        "idempotency_key": (
+            f"p2p-{str(run.name)[:8]}-{intent.goal_version}-"
+            f"{len(entries) + 1}-{payload_digest[:40]}"
+        ),
+        "expires_at": _candidate_expiry(run),
+        "revalidation_rule": "FULL_PRE_EXECUTE_RECHECK_P2P_V1",
+        "summary": intent.reason,
+        "correlation_id": correlation_id,
+    }
 
 
 def _stable_refs(value: Iterable[tuple[str, str]] | None) -> list[list[str]]:
@@ -669,6 +1359,7 @@ def _minimal_entry(
         "action_type": str(action.action_type),
         "run_id": str(action.run_id),
         "state": str(doc.state),
+        "state_version": int(getattr(doc, "state_version", 0) or 0),
         "state_reason": str(doc.state_reason or ""),
         "receipt": receipt,
         "target_ref": _target_ref(action, receipt, reservation),
@@ -682,7 +1373,7 @@ def _entries_for_run(run_id: str) -> list[dict[str, Any]]:
     rows = frappe.get_all(
         "Synora Proposed Action",
         filters={"run": run_id, "action_type": ["in", sorted(P2P_ACTION_TYPES)]},
-        fields=["name"],
+        fields=["name", "state", "state_version", "state_reason"],
         order_by="creation asc, name asc",
         limit_page_length=200,
         ignore_permissions=True,
@@ -857,6 +1548,8 @@ def derive_step_views(entries: Iterable[dict[str, Any]]) -> tuple[P2PPlanStepVie
             elif pending:
                 projected = "WAITING_DEPENDENCY"
                 blocked_reason = f"waiting for dependency {pending[0]}"
+            elif projected == "WAITING_APPROVAL":
+                blocked_reason = "waiting for independent approval"
         views.append(
             P2PPlanStepView(
                 action_id=action_id,
@@ -940,6 +1633,14 @@ def chain_from_entries(
                 "depends_on": list(view.depends_on),
                 "blocked_reason": view.blocked_reason,
                 "receipt_state": _receipt_state(entry),
+                "receipt_id": (
+                    str(
+                        getattr(entry.get("receipt"), "receipt_id", "")
+                        or getattr(entry.get("receipt"), "name", "")
+                    )
+                    if entry.get("receipt") is not None
+                    else None
+                ),
             }
         )
     progress = business_progress or {
@@ -1135,6 +1836,16 @@ def get_p2p_chain(
                 step["reinvestigation_required"] = bool(row.reinvestigation_required)
                 if row.blocked_reason:
                     step["blocked_reason"] = str(row.blocked_reason)
+    chain["run_version"] = int(getattr(run, "state_version", 0) or 0) if run is not None else None
+    chain["current_candidate"] = _current_candidate(resolved_entries)
+    chain["recovery"] = {
+        "available": bool(
+            chain["current_candidate"] and chain["current_candidate"].get("recovery_required")
+        ),
+        "manual_takeover": bool(
+            chain["current_candidate"] and chain["current_candidate"].get("recovery_required")
+        ),
+    }
     return chain
 
 
@@ -1254,6 +1965,101 @@ def _active_reservations(run_id: str) -> list[dict[str, Any]]:
     )
 
 
+def _plan_next_p2p_candidate(run: Any, correlation_id: str) -> dict[str, Any]:
+    """Investigate one Run and persist at most one current candidate."""
+
+    run_id = str(run.name)
+    entries = _entries_for_run(run_id)
+    goal_record = _stored_p2p_goal(run)
+    progress = p2p_goal_progress(run, entries)
+    chain = chain_from_entries(
+        str(run.run_state or ""),
+        entries,
+        goal=goal_record["goal"],
+        business_progress=progress,
+    )
+    current = _current_candidate(entries)
+    chain["run_version"] = int(getattr(run, "state_version", 0) or 0)
+    chain["current_candidate"] = current
+    chain["recovery"] = {
+        "available": bool(current and current.get("recovery_required")),
+        "manual_takeover": bool(current and current.get("recovery_required")),
+    }
+    if current is not None:
+        chain["planning"] = {
+            "status": "CANDIDATE_ALREADY_EXISTS",
+            "action_id": current["action"]["action_id"],
+        }
+        return _run_result(run, chain)
+    _complete_runtime_for_entries(entries)
+    intent, wait_reasons = _next_candidate_intent(run, goal_record, progress, entries)
+    if intent is None:
+        chain["candidate_intent"] = None
+        chain["planning"] = {
+            "status": "WAITING_BUSINESS_FACTS" if wait_reasons else "NO_CANDIDATE",
+            "blocked_reasons": wait_reasons,
+        }
+        chain["blocked_reasons"] = list(
+            dict.fromkeys([*chain.get("blocked_reasons", []), *wait_reasons])
+        )
+        chain["status"] = "WAITING_BUSINESS_FACTS" if wait_reasons else chain["status"]
+        return _run_result(run, chain)
+
+    from synora_agentic_erp.governance.policy import evaluate_proposal
+
+    runtime_checkpoint = None
+    if os.environ.get("SYNORA_RUNTIME_TOKEN", "").strip():
+        from synora_agentic_erp.agent.service import plan_p2p_candidate_runtime
+
+        runtime_checkpoint = plan_p2p_candidate_runtime(
+            intent.to_dict(),
+            getattr(run, "workflow_expires_at", None) or getattr(run, "expires_at", None),
+            correlation_id,
+        )
+    proposal = _candidate_proposal(
+        intent,
+        run,
+        goal_record,
+        entries,
+        correlation_id,
+        runtime_checkpoint=runtime_checkpoint,
+    )
+    evaluated = evaluate_proposal(proposal)
+    frappe.db.commit()
+    refreshed_run = frappe.get_doc("Synora Agent Run", run_id)
+    refreshed_entries = _entries_for_run(run_id)
+    refreshed_chain = get_p2p_chain(
+        run_id,
+        entries=refreshed_entries,
+        run_state=str(refreshed_run.run_state),
+    )
+    refreshed_chain["candidate_intent"] = intent.to_dict()
+    if runtime_checkpoint is not None:
+        refreshed_chain["runtime"] = {
+            "revision": runtime_checkpoint["revision"],
+            "step_id": runtime_checkpoint["step_id"],
+        }
+    refreshed_chain["planning"] = {
+        "status": "CANDIDATE_CREATED",
+        "action_id": str(evaluated["action"]["action_id"]),
+        "goal_version": intent.goal_version,
+        "run_version": intent.run_version,
+    }
+    return _run_result(refreshed_run, refreshed_chain)
+
+
+def investigate_p2p_run(run_id: str, correlation_id: str) -> dict[str, Any]:
+    """Re-read ERP facts and create only the next independently approvable candidate."""
+
+    run = _authorized_run(run_id, lock=True)
+    if str(run.run_state) in {"CANCELLED", "EXPIRED", "FAILED", "SUCCEEDED"}:
+        return _run_result(run, get_p2p_chain(run_id, run_state=str(run.run_state)))
+    if _expire_if_needed(run, correlation_id):
+        return _run_result(run, get_p2p_chain(run_id, run_state="EXPIRED"))
+    sync_p2p_plan_steps(run_id)
+    return _plan_next_p2p_candidate(run, correlation_id)
+
+
 def _expire_if_needed(run: Any, correlation_id: str) -> bool:
     """Close an expired PLAN_EXECUTE Run only when no side effect is active."""
 
@@ -1367,7 +2173,7 @@ def cancel_p2p_run(run_id: str, correlation_id: str) -> dict[str, Any]:
 
 
 def resume_p2p_run(run_id: str, correlation_id: str) -> dict[str, Any]:
-    """Re-read current ERP targets and surface drift without executing a writer."""
+    """Re-read current ERP targets and schedule one next candidate without executing a writer."""
 
     run = _authorized_run(run_id, lock=True)
     if str(run.run_state) in {"CANCELLED", "EXPIRED", "FAILED", "SUCCEEDED"}:
@@ -1400,19 +2206,23 @@ def resume_p2p_run(run_id: str, correlation_id: str) -> dict[str, Any]:
         chain["needs_reinvestigation"] = True
         chain["reinvestigation"] = drift
         frappe.db.commit()
-    else:
-        chain["reinvestigation"] = drift
-    return _run_result(run, chain)
+        return _run_result(run, chain)
+    chain["reinvestigation"] = drift
+    return _plan_next_p2p_candidate(run, correlation_id)
 
 
 __all__ = [
+    "P2P_CANDIDATE_SCHEMA_VERSION",
     "P2P_STEP_SCHEMA_VERSION",
+    "P2PCandidateIntent",
     "assert_p2p_action_dependencies",
     "chain_from_entries",
     "derive_step_views",
     "ensure_p2p_plan_step",
     "get_p2p_chain",
+    "get_p2p_goal_options",
     "infer_dependencies",
+    "investigate_p2p_run",
     "live_reinvestigation",
     "sync_p2p_plan_steps",
 ]

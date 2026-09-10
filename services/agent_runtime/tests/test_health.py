@@ -27,7 +27,9 @@ def test_agent_route_is_internal_and_documentation_is_disabled() -> None:
         "/coach/answer",
         "/workflow/start",
         "/workflow/resume",
+        "/workflow/p2p/plan",
         "/workflow/cancel",
+        "/workflow/complete-governed-action",
         "/workflow/status",
     }
     assert app.docs_url is None

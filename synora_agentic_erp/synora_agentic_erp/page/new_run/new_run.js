@@ -12,7 +12,7 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 		fieldname: "purpose",
 		label: __("用途"),
 		fieldtype: "Select",
-		options: "PROCUREMENT_ANALYSIS\nERP_COACH",
+		options: "PROCUREMENT_ANALYSIS\nP2P_EXECUTION\nERP_COACH",
 		default: "PROCUREMENT_ANALYSIS",
 		change: function () {
 			set_purpose_mode();
@@ -130,17 +130,21 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 
 	function set_purpose_mode() {
 		const coach = page.purpose_field.value === "ERP_COACH";
+		const p2p = page.purpose_field.value === "P2P_EXECUTION";
 		set_field_visible(page.goal_field, !coach);
 		page.goal_counter.toggle(!coach);
 		set_field_visible(page.coach_question_field, coach);
 		set_field_visible(page.coach_context_type_field, coach);
-		set_field_visible(page.window_field, !coach);
-		set_field_visible(page.execution_mode_field, !coach);
+		set_field_visible(page.window_field, !coach && !p2p);
+		set_field_visible(page.execution_mode_field, !coach && !p2p);
 		set_field_visible(
 			page.coach_context_name_field,
 			coach && Boolean(page.coach_context_type_field.value)
 		);
-		page.btn_primary.html(coach ? __("Ask Synora") : __("开始分析"));
+		page.btn_primary.html(coach ? __("Ask Synora") : p2p ? __("启动完整 P2P") : __("开始分析"));
+		if (p2p) {
+			page.execution_mode_field.set_value("PLAN_EXECUTE");
+		}
 		if (coach) {
 			refresh_coach_context_name();
 		}
@@ -248,7 +252,8 @@ frappe.pages["new-run"].on_page_load = function (wrapper) {
 			company: company,
 			goal: goal,
 			time_window_days: days,
-			execution_mode: execution_mode,
+			execution_mode: page.purpose_field.value === "P2P_EXECUTION" ? "PLAN_EXECUTE" : execution_mode,
+			purpose: page.purpose_field.value === "P2P_EXECUTION" ? "P2P_EXECUTION" : "ANALYSIS",
 		};
 		if (page.warehouse_field.value) {
 			args.warehouse = page.warehouse_field.value;

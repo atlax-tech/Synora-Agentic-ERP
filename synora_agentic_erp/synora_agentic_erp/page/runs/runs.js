@@ -720,15 +720,22 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		const target = goal.target || {};
 		const progress = chain.business_progress || {};
 		const has_goal = String(goal.state || run.p2p_goal_state || "MISSING") !== "MISSING";
-		if (!chain.steps.length && !has_goal) {
+		const is_p2p = run.purpose === "P2P_EXECUTION" || chain.steps.length || has_goal;
+		if (!is_p2p) {
 			return "";
 		}
 		const panel_id = "p2p-chain-panel-" + String(run.run_id).replace(/[^a-zA-Z0-9_-]/g, "");
 		const terminal = ["SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"].indexOf(String(run.run_state)) >= 0;
 		const owner = String(run.initiator || "") === String(current_user || "");
-		const can_resume = owner && !terminal;
+		const candidate = chain.current_candidate || null;
+		const recovery = chain.recovery || {};
+		const goal_state = String(goal.state || run.p2p_goal_state || "MISSING");
+		const goal_ready = goal_state === "CONFIRMED";
+		const can_resume = owner && !terminal && goal_ready;
 		const can_finalize = owner && !terminal && Boolean(chain.completion_ready);
 		const can_cancel = owner && !terminal && !Boolean(chain.completion_ready);
+		const can_confirm_goal = owner && !terminal && (!has_goal || ["STALE", "INVALID"].indexOf(goal_state) >= 0);
+		const can_investigate = owner && !terminal && goal_ready && !recovery.manual_takeover;
 		const target_rows = Array.isArray(target.source_rows) ? target.source_rows : [];
 		const goal_summary = target.source_name
 			? __("目标") + ": " + esc(target.source_doctype || "Purchase Order") + " / " + esc(target.source_name) +
@@ -746,6 +753,22 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				target_rows.map(function (row) {
 					return esc(row.source_row) + " / " + esc(row.item_code) + " · " + __("数量") + ": " + esc(row.target_qty);
 				}).join("；") + "</div>"
+			: "";
+		const candidate_action = candidate && candidate.action ? candidate.action : null;
+		const candidate_summary = candidate_action
+			? '<div class="small border rounded p-2 mb-2 bg-light"><b>' + __("当前候选") + "</b> · " +
+				esc(governance_action_copy(candidate_action)) +
+				" · " + __("候选状态") + ": " + esc(candidate.state || "—") +
+				" · " + __("目标版本") + ": " + esc(candidate_action.goal_version || goal.version || 0) +
+				" · " + __("运行版本") + ": " + esc(candidate_action.run_version || chain.run_version || 0) +
+				(candidate.requires_approval ? " · " + __("等待独立审批") : "") +
+				(candidate.recovery_required ? " · " + __("需要人工接管") : "") +
+				"</div>"
+			: "";
+		const recovery_summary = recovery.manual_takeover
+			? '<div class="small text-warning mb-2"><b>' + __("已暂停自动推进") + "</b> · " +
+				__("最近一次 ERP 副作用结果不确定；请在治理动作卡片中先只读对账或人工确认，系统不会自动重试。") +
+				"</div>"
 			: "";
 		const reasons = (chain.blocked_reasons || []).filter(Boolean).map(function (reason) {
 			return "<li>" + esc(reason) + "</li>";
@@ -768,7 +791,9 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 				"<td class=\"small\">" + esc(receipt) + "</td>" +
 				"</tr>";
 		}).join("");
-		const actions = (can_resume ? '<button type="button" class="btn btn-outline-primary btn-sm p2p-run-resume" data-run="' + esc(run.run_id) + '">' + __("重新调查 / 恢复") + "</button>" : "") +
+		const actions = (can_confirm_goal ? '<button type="button" class="btn btn-outline-primary btn-sm p2p-goal-confirm" data-run="' + esc(run.run_id) + '">' + (has_goal ? __("补充 / 更新业务目标") : __("确认 P2P 业务目标")) + "</button>" : "") +
+			(can_investigate ? '<button type="button" class="btn btn-outline-primary btn-sm p2p-run-investigate" data-run="' + esc(run.run_id) + '">' + __("调查 / 生成下一候选") + "</button>" : "") +
+			(can_resume ? '<button type="button" class="btn btn-outline-secondary btn-sm p2p-run-resume" data-run="' + esc(run.run_id) + '">' + __("重新读取事实") + "</button>" : "") +
 			(can_finalize ? '<button type="button" class="btn btn-primary btn-sm p2p-run-finalize" data-run="' + esc(run.run_id) + '">' + __("确认链路完成") + "</button>" : "") +
 			(can_cancel ? '<button type="button" class="btn btn-outline-danger btn-sm p2p-run-cancel" data-run="' + esc(run.run_id) + '">' + __("停止后续调度") + "</button>" : "");
 			return '<section class="p2p-chain-panel mt-3" aria-labelledby="' + panel_id + '-label" data-p2p-run="' + esc(run.run_id) + '">' +
@@ -779,6 +804,8 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 					(chain.next_step_id ? " · " + __("下一步") + ": " + esc(chain.next_step_id) : "") + "</div>" +
 				'<div class="small mb-2"><b>' + goal_summary + "</b>" + (progress_summary ? "<br>" + progress_summary : "") + "</div>" +
 				target_rows_summary +
+				candidate_summary +
+				recovery_summary +
 				'<div class="small mb-2">' + __("每个 ERP 副作用都单独审批、执行和读回；前一步失败或未知时，后续步骤会停在这里。") + "</div>" +
 			(reasons ? '<div class="small text-danger mb-2"><b>' + __("待处理原因") + "</b><ul class=\"mb-0\">" + reasons + "</ul></div>" : "") +
 			'<div class="table-responsive"><table class="table table-sm table-striped"><caption class="sr-only">' + __("P2P 步骤与回执") + "</caption><thead><tr>" +
@@ -934,6 +961,138 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 		});
 	}
 
+	function open_p2p_goal_dialog(run_id, trigger, detail_dialog) {
+		const original = trigger.html();
+		trigger.attr("disabled", true).html('<span class="spinner-border spinner-border-sm"></span> ' + esc(__("读取 Purchase Order…")));
+		frappe.call({
+			method: "synora_agentic_erp.api.get_p2p_goal_options",
+			type: "GET",
+			args: { run_id: run_id },
+			callback: function (r) {
+				trigger.attr("disabled", false).html(original);
+				if (!r.message || !r.message.ok) {
+					frappe.msgprint(api_failure_copy(__("读取 P2P 来源失败"), r.message, __("当前可用 Purchase Order 不可读取。"), ""));
+					return;
+				}
+				const orders = Array.isArray(r.message.options) ? r.message.options : [];
+				if (!orders.length) {
+					frappe.msgprint(__("当前公司范围内没有可用于 P2P 目标确认的 Purchase Order。"));
+					return;
+				}
+				const order_by_name = {};
+				orders.forEach(function (order) {
+					order_by_name[String(order.source_name)] = order;
+				});
+				const dialog = new frappe.ui.Dialog({
+					title: __("确认 P2P 业务目标"),
+					fields: [
+						{
+							fieldtype: "Select",
+							fieldname: "source_name",
+							label: __("来源 Purchase Order"),
+							options: orders.map(function (order) { return String(order.source_name); }).join("\n"),
+							reqd: 1,
+						},
+						{
+							fieldtype: "Select",
+							fieldname: "source_row",
+							label: __("来源行"),
+							options: "",
+							reqd: 1,
+						},
+						{
+							fieldtype: "Float",
+							fieldname: "target_qty",
+							label: __("目标数量"),
+							reqd: 1,
+							description: __("只能确认不超过来源行订购数量的目标；已收货数量仍以 ERP 回读为准。"),
+						},
+						{ fieldtype: "HTML", fieldname: "facts" },
+					],
+					primary_action_label: __("保存目标并继续调查"),
+					primary_action: function () {
+						const order = order_by_name[String(dialog.get_value("source_name") || "")];
+						const row_name = String(dialog.get_value("source_row") || "");
+						const row = order && Array.isArray(order.rows)
+							? order.rows.find(function (item) { return String(item.source_row) === row_name; })
+							: null;
+						const target_qty = Number(dialog.get_value("target_qty"));
+						if (!row || !Number.isFinite(target_qty) || target_qty <= 0 || target_qty > Number(row.qty)) {
+							frappe.msgprint(__("请确认来源行和目标数量；目标数量必须大于 0 且不超过订购数量。"));
+							return;
+						}
+						const action_button = dialog.get_primary_btn();
+						action_button.attr("disabled", true).html('<span class="spinner-border spinner-border-sm"></span> ' + esc(__("保存中")));
+						const correlation_id = crypto.randomUUID();
+						frappe.call({
+							method: "synora_agentic_erp.api.confirm_p2p_goal",
+							type: "POST",
+							args: {
+								run_id: run_id,
+								goal: JSON.stringify({
+									schema_version: "1",
+									source_doctype: "Purchase Order",
+									source_name: String(order.source_name),
+									source_rows: [{
+										source_row: String(row.source_row),
+										item_code: String(row.item_code),
+										target_qty: String(target_qty),
+									}],
+									settlement_endpoint: "RECEIVED_BILLED_PAID",
+								}),
+								correlation_id: correlation_id,
+							},
+							callback: function (response) {
+								if (response.message && response.message.ok) {
+									dialog.hide();
+									if (detail_dialog) { detail_dialog.hide(); }
+									refresh();
+									show_detail(run_id);
+									return;
+								}
+								action_button.attr("disabled", false).html(__("保存目标并继续调查"));
+								frappe.msgprint(api_failure_copy(__("保存 P2P 目标失败"), response.message, __("目标未保存。"), correlation_id));
+							},
+							error: function (xhr) {
+								action_button.attr("disabled", false).html(__("保存目标并继续调查"));
+								frappe.msgprint(api_failure_copy(__("保存 P2P 目标失败"), xhr, __("目标未保存。"), correlation_id));
+							},
+						});
+					},
+				});
+
+				function refresh_rows() {
+					const order = order_by_name[String(dialog.get_value("source_name") || "")];
+					const rows = order && Array.isArray(order.rows) ? order.rows : [];
+					dialog.set_df_property("source_row", "options", rows.map(function (row) { return String(row.source_row); }).join("\n"));
+					dialog.fields_dict.source_row.refresh();
+					if (rows.length) {
+						dialog.set_value("source_row", String(rows[0].source_row));
+						dialog.set_value("target_qty", Number(rows[0].qty));
+						dialog.fields_dict.facts.$wrapper.html(
+							'<div class="small text-muted">' +
+								__("物料") + ": " + esc(rows[0].item_code) + " · " +
+								__("订购") + ": " + esc(rows[0].qty) + " · " +
+								__("已收货") + ": " + esc(rows[0].received_qty) + " · " +
+								__("已开票金额") + ": " + esc(rows[0].billed_amount) +
+							'</div>'
+						);
+					} else {
+						dialog.set_value("source_row", "");
+						dialog.fields_dict.facts.$wrapper.empty();
+					}
+				}
+				dialog.fields_dict.source_name.$input.on("change", refresh_rows);
+				dialog.show();
+				refresh_rows();
+			},
+			error: function (xhr) {
+				trigger.attr("disabled", false).html(original);
+				frappe.msgprint(api_failure_copy(__("读取 P2P 来源失败"), xhr, __("当前可用 Purchase Order 不可读取。"), ""));
+			},
+		});
+	}
+
 	function bind_governance_actions(wrapper, run_id, dialog) {
 		wrapper.find(".governance-decide").on("click", function () {
 			const button = $(this);
@@ -994,6 +1153,12 @@ frappe.pages["runs"].on_page_load = function (wrapper) {
 	}
 
 	function bind_p2p_chain_actions(wrapper, run_id, dialog) {
+		wrapper.find(".p2p-goal-confirm").on("click", function () {
+			open_p2p_goal_dialog(run_id, $(this), dialog);
+		});
+		wrapper.find(".p2p-run-investigate").on("click", function () {
+			p2p_run_call($(this), "synora_agentic_erp.api.investigate_p2p_run", __("调查中"), run_id, dialog);
+		});
 		wrapper.find(".p2p-run-resume").on("click", function () {
 			p2p_run_call($(this), "synora_agentic_erp.api.resume_p2p_run", __("重新调查中"), run_id, dialog);
 		});

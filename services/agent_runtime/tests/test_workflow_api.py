@@ -154,6 +154,68 @@ def test_workflow_start_interrupts_resume_is_revision_bound(
     assert stale.status_code == 409
 
 
+def test_p2p_plan_checkpoints_typed_candidate_and_advances_after_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("SYNORA_RUNTIME_TOKEN", TOKEN)
+    monkeypatch.setenv("SYNORA_WORKFLOW_DB_PATH", str(tmp_path / "workflow.sqlite"))
+    run_id = uuid4()
+    intent = {
+        "schema_version": "1",
+        "run_id": str(run_id),
+        "goal_version": 1,
+        "run_version": 4,
+        "action_type": "SUBMIT_PO",
+        "source_doctype": "Purchase Order",
+        "source_name": "PUR-ORD-0001",
+        "items": [],
+        "payment": None,
+        "reason": "submit the confirmed Purchase Order",
+    }
+    payload = {
+        "run_id": str(run_id),
+        "correlation_id": str(uuid4()),
+        "deadline": "2099-01-01T00:00:00+00:00",
+        "intent": intent,
+    }
+    headers = {"X-Synora-Runtime-Token": TOKEN}
+    planned = asyncio.run(_post("/workflow/p2p/plan", payload, headers))
+    assert planned.status_code == 200, planned.text
+    state = planned.json()["result"]["state"]
+    assert state["status"] == "RUNNING"
+    assert state["steps"][0]["status"] == "WAITING"
+    assert state["steps"][0]["governed_action"] == intent
+
+    repeated = asyncio.run(_post("/workflow/p2p/plan", payload, headers))
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["result"]["state"]["revision"] == state["revision"]
+
+    completed = asyncio.run(
+        _post(
+            "/workflow/complete-governed-action",
+            {
+                "run_id": str(run_id),
+                "workflow_revision": state["revision"],
+                "step_id": state["current_step_id"],
+                "receipt_digest": "a" * 64,
+            },
+            headers,
+        )
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["result"]["state"]["status"] == "SUCCEEDED"
+
+    next_intent = {**intent, "run_version": 5, "action_type": "CREATE_PR_DRAFT"}
+    next_payload = {**payload, "correlation_id": str(uuid4()), "intent": next_intent}
+    next_planned = asyncio.run(_post("/workflow/p2p/plan", next_payload, headers))
+    assert next_planned.status_code == 200, next_planned.text
+    next_state = next_planned.json()["result"]["state"]
+    assert next_state["steps"][0]["status"] == "SUCCEEDED"
+    assert next_state["steps"][1]["status"] == "WAITING"
+    assert next_state["steps"][1]["governed_action"] == next_intent
+
+
 def test_workflow_cancel_is_terminal_and_status_is_readable(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

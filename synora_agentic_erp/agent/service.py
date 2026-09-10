@@ -820,7 +820,7 @@ _WORKFLOW_STEP_STATUSES = {
     "SKIPPED",
     "CANCELLED",
 }
-_WORKFLOW_STEP_TYPES = {"TOOL", "CLARIFICATION", "FINALIZE"}
+_WORKFLOW_STEP_TYPES = {"TOOL", "CLARIFICATION", "GOVERNED_ACTION", "FINALIZE"}
 _WORKFLOW_TOOL_NAMES = {
     "item.lookup",
     "supplier.lookup",
@@ -940,7 +940,11 @@ def _validate_workflow_runtime_response(body: object, run_id: str) -> dict[str, 
             "observation_digest",
             "error",
             "completed_at",
+            "governed_action",
         }
+        legacy_step_fields = expected_step_fields - {"governed_action"}
+        if set(step) == legacy_step_fields:
+            step["governed_action"] = None
         if set(step) != expected_step_fields or step.get("schema_version") != "1":
             raise ValueError("workflow step shape is invalid")
         step_id = step.get("step_id")
@@ -984,12 +988,74 @@ def _validate_workflow_runtime_response(body: object, run_id: str) -> dict[str, 
         tool_name = step.get("tool_name")
         clarification = step.get("clarification")
         if step_type == "TOOL":
-            if tool_name not in raw_tools or clarification is not None:
+            if (
+                tool_name not in raw_tools
+                or clarification is not None
+                or step.get("governed_action") is not None
+            ):
                 raise ValueError("workflow tool step is invalid")
         elif step_type == "CLARIFICATION":
-            if tool_name is not None or raw_tools or not isinstance(clarification, dict):
+            if (
+                tool_name is not None
+                or raw_tools
+                or not isinstance(clarification, dict)
+                or step.get("governed_action") is not None
+            ):
                 raise ValueError("workflow clarification step is invalid")
-        elif tool_name is not None or raw_tools or clarification is not None:
+        elif step_type == "GOVERNED_ACTION":
+            governed_action = step.get("governed_action")
+            if tool_name is not None or raw_tools or clarification is not None:
+                raise ValueError("workflow governed-action step is invalid")
+            if not isinstance(governed_action, dict):
+                raise ValueError("workflow governed-action intent is missing")
+            expected_intent_fields = {
+                "schema_version",
+                "run_id",
+                "goal_version",
+                "run_version",
+                "action_type",
+                "source_doctype",
+                "source_name",
+                "items",
+                "payment",
+                "reason",
+            }
+            if set(governed_action) != expected_intent_fields:
+                raise ValueError("workflow governed-action intent is invalid")
+            if (
+                governed_action.get("schema_version") != "1"
+                or governed_action.get("run_id") != run_id
+                or not isinstance(governed_action.get("goal_version"), int)
+                or isinstance(governed_action.get("goal_version"), bool)
+                or governed_action["goal_version"] < 0
+                or not isinstance(governed_action.get("run_version"), int)
+                or isinstance(governed_action.get("run_version"), bool)
+                or governed_action["run_version"] < 0
+                or not all(
+                    isinstance(governed_action.get(field), str)
+                    and 0 < len(governed_action[field]) <= maximum
+                    for field, maximum in (
+                        ("action_type", 80),
+                        ("source_doctype", 80),
+                        ("source_name", 140),
+                        ("reason", 500),
+                    )
+                )
+                or not isinstance(governed_action.get("items"), list)
+                or len(governed_action["items"]) > 100
+                or any(not isinstance(item, dict) for item in governed_action["items"])
+                or (
+                    governed_action.get("payment") is not None
+                    and not isinstance(governed_action["payment"], dict)
+                )
+            ):
+                raise ValueError("workflow governed-action intent is invalid")
+        elif (
+            tool_name is not None
+            or raw_tools
+            or clarification is not None
+            or step.get("governed_action") is not None
+        ):
             raise ValueError("workflow finalize step is invalid")
         parameters = step.get("parameters")
         if not isinstance(parameters, dict):
@@ -1172,6 +1238,7 @@ def _workflow_public_summary(response: dict[str, Any]) -> dict[str, Any]:
                 "observation_digest": step.get("observation_digest"),
                 "error": step.get("error"),
                 "completed_at": step.get("completed_at"),
+                "governed_action": step.get("governed_action"),
             }
         )
     clarification = state.get("clarification")
@@ -1203,6 +1270,72 @@ def _workflow_public_summary(response: dict[str, Any]) -> dict[str, Any]:
         "observations": result.get("observations", []),
         "resumed": result.get("resumed", False),
     }
+
+
+def plan_p2p_candidate_runtime(
+    intent: dict[str, Any], deadline: Any, correlation_id: str
+) -> dict[str, Any]:
+    """Checkpoint one typed P2P candidate in Runtime without ERP authority."""
+    run_id = str(intent.get("run_id") or "")
+    response = _call_workflow_runtime(
+        "p2p/plan",
+        {
+            "schema_version": "1",
+            "run_id": run_id,
+            "correlation_id": correlation_id,
+            "deadline": _workflow_deadline_for_runtime(deadline),
+            "intent": intent,
+        },
+    )
+    workflow = _workflow_public_summary(response)
+    current_step_id = workflow.get("current_step_id")
+    step = next(
+        (
+            item
+            for item in workflow.get("steps", [])
+            if isinstance(item, dict) and item.get("step_id") == current_step_id
+        ),
+        None,
+    )
+    if (
+        workflow.get("status") != "RUNNING"
+        or not isinstance(step, dict)
+        or step.get("status") != "WAITING"
+        or step.get("type") != "GOVERNED_ACTION"
+        or step.get("governed_action") != intent
+    ):
+        raise GatewayFault("ERP_ERROR", "workflow runtime returned an invalid P2P candidate", 502)
+    return {
+        "revision": int(workflow["revision"]),
+        "step_id": str(current_step_id),
+        "workflow": workflow,
+    }
+
+
+def complete_p2p_candidate_runtime(
+    run_id: str, workflow_revision: int, step_id: str, receipt_digest: str
+) -> dict[str, Any]:
+    """Advance Runtime only after Frappe has a durable successful Receipt."""
+    response = _call_workflow_runtime(
+        "complete-governed-action",
+        {
+            "schema_version": "1",
+            "run_id": run_id,
+            "workflow_revision": workflow_revision,
+            "step_id": step_id,
+            "receipt_digest": receipt_digest,
+        },
+    )
+    return _workflow_public_summary(response)
+
+
+def get_p2p_candidate_runtime_status(run_id: str) -> dict[str, Any]:
+    """Read the sidecar checkpoint for P2P Receipt reconciliation."""
+    response = _call_workflow_runtime(
+        "status",
+        {"schema_version": "1", "run_id": run_id},
+    )
+    return _workflow_public_summary(response)
 
 
 def _persist_workflow_trace(

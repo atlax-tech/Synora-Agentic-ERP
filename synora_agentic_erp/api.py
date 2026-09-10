@@ -45,6 +45,7 @@ from synora_agentic_erp.gateway.contract import (
 from synora_agentic_erp.gateway.registry import dispatch
 from synora_agentic_erp.gateway.security import (
     EXECUTION_MODES,
+    RUN_PURPOSES,
     record_gateway_audit,
     reject_mixed_user_credentials,
     require_capability_only_request,
@@ -86,6 +87,12 @@ from synora_agentic_erp.governance.p2p_orchestration import (
 )
 from synora_agentic_erp.governance.p2p_orchestration import (
     get_p2p_chain,
+)
+from synora_agentic_erp.governance.p2p_orchestration import (
+    get_p2p_goal_options as get_p2p_goal_options_impl,
+)
+from synora_agentic_erp.governance.p2p_orchestration import (
+    investigate_p2p_run as investigate_p2p_run_impl,
 )
 from synora_agentic_erp.governance.p2p_orchestration import (
     resume_p2p_run as resume_p2p_run_impl,
@@ -427,6 +434,7 @@ def issue_run(
     time_window_days: int | None = None,
     correlation_id: str | None = None,
     execution_mode: str | None = None,
+    purpose: str | None = None,
 ) -> dict[str, Any]:
     safe_correlation_id: str | None = None
     try:
@@ -451,6 +459,9 @@ def issue_run(
         safe_execution_mode = "DETERMINISTIC" if execution_mode is None else execution_mode
         if not isinstance(safe_execution_mode, str) or safe_execution_mode not in EXECUTION_MODES:
             raise GatewayFault("INVALID_INPUT", "execution_mode is invalid")
+        safe_purpose = "ANALYSIS" if purpose is None else purpose
+        if not isinstance(safe_purpose, str) or safe_purpose not in RUN_PURPOSES:
+            raise GatewayFault("INVALID_INPUT", "purpose is invalid")
         run = create_run(
             safe_company,
             safe_goal,
@@ -458,6 +469,7 @@ def issue_run(
             safe_days,
             safe_correlation_id,
             safe_execution_mode,
+            safe_purpose,
         )
         if safe_execution_mode == "PLAN_EXECUTE":
             # A durable workflow receives a fresh capability only when a
@@ -810,6 +822,7 @@ def _run_summary(run: Any) -> dict[str, Any]:
     return {
         "run_id": run.name,
         "goal": run.goal,
+        "purpose": getattr(run, "purpose", "ANALYSIS") or "ANALYSIS",
         "execution_mode": execution_mode,
         "agent_status": (agent_trace or {}).get("status", "NOT_STARTED")
         if execution_mode == "AGENT"
@@ -1146,6 +1159,43 @@ def confirm_p2p_goal(run_id: object, goal: object, correlation_id: object) -> di
         safe_correlation_id = validate_correlation_id(correlation_id)
         safe_run_id = canonical_uuid(run_id, "run_id")
         result = confirm_p2p_goal_impl(safe_run_id, goal, safe_correlation_id)
+        return {
+            "ok": True,
+            "schema_version": SCHEMA_VERSION,
+            "correlation_id": safe_correlation_id,
+            "run": result,
+        }
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, safe_correlation_id)
+
+
+@frappe.whitelist(methods=["GET"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def get_p2p_goal_options(run_id: object) -> dict[str, Any]:
+    """List current, permission-filtered Purchase Order rows for goal confirmation."""
+
+    try:
+        reject_mixed_user_credentials()
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        result = get_p2p_goal_options_impl(safe_run_id)
+        return {"ok": True, "schema_version": SCHEMA_VERSION, "options": result["options"]}
+    except GatewayFault as fault:
+        _set_status(fault.status_code)
+        return error_response(fault, None)
+
+
+@frappe.whitelist(methods=["POST"])  # type: ignore[untyped-decorator]
+@do_not_record  # type: ignore[untyped-decorator]
+def investigate_p2p_run(run_id: object, correlation_id: object) -> dict[str, Any]:
+    """Re-read facts and create at most one current governed P2P candidate."""
+
+    safe_correlation_id: str | None = None
+    try:
+        reject_mixed_user_credentials()
+        safe_correlation_id = validate_correlation_id(correlation_id)
+        safe_run_id = canonical_uuid(run_id, "run_id")
+        result = investigate_p2p_run_impl(safe_run_id, safe_correlation_id)
         return {
             "ok": True,
             "schema_version": SCHEMA_VERSION,

@@ -78,6 +78,21 @@ class TestAgentRun(FrappeTestCase):
         stored = frappe.get_doc("Synora Agent Run", agent_result["run"]["run_id"])
         self.assertEqual(stored.execution_mode, "AGENT")
 
+    def test_issue_run_accepts_p2p_execution_purpose(self) -> None:
+        frappe.set_user(BUYER)
+        response = issue_run(
+            COMPANY,
+            "settle the confirmed purchase order target",
+            warehouse=WAREHOUSE,
+            correlation_id="3c4d5e6f-7a8b-4c9d-0e1f-2a3b4c5d6e7f",
+            execution_mode="PLAN_EXECUTE",
+            purpose="P2P_EXECUTION",
+        )
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["run"]["purpose"], "P2P_EXECUTION")
+        stored = frappe.get_doc("Synora Agent Run", response["run"]["run_id"])
+        self.assertEqual(stored.purpose, "P2P_EXECUTION")
+
     def test_issue_run_rejects_invalid_inputs(self) -> None:
         frappe.set_user(BUYER)
         for days in (0, -1, 366):

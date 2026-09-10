@@ -7,13 +7,21 @@ receives that capability.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from pydantic import BeforeValidator, ConfigDict, Field, SecretStr, field_validator
+from pydantic import (
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 
-from agent_runtime.agent.contracts import Action, StrictModel
+from agent_runtime.agent.contracts import Action, StrictModel, canonical_json
 from agent_runtime.agent.execution import GatewayToolAdapter
 from agent_runtime.agent.kernel import ToolExecutionFailure
 from agent_runtime.gateway import GatewayClient
@@ -24,6 +32,7 @@ from agent_runtime.workflow.checkpoint import (
 )
 from agent_runtime.workflow.contracts import (
     ClarificationRequest,
+    GovernedActionIntent,
     PlanStep,
     WorkflowResult,
     WorkflowState,
@@ -68,6 +77,34 @@ class WorkflowResumeRequest(WorkflowRequest):
     workflow_revision: int = Field(ge=0, le=1_000_000)
     interrupt_id: Annotated[UUID, Field(strict=False)]
     answer: str = Field(min_length=1, max_length=4_000)
+
+
+class WorkflowGovernedActionCompleteRequest(StrictModel):
+    """Record a Receipt without exposing a Gateway capability to Runtime."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
+    schema_version: Literal["1"] = WORKFLOW_RUNTIME_SCHEMA_VERSION
+    run_id: Annotated[UUID, Field(strict=False)]
+    workflow_revision: int = Field(ge=0, le=1_000_000)
+    step_id: str = Field(min_length=1, max_length=64)
+    receipt_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class WorkflowP2PPlanRequest(StrictModel):
+    """A write-free P2P checkpoint request from the Frappe planner."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
+    schema_version: Literal["1"] = WORKFLOW_RUNTIME_SCHEMA_VERSION
+    run_id: Annotated[UUID, Field(strict=False)]
+    correlation_id: Annotated[UUID, Field(strict=False)]
+    deadline: str = Field(min_length=1, max_length=64)
+    intent: GovernedActionIntent
+
+    @model_validator(mode="after")
+    def validate_intent_run(self) -> WorkflowP2PPlanRequest:
+        if self.intent.run_id != self.run_id:
+            raise ValueError("governed action intent belongs to another run")
+        return self
 
 
 class WorkflowCancelRequest(StrictModel):
@@ -131,6 +168,29 @@ def default_plan(goal: str, run_id: UUID) -> tuple[PlanStep, ...]:
     return tuple(steps)
 
 
+def _p2p_step_id(intent: GovernedActionIntent) -> str:
+    digest = hashlib.sha256(
+        canonical_json(intent.model_dump(mode="json")).encode("utf-8")
+    ).hexdigest()[:16]
+    return f"p2p-{intent.goal_version}-{intent.run_version}-{digest}"
+
+
+def _p2p_step(
+    intent: GovernedActionIntent,
+    *,
+    step_id: str,
+    order: int,
+    depends_on: tuple[str, ...] = (),
+) -> PlanStep:
+    return PlanStep(
+        step_id=step_id,
+        order=order,
+        type="GOVERNED_ACTION",
+        depends_on=depends_on,
+        governed_action=intent,
+    )
+
+
 class WorkflowRuntime:
     """Execute one workflow segment and persist every safe point."""
 
@@ -152,6 +212,72 @@ class WorkflowRuntime:
         except CheckpointConflict:
             state = self.store.load(request.run_id)
         return WorkflowResponse(result=await self._advance(state, request))
+
+    async def plan_governed_action(self, request: WorkflowP2PPlanRequest) -> WorkflowResponse:
+        """Checkpoint one typed P2P intent, without reading or writing ERP data."""
+        step_id = _p2p_step_id(request.intent)
+        try:
+            state = self.store.load(request.run_id)
+        except CheckpointError as error:
+            if error.code != "CHECKPOINT_NOT_FOUND":
+                raise
+            initial = WorkflowEngine.create_state(
+                run_id=request.run_id,
+                trace_id=request.correlation_id,
+                steps=(
+                    _p2p_step(
+                        request.intent,
+                        step_id=step_id,
+                        order=1,
+                    ),
+                ),
+                deadline=request.deadline,
+            )
+            self.store.create(initial)
+            state = initial
+
+        current = (
+            next(
+                (item for item in state.steps if item.step_id == state.current_step_id),
+                None,
+            )
+            if state.current_step_id
+            else None
+        )
+        if current is not None and current.status in {"RUNNING", "WAITING"}:
+            if current.type == "GOVERNED_ACTION" and current.governed_action == request.intent:
+                return WorkflowResponse(result=self.engine.result(state))
+            raise WorkflowError(
+                "WORKFLOW_CONFLICT",
+                "another governed P2P candidate is already current",
+            )
+        if state.status == "READY":
+            if len(state.steps) == 1 and state.steps[0].governed_action == request.intent:
+                return WorkflowResponse(result=await self._advance(state, request))
+            raise WorkflowError("WORKFLOW_CONFLICT", "workflow has an incompatible pending plan")
+        if state.status in {"FAILED", "CANCELLED", "EXPIRED", "INTERRUPTED"}:
+            raise WorkflowError("WORKFLOW_CONFLICT", "workflow cannot accept a new P2P candidate")
+        if any(item.step_id == step_id for item in state.steps):
+            raise WorkflowError("WORKFLOW_CONFLICT", "P2P candidate identity was already used")
+
+        next_step = _p2p_step(
+            request.intent,
+            step_id=step_id,
+            order=len(state.steps) + 1,
+            depends_on=(state.steps[-1].step_id,) if state.steps else (),
+        )
+        lease = self.store.acquire_lease(request.run_id, expected_revision=state.revision)
+        try:
+            replanned = self.engine.replan(
+                state,
+                (*state.steps, next_step),
+                "NO_PROGRESS",
+            )
+            self.store.save(replanned, expected_revision=state.revision, lease_id=lease)
+        except Exception:
+            self.store.release_lease(request.run_id, lease)
+            raise
+        return WorkflowResponse(result=await self._advance(replanned, request))
 
     async def resume(self, request: WorkflowResumeRequest) -> WorkflowResponse:
         state = self.store.load(request.run_id)
@@ -203,6 +329,25 @@ class WorkflowRuntime:
             self.store.release_lease(request.run_id, lease)
             raise
         return WorkflowResponse(result=WorkflowResult(state=cancelled))
+
+    def complete_governed_action(
+        self, request: WorkflowGovernedActionCompleteRequest
+    ) -> WorkflowResponse:
+        state = self.store.load(request.run_id)
+        if state.revision != request.workflow_revision:
+            raise CheckpointConflict("workflow revision is stale")
+        lease = self.store.acquire_lease(request.run_id, expected_revision=state.revision)
+        try:
+            completed = self.engine.complete_governed_action(
+                state,
+                step_id=request.step_id,
+                observation_digest=request.receipt_digest,
+            )
+            self.store.save(completed, expected_revision=state.revision, lease_id=lease)
+        except Exception:
+            self.store.release_lease(request.run_id, lease)
+            raise
+        return WorkflowResponse(result=WorkflowResult(state=completed, resumed=True))
 
     async def recover(self) -> int:
         """Mark in-flight tool calls as an explicit manual-recovery interrupt."""
@@ -273,13 +418,6 @@ class WorkflowRuntime:
                         "UNCERTAIN_TOOL_RESULT",
                         "a running tool has no durable result; manual recovery is required",
                     )
-            client = GatewayClient()
-            adapter = GatewayToolAdapter(
-                client=client,
-                run_id=request.run_id,
-                correlation_id=request.correlation_id,
-                capability=request.capability,
-            )
             while current.status == "RUNNING":
                 ready = self.engine.ready_step(current)
                 if ready is None:
@@ -305,8 +443,25 @@ class WorkflowRuntime:
                         lease_id=held_lease,
                     )
                     return self.engine.result(interrupted)
+                if ready.type == "GOVERNED_ACTION":
+                    waiting = self.engine.wait_for_governed_action(current, ready.step_id)
+                    self.store.save(
+                        waiting,
+                        expected_revision=current.revision,
+                        lease_id=held_lease,
+                    )
+                    return self.engine.result(waiting)
                 if ready.tool_name is None:
                     raise WorkflowError("WORKFLOW_INVALID", "tool step is incomplete")
+                if client is None:
+                    client = GatewayClient()
+                if adapter is None:
+                    adapter = GatewayToolAdapter(
+                        client=client,
+                        run_id=request.run_id,
+                        correlation_id=request.correlation_id,
+                        capability=request.capability,
+                    )
                 set_context = getattr(adapter, "set_workflow_context", None)
                 if callable(set_context):
                     set_context(plan_version=current.plan_version, step_id=ready.step_id)

@@ -2,6 +2,7 @@
 
 from agent_runtime.workflow.contracts import (
     ClarificationRequest,
+    GovernedActionIntent,
     PlanStep,
     ReplanReason,
     StepStatus,
@@ -22,6 +23,7 @@ from agent_runtime.workflow.langgraph_adapter import LangGraphUnavailable, langg
 __all__ = [
     "ClarificationRequest",
     "FixedWorkflowRunner",
+    "GovernedActionIntent",
     "LangGraphUnavailable",
     "PlanAndExecuteWorkflowRunner",
     "PlanStep",

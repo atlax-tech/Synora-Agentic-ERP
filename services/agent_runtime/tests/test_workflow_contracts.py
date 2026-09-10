@@ -10,6 +10,7 @@ import pytest
 from agent_runtime.agent.contracts import observation_from_summary
 from agent_runtime.workflow import (
     ClarificationRequest,
+    GovernedActionIntent,
     PlanStep,
     WorkflowEngine,
     WorkflowError,
@@ -122,6 +123,45 @@ def test_clarification_interrupt_resume_is_single_use() -> None:
     assert resumed.replan_reason == "INPUT_CLARIFIED"
     with pytest.raises(WorkflowError, match="not waiting"):
         engine.resume(resumed, interrupt_id=interrupt.interrupt_id, answer="Stores")
+
+
+def test_governed_action_waits_for_receipt_without_runtime_write_access() -> None:
+    engine = WorkflowEngine()
+    run_id = uuid4()
+    intent = GovernedActionIntent(
+        run_id=run_id,
+        goal_version=2,
+        run_version=7,
+        action_type="SUBMIT_PO",
+        source_doctype="Purchase Order",
+        source_name="PUR-ORD-0001",
+        reason="submit the confirmed source Purchase Order",
+    )
+    state = WorkflowEngine.create_state(
+        run_id=run_id,
+        trace_id=uuid4(),
+        steps=(
+            PlanStep(
+                step_id="submit-po",
+                order=1,
+                type="GOVERNED_ACTION",
+                governed_action=intent,
+            ),
+        ),
+        deadline=_deadline(),
+    )
+    running = engine.begin_step(engine.start(state), "submit-po")
+    waiting = engine.wait_for_governed_action(running, "submit-po")
+    assert waiting.status == "RUNNING"
+    assert waiting.steps[0].status == "WAITING"
+    receipt_digest = "a" * 64
+    completed = engine.complete_governed_action(
+        waiting,
+        step_id="submit-po",
+        observation_digest=receipt_digest,
+    )
+    assert completed.status == "SUCCEEDED"
+    assert completed.steps[0].observation_digest == receipt_digest
 
 
 def test_replan_preserves_completed_step_and_increments_version() -> None:

@@ -69,6 +69,10 @@ class WorkflowEngine:
     def ready_step(self, state: WorkflowState) -> PlanStep | None:
         if state.status != "RUNNING":
             return None
+        if state.current_step_id is not None:
+            current = self._get_step(state, state.current_step_id)
+            if current.status in {"RUNNING", "WAITING"}:
+                return None
         done = {step.step_id for step in state.steps if step.status == "SUCCEEDED"}
         for step in state.steps:
             if step.status in {"PENDING", "READY"} and set(step.depends_on) <= done:
@@ -96,6 +100,67 @@ class WorkflowEngine:
         steps = self._replace_step(state.steps, step_id, status="RUNNING")
         return state.model_copy(
             update={"current_step_id": step_id, "steps": steps, "revision": state.revision + 1}
+        )
+
+    def wait_for_governed_action(self, state: WorkflowState, step_id: str) -> WorkflowState:
+        """Persist a governed intent without granting Runtime any write authority."""
+
+        self._ensure_running(state)
+        step = self._get_step(state, step_id)
+        if step.status != "RUNNING" or step.type != "GOVERNED_ACTION":
+            raise WorkflowError("WORKFLOW_CONFLICT", "step is not waiting for a governed action")
+        steps = self._replace_step(state.steps, step_id, status="WAITING")
+        return state.model_copy(
+            update={"steps": steps, "current_step_id": step_id, "revision": state.revision + 1}
+        )
+
+    def complete_governed_action(
+        self, state: WorkflowState, *, step_id: str, observation_digest: str
+    ) -> WorkflowState:
+        """Record a Frappe-side Receipt digest and advance the checkpoint."""
+
+        self._ensure_running(state)
+        if len(observation_digest) != 64 or any(
+            character not in "0123456789abcdef" for character in observation_digest
+        ):
+            raise WorkflowError("INVALID_OBSERVATION", "governed action Receipt digest is invalid")
+        step = self._get_step(state, step_id)
+        if step.status != "WAITING" or step.type != "GOVERNED_ACTION":
+            raise WorkflowError("WORKFLOW_CONFLICT", "governed action is not waiting for a Receipt")
+        updated = step.model_copy(
+            update={
+                "status": "SUCCEEDED",
+                "observation_digest": observation_digest,
+                "completed_at": _now_iso(self._clock),
+                "error": None,
+            }
+        )
+        steps = tuple(updated if item.step_id == step_id else item for item in state.steps)
+        if all(item.status in {"SUCCEEDED", "SKIPPED"} for item in steps):
+            return state.model_copy(
+                update={
+                    "steps": steps,
+                    "current_step_id": None,
+                    "status": "SUCCEEDED",
+                    "stop_reason": "governed action Receipt recorded",
+                    "revision": state.revision + 1,
+                }
+            )
+        done = {item.step_id for item in steps if item.status == "SUCCEEDED"}
+        next_step = next(
+            (
+                item
+                for item in steps
+                if item.status in {"PENDING", "READY"} and set(item.depends_on) <= done
+            ),
+            None,
+        )
+        return state.model_copy(
+            update={
+                "steps": steps,
+                "current_step_id": next_step.step_id if next_step else None,
+                "revision": state.revision + 1,
+            }
         )
 
     def complete_step(self, state: WorkflowState, observation: Observation) -> WorkflowState:

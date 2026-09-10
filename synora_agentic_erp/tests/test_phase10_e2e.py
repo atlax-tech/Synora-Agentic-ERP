@@ -8,6 +8,7 @@ and settlement facts can be read back before the next action is proposed.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, cast
 from unittest.mock import patch
 from uuid import uuid4
@@ -23,6 +24,8 @@ from synora_agentic_erp.api import (
     execute_p2p_action,
     finalize_p2p_run,
     get_run,
+    get_p2p_goal_options,
+    investigate_p2p_run,
     issue_run,
     resume_p2p_run,
 )
@@ -128,16 +131,22 @@ class TestPhase10RealP2PEndToEnd(FrappeTestCase):  # type: ignore[misc]
         frappe.db.commit()
         return str(po.name), str(po.items[0].name), item_code
 
-    def _new_run(self, goal: str) -> str:
+    def _new_run(self, goal: str, *, purpose: str = "ANALYSIS") -> str:
         frappe.set_user(E2E_OWNER)
         issued = issue_run(
             COMPANY,
             goal,
             warehouse=WAREHOUSE,
             correlation_id=str(uuid4()),
+            execution_mode="PLAN_EXECUTE" if purpose == "P2P_EXECUTION" else None,
+            purpose=purpose,
         )
         self.assertTrue(issued["ok"], issued)
         run_id = str(issued["run"]["run_id"])
+        if purpose == "P2P_EXECUTION":
+            self.assertEqual(issued["run"]["purpose"], "P2P_EXECUTION")
+            self.assertEqual(issued["run"]["run_state"], "CREATED")
+            return run_id
         analyzed = analyze_run(run_id, str(issued["correlation_id"]))
         self.assertTrue(analyzed["ok"], analyzed)
         self.assertEqual(analyzed["analysis"]["run_state"], "PROPOSED")
@@ -267,6 +276,10 @@ class TestPhase10RealP2PEndToEnd(FrappeTestCase):  # type: ignore[misc]
         po_name, po_item_name, item_code = self._draft_po()
         run_id = self._new_run(f"Phase 10 E2E P2P batch {po_name}")
         frappe.set_user(E2E_OWNER)
+        options = get_p2p_goal_options(run_id)
+        self.assertTrue(options["ok"], options)
+        selected = next(item for item in options["options"] if item["source_name"] == po_name)
+        self.assertEqual(selected["rows"][0]["source_row"], po_item_name)
         confirmed = confirm_p2p_goal(
             run_id,
             {
@@ -586,6 +599,143 @@ class TestPhase10RealP2PEndToEnd(FrappeTestCase):  # type: ignore[misc]
             if row["action"]["action_id"] == proposal["action_id"]
         )
         self.assertEqual(old_action["action"]["state"], "EXPIRED")
+
+    def test_investigation_creates_one_candidate_and_advances_after_receipt(self) -> None:
+        po_name, po_item_name, item_code = self._draft_po()
+        run_id = self._new_run(f"Phase 10 E2E candidate planner {po_name}")
+        frappe.set_user(E2E_OWNER)
+        confirmed = confirm_p2p_goal(
+            run_id,
+            {
+                "source_doctype": "Purchase Order",
+                "source_name": po_name,
+                "source_rows": [
+                    {"source_row": po_item_name, "item_code": item_code, "target_qty": 2}
+                ],
+            },
+            str(uuid4()),
+        )
+        self.assertTrue(confirmed["ok"], confirmed)
+
+        planned = cast(dict[str, Any], investigate_p2p_run(run_id, str(uuid4())))
+        self.assertTrue(planned["ok"], planned)
+        first_candidate = planned["run"]["chain"]["current_candidate"]
+        self.assertEqual(first_candidate["action"]["action_type"], "SUBMIT_PO")
+        if os.environ.get("SYNORA_RUNTIME_TOKEN", "").strip():
+            self.assertIsNotNone(first_candidate["runtime"], first_candidate)
+        self.assertEqual(planned["run"]["chain"]["goal"]["version"], 1)
+        self.assertEqual(planned["run"]["chain"]["planning"]["status"], "CANDIDATE_CREATED")
+
+        repeated = cast(dict[str, Any], investigate_p2p_run(run_id, str(uuid4())))
+        self.assertTrue(repeated["ok"], repeated)
+        self.assertEqual(repeated["run"]["chain"]["planning"]["status"], "CANDIDATE_ALREADY_EXISTS")
+        self.assertEqual(
+            frappe.db.count("Synora Proposed Action", {"run": run_id, "action_type": "SUBMIT_PO"}),
+            1,
+        )
+
+        action = first_candidate["action"]
+        frappe.set_user(PO_APPROVER)
+        approved = decide_action(
+            action["action_id"],
+            "ALLOW",
+            action["proposal_digest"],
+            "candidate planner approval",
+            str(uuid4()),
+        )
+        self.assertTrue(approved["ok"], approved)
+        executed = execute_p2p_action(
+            action["action_id"],
+            action["proposal_digest"],
+            action["idempotency_key"],
+            str(uuid4()),
+        )
+        self.assertTrue(executed["ok"], executed)
+
+        frappe.set_user(E2E_OWNER)
+        next_plan = cast(dict[str, Any], investigate_p2p_run(run_id, str(uuid4())))
+        self.assertTrue(next_plan["ok"], next_plan)
+        next_action = next_plan["run"]["chain"]["current_candidate"]["action"]
+        self.assertEqual(next_action["action_type"], "CREATE_PR_DRAFT")
+        self.assertEqual(next_action["payload"]["items"][0]["source_row"], po_item_name)
+        self.assertEqual(next_action["payload"]["items"][0]["qty"], "2")
+
+    def test_candidate_planner_drives_full_settlement_path(self) -> None:
+        po_name, po_item_name, item_code = self._draft_po()
+        run_id = self._new_run(
+            f"Phase 10 E2E planner full path {po_name}", purpose="P2P_EXECUTION"
+        )
+        frappe.set_user(E2E_OWNER)
+        confirmed = confirm_p2p_goal(
+            run_id,
+            {
+                "source_doctype": "Purchase Order",
+                "source_name": po_name,
+                "source_rows": [
+                    {"source_row": po_item_name, "item_code": item_code, "target_qty": 2}
+                ],
+            },
+            str(uuid4()),
+        )
+        self.assertTrue(confirmed["ok"], confirmed)
+        approvers = {
+            "SUBMIT_PO": PO_APPROVER,
+            "CREATE_PR_DRAFT": RECEIPT_APPROVER,
+            "SUBMIT_PR": RECEIPT_APPROVER,
+            "CREATE_PI_DRAFT": INVOICE_APPROVER,
+            "SUBMIT_PI": INVOICE_APPROVER,
+            "CREATE_PAYMENT_ENTRY_DRAFT": INVOICE_APPROVER,
+            "SUBMIT_PAYMENT_ENTRY": PAYMENT_APPROVER,
+        }
+        executed_types: list[str] = []
+        for _ in range(10):
+            frappe.set_user(E2E_OWNER)
+            planned = cast(dict[str, Any], investigate_p2p_run(run_id, str(uuid4())))
+            self.assertTrue(planned["ok"], planned)
+            chain = planned["run"]["chain"]
+            if chain["current_candidate"] is None:
+                self.assertTrue(chain["completion_ready"], chain)
+                break
+            action = chain["current_candidate"]["action"]
+            action_type = str(action["action_type"])
+            executed_types.append(action_type)
+            frappe.set_user(approvers[action_type])
+            approved = decide_action(
+                action["action_id"],
+                "ALLOW",
+                action["proposal_digest"],
+                "planner candidate approval",
+                str(uuid4()),
+            )
+            self.assertTrue(approved["ok"], approved)
+            executed = execute_p2p_action(
+                action["action_id"],
+                action["proposal_digest"],
+                action["idempotency_key"],
+                str(uuid4()),
+            )
+            self.assertTrue(executed["ok"], executed)
+        else:
+            self.fail("candidate planner did not reach a terminal business result")
+
+        self.assertEqual(
+            executed_types,
+            [
+                "SUBMIT_PO",
+                "CREATE_PR_DRAFT",
+                "SUBMIT_PR",
+                "CREATE_PI_DRAFT",
+                "SUBMIT_PI",
+                "CREATE_PAYMENT_ENTRY_DRAFT",
+                "SUBMIT_PAYMENT_ENTRY",
+            ],
+        )
+        frappe.set_user(E2E_OWNER)
+        details = cast(dict[str, Any], get_run(run_id))
+        self.assertTrue(details["p2p_chain"]["completion_ready"], details)
+        finalized = cast(dict[str, Any], finalize_p2p_run(run_id, str(uuid4())))
+        self.assertTrue(finalized["ok"], finalized)
+        self.assertEqual(finalized["run"]["run_state"], "SUCCEEDED")
 
     def test_response_loss_replays_without_duplicate_and_blocks_unknown_downstream(self) -> None:
         po_name, po_item_name, item_code = self._draft_po()
