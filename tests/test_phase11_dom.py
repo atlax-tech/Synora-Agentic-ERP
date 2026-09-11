@@ -546,3 +546,50 @@ def test_visual_task_records_stale_action_as_structured_rejection() -> None:
     assert run.result.status == "FAILED"
     assert run.result.stop_reason == "ACTION_REJECTED"
     assert run.result.actions[0].result == "REJECTED"
+
+
+def test_visual_task_rechecks_page_version_before_click(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import labs.web_gui.gui as gui_module
+
+    original = gui_module._visual_observation
+    calls = 0
+
+    def changed(page: object, source: str) -> tuple[Observation, bytes]:
+        nonlocal calls
+        calls += 1
+        observation, screenshot = original(page, source)
+        if calls == 2:
+            observation = observation.model_copy(
+                update={"page_version": observation.page_version + ":changed"}
+            )
+        return observation, screenshot
+
+    monkeypatch.setattr(gui_module, "_visual_observation", changed)
+
+    def decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="click",
+                observation_id=observation.observation_id,  # type: ignore[attr-defined]
+                x=700,
+                y=300,
+            )
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-stale-page", purchase_order="PUR-ORD-0001", mode="vision"
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "FAILED"
+    assert run.result.stop_reason == "STALE_OBSERVATION"
+    assert run.result.actions[0].error_code == "STALE_OBSERVATION"

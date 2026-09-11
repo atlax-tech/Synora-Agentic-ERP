@@ -233,6 +233,31 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     status = "BUDGET_EXCEEDED" if code == "ACTION_BUDGET" else "FAILED"
                     stop_reason = code
                     break
+                if proposal.action_type != "finish":
+                    try:
+                        current_observation, current_screenshot = _visual_observation(
+                            page, spec.data_source
+                        )
+                    except BrowserPolicyError:
+                        receipts.append(
+                            _rejected_receipt(
+                                proposal, observation, "STALE_OBSERVATION", "stale_observation"
+                            )
+                        )
+                        status = "FAILED"
+                        stop_reason = "STALE_OBSERVATION"
+                        break
+                    if current_observation.page_version != observation.page_version:
+                        observations.append(current_observation)
+                        screenshots.append(current_screenshot)
+                        receipts.append(
+                            _rejected_receipt(
+                                proposal, observation, "STALE_OBSERVATION", "stale_observation"
+                            )
+                        )
+                        status = "FAILED"
+                        stop_reason = "STALE_OBSERVATION"
+                        break
                 if proposal.action_type == "finish":
                     try:
                         fields = _fields_from_decision(decision)

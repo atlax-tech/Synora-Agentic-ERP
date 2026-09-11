@@ -271,6 +271,34 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     status = "BUDGET_EXCEEDED" if code == "ACTION_BUDGET" else "FAILED"
                     stop_reason = code
                     break
+                if proposal.action_type != "finish":
+                    try:
+                        current_frame = _hybrid_frame(page, spec)
+                    except BrowserPolicyError:
+                        receipts.append(
+                            _rejected_receipt(
+                                proposal,
+                                frame.observation,
+                                "STALE_OBSERVATION",
+                                "stale_observation",
+                            )
+                        )
+                        status = "FAILED"
+                        stop_reason = "STALE_OBSERVATION"
+                        break
+                    if current_frame.observation.page_version != frame.observation.page_version:
+                        frames.append(current_frame)
+                        receipts.append(
+                            _rejected_receipt(
+                                proposal,
+                                frame.observation,
+                                "STALE_OBSERVATION",
+                                "stale_observation",
+                            )
+                        )
+                        status = "FAILED"
+                        stop_reason = "STALE_OBSERVATION"
+                        break
                 if proposal.action_type == "finish":
                     try:
                         fields = _safe_fields(decision.fields)
