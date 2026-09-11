@@ -18,7 +18,6 @@ REQUIRED_REDACTION_SELECTORS = (
     ".body-sidebar-container",
     ".layout-side-section",
     ".form-sidebar .sidebar-meta-details",
-    ".form-sidebar .form-name-container",
     ".new-timeline",
     ".comment-box",
     ".page-actions",
@@ -51,7 +50,6 @@ REDACTION_CSS = """\
 .body-sidebar-container,
 .layout-side-section,
 .form-sidebar .sidebar-meta-details,
-.form-sidebar .form-name-container,
 .new-timeline,
 .comment-box,
 .page-actions,
@@ -121,6 +119,30 @@ def _sensitive_regions_hidden(page: Any) -> bool:
         return False
 
 
+def _preserve_purchase_order_label(page: Any, purchase_order: str) -> bool:
+    """Copy only the already-visible document name into the safe viewport."""
+
+    if not hasattr(page, "evaluate"):
+        return True
+    script = """expected => {
+        const source = document.querySelector('.form-name-container');
+        if (!source || source.innerText.trim() !== expected) return false;
+        const label = document.createElement('div');
+        label.id = 'phase11-task-po-label';
+        label.textContent = source.innerText.trim();
+        label.setAttribute('aria-label', 'Purchase order number');
+        label.style.cssText = 'position:fixed;left:16px;top:8px;z-index:2147483647;'
+            + 'display:block!important;padding:4px 8px;background:#fff;color:#222;'
+            + 'font:600 14px sans-serif;';
+        document.body.appendChild(label);
+        return true;
+    }"""
+    try:
+        return bool(page.evaluate(script, purchase_order))
+    except Exception:
+        return False
+
+
 def capture_redacted_page(page: Any, purchase_order: str) -> RedactedCapture:
     """Mask known account/navigation regions and capture only a safe viewport."""
 
@@ -133,6 +155,8 @@ def capture_redacted_page(page: Any, purchase_order: str) -> RedactedCapture:
         page.add_style_tag(content=REDACTION_CSS)
         if not _sensitive_regions_hidden(page):
             return _blocked("REDACTION_PIXEL_REGION_VISIBLE")
+        if not _preserve_purchase_order_label(page, purchase_order):
+            return _blocked("PURCHASE_ORDER_LABEL_UNAVAILABLE")
         visible_text = page.locator("body").inner_text()
         if _EMAIL.search(visible_text) or _SECRET_WORD.search(visible_text):
             return _blocked("SENSITIVE_MARKER_VISIBLE")
