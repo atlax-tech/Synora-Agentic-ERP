@@ -38,7 +38,13 @@ from labs.web_gui.erp_browser import (
     model_web_decider,
     read_erp_web,
 )
-from labs.web_gui.erp_readonly import READ_FIELDS, ErpComparison, ErpReadConfig, read_erp_api
+from labs.web_gui.erp_readonly import (
+    READ_FIELDS,
+    ErpComparison,
+    ErpReadConfig,
+    ErpReadResult,
+    read_erp_api,
+)
 from labs.web_gui.erp_visual import run_live_erp_visual_task
 from labs.web_gui.fixtures import FIXTURE_ORDERS, create_app
 from labs.web_gui.gui import (
@@ -391,6 +397,20 @@ def _run_method(
 def _digest(value: object) -> str:
     payload = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(payload).hexdigest()
+
+
+def _fact_snapshot(result: ErpReadResult) -> dict[str, object]:
+    """Keep the non-secret API snapshot needed to replay visual reconciliation."""
+
+    fact = result.fact
+    return {
+        "status": result.status,
+        "fields": fact.model_dump(mode="json", include=set(READ_FIELDS)),
+        "source_modified_at": fact.source_modified_at,
+        "frappe_revision": fact.frappe_revision,
+        "erpnext_revision": fact.erpnext_revision,
+        "evidence_digest": result.evidence_digest,
+    }
 
 
 def _trial(
@@ -786,8 +806,21 @@ def run_erp_benchmark(
                     "policy_events": list(visual.policy_events),
                     "api_before_status": before.status,
                     "api_after_status": after.status,
+                    "api_before_snapshot": _fact_snapshot(before),
+                    "api_after_snapshot": _fact_snapshot(after),
                     "api_before_modified_at": before.fact.source_modified_at,
                     "api_after_modified_at": after.fact.source_modified_at,
+                    "reconciliation": {
+                        "fields_match": before.fact.model_dump(
+                            mode="json", include=set(READ_FIELDS)
+                        )
+                        == after.fact.model_dump(mode="json", include=set(READ_FIELDS)),
+                        "versions_match": (
+                            before.fact.source_modified_at == after.fact.source_modified_at
+                            and before.fact.frappe_revision == after.fact.frappe_revision
+                            and before.fact.erpnext_revision == after.fact.erpnext_revision
+                        ),
+                    },
                 }
             )
     return {

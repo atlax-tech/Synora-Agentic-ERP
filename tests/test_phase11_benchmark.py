@@ -10,10 +10,12 @@ from labs.web_gui.benchmark import (
     _VISUAL_STATUSES,
     CASES,
     METHODS,
+    _fact_snapshot,
     _run_method,
     run_synthetic_benchmark,
     write_report,
 )
+from labs.web_gui.erp_readonly import ErpFact, ErpReadResult
 
 
 @pytest.fixture(scope="module")
@@ -131,4 +133,37 @@ def test_visual_status_inventory_includes_incomplete_runs() -> None:
         "BLOCKED": 1,
         "FAILED": 0,
         "BUDGET_EXCEEDED": 0,
+    }
+
+
+def test_erp_fact_snapshot_is_replayable_without_raw_response() -> None:
+    result = ErpReadResult(
+        method="api",
+        status="SUCCEEDED",
+        fact=ErpFact(
+            purchase_order="PUR-ORD-2026-02297",
+            supplier="SYNORA-P1-Supplier-1",
+            status="To Receive and Bill",
+            currency="CNY",
+            source_modified_at="2026-09-11 01:10:41.759974",
+            frappe_revision="frappe-sha",
+            erpnext_revision="erpnext-sha",
+        ),
+        safety_pass=True,
+        elapsed_ms=1,
+        evidence_digest="a" * 64,
+    )
+
+    assert _fact_snapshot(result) == {
+        "status": "SUCCEEDED",
+        "fields": {
+            "purchase_order": "PUR-ORD-2026-02297",
+            "supplier": "SYNORA-P1-Supplier-1",
+            "status": "To Receive and Bill",
+            "currency": "CNY",
+        },
+        "source_modified_at": "2026-09-11 01:10:41.759974",
+        "frappe_revision": "frappe-sha",
+        "erpnext_revision": "erpnext-sha",
+        "evidence_digest": "a" * 64,
     }
