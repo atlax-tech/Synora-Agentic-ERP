@@ -564,7 +564,7 @@ def run_erp_benchmark(
                 role=vision_role,
                 trusted_api=before,
             )
-            after = asyncio.run(read_erp_api(config))
+            after = visual.api_after or asyncio.run(read_erp_api(config))
             before_modified = before.fact.source_modified_at
             after_modified = after.fact.source_modified_at
             if (

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from collections.abc import Callable
@@ -19,6 +20,7 @@ from labs.web_gui.erp_readonly import (
     READ_FIELDS,
     ErpReadConfig,
     ErpReadResult,
+    read_erp_api,
 )
 from labs.web_gui.gui import (
     VisualDecision,
@@ -51,6 +53,7 @@ class ErpVisualRun:
     model: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    api_after: ErpReadResult | None = None
 
 
 def _rejected_receipt(
@@ -143,6 +146,53 @@ def _trusted_fields(
     if any(not isinstance(value, str) or not value.strip() for value in values.values()):
         return None
     return {key: value for key, value in values.items()}
+
+
+def _reconcile_api_after(
+    config: ErpReadConfig,
+    result: TaskResult,
+    trusted_api: ErpReadResult | None,
+    api_after: ErpReadResult | None,
+) -> TaskResult:
+    """Allow visual success only when the typed before/after snapshots agree."""
+
+    if result.status != "SUCCEEDED":
+        return result
+    before_fields = _trusted_fields(config, trusted_api)
+    after_fields = _trusted_fields(config, api_after)
+    if before_fields is None or after_fields is None:
+        return result.model_copy(
+            update={
+                "status": "INCOMPLETE",
+                "fields": {},
+                "observation_complete": False,
+                "stop_reason": "trusted_erp_after_unavailable",
+            }
+        )
+    assert trusted_api is not None and api_after is not None
+    if (
+        trusted_api.fact.source_modified_at != api_after.fact.source_modified_at
+        or trusted_api.fact.frappe_revision != api_after.fact.frappe_revision
+        or trusted_api.fact.erpnext_revision != api_after.fact.erpnext_revision
+    ):
+        return result.model_copy(
+            update={
+                "status": "STATE_DRIFT",
+                "fields": {},
+                "observation_complete": False,
+                "stop_reason": "erp_api_version_drift",
+            }
+        )
+    if before_fields != after_fields:
+        return result.model_copy(
+            update={
+                "status": "INCOMPLETE",
+                "fields": {},
+                "observation_complete": False,
+                "stop_reason": "trusted_erp_after_fields_mismatch",
+            }
+        )
+    return result
 
 
 def run_erp_visual_task(
@@ -570,6 +620,13 @@ def run_erp_visual_task(
     if policy.violations or events or response_events:
         status, reason = "FAILED", "browser_security_violation"
     result = _result(task, status, fields, observations, receipts, reason)
+    api_after: ErpReadResult | None = None
+    if trusted_api is not None:
+        try:
+            api_after = asyncio.run(read_erp_api(config))
+        except Exception:
+            api_after = None
+        result = _reconcile_api_after(config, result, trusted_api, api_after)
     return ErpVisualRun(
         result,
         tuple(observations),
@@ -581,6 +638,7 @@ def run_erp_visual_task(
         model,
         prompt_tokens,
         completion_tokens,
+        api_after,
     )
 
 
