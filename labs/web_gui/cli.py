@@ -160,9 +160,7 @@ def _parser() -> argparse.ArgumentParser:
     benchmark = subparsers.add_parser("benchmark", help="run a reproducible comparison suite")
     benchmark.add_argument("--suite", choices=("synthetic", "erp-readonly"), required=True)
     benchmark.add_argument("--repeats", type=int, choices=(1, 2, 3), default=3)
-    benchmark.add_argument(
-        "--engine", choices=("deterministic", "live"), default="deterministic"
-    )
+    benchmark.add_argument("--engine", choices=("deterministic", "live"), default="deterministic")
     benchmark.add_argument(
         "--text-role",
         choices=("primary", "assist", "backup", "last_local"),

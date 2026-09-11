@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+from typing import Any
 
 import httpx
 import pytest
@@ -26,7 +27,7 @@ def _env() -> dict[str, str]:
 
 
 def test_probe_uses_existing_role_and_never_returns_key() -> None:
-    seen: list[dict[str, object]] = []
+    seen: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(json.loads(request.content))
@@ -158,13 +159,7 @@ def test_request_vision_json_returns_untrusted_decision_without_oracle() -> None
         return httpx.Response(
             200,
             json={
-                "choices": [
-                    {
-                        "message": {
-                            "content": '{"action_type":"finish","fields":{}}'
-                        }
-                    }
-                ],
+                "choices": [{"message": {"content": '{"action_type":"finish","fields":{}}'}}],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 2},
             },
         )

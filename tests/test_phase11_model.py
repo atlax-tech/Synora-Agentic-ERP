@@ -123,9 +123,7 @@ def test_model_dom_task_rejects_unobserved_target() -> None:
     client = LiveTextModel(
         environ={"ASSIST_MODEL": "text-test"},
         provider_factory=lambda: DeterministicProvider(
-            scripted_responses=[
-                ProviderResponse(text=_wire("click", target_ref="order:FORGED"))
-            ]
+            scripted_responses=[ProviderResponse(text=_wire("click", target_ref="order:FORGED"))]
         ),
     )
 
@@ -148,15 +146,7 @@ def test_vision_decision_adapter_keeps_image_result_untrusted() -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            json={
-                "choices": [
-                    {
-                        "message": {
-                            "content": '{"action_type":"finish","fields":{}}'
-                        }
-                    }
-                ]
-            },
+            json={"choices": [{"message": {"content": '{"action_type":"finish","fields":{}}'}}]},
         )
 
     client = LiveVisionModel(

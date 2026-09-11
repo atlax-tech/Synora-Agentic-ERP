@@ -361,7 +361,7 @@ async def read_erp_web(
                         asyncio.to_thread(decider, observation, task),
                         timeout=config.timeout_seconds,
                     )
-                except (TimeoutError, RecoveryFailure):
+                except TimeoutError, RecoveryFailure:
                     await browser.close()
                     return _result(
                         "web",

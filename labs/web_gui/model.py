@@ -171,12 +171,18 @@ class LiveTextModel:
         self._environ = environ
         self._provider_factory = provider_factory
         values = environ if environ is not None else os.environ
-        self.model = values.get({
-            "primary": "OLLAMA_MODEL",
-            "assist": "ASSIST_MODEL",
-            "backup": "BACKUP_MODEL",
-            "last_local": "BACKUP_OLLAMA_MODEL",
-        }[role], "") or "configured"
+        self.model = (
+            values.get(
+                {
+                    "primary": "OLLAMA_MODEL",
+                    "assist": "ASSIST_MODEL",
+                    "backup": "BACKUP_MODEL",
+                    "last_local": "BACKUP_OLLAMA_MODEL",
+                }[role],
+                "",
+            )
+            or "configured"
+        )
 
     def _provider(self) -> Provider:
         if self._provider_factory is not None:
@@ -242,15 +248,18 @@ class LiveVisionModel:
         self._environ = environ
         self._transport = transport
         values = environ if environ is not None else os.environ
-        self.model = values.get(
-            {
-                "primary": "OLLAMA_MODEL",
-                "assist": "ASSIST_MODEL",
-                "backup": "BACKUP_MODEL",
-                "last_local": "BACKUP_OLLAMA_MODEL",
-            }.get(role, ""),
-            "",
-        ) or "configured"
+        self.model = (
+            values.get(
+                {
+                    "primary": "OLLAMA_MODEL",
+                    "assist": "ASSIST_MODEL",
+                    "backup": "BACKUP_MODEL",
+                    "last_local": "BACKUP_OLLAMA_MODEL",
+                }.get(role, ""),
+                "",
+            )
+            or "configured"
+        )
 
     def call(
         self, prompt: str, images: list[bytes] | tuple[bytes, ...], *, max_tokens: int = 1_024

@@ -247,9 +247,7 @@ def _run_method(
     if method == "vision":
         if engine == "live":
             vision_client = LiveVisionModel(vision_role)
-            visual_run = run_visual_task(
-                base_url, spec, model_visual_decider(vision_client)
-            )
+            visual_run = run_visual_task(base_url, spec, model_visual_decider(vision_client))
         else:
             visual_run = run_visual_task(base_url, spec, _visual_script(case))
         return (
@@ -263,9 +261,7 @@ def _run_method(
         )
     if engine == "live":
         vision_client = LiveVisionModel(vision_role)
-        hybrid_run = run_hybrid_task(
-            base_url, spec, model_hybrid_decider(vision_client)
-        )
+        hybrid_run = run_hybrid_task(base_url, spec, model_hybrid_decider(vision_client))
     else:
         hybrid_run = run_hybrid_task(base_url, spec, _hybrid_script(case))
     return (
@@ -413,9 +409,7 @@ def _faults(
                         remaining: int,
                         _client: LiveTextModel = text_client,
                     ) -> ModelDecision:
-                        return decision_from_model(
-                            _client, current_spec, observation, remaining
-                        )
+                        return decision_from_model(_client, current_spec, observation, remaining)
 
                     run = run_model_dom_task(base_url, spec, decider)
                 else:
@@ -563,9 +557,7 @@ def run_erp_benchmark(
         for _ in range(repeats):
             text_client = LiveTextModel(text_role)
             before = asyncio.run(read_erp_api(config))
-            web_read = asyncio.run(
-                read_erp_web(config, decider=model_web_decider(text_client))
-            )
+            web_read = asyncio.run(read_erp_web(config, decider=model_web_decider(text_client)))
             visual = run_live_erp_visual_task(
                 config,
                 role=vision_role,

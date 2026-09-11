@@ -584,6 +584,7 @@ def run_model_dom_task(base_url: str, spec: TaskSpec, decider: StructuredDecider
                             status, stop_reason = "BUDGET_EXCEEDED", "wall_time_budget"
                             break
                         model_calls += 1
+
                         def invoke_decision(
                             current_snapshot: DomSnapshot = current,
                         ) -> ModelDecision:
@@ -609,9 +610,7 @@ def run_model_dom_task(base_url: str, spec: TaskSpec, decider: StructuredDecider
                             break
                         except RecoveryFailure as failure:
                             status = (
-                                "BUDGET_EXCEEDED"
-                                if failure.code == "MODEL_TIMEOUT"
-                                else "FAILED"
+                                "BUDGET_EXCEEDED" if failure.code == "MODEL_TIMEOUT" else "FAILED"
                             )
                             stop_reason = failure.code
                             break
