@@ -5,17 +5,30 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from agent_runtime.providers import (
-    Provider,
-    ProviderError,
-    ProviderMessage,
-    ProviderRole,
-    provider_for_role,
-)
+try:
+    from agent_runtime.providers import (
+        Provider,
+        ProviderError,
+        ProviderMessage,
+        ProviderRole,
+        provider_for_role,
+    )
+except ModuleNotFoundError:  # The workspace sidecar is not installed for CLI use.
+    _runtime_source = Path(__file__).resolve().parents[2] / "services" / "agent_runtime" / "src"
+    sys.path.insert(0, str(_runtime_source))
+    from agent_runtime.providers import (
+        Provider,
+        ProviderError,
+        ProviderMessage,
+        ProviderRole,
+        provider_for_role,
+    )
 
 from labs.web_gui.contracts import ActionProposal, ActionType, Observation, StrictModel, TaskSpec
 from labs.web_gui.vision import VisionProbeError, request_vision_json

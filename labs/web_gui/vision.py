@@ -11,26 +11,48 @@ import base64
 import hashlib
 import json
 import os
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
-from agent_runtime.providers import (
-    ASSIST_API_KEY_ENV,
-    ASSIST_BASE_URL_ENV,
-    ASSIST_MODEL_ENV,
-    BACKUP_API_KEY_ENV,
-    BACKUP_BASE_URL_ENV,
-    BACKUP_MODEL_ENV,
-    BACKUP_OLLAMA_API_KEY_ENV,
-    BACKUP_OLLAMA_BASE_URL_ENV,
-    BACKUP_OLLAMA_MODEL_ENV,
-    MODEL_PROXY_ENV,
-    OLLAMA_API_KEY_ENV,
-    OLLAMA_BASE_URL_ENV,
-    OLLAMA_MODEL_ENV,
-)
+
+try:
+    from agent_runtime.providers import (
+        ASSIST_API_KEY_ENV,
+        ASSIST_BASE_URL_ENV,
+        ASSIST_MODEL_ENV,
+        BACKUP_API_KEY_ENV,
+        BACKUP_BASE_URL_ENV,
+        BACKUP_MODEL_ENV,
+        BACKUP_OLLAMA_API_KEY_ENV,
+        BACKUP_OLLAMA_BASE_URL_ENV,
+        BACKUP_OLLAMA_MODEL_ENV,
+        MODEL_PROXY_ENV,
+        OLLAMA_API_KEY_ENV,
+        OLLAMA_BASE_URL_ENV,
+        OLLAMA_MODEL_ENV,
+    )
+except ModuleNotFoundError:  # The workspace sidecar is not installed for CLI use.
+    _runtime_source = Path(__file__).resolve().parents[2] / "services" / "agent_runtime" / "src"
+    sys.path.insert(0, str(_runtime_source))
+    from agent_runtime.providers import (
+        ASSIST_API_KEY_ENV,
+        ASSIST_BASE_URL_ENV,
+        ASSIST_MODEL_ENV,
+        BACKUP_API_KEY_ENV,
+        BACKUP_BASE_URL_ENV,
+        BACKUP_MODEL_ENV,
+        BACKUP_OLLAMA_API_KEY_ENV,
+        BACKUP_OLLAMA_BASE_URL_ENV,
+        BACKUP_OLLAMA_MODEL_ENV,
+        MODEL_PROXY_ENV,
+        OLLAMA_API_KEY_ENV,
+        OLLAMA_BASE_URL_ENV,
+        OLLAMA_MODEL_ENV,
+    )
 
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MAX_IMAGES = 2
