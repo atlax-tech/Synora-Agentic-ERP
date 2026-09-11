@@ -144,6 +144,42 @@ def _response_body_too_large(body: bytes, headers: Mapping[str, str] | None = No
         return False
 
 
+async def _handle_allowed_route(
+    route: Any,
+    policy: _RealPolicy,
+    request_paths: list[str],
+    response_events: list[str],
+) -> None:
+    """Fetch every allowed resource through one bounded response gate."""
+
+    request = route.request
+    path = urlsplit(request.url).path
+    if path not in request_paths and path.startswith(("/api/", "/desk/")):
+        request_paths.append(path)
+    if not policy.check(request.method, request.url):
+        await route.abort()
+        return
+    try:
+        response = await route.fetch()
+        body = await response.body()
+        if _response_body_too_large(body, response.headers):
+            if "RESPONSE_TOO_LARGE" not in response_events:
+                response_events.append("RESPONSE_TOO_LARGE")
+            await route.abort()
+            return
+        await route.fulfill(response=response)
+    except Exception:
+        await route.abort()
+
+
+async def _close_unexpected_page(page: Any, primary_page: Any, browser_events: list[str]) -> None:
+    if page is primary_page:
+        return
+    if "POPUP_BLOCKED" not in browser_events:
+        browser_events.append("POPUP_BLOCKED")
+    await page.close()
+
+
 async def read_erp_web(
     config: ErpReadConfig,
     *,
@@ -182,33 +218,16 @@ async def read_erp_web(
             browser = await playwright.chromium.launch(headless=True)
             context = await browser.new_context(service_workers="block", accept_downloads=False)
 
+            response_events: list[str] = []
+            browser_events: list[str] = []
+
             async def route_handler(route: Any) -> None:
-                request = route.request
-                path = urlsplit(request.url).path
-                if path not in request_paths and path.startswith(("/api/", "/desk/")):
-                    request_paths.append(path)
-                if not policy.check(request.method, request.url):
-                    await route.abort()
-                    return
-                if path.startswith("/api/") or path == f"{ERP_SITE_PATH}/{config.purchase_order}":
-                    try:
-                        response = await route.fetch()
-                        body = await response.body()
-                        if _response_body_too_large(body, response.headers):
-                            response_events.append("RESPONSE_TOO_LARGE")
-                            await route.abort()
-                            return
-                        await route.fulfill(response=response)
-                    except Exception:
-                        await route.abort()
-                    return
-                await route.continue_()
+                await _handle_allowed_route(route, policy, request_paths, response_events)
 
             await context.route("**/*", route_handler)
             popup_seen = False
             download_seen = False
             dialog_seen = False
-            response_events: list[str] = []
 
             async def on_popup(_page: Any) -> None:
                 nonlocal popup_seen
@@ -226,6 +245,11 @@ async def read_erp_web(
                 await dialog.dismiss()
 
             page = await context.new_page()
+
+            async def on_new_page(new_page: Any) -> None:
+                await _close_unexpected_page(new_page, page, browser_events)
+
+            context.on("page", on_new_page)
             page.on("popup", on_popup)
             page.on("download", on_download)
             page.on("dialog", on_dialog)
@@ -430,6 +454,7 @@ async def read_erp_web(
                 popup_seen
                 or download_seen
                 or dialog_seen
+                or bool(browser_events)
                 or bool(policy.violations)
                 or bool(response_events)
             )
@@ -443,7 +468,9 @@ async def read_erp_web(
                     failure_code="ERP_BROWSER_POLICY_VIOLATION",
                     started=started,
                     request_paths=tuple(request_paths),
-                    policy_events=tuple(policy.violations + policy.blocked + response_events),
+                    policy_events=tuple(
+                        policy.violations + policy.blocked + response_events + browser_events
+                    ),
                 )
             return _result(
                 "web",
@@ -452,7 +479,7 @@ async def read_erp_web(
                 safety_pass=True,
                 started=started,
                 request_paths=tuple(request_paths),
-                policy_events=tuple(policy.blocked + response_events),
+                policy_events=tuple(policy.blocked + response_events + browser_events),
             )
     except PlaywrightTimeoutError:
         return _result(

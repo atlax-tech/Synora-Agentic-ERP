@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import asyncio
 
-from labs.web_gui.erp_browser import _RealPolicy, _response_body_too_large, read_erp_web
+from labs.web_gui.erp_browser import (
+    _close_unexpected_page,
+    _handle_allowed_route,
+    _RealPolicy,
+    _response_body_too_large,
+    read_erp_web,
+)
 from labs.web_gui.erp_readonly import ERP_GATEWAY_PATH, ErpReadConfig
 
 
@@ -40,3 +46,71 @@ def test_real_web_reader_reports_missing_credentials_without_network() -> None:
 def test_response_limit_checks_body_when_content_length_is_missing_or_invalid() -> None:
     assert _response_body_too_large(b"x" * (2_000_000 + 1), {})
     assert _response_body_too_large(b"ok", {"content-length": "not-a-number"}) is False
+
+
+class _FakeResponse:
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+        self.headers: dict[str, str] = {}
+
+    async def body(self) -> bytes:
+        return self._body
+
+
+class _FakeRequest:
+    def __init__(self, url: str, method: str = "GET") -> None:
+        self.url = url
+        self.method = method
+
+
+class _FakeRoute:
+    def __init__(self, url: str, body: bytes) -> None:
+        self.request = _FakeRequest(url)
+        self._response = _FakeResponse(body)
+        self.fulfilled = False
+        self.aborted = False
+
+    async def fetch(self) -> _FakeResponse:
+        return self._response
+
+    async def fulfill(self, *, response: _FakeResponse) -> None:
+        self.fulfilled = response is self._response
+
+    async def abort(self) -> None:
+        self.aborted = True
+
+
+def test_allowed_static_resource_is_subject_to_response_limit() -> None:
+    route = _FakeRoute(
+        "http://127.0.0.1:8000/assets/frappe/css/app.css",
+        b"x" * (2_000_000 + 1),
+    )
+    events: list[str] = []
+    policy = _RealPolicy("http://127.0.0.1:8000", "PUR-ORD-2026-02297")
+
+    asyncio.run(_handle_allowed_route(route, policy, [], events))
+
+    assert route.aborted is True
+    assert route.fulfilled is False
+    assert events == ["RESPONSE_TOO_LARGE"]
+
+
+class _FakePage:
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def test_context_page_guard_closes_only_unexpected_pages() -> None:
+    primary = _FakePage()
+    popup = _FakePage()
+    events: list[str] = []
+
+    asyncio.run(_close_unexpected_page(primary, primary, events))
+    asyncio.run(_close_unexpected_page(popup, primary, events))
+
+    assert primary.closed is False
+    assert popup.closed is True
+    assert events == ["POPUP_BLOCKED"]
