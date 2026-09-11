@@ -8,7 +8,7 @@ from agent_runtime.providers import DeterministicProvider, ProviderResponse
 
 from labs.web_gui.benchmark import _lab_server
 from labs.web_gui.browser import run_model_dom_task
-from labs.web_gui.contracts import Observation, TaskSpec
+from labs.web_gui.contracts import Observation, TaskSpec, TrialBudget
 from labs.web_gui.model import (
     LiveTextModel,
     LiveVisionModel,
@@ -96,7 +96,7 @@ def test_structured_decision_forwards_output_budget() -> None:
         case_id="model-budget",
         purchase_order="PUR-ORD-0001",
         mode="dom",
-        budget={"max_output_tokens": 7},
+        budget=TrialBudget(max_output_tokens=7),
     )
 
     decision_from_model(client, spec, _observation(), 12)
