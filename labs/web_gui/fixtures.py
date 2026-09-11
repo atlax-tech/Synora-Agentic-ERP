@@ -74,6 +74,7 @@ def _order_json(order: FixtureOrder) -> dict[str, object]:
 
 def _layout(*, query: str, rows: str, body_title: str, body: str, scenario: str = "") -> str:
     safe_query = html.escape(query, quote=True)
+    safe_scenario = html.escape(scenario, quote=True)
     return f"""<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>Synora Lab Procurement</title>
@@ -90,6 +91,7 @@ th,td{{border:1px solid #bbb;padding:.5rem;text-align:left}}
 <main><section aria-labelledby="search-heading"><h2 id="search-heading">Find a purchase order</h2>
 <form method="get" action="/" role="search"><label for="order-search">Purchase order number</label>
 <input id="order-search" name="q" value="{safe_query}" maxlength="140" autocomplete="off">
+<input type="hidden" name="scenario" value="{safe_scenario}">
 <button type="submit" data-action="search">Search</button></form></section>
 <section aria-labelledby="results-heading"><h2 id="results-heading">Results</h2>
 {rows}</section>{body_title}{body}{_security_controls(scenario)}</main></body></html>"""
@@ -111,6 +113,21 @@ def _security_controls(scenario: str) -> str:
     if scenario == "write":
         return '<p><button data-security="write" type="button">Submit ERP change</button></p>'
     return ""
+
+
+def _async_rows(*, query: str, scenario: str, ready: bool, rows: str) -> str:
+    if scenario not in {"async", "timeout"}:
+        return rows
+    if scenario == "timeout":
+        return '<p role="status" data-state="loading">Loading purchase orders…</p>'
+    if ready:
+        return f'<p role="status" data-state="ready">Data ready</p>{rows}'
+    safe_query = html.escape(query, quote=True)
+    return (
+        '<p role="status" data-state="loading">Loading purchase orders…</p>'
+        '<script>setTimeout(() => { window.location.href = "/?q='
+        f'{safe_query}&scenario=async&ready=1"; }}, 200);</script>'
+    )
 
 
 def _list_rows(orders: tuple[FixtureOrder, ...]) -> str:
@@ -184,6 +201,7 @@ def create_app() -> FastAPI:
     def index(
         q: str = Query(default="", max_length=140),
         scenario: str = Query(default="", max_length=20),
+        ready: int = Query(default=0, ge=0, le=1),
     ) -> HTMLResponse:
         normalized = q.strip().casefold()
         orders = tuple(
@@ -196,7 +214,12 @@ def create_app() -> FastAPI:
         return HTMLResponse(
             _layout(
                 query=q,
-                rows=_list_rows(orders),
+                rows=_async_rows(
+                    query=q,
+                    scenario=scenario,
+                    ready=bool(ready),
+                    rows=_list_rows(orders),
+                ),
                 body_title="",
                 body="",
                 scenario=scenario,

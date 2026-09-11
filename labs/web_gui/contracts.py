@@ -59,6 +59,7 @@ class TaskSpec(StrictModel):
     )
     mode: ObservationMode = "dom"
     data_source: DataSource = "synthetic"
+    scenario: str = Field(default="", max_length=20)
     budget: TrialBudget = TrialBudget()
 
     @model_validator(mode="after")

@@ -8,7 +8,7 @@ from urllib.parse import parse_qsl, urlparse
 
 _SAFE_PATH = re.compile(r"^/(?:purchase-orders|api/purchase-orders)/[A-Za-z0-9_-]{1,140}$")
 _ALLOWED_PATHS = frozenset({"/", "/health", "/api/purchase-orders"})
-_ALLOWED_QUERY_KEYS = frozenset({"q", "scenario"})
+_ALLOWED_QUERY_KEYS = frozenset({"q", "scenario", "ready"})
 
 
 @dataclass
@@ -29,7 +29,7 @@ class BrowserSecurityPolicy:
             self.violations.append(f"GET {url}")
             return False
         query = parse_qsl(parsed.query, keep_blank_values=True)
-        if len(query) > 2 or any(key not in _ALLOWED_QUERY_KEYS for key, _ in query):
+        if len(query) > 3 or any(key not in _ALLOWED_QUERY_KEYS for key, _ in query):
             self.violations.append(f"GET {url}")
             return False
         if any(len(key) > 20 or len(value) > 140 for key, value in query):

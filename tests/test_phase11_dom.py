@@ -18,7 +18,7 @@ from labs.web_gui.browser import (
     run_dom_task,
     run_security_probe,
 )
-from labs.web_gui.contracts import ActionProposal, Observation, TaskSpec
+from labs.web_gui.contracts import ActionProposal, Observation, TaskSpec, TrialBudget
 from labs.web_gui.fixtures import create_app
 from labs.web_gui.gui import VisualDecision, run_visual_task
 from labs.web_gui.security import BrowserSecurityPolicy
@@ -94,6 +94,48 @@ def test_aria_task_uses_accessible_roles_and_reads_one_order() -> None:
     assert run.result.fields["currency"] == "USD"
     assert "textbox" in run.observations[0].content
     assert "search-input" not in run.observations[0].content
+
+
+def test_dom_task_waits_for_observable_async_ready_marker() -> None:
+    try:
+        with _server() as base_url:
+            run = run_dom_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-async-001",
+                    purchase_order="PUR-ORD-0001",
+                    mode="dom",
+                    scenario="async",
+                    budget=TrialBudget(action_timeout_seconds=2.0),
+                ),
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "SUCCEEDED"
+    assert (
+        "Data ready" in run.observations[0].content or "Data ready" in run.observations[1].content
+    )
+
+
+def test_dom_task_stops_when_async_page_never_becomes_ready() -> None:
+    try:
+        with _server() as base_url:
+            run = run_dom_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-async-002",
+                    purchase_order="PUR-ORD-0001",
+                    mode="dom",
+                    scenario="timeout",
+                    budget=TrialBudget(action_timeout_seconds=0.05, wall_time_seconds=1.0),
+                ),
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "FAILED"
+    assert run.result.stop_reason == "PAGE_NOT_READY"
 
 
 def test_dom_policy_rejects_stale_or_unknown_targets() -> None:

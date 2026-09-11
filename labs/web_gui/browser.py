@@ -23,6 +23,7 @@ from labs.web_gui.contracts import (
     TaskSpec,
     TaskStatus,
 )
+from labs.web_gui.recovery import RecoveryFailure, wait_for_ready
 from labs.web_gui.security import BrowserSecurityPolicy
 
 
@@ -266,9 +267,29 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
         context.on("page", on_popup)
         page.on("download", on_download)
         try:
-            page.goto(f"{origin}/", wait_until="domcontentloaded", timeout=10_000)
+            page.goto(
+                f"{origin}/?scenario={spec.scenario}",
+                wait_until="domcontentloaded",
+                timeout=10_000,
+            )
             snapshot = _snapshot(page, spec, spec.mode)
             observations.append(snapshot.observation)
+            try:
+                wait_for_ready(
+                    page,
+                    timeout_ms=spec.budget.action_timeout_seconds * 1000,
+                    scenario=spec.scenario,
+                )
+            except RecoveryFailure as failure:
+                security_violations = tuple(policy.violations + browser_events)
+                result = TaskResult(
+                    case_id=spec.case_id,
+                    status="FAILED",
+                    evidence_refs=tuple(item.observation_id for item in observations),
+                    actions=tuple(receipts),
+                    stop_reason=failure.code,
+                )
+                return DomRun(result, tuple(observations), security_violations)
             if len(receipts) >= spec.budget.max_actions:
                 raise BrowserPolicyError("action budget exceeded")
             search = ActionProposal(
@@ -278,6 +299,22 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                 text=spec.purchase_order,
             )
             receipts.append(_apply_action(page, search, snapshot, spec))
+            try:
+                wait_for_ready(
+                    page,
+                    timeout_ms=spec.budget.action_timeout_seconds * 1000,
+                    scenario=spec.scenario,
+                )
+            except RecoveryFailure as failure:
+                security_violations = tuple(policy.violations + browser_events)
+                result = TaskResult(
+                    case_id=spec.case_id,
+                    status="FAILED",
+                    evidence_refs=tuple(item.observation_id for item in observations),
+                    actions=tuple(receipts),
+                    stop_reason=failure.code,
+                )
+                return DomRun(result, tuple(observations), security_violations)
             snapshot = _snapshot(page, spec, spec.mode)
             observations.append(snapshot.observation)
             target = f"order:{spec.purchase_order}"
