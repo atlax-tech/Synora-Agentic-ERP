@@ -193,6 +193,7 @@ def test_model_dom_task_executes_model_selected_actions_and_records_usage() -> N
     assert run.model_calls == 3
     assert run.prompt_tokens == 6
     assert run.completion_tokens == 9
+    assert run.observations[0].page_version != run.observations[-1].page_version
     assert all(receipt.after_observation_id is not None for receipt in run.result.actions[:2])
 
 

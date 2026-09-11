@@ -96,6 +96,10 @@ def _snapshot(page: Any, spec: TaskSpec, mode: str = "dom") -> DomSnapshot:
     text = body.inner_text(timeout=timeout)
     if len(text) > 50_000:
         raise BrowserPolicyError("observation is too large")
+    # The fixture's release version is stable across list/detail routes.  Add
+    # a bounded digest of the current URL and visible text so a navigation or
+    # local refresh cannot masquerade as the same observation.
+    page_version = f"{version}:{_digest({'url': page.url, 'text': text})[:16]}"
     targets: set[str] = set()
     if mode == "aria":
         try:
@@ -115,7 +119,7 @@ def _snapshot(page: Any, spec: TaskSpec, mode: str = "dom") -> DomSnapshot:
             if match:
                 targets.add(f"order:{match.group(1)}")
         content = json.dumps(
-            {"page_version": version, "aria": aria, "targets": sorted(targets)},
+            {"page_version": page_version, "aria": aria, "targets": sorted(targets)},
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
@@ -134,14 +138,14 @@ def _snapshot(page: Any, spec: TaskSpec, mode: str = "dom") -> DomSnapshot:
             if isinstance(name, str) and name:
                 targets.add(f"order:{name}")
         content = json.dumps(
-            {"page_version": version, "text": text, "targets": sorted(targets)},
+            {"page_version": page_version, "text": text, "targets": sorted(targets)},
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
         )
     return DomSnapshot(
         observation=Observation(
-            page_version=version,
+            page_version=page_version,
             source=spec.data_source,
             mode=mode,  # type: ignore[arg-type]
             content=content,
