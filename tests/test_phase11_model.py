@@ -222,10 +222,16 @@ def test_model_dom_task_rejects_page_change_before_action(
     original = browser_module._snapshot
     calls = 0
 
-    def changed(page: object, spec: TaskSpec, mode: str = "dom") -> object:
+    def changed(
+        page: object,
+        spec: TaskSpec,
+        mode: str = "dom",
+        *,
+        started: float | None = None,
+    ) -> object:
         nonlocal calls
         calls += 1
-        snapshot = original(page, spec, mode)
+        snapshot = original(page, spec, mode, started=started)
         if calls == 2:
             snapshot = snapshot.__class__(
                 observation=snapshot.observation.model_copy(
