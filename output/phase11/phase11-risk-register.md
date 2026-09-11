@@ -1,6 +1,6 @@
-# Phase 11 风险登记（最终审查前）
+# Phase 11 风险登记（最终）
 
-概率和影响按 `docs/PLAN.md` §4.6 取 1–4；分数为 likelihood × impact。当前实现基线 `98ee158`，真实图片和 ERP live 证据均已刷新；Review 与 Harness 同步仍是出口门禁。
+概率和影响按 `docs/PLAN.md` §4.6 取 1–4；分数为 likelihood × impact。当前实现基线 `98ee158`，真实图片和 ERP live 证据均已刷新；Review 与 Harness 同步均已完成；仅模型质量波动作为阶段外限制保留。
 
 | ID | 风险 | L×I | 级别 | 状态 | owner | 下一门禁与复验 |
 | --- | --- | ---: | --- | --- | --- | --- |
@@ -14,8 +14,8 @@
 | R11-DOUBLE | test double 被误读为真实视觉成绩 | 2×3=6 | P2 | `CLOSED_FOR_SCOPE` | 阶段报告维护者 | live batch `test_double_methods=[]`，旧 deterministic 文件保持单独标记 |
 | R11-TEXT-LATENCY | DOM/视觉模型延迟和结构波动，样本不足以推生产指标 | 3×2=6 | P2 | `OPEN / LIMITATION` | 实验维护者 | 只使用冻结批次实际中位数/范围；模型变化重跑三次 |
 | R11-PYTHON | 默认 uv 主机可能选择 3.13，项目要求 3.14 | 2×2=4 | P3 | `MITIGATED` | 工程维护者 | 所有验收命令显式 `--python 3.14` |
-| R11-HARNESS | pyproject/uv.lock source fingerprint 尚未同步 | 3×3=9 | P2 | `OPEN / GATE` | Harness 维护者 | Review PASS 后按已授权范围同步两个 source-index 条目和 manifest SHA，再跑 drift |
+| R11-HARNESS | pyproject/uv.lock source fingerprint 曾未同步 | 3×3=9 | P2 | `CLOSED / PASS` | Harness 维护者 | 已同步 docs/PLAN、pyproject、uv.lock 指纹；最终 drift=0 |
 | R11-USAGE | provider usage/价格不总是返回或无法核验 | 3×2=6 | P2 | `MITIGATED` | 实验维护者 | 缺失保持 `null`；不生成货币成本 |
-| R11-REVIEW | 最终独立审查发现的墙钟预算、当前 probe 引用和测试计数问题已修复 | 2×3=6 | P2 | `OPEN / FINAL_RECHECK` | 阶段执行者 | 五项代码/证据意见已修复；最终复查 PASS 后同步权威状态 |
+| R11-REVIEW | 最终独立审查发现的墙钟预算、当前 probe 引用和测试计数问题已修复 | 2×3=6 | P2 | `CLOSED / PASS` | 阶段执行者 | 三项 P2 逐项复核通过；机械文档问题已核销 |
 
-当前计数：P0=`0`；未关闭 P1=`0`；开放 P2 为模型质量限制、Harness 指纹和最终 Review；DOM 竞态与 ERP 浏览器资源边界已修复并由专项测试复验，均有 owner、下一门禁和复验条件；P3 环境项已通过显式解释器规避。阶段暂为 `READY_FOR_FINAL_REVIEW`，不进入 Phase 12。
+当前计数：P0=`0`；未关闭 P1=`0`；开放 P2 仅为模型质量限制（`R11-TEXT-LATENCY`），有 owner、下一门禁和复验条件；Harness 与 Review 门禁均已关闭，P3 环境项已通过显式解释器规避。阶段为 `COMPLETED / PASS / READY FOR NEXT PHASE`，不进入 Phase 12。

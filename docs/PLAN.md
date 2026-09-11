@@ -2,7 +2,7 @@
 
 状态：`CONFIRMED` 执行计划。版本：`PLAN-MAP-v1`。
 
-当前阶段状态（2026-09-11）：Phase 10 为 `COMPLETED / PASS / READY FOR THE NEXT PHASE`。该状态仅覆盖固定隔离 `dev.localhost` 的受治理 P2P 闭环和已记录的真实 ERP/浏览器/故障证据，不代表生产部署、银行转账或客户采用；Phase 11–13 尚未开始。
+当前阶段状态（2026-09-12）：Phase 11 为 `COMPLETED / PASS / READY FOR THE NEXT PHASE`。该状态覆盖固定 loopback 合成采购实验、真实 `dev.localhost` 采购只读 API/Web/GUI 对照、全量回归、最终独立 Review 和 Harness drift=0；不代表生产部署、业务写入授权或客户采用。Phase 12–13 尚未开始。
 
 ## 1. 目的、权威与边界
 
@@ -397,9 +397,17 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 
 出口证据：F-009–F-012 各自拥有权限、会计、审批、幂等、恢复和真实 ERP 验收证据；完整 P2P 在固定隔离开发 ERP 中可运行，且没有把实验指标、开发站点验收或受治理记账描述为生产能力。阶段报告为 `output/phase10/phase10-stage-report-final-80abbba.md`。
 
-## 20. Phase 11 — Web/GUI Agent 与多模态观察
+## 20. Phase 11 — Web/GUI Agent 与多模态观察 — COMPLETED / PASS / READY FOR THE NEXT PHASE
 
-实现有界 Web/GUI 实验，覆盖 DOM/视觉观察、元素定位、动作、登录态、异步页面、可访问性和安全；与 typed API tools 比较适用条件。业务主线采用不得绕过 ERP 权限或写入门禁。
+Phase 11 已完成。实验页和执行器保持 `LAB_ONLY`，覆盖 DOM、ARIA、截图坐标、显式 Hybrid、异步加载、登录失效、弹窗、页面变化、网络边界和无进展恢复；typed API 仍是业务默认，不注册浏览器执行器、不增加业务写入权限。
+
+- 真实图片链路已由 `assist/glm-5.3-flash` 双图合成 probe 验证；`backup/grok-4.5` 的 Responses 协议可读，但可信字段不一致，作为质量限制保留，未被改写为环境阻塞。
+- 同一真实 ERP 采购单已完成 API/Web/GUI 只读对照：API/Web `MATCHED=3/3`，GUI `SUCCEEDED=2/3`，一次模型响应为空的失败如实保留；版本稳定、四字段一致、业务写入为 0。
+- live synthetic 批次为 45 个主 trial、78 个故障/安全记录；API、DOM、ARIA、视觉和 Hybrid 均有真实正常轨迹，安全记录全部安全停止。失败率和延迟只作实验限制，不作生产收益或可靠性承诺。
+- 阶段实现、证据、报告和最终审查绑定：实现基线 `98ee158`，证据冻结 `cb4a473`，最新测试修复 `f713f05`，最终报告为 `output/phase11/phase11-stage-report-final-98ee158.md`；最终独立对抗 Review 为 `PASS`。
+- `make format-check`、`make lint`、`make type`、`make unit`（974 passed）、`make integration`（248/248）、Phase11 专项（118 passed）、实验 mypy、Harness structure/manifest/references/drift 和 `git diff --check` 均通过；最终引用检查 862 项、0 断链，drift=0。
+
+阶段出口后停止在 Phase 11，不自动开始 Phase 12；不生成学习笔记或问答，不修改 README、`.env*`、ERP/Frappe 核心或业务 Runtime。
 
 ## 21. Phase 12 — 自进化、后训练与 Agentic RL
 

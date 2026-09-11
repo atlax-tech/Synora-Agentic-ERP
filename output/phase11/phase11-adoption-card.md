@@ -1,8 +1,8 @@
 # Phase 11 Adoption Card
 
-状态：`READY_FOR_FINAL_REVIEW / HARNESS_SYNC_PENDING`。
+状态：`COMPLETED / PASS / READY FOR NEXT PHASE`。
 
-实现基线 HEAD：`98ee158`；本卡只描述 `LAB_ONLY` 实验和固定开发 ERP 只读证据，不授予业务 Runtime 或 ERP 写入权限。旧阻塞 artifact 保留为历史记录，当前结论只引用下列新证据。
+实现基线 HEAD：`98ee158`；最终独立 Review 为 `PASS`，Harness drift 为 `0`。本卡只描述 `LAB_ONLY` 实验和固定开发 ERP 只读证据，不授予业务 Runtime 或 ERP 写入权限。旧阻塞 artifact 保留为历史记录，当前结论只引用下列新证据。
 
 主要证据：
 
@@ -30,6 +30,6 @@
 - Grok 的失败是内容校验不一致，不能改写为 provider 不可用；冻结后续对照使用已验证的 assist/`glm-5.3-flash`。
 - 视觉和 DOM 的成功率受模型版本、响应结构和延迟波动影响；小样本只报告实际 trial，不生成生产 p95 或收益结论。
 - 原始 `phase11-erp-visual-boundary.json`、旧 probe 和旧 live mismatch 文件保留为历史证据，不作为当前状态。
-- 最终独立 Review PASS 和 Harness drift 清零是阶段出口前剩余门禁；通过后再把状态写入 PLAN。
+- 最终独立 Review 已为 `PASS`，Harness drift 已清零；阶段状态已同步至 PLAN。
 
 本卡不进入 Phase 12；阶段结束前不生成学习笔记或自动问答。

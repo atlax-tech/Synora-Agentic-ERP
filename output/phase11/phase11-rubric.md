@@ -1,4 +1,4 @@
-# Phase 11 Rubric（最终审查前）
+# Phase 11 Rubric（最终）
 
 评分绑定实现 HEAD `98ee158`、GLM 双图 probe、当前 synthetic live、当前 ERP live、当前脱敏边界和 Phase11 全量门禁。旧阻塞 artifact 只作历史证据。
 
@@ -11,9 +11,9 @@
 | D5 安全与数据保护 | 4 | origin/路由/方法/下载/弹窗/写入白名单，Service Worker 禁用，响应大小、注入、陈旧坐标、ERP 脱敏和无秘密日志 |
 | D6 UI、可访问性与双语 | 2 | role/name、ARIA、焦点、表头、空/错误/权限状态有测试；不是完整 ERP 无障碍审计 |
 | D7 测试、真实集成与复现 | 4 | 全量单测/集成通过，118 Phase11 测试、GLM live 轨迹、45+78 synthetic、ERP API/Web/GUI 三方证据均可复跑 |
-| D8 治理、追踪与非虚构 | 3 | 失败前后 artifact、SHA、当前治理文档和风险登记齐备；最终 Review/Harness 尚未闭合 |
+| D8 治理、追踪与非虚构 | 3 | 失败前后 artifact、SHA、最终 Review PASS、当前治理文档和 Harness drift=0 齐备；保留小样本限制 |
 | D9 简洁性与可运维性 | 3 | 独立可选依赖组、单 CLI、错误码/预算/证据路径清晰；provider 变化需重新探测 |
 
 合计：`28/36`，平均 `3.11`。
 
-门槛检查：P0=`0`、P1=`0`；D6 为阶段明确限制，D8 在最终 Review PASS 和 Harness drift 清零后复核。即使视觉成绩良好，也不改变 typed API 的业务默认，不自动进入 Phase 12。
+门槛检查：P0=`0`、P1=`0`；D6 为阶段明确限制，D8 已在最终 Review PASS 和 Harness drift 清零后复核。即使视觉成绩良好，也不改变 typed API 的业务默认，不自动进入 Phase 12。
