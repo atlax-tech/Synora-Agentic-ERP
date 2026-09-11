@@ -158,16 +158,24 @@ def _endpoint(base_url: str, responses: bool) -> str:
     return base_url if base_url.endswith(suffix) else base_url + suffix
 
 
-def _payload(prompt: str, images: list[str], model: str, responses: bool) -> dict[str, object]:
+def _payload(
+    prompt: str,
+    images: list[str],
+    model: str,
+    responses: bool,
+    max_output_tokens: int = MAX_OUTPUT_TOKENS,
+) -> dict[str, object]:
     if len(prompt) > MAX_PROMPT_CHARS:
         raise VisionProbeError("PROMPT_TOO_LARGE")
+    if max_output_tokens < 1 or max_output_tokens > MAX_OUTPUT_TOKENS:
+        raise VisionProbeError("MODEL_OUTPUT_BUDGET")
     if responses:
         content: list[dict[str, object]] = [{"type": "input_text", "text": prompt}]
         content.extend({"type": "input_image", "image_url": image} for image in images)
         return {
             "model": model,
             "input": [{"role": "user", "content": content}],
-            "max_output_tokens": MAX_OUTPUT_TOKENS,
+            "max_output_tokens": max_output_tokens,
             "store": False,
             "text": {"format": {"type": "json_object"}},
         }
@@ -178,7 +186,7 @@ def _payload(prompt: str, images: list[str], model: str, responses: bool) -> dic
     return {
         "model": model,
         "messages": [{"role": "user", "content": content}],
-        "max_tokens": MAX_OUTPUT_TOKENS,
+        "max_tokens": max_output_tokens,
         "stream": False,
         "response_format": {"type": "json_object"},
     }
@@ -398,6 +406,7 @@ def request_vision_json(
     role: str,
     environ: Mapping[str, str] | None = None,
     transport: httpx.BaseTransport | None = None,
+    max_output_tokens: int = MAX_OUTPUT_TOKENS,
 ) -> VisionModelResponse:
     """Send one untrusted image decision request to one frozen role.
 
@@ -418,7 +427,7 @@ def request_vision_json(
         raise VisionProbeError("VISION_PROVIDER_UNAVAILABLE")
     base_url, api_key, model, responses = config
     try:
-        request = _payload(prompt, encoded, model, responses)
+        request = _payload(prompt, encoded, model, responses, max_output_tokens)
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         headers["Authorization"] = f"Bearer {api_key}"
         proxy = values.get(MODEL_PROXY_ENV, "").strip() or None

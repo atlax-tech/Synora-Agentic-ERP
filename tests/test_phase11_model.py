@@ -76,6 +76,34 @@ def test_live_text_model_preserves_text_only_observation_contract() -> None:
     assert "Supplier A" not in seen[0]
 
 
+def test_structured_decision_forwards_output_budget() -> None:
+    seen: list[int] = []
+
+    def factory() -> DeterministicProvider:
+        return DeterministicProvider(
+            scripted_responses=[ProviderResponse(text=_wire("finish", fields={}))]
+        )
+
+    client = LiveTextModel(environ={"ASSIST_MODEL": "text-test"}, provider_factory=factory)
+    original_call = client.call
+
+    def recording_call(prompt: str, *, max_tokens: int = 1024) -> ModelResponse:
+        seen.append(max_tokens)
+        return original_call(prompt, max_tokens=max_tokens)
+
+    client.call = recording_call  # type: ignore[method-assign]
+    spec = TaskSpec(
+        case_id="model-budget",
+        purchase_order="PUR-ORD-0001",
+        mode="dom",
+        budget={"max_output_tokens": 7},
+    )
+
+    decision_from_model(client, spec, _observation(), 12)
+
+    assert seen == [7]
+
+
 def test_model_dom_task_executes_model_selected_actions_and_records_usage() -> None:
     responses = [
         _wire("search", target_ref="search-input", text="PUR-ORD-0001"),

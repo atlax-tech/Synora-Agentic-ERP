@@ -264,7 +264,7 @@ class LiveVisionModel:
     def call(
         self, prompt: str, images: list[bytes] | tuple[bytes, ...], *, max_tokens: int = 1_024
     ) -> ModelResponse:
-        if max_tokens != 1_024:
+        if max_tokens < 1 or max_tokens > 1_024:
             raise ModelCallError("MODEL_OUTPUT_BUDGET")
         try:
             response = request_vision_json(
@@ -273,6 +273,7 @@ class LiveVisionModel:
                 role=self.role,
                 environ=self._environ,
                 transport=self._transport,
+                max_output_tokens=max_tokens,
             )
         except VisionProbeError as error:
             raise ModelCallError(error.code) from error
@@ -290,7 +291,10 @@ def decision_from_model(
     observation: Observation,
     remaining_actions: int,
 ) -> ModelDecision:
-    response = client.call(structured_prompt(spec, observation, remaining_actions))
+    response = client.call(
+        structured_prompt(spec, observation, remaining_actions),
+        max_tokens=spec.budget.max_output_tokens,
+    )
     decision = parse_model_decision(response.payload, observation)
     return ModelDecision(
         proposal=decision.proposal,
@@ -312,6 +316,7 @@ def decision_from_vision(
     response = client.call(
         structured_prompt(spec, observation, remaining_actions),
         [image],
+        max_tokens=spec.budget.max_output_tokens,
     )
     decision = parse_model_decision(response.payload, observation)
     return ModelDecision(

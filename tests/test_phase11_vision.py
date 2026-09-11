@@ -177,6 +177,29 @@ def test_request_vision_json_returns_untrusted_decision_without_oracle() -> None
     assert result.prompt_tokens == 1
 
 
+def test_request_vision_json_forwards_output_budget() -> None:
+    seen: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        seen.append(payload)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"action_type":"finish"}'}}]},
+        )
+
+    request_vision_json(
+        "return one action",
+        [PNG],
+        role="assist",
+        environ=_env(),
+        transport=httpx.MockTransport(handler),
+        max_output_tokens=7,
+    )
+
+    assert seen[0]["max_tokens"] == 7
+
+
 def test_probe_without_config_is_an_explicit_block() -> None:
     result = probe_vision("read", [PNG], environ={})
     assert result.status == "VISION_PROVIDER_UNAVAILABLE"
