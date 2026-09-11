@@ -25,7 +25,9 @@ from labs.web_gui.gui import (
     _fields_from_decision,
     _model_output_size,
     _validate_visual_action,
+    model_visual_decider,
 )
+from labs.web_gui.model import LiveVisionModel
 from labs.web_gui.recovery import ProgressGuard, RecoveryFailure, run_with_deadline
 from labs.web_gui.redaction import RedactedCapture, capture_redacted_page
 
@@ -40,6 +42,9 @@ class ErpVisualRun:
     safety_pass: bool
     policy_events: tuple[str, ...] = ()
     redaction: RedactedCapture | None = None
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
 
 
 def _rejected_receipt(
@@ -160,6 +165,9 @@ def run_erp_visual_task(
     reason: str | None = "visual_decider_stopped"
     fields: dict[str, str | None] = {}
     model_calls = 0
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
     progress = ProgressGuard(max_actions=task.budget.max_actions)
     unchanged_reobservations = 0
     with sync_playwright() as playwright:
@@ -288,13 +296,34 @@ def run_erp_visual_task(
                                 status, reason = (
                                     ("BUDGET_EXCEEDED", "model_timeout")
                                     if failure.code == "MODEL_TIMEOUT"
-                                    else ("FAILED", "model_call_failed")
+                                    else (
+                                        "BLOCKED",
+                                        failure.code,
+                                    )
+                                    if failure.code
+                                    in {
+                                        "VISION_PROVIDER_UNAVAILABLE",
+                                        "TRANSPORT_ERROR",
+                                        "UPSTREAM_UNAVAILABLE",
+                                    }
+                                    else ("FAILED", failure.code)
                                 )
                                 break
                             model_elapsed = monotonic() - model_started
                             if not isinstance(decision, VisualDecision):
                                 status, reason = "FAILED", "invalid_model_decision"
                                 break
+                            model = model or decision.model
+                            prompt_tokens = (
+                                (prompt_tokens or 0) + decision.prompt_tokens
+                                if decision.prompt_tokens is not None
+                                else prompt_tokens
+                            )
+                            completion_tokens = (
+                                (completion_tokens or 0) + decision.completion_tokens
+                                if decision.completion_tokens is not None
+                                else completion_tokens
+                            )
                             if model_elapsed > task.budget.action_timeout_seconds:
                                 status, reason = "BUDGET_EXCEEDED", "model_timeout"
                                 break
@@ -478,7 +507,26 @@ def run_erp_visual_task(
         not policy.violations and not events and not response_events,
         policy_events,
         capture,
+        model,
+        prompt_tokens,
+        completion_tokens,
     )
 
 
-__all__ = ["ErpVisualRun", "run_erp_visual_task"]
+def run_live_erp_visual_task(
+    config: ErpReadConfig,
+    *,
+    role: str,
+    trusted_api: ErpReadResult | None = None,
+) -> ErpVisualRun:
+    """Run the redacted ERP task with one explicitly selected image role."""
+
+    client = LiveVisionModel(role)
+    return run_erp_visual_task(
+        config,
+        model_visual_decider(client),
+        trusted_api=trusted_api,
+    )
+
+
+__all__ = ["ErpVisualRun", "run_erp_visual_task", "run_live_erp_visual_task"]
