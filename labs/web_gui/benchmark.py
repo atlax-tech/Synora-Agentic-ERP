@@ -139,10 +139,23 @@ def _fixture_api(case: _Case) -> TaskResult:
 
 
 def _visual_script(case: _Case) -> Callable[[bytes, Observation, TaskSpec], VisualDecision]:
+    calls = 0
+
     def decider(_image: bytes, observation: Observation, spec: TaskSpec) -> VisualDecision:
+        nonlocal calls
+        calls += 1
         order = next(
             (item for item in FIXTURE_ORDERS if item.purchase_order == case.purchase_order), None
         )
+        if order is not None and calls == 1:
+            return VisualDecision(
+                proposal=ActionProposal(
+                    action_type="click",
+                    observation_id=observation.observation_id,
+                    x=700,
+                    y=340,
+                )
+            )
         fields: dict[str, str | None] = (
             {
                 "purchase_order": order.purchase_order,
@@ -226,7 +239,7 @@ def _fault_visual_script(
                     action_type="click",
                     observation_id=observation.observation_id,
                     x=700,
-                    y=340,
+                    y=374 if scenario == "async" else 340,
                 )
             )
         order = next(

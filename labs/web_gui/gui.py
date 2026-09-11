@@ -178,6 +178,7 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
     completion_tokens: int | None = None
     progress = ProgressGuard(max_actions=spec.budget.max_actions)
     unchanged_reobservations = 0
+    visual_progressed = False
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         policy = BrowserSecurityPolicy(origin=origin)
@@ -408,6 +409,9 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     if trusted is None:
                         status = "NOT_FOUND"
                         stop_reason = "fixture_not_found"
+                    elif not visual_progressed:
+                        status = "INCOMPLETE"
+                        stop_reason = "visual_navigation_missing"
                     elif fields != trusted:
                         status = "INCOMPLETE"
                         stop_reason = "visual_fields_mismatch"
@@ -518,6 +522,8 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     break
                 observations.append(observation)
                 screenshots.append(screenshot)
+                if observation.page_version != before_observation.page_version:
+                    visual_progressed = True
                 unchanged_reobservations = (
                     unchanged_reobservations + 1
                     if observation.page_version == before_observation.page_version

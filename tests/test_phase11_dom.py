@@ -315,7 +315,7 @@ def test_visual_task_uses_only_screenshots_and_validates_final_fields() -> None:
                     action_type="click",
                     observation_id=observation.observation_id,  # type: ignore[attr-defined]
                     x=700,
-                    y=300,
+                    y=340,
                 )
             )
         return VisualDecision(
@@ -359,7 +359,7 @@ def test_visual_task_waits_for_ready_before_model_observation() -> None:
                     action_type="click",
                     observation_id=observation.observation_id,  # type: ignore[attr-defined]
                     x=700,
-                    y=300,
+                    y=374,
                 )
             )
         return VisualDecision(
@@ -558,6 +558,40 @@ def test_visual_task_rejects_nonempty_wrong_trusted_fields() -> None:
     assert run.result.status == "INCOMPLETE"
     assert run.result.fields == {}
     assert run.result.stop_reason == "visual_fields_mismatch"
+
+
+def test_visual_task_requires_navigation_before_found_fields() -> None:
+    def decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="finish",
+                observation_id=observation.observation_id,  # type: ignore[attr-defined]
+            ),
+            fields={
+                "purchase_order": "PUR-ORD-0001",
+                "supplier": "Supplier A",
+                "status": "To Receive and Bill",
+                "currency": "CNY",
+            },
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-no-navigation",
+                    purchase_order="PUR-ORD-0001",
+                    mode="vision",
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "INCOMPLETE"
+    assert run.result.fields == {}
+    assert run.result.stop_reason == "visual_navigation_missing"
 
 
 def test_generic_hybrid_runner_rejects_real_source_before_decider() -> None:
