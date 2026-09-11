@@ -79,6 +79,10 @@ def _digest(value: object) -> str:
 
 
 def _snapshot(page: Any, spec: TaskSpec, mode: str = "dom") -> DomSnapshot:
+    if spec.data_source != "synthetic":
+        raise BrowserPolicyError(
+            "generic DOM/ARIA runner accepts synthetic data only; use the ERP readonly adapter"
+        )
     body = page.locator("body")
     version = body.get_attribute("data-page-version") or "unknown"
     timeout = spec.budget.action_timeout_seconds * 1000
@@ -250,6 +254,10 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
 
     if spec.mode not in {"dom", "aria"}:
         raise ValueError("run_dom_task requires a DOM or ARIA TaskSpec")
+    if spec.data_source != "synthetic":
+        raise BrowserPolicyError(
+            "generic DOM/ARIA runner accepts synthetic data only; use the ERP readonly adapter"
+        )
     origin = _origin(base_url)
     started = monotonic()
     sync_playwright = _playwright_sync()

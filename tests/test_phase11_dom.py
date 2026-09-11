@@ -340,6 +340,20 @@ def test_generic_visual_runner_rejects_real_source_before_decider() -> None:
     assert called is False
 
 
+@pytest.mark.parametrize("mode", ["dom", "aria"])
+def test_generic_dom_runners_reject_real_source_before_browser(mode: str) -> None:
+    with pytest.raises(BrowserPolicyError, match="synthetic data only"):
+        run_dom_task(
+            "http://127.0.0.1:8765",
+            TaskSpec(
+                case_id=f"p11-{mode}-real-source",
+                purchase_order="PUR-ORD-2026-02297",
+                mode=mode,  # type: ignore[arg-type]
+                data_source="erp_readonly",
+            ),
+        )
+
+
 def test_visual_task_rejects_nonempty_wrong_trusted_fields() -> None:
     def decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
         return VisualDecision(
