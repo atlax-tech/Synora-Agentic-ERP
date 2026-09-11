@@ -1,6 +1,6 @@
 # Phase 11 阶段报告（草稿）
 
-状态：`PENDING SECOND INDEPENDENT REVIEW / BLOCKED BY VISION PROVIDER`。
+状态：`BLOCKED / SECOND REVIEW CHANGES_REQUIRED / VISION_PROVIDER_UNAVAILABLE / HARNESS DRIFT`。
 
 本草稿不把实验页面、test double 或固定开发 ERP 读对照描述为生产部署、客户采用、模型质量提升或业务写入授权。真实视觉依赖和 managed Harness fingerprint 同步尚未闭合，因此不能写 `COMPLETED / PASS`。
 
@@ -18,7 +18,7 @@ Phase 11 交付了一套只绑定 loopback 的 `LAB_ONLY` 采购读取实验。�
 2. [labs/web_gui/browser.py](../../labs/web_gui/browser.py)、[labs/web_gui/gui.py](../../labs/web_gui/gui.py)、[labs/web_gui/hybrid.py](../../labs/web_gui/hybrid.py)：DOM/ARIA、截图坐标和同步混合循环。
 3. [labs/web_gui/erp_readonly.py](../../labs/web_gui/erp_readonly.py)、[labs/web_gui/erp_browser.py](../../labs/web_gui/erp_browser.py)、[labs/web_gui/redaction.py](../../labs/web_gui/redaction.py)、[labs/web_gui/erp_visual.py](../../labs/web_gui/erp_visual.py)：真实 ERP 只读 API/Web、截图遮罩和 GUI 边界。
 
-实现与证据 HEAD（第二轮 Review 输入）：`9cf8e9e862419023b1355ee8156dc7efa50e2d7e`。
+实现与证据冻结 HEAD：`f01ca6e`（完整代码、修复和当前 benchmark artifact）；本报告内容的最终文档提交哈希在交付时单独列出，避免报告自引用。
 
 ## 3. 步骤与提交追踪
 
@@ -35,8 +35,8 @@ Phase 11 交付了一套只绑定 loopback 的 `LAB_ONLY` 采购读取实验。�
 | P11.10 | v2 定位变化先失败、保留失败、修复后复验 | `ef405f1`、`f69354c`、[failure](phase11-page-change-failure-v1.json)、[repair](phase11-page-change-repair-v1.json) |
 | P11.11 | 真实 ERP typed API 与精确 allowlist Web 对照 | `8feaee1`、`b0d9961`、[comparison](phase11-erp-readonly-comparison.json) |
 | P11.12 | 真实 ERP 确定性截图遮罩和 GUI test-double 安全边界 | `16bd822`、`a3433ea`、[boundary](phase11-erp-visual-boundary.json) |
-| P11.13 | 调用预算、统一 CLI、五方法 benchmark、三次冻结证据 | `9bb4c5b`、`701413d`、`4da1986`、`bd05dae`、[synthetic](phase11-benchmark-synthetic.json)、[ERP](phase11-benchmark-erp-readonly.json) |
-| Review remediation | 输入隔离、trusted oracle、模型预算/无进展、结构化拒绝、页面版本、ERP 浏览器事件、benchmark 断言和原子写入 | `4cbc7ce`、`1e495f3`、`611f55b`、`d2a349f`、`cd96d6c`、`50f342d`、`a4d6842`、`823233f`、`8fed6d9`、`d9823fc` |
+| P11.13 | 调用预算、统一 CLI、五方法 benchmark、三次冻结证据 | `9bb4c5b`、`701413d`、`4da1986`、`bd05dae`、`f01ca6e`、[synthetic](phase11-benchmark-synthetic.json)、[ERP](phase11-benchmark-erp-readonly.json) |
+| Review remediation | 输入隔离、trusted oracle、模型预算/无进展、结构化拒绝、页面版本、ERP 浏览器事件、响应正文限制、脱敏采购单号和最新证据 | `4cbc7ce`、`1e495f3`、`611f55b`、`d2a349f`、`cd96d6c`、`50f342d`、`a4d6842`、`823233f`、`8fed6d9`、`d9823fc`、`dad892b`、`cfed0ee`、`74b8a1d`、`11923d7`、`80bbe50`、`740ff88`、`4d52ba6`、`393191d`、`72fbaf1`、`f915af0`、`f01ca6e` |
 
 每个提交只包含一个可回滚的实验结果；未修改 ERP/Frappe 核心、业务 Runtime、`.env*`、README 或 `.harness`。
 
@@ -44,29 +44,29 @@ Phase 11 交付了一套只绑定 loopback 的 `LAB_ONLY` 采购读取实验。�
 
 ### Synthetic
 
-`phase11-benchmark-synthetic.json` SHA-256 为 `c26d75c33396ef3dd8e5c43de7f3de210f3b9bef40fa240c183dc30c54b41fdd`。三次重复包含 45 个业务 trial 和 33 个故障 trial；所有业务 trial `safety_pass`，不删除失败或 `INCOMPLETE`。
+`phase11-benchmark-synthetic.json` SHA-256 为 `b6f06a7d3b32f5dc6da309c7adb25ef330548e4e0dd9f3714ea629153de9c228`。三次重复包含 45 个业务 trial 和 33 个故障 trial；所有业务 trial `safety_pass`，不删除失败或 `INCOMPLETE`。
 
 | 方法 | 正确 | 业务 trial | 模型调用 | 延迟统计（ms） | 说明 |
 | --- | ---: | ---: | ---: | --- | --- |
 | API | 9 | 9 | 0 | 0/0/0（min/median/max） | typed fixture oracle |
-| DOM | 9 | 9 | 0 | 320/399/854 | bounded Playwright |
-| ARIA | 9 | 9 | 0 | 337/399/506 | bounded Playwright |
-| 视觉 | 9 | 9 | 9 | 276/286/322 | `scripted-fixture-replay` test double；目标不存在由 trusted oracle 返回 `NOT_FOUND` |
-| 混合 | 9 | 9 | 24 | 472/639/749 | `scripted-fixture-replay` test double；冲突仍返回 `OBSERVATION_CONFLICT` |
+| DOM | 9 | 9 | 0 | 318/374/683 | bounded Playwright |
+| ARIA | 9 | 9 | 0 | 333/380/401 | bounded Playwright |
+| 视觉 | 9 | 9 | 9 | 275/278/298 | `scripted-fixture-replay` test double；目标不存在由 trusted oracle 返回 `NOT_FOUND` |
+| 混合 | 9 | 9 | 24 | 476/594/653 | `scripted-fixture-replay` test double；冲突仍返回 `OBSERVATION_CONFLICT` |
 
 故障集三次重复均可区分：页面变化修复后 `SUCCEEDED`、异步 `SUCCEEDED`、持续加载 `FAILED/PAGE_NOT_READY`、权限 `PERMISSION_DENIED`、登录失效 `AUTH_REQUIRED`、外域/弹窗/下载/写入/确认均安全停止、陈旧坐标拒绝。
 
 ### Real ERP API/Web
 
-`PUR-ORD-2026-02297` 在固定 `dev.localhost`、同一 Buyer/Company 范围和同一单据版本下运行三次，报告 SHA-256 为 `bb517ff2f6a9fccc29db25af245aacf3f8005a8bd5faa4aa10053cad2a1a6a9e`，状态为 `MATCHED=3`、`MISMATCH=0`、`STATE_DRIFT=0`、`BLOCKED=0`。四个字段为采购单号 `PUR-ORD-2026-02297`、供应商 `SYNORA-P1-Supplier-1`、状态 `To Receive and Bill`、币种 `CNY`；API-before/after `source_modified_at` 一致。Frappe/ERPNext 固定 revision 仍为 `6a329d068416768ec47ccd3326b9cc95a8d7bf99` / `11e0ba0a1c45f217e2e73e885f699102d06da325`。
+`PUR-ORD-2026-02297` 在固定 `dev.localhost`、同一 Buyer/Company 范围和同一单据版本下运行三次，报告 SHA-256 为 `696eaaf442a4218f8ac7ddd8de3a97936183d3e1a86c1c028ce3fd749895e0f2`，状态为 `MATCHED=3`、`MISMATCH=0`、`STATE_DRIFT=0`、`BLOCKED=0`。四个字段为采购单号 `PUR-ORD-2026-02297`、供应商 `SYNORA-P1-Supplier-1`、状态 `To Receive and Bill`、币种 `CNY`；API-before/after `source_modified_at` 一致。Frappe/ERPNext 固定 revision 仍为 `6a329d068416768ec47ccd3326b9cc95a8d7bf99` / `11e0ba0a1c45f217e2e73e885f699102d06da325`。
 
 API 使用现有 `purchase_order.current` typed Gateway、正常 Run/capability 机制和独立会话；Web 只读页面及列举出的 Frappe 只读请求，socket/非目标文档被阻断。前后没有创建或修改业务采购单。
 
 ### Real ERP visual
 
-脱敏截图边界报告 SHA-256 为 `50a32c4454ee65b83fc286c5ed9c382fc83a25925fd5114bf3cc97763a23ab37`。截图为 1024×768、约 24 KiB，遮罩后保留任务字段，账号、导航、时间线、评论和动作区隐藏；GUI test double 只有在显式 trusted API mapping 下返回四字段且 `trusted_fact_required=true`。
+脱敏截图边界报告 SHA-256 为 `48a61e3c621454358048d9584320b1e6e6aaaa9294a07ad512105b0fba1fadab`。截图为 1024×768、19072 bytes，遮罩后保留采购单号、供应商、状态和币种，账号、导航、时间线、评论和动作区隐藏；GUI test double 只有在显式 trusted API mapping 下返回四字段且 `trusted_fact_required=true`。
 
-四个已配置 provider role 的两图真实探测均失败：primary=`TRANSPORT_ERROR`、assist=`RESPONSE_SCHEMA`、backup/last_local=`TRANSPORT_ERROR`；最终状态 `VISION_PROVIDER_UNAVAILABLE`，usage 为 `null`。因此 P11.12 要求的真实 ERP API/Web/GUI 三方对照未完成，不能用 test double 或 DOM/API 结果冒充视觉模型成功。
+四个已配置 provider role 的真实探测均失败：primary=`TRANSPORT_ERROR`、assist=`RESPONSE_SCHEMA`、backup=`TRANSPORT_ERROR`、last_local=`TRANSPORT_ERROR`；最终状态 `VISION_PROVIDER_UNAVAILABLE`，usage 为 `null`。因此 P11.12 要求的真实 ERP API/Web/GUI 三方对照未完成，不能用 test double 或 DOM/API 结果冒充视觉模型成功。
 
 ## 5. 页面变化失败与修复
 
@@ -86,7 +86,7 @@ v2 将列表行属性从 `data-order-name` 改为 `data-order-id`。原始文件
 | `make format-check` | 0 | 426 files already formatted |
 | `make lint` | 0 | All checks passed |
 | `make type` | 0（修复后） | 131 个项目源/测试路径无错误 |
-| `make unit` | 0 | 915 passed；55 warnings |
+| `make unit` | 0 | 925 passed；55 warnings |
 | `make integration` | 0 | Frappe 248 tests `OK` |
 | `uv run --python 3.14 mypy labs/web_gui` | 0 | 16 个实验源码文件无错误 |
 | synthetic benchmark | 0 | 45 business + 33 fault trials written |
@@ -98,7 +98,7 @@ v2 将列表行属性从 `data-order-name` 改为 `data-order-id`。原始文件
 | `python3 .agents/skills/harness-check/scripts/score_harness_health.py .` | 0 | read-only；79/100，grade C；drift 2 files |
 | Harness drift | 1 | `pyproject.toml`、`uv.lock` fingerprint 尚未同步 |
 
-首次 `make type` 退出码 `1` 的 9 个新增测试注解错误已在 `4708b5e` 修复；修复后 full type 与 29 个受影响测试通过。按计划原样运行无 `--python` 的 `uv run --group web-gui-lab ...` 曾因主机选中 3.13 与项目 3.14 不兼容退出码 `2`；所有实际验收命令显式使用已安装 Python 3.14，未降低项目基线。阶段出口还完成了 ponytail-audit（结论为代码已足够精简）、ponytail-debt（现有 1 条固定上限标记，无新增遗留）和只读 Harness 健康检查；健康分数受待同步 fingerprint 漂移影响，不能作为通过依据。
+首次 `make type` 退出码 `1` 的 9 个新增测试注解错误已在 `4708b5e` 修复；修复后 full type 与 29 个受影响测试通过。按计划原样运行无 `--python` 的 `uv run --group web-gui-lab ...` 曾因主机选中 3.13 与项目 3.14 不兼容退出码 `2`；所有实际验收命令显式使用已安装 Python 3.14，未降低项目基线。阶段出口还完成了 ponytail-audit（结论为代码已足够精简）、ponytail-debt（现有 1 条固定上限标记，无新增遗留）和只读 Harness 健康检查；健康分数受待同步 fingerprint 漂移影响，不能作为通过依据。当前 `make unit` 收集到 925 项并全部通过，包含本阶段新增回归。
 
 ## 8. Adoption、Rubric 与风险
 
@@ -108,13 +108,13 @@ v2 将列表行属性从 `data-order-name` 改为 `data-order-id`。原始文件
 
 ## 9. 独立审查与受保护同步
 
-本报告草稿提交后启动的第一轮独立对抗 Review 返回 `CHANGES_REQUIRED`，指出 8 类边界问题。执行 agent 已在 `4cbc7ce..d9823fc` 逐项修复并补回归，随后以 `9cf8e9e` 重建原始 evidence；第二轮独立 Review 将检查最终 diff、修复后测试、真实 ERP 对照、视觉 provider 探测、秘密保护和失败复盘，只返回 `PASS`、`CHANGES_REQUIRED` 或 `BLOCKED`。
+本报告草稿提交后启动的第一轮独立对抗 Review 返回 `CHANGES_REQUIRED`，指出 8 类边界问题。执行 agent 已在 `4cbc7ce..d9823fc` 逐项修复并补回归，随后以 `9cf8e9e` 重建原始 evidence。第二轮独立 Review 以 `8dd18a7` 为输入，返回 `CHANGES_REQUIRED`，指出 7 类问题：ERP artifact 与报告状态矛盾、模型墙钟预算未在调用者侧截止、响应正文和通用浏览器危险事件覆盖不完整、结构化拒绝/动作 lineage/Hybrid 页面变化遗漏、通用 DOM/ARIA 可接受 ERP 数据源、trusted oracle/provider PASS 入口可绕过，以及 ERP visual URL/脱敏边界残余风险。执行 agent 已在 `dad892b`、`cfed0ee`、`74b8a1d`、`11923d7`、`80bbe50`、`740ff88`、`4d52ba6`、`393191d`、`72fbaf1`、`f915af0`、`f01ca6e` 中完成修复、回归和证据刷新；但按本阶段最多两轮审查规则，不再启动第三轮，因此独立审查门禁仍为 `BLOCKED`，不能声称 `PASS`。
 
 `.harness/manifest.json` 当前有效，但依赖组变更导致 `pyproject.toml` 与 `uv.lock` fingerprint drift。根据 `harness-update` 规则，需先提交文件级只读 proposal，再由用户明确批准具体 Harness 文件/指纹同步；在批准前不修改 `.harness`、README 或其它用户维护文件。
 
 ## 10. 阶段结论（草稿）
 
-代码、合成实验、浏览器安全边界、真实 ERP API/Web 对照和第一轮 Review 修复均已完成并可复跑；真实 ERP 脱敏截图和 GUI 坐标边界可运行，但真实图片 provider 未返回可验证观察，导致三方视觉验收阻塞，第二轮 Review 也尚未通过。阶段暂定 `BLOCKED`，不进入 Phase 12，不获得业务写入权限。只有 provider 真实探测通过、Harness 受保护同步获批且独立 Review 最终 `PASS` 后，才能重新评估阶段是否满足 `COMPLETED / PASS`。
+代码、合成实验、浏览器安全边界、真实 ERP API/Web 对照和两轮 Review 的已知问题修复均已完成并可复跑；真实 ERP 脱敏截图和 GUI 坐标边界可运行，但真实图片 provider 未返回可验证观察，三方视觉验收阻塞。第二轮独立 Review 的 `CHANGES_REQUIRED` 未获得后续 `PASS`，且 `.harness` fingerprint drift 尚未取得文件级同步授权。阶段最终记为 `BLOCKED`，不进入 Phase 12，不获得业务写入权限；未来只有重新完成独立审查、provider 真实探测和受保护 Harness 同步后，才能重新评估 `COMPLETED / PASS`。
 
 ## 11. 手工验收
 

@@ -1,14 +1,14 @@
 # Phase 11 Adoption Card
 
-状态：`PENDING SECOND INDEPENDENT REVIEW`；业务采用结论受真实图片 provider 和受保护 Harness 同步门禁约束。
+状态：`BLOCKED / SECOND REVIEW CHANGES_REQUIRED`；业务采用结论受真实图片 provider、独立审查和受保护 Harness 同步门禁约束。
 
-实现代码基线：`9cf8e9e862419023b1355ee8156dc7efa50e2d7e`。
+实现与证据基线：`f01ca6e`。
 
 主要证据：
 
-- synthetic 五方法报告：[phase11-benchmark-synthetic.json](phase11-benchmark-synthetic.json)，SHA-256 `c26d75c33396ef3dd8e5c43de7f3de210f3b9bef40fa240c183dc30c54b41fdd`。
-- 真实 ERP API/Web 报告：[phase11-benchmark-erp-readonly.json](phase11-benchmark-erp-readonly.json)，SHA-256 `bb517ff2f6a9fccc29db25af245aacf3f8005a8bd5faa4aa10053cad2a1a6a9e`。
-- 真实 ERP 脱敏 GUI 边界：[phase11-erp-visual-boundary.json](phase11-erp-visual-boundary.json)，SHA-256 `50a32c4454ee65b83fc286c5ed9c382fc83a25925fd5114bf3cc97763a23ab37`。
+- synthetic 五方法报告：[phase11-benchmark-synthetic.json](phase11-benchmark-synthetic.json)，SHA-256 `b6f06a7d3b32f5dc6da309c7adb25ef330548e4e0dd9f3714ea629153de9c228`。
+- 真实 ERP API/Web 报告：[phase11-benchmark-erp-readonly.json](phase11-benchmark-erp-readonly.json)，SHA-256 `696eaaf442a4218f8ac7ddd8de3a97936183d3e1a86c1c028ce3fd749895e0f2`，三次均 `MATCHED`。
+- 真实 ERP 脱敏 GUI 边界：[phase11-erp-visual-boundary.json](phase11-erp-visual-boundary.json)，SHA-256 `48a61e3c621454358048d9584320b1e6e6aaaa9294a07ad512105b0fba1fadab`；capture `READY`，provider `VISION_PROVIDER_UNAVAILABLE`。
 
 ## 方法决策
 
@@ -36,3 +36,7 @@
 1. `probe-vision` 对两张不同合成截图返回严格结构化、可核验的四字段观察，并保存角色/模型/usage 摘要。
 2. 重新在同一真实 ERP 单据、同一脱敏映射和同一页面版本下完成 API/Web/GUI 三方只读对照。
 3. 新页面版本或 provider 变化必须保留旧失败证据，先补回归测试和独立审查，再更新本卡。
+
+## 审查状态
+
+第一轮独立对抗 Review 的 8 类问题已修复并复验。第二轮以 `8dd18a7` 为输入返回 `CHANGES_REQUIRED`，执行 agent 已完成其指出的 7 类代码、测试和证据修复，但阶段规则最多允许两轮独立审查，因此没有第三轮 `PASS`。本卡保持 `BLOCKED`，不授予业务 Runtime 或 ERP 写入权限。
