@@ -23,6 +23,7 @@ from labs.web_gui.contracts import (
     TaskSpec,
     TaskStatus,
 )
+from labs.web_gui.security import BrowserSecurityPolicy
 
 
 class BrowserPolicyError(ValueError):
@@ -43,6 +44,7 @@ class DomSnapshot:
 class DomRun:
     result: TaskResult
     observations: tuple[Observation, ...]
+    security_violations: tuple[str, ...] = ()
 
 
 def _playwright_sync() -> Any:
@@ -240,8 +242,29 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
     receipts: list[ActionReceipt] = []
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
-        context = browser.new_context(service_workers="block")
+        policy = BrowserSecurityPolicy(origin=origin)
+        context = browser.new_context(service_workers="block", accept_downloads=False)
+
+        def route_handler(route: Any) -> None:
+            request = route.request
+            if policy.permits(request.url, request.method):
+                route.continue_()
+            else:
+                route.abort(error_code="blockedbyclient")
+
+        context.route("**/*", route_handler)
         page = context.new_page()
+        browser_events: list[str] = []
+
+        def on_popup(popup: Any) -> None:
+            browser_events.append("POPUP_BLOCKED")
+            popup.close()
+
+        def on_download(download: Any) -> None:
+            browser_events.append("DOWNLOAD_BLOCKED")
+
+        context.on("page", on_popup)
+        page.on("download", on_download)
         try:
             page.goto(f"{origin}/", wait_until="domcontentloaded", timeout=10_000)
             snapshot = _snapshot(page, spec, spec.mode)
@@ -274,6 +297,9 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
             elapsed = int((monotonic() - started) * 1000)
             if elapsed > spec.budget.wall_time_seconds * 1000:
                 status = "BUDGET_EXCEEDED"
+            security_violations = tuple(policy.violations + browser_events)
+            if security_violations:
+                status = "FAILED"
             result = TaskResult(
                 case_id=spec.case_id,
                 status=status,
@@ -286,7 +312,71 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
         finally:
             context.close()
             browser.close()
-    return DomRun(result=result, observations=tuple(observations))
+    return DomRun(
+        result=result,
+        observations=tuple(observations),
+        security_violations=security_violations,
+    )
+
+
+def run_security_probe(base_url: str, scenario: str) -> tuple[str, ...]:
+    """Exercise one fixture hazard and return recorded security events."""
+
+    if scenario not in {"external", "popup", "download", "write"}:
+        raise ValueError("unknown security scenario")
+    origin = _origin(base_url)
+    sync_playwright = _playwright_sync()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        policy = BrowserSecurityPolicy(origin=origin)
+        context = browser.new_context(service_workers="block", accept_downloads=False)
+
+        def route_handler(route: Any) -> None:
+            request = route.request
+            if policy.permits(request.url, request.method):
+                route.continue_()
+            else:
+                route.abort(error_code="blockedbyclient")
+
+        context.route("**/*", route_handler)
+        page = context.new_page()
+        events: list[str] = []
+
+        def on_popup(popup: Any) -> None:
+            events.append("POPUP_BLOCKED")
+            popup.close()
+
+        def on_download(download: Any) -> None:
+            events.append("DOWNLOAD_BLOCKED")
+
+        context.on("page", on_popup)
+        page.on("download", on_download)
+        try:
+            page.goto(
+                f"{origin}/?scenario={scenario}",
+                wait_until="domcontentloaded",
+                timeout=10_000,
+            )
+            if scenario in {"external", "popup", "download"}:
+                try:
+                    page.locator(f'[data-security="{scenario}"]').click(timeout=1_000)
+                except Exception:
+                    pass
+            else:
+                snapshot = _snapshot(page, TaskSpec(case_id="security", purchase_order="x"))
+                proposal = ActionProposal(
+                    action_type="click",
+                    observation_id=snapshot.observation.observation_id,
+                    target_ref="security:write",
+                )
+                try:
+                    _validate_action(proposal, snapshot)
+                except BrowserPolicyError:
+                    events.append("WRITE_ACTION_REJECTED")
+        finally:
+            context.close()
+            browser.close()
+    return tuple(policy.violations + events)
 
 
 def run_aria_task(base_url: str, spec: TaskSpec) -> DomRun:
@@ -304,4 +394,5 @@ __all__ = [
     "DomSnapshot",
     "run_aria_task",
     "run_dom_task",
+    "run_security_probe",
 ]

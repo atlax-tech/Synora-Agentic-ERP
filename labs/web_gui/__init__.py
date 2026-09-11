@@ -4,7 +4,7 @@ This package is a LAB_ONLY experiment.  It is intentionally not imported by
 the ERP app or the Agent Runtime business path.
 """
 
-from labs.web_gui.browser import run_aria_task, run_dom_task
+from labs.web_gui.browser import run_aria_task, run_dom_task, run_security_probe
 from labs.web_gui.contracts import (
     ActionProposal,
     ActionReceipt,
@@ -14,11 +14,13 @@ from labs.web_gui.contracts import (
     TaskSpec,
 )
 from labs.web_gui.fixtures import FIXTURE_ORDERS, create_app
+from labs.web_gui.security import BrowserSecurityPolicy
 
 __all__ = [
     "FIXTURE_ORDERS",
     "ActionProposal",
     "ActionReceipt",
+    "BrowserSecurityPolicy",
     "Observation",
     "ObservationMode",
     "TaskResult",
@@ -26,4 +28,5 @@ __all__ = [
     "create_app",
     "run_aria_task",
     "run_dom_task",
+    "run_security_probe",
 ]

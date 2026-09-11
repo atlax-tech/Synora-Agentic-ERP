@@ -72,7 +72,7 @@ def _order_json(order: FixtureOrder) -> dict[str, object]:
     return order.model_dump(mode="json")
 
 
-def _layout(*, query: str, rows: str, body_title: str, body: str) -> str:
+def _layout(*, query: str, rows: str, body_title: str, body: str, scenario: str = "") -> str:
     safe_query = html.escape(query, quote=True)
     return f"""<!doctype html>
 <html lang="en">
@@ -92,7 +92,25 @@ th,td{{border:1px solid #bbb;padding:.5rem;text-align:left}}
 <input id="order-search" name="q" value="{safe_query}" maxlength="140" autocomplete="off">
 <button type="submit" data-action="search">Search</button></form></section>
 <section aria-labelledby="results-heading"><h2 id="results-heading">Results</h2>
-{rows}</section>{body_title}{body}</main></body></html>"""
+{rows}</section>{body_title}{body}{_security_controls(scenario)}</main></body></html>"""
+
+
+def _security_controls(scenario: str) -> str:
+    if scenario == "external":
+        return (
+            '<p><a data-security="external" href="https://evil.example/collect">'
+            "External destination</a></p>"
+        )
+    if scenario == "popup":
+        return (
+            '<p><button data-security="popup" '
+            "onclick=\"window.open('https://evil.example')\">Open popup</button></p>"
+        )
+    if scenario == "download":
+        return '<p><a data-security="download" href="/secret.txt" download>Download secret</a></p>'
+    if scenario == "write":
+        return '<p><button data-security="write" type="button">Submit ERP change</button></p>'
+    return ""
 
 
 def _list_rows(orders: tuple[FixtureOrder, ...]) -> str:
@@ -163,7 +181,10 @@ def create_app() -> FastAPI:
         return {"lab_only": True, "order": _order_json(order)}
 
     @app.get("/", response_class=HTMLResponse)
-    def index(q: str = Query(default="", max_length=140)) -> HTMLResponse:
+    def index(
+        q: str = Query(default="", max_length=140),
+        scenario: str = Query(default="", max_length=20),
+    ) -> HTMLResponse:
         normalized = q.strip().casefold()
         orders = tuple(
             order
@@ -173,7 +194,13 @@ def create_app() -> FastAPI:
             or normalized in order.supplier.casefold()
         )
         return HTMLResponse(
-            _layout(query=q, rows=_list_rows(orders), body_title="", body=""),
+            _layout(
+                query=q,
+                rows=_list_rows(orders),
+                body_title="",
+                body="",
+                scenario=scenario,
+            ),
         )
 
     @app.get("/purchase-orders/{name}", response_class=HTMLResponse)

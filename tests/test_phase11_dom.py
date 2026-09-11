@@ -16,9 +16,11 @@ from labs.web_gui.browser import (
     DomSnapshot,
     _validate_action,
     run_dom_task,
+    run_security_probe,
 )
 from labs.web_gui.contracts import ActionProposal, Observation, TaskSpec
 from labs.web_gui.fixtures import create_app
+from labs.web_gui.security import BrowserSecurityPolicy
 
 
 @contextmanager
@@ -118,3 +120,36 @@ def test_dom_policy_rejects_stale_or_unknown_targets() -> None:
             target_ref="order:PUR-ORD-0001",
             script="window.location='https://evil.example'",  # type: ignore[call-arg]
         )
+
+
+def test_browser_security_policy_allows_only_loopback_read_routes() -> None:
+    policy = BrowserSecurityPolicy("http://127.0.0.1:8765")
+    assert policy.permits("http://127.0.0.1:8765/?q=PUR-ORD-0001")
+    assert policy.permits("http://127.0.0.1:8765/api/purchase-orders/PUR-ORD-0001")
+    assert not policy.permits("https://evil.example/collect")
+    assert not policy.permits("http://127.0.0.1:8765/api/purchase-orders", "POST")
+    assert len(policy.violations) == 2
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected"),
+    [("external", "evil.example"), ("download", "DOWNLOAD_BLOCKED"), ("popup", "evil.example")],
+)
+def test_browser_security_probe_blocks_side_effect_surfaces(scenario: str, expected: str) -> None:
+    try:
+        with _server() as base_url:
+            violations = run_security_probe(base_url, scenario)
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert any(expected in violation for violation in violations)
+
+
+def test_browser_security_probe_rejects_write_action() -> None:
+    try:
+        with _server() as base_url:
+            violations = run_security_probe(base_url, "write")
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert violations == ("WRITE_ACTION_REJECTED",)
