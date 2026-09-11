@@ -18,7 +18,7 @@ Phase 11 交付了一个隔离的 `LAB_ONLY / SYNTHETIC DATA` 采购读取实验
 2. [labs/web_gui/browser.py](../../labs/web_gui/browser.py)、[labs/web_gui/gui.py](../../labs/web_gui/gui.py)、[labs/web_gui/hybrid.py](../../labs/web_gui/hybrid.py)：结构观察、截图坐标、同步 Hybrid 和有界恢复。
 3. [labs/web_gui/model.py](../../labs/web_gui/model.py)、[labs/web_gui/vision.py](../../labs/web_gui/vision.py)、[labs/web_gui/erp_readonly.py](../../labs/web_gui/erp_readonly.py)、[labs/web_gui/erp_browser.py](../../labs/web_gui/erp_browser.py)、[labs/web_gui/erp_visual.py](../../labs/web_gui/erp_visual.py)：模型适配、真实 ERP API/Web/脱敏 GUI 对照。
 
-实现代码冻结 HEAD（待本轮文档与 Harness 提交后重新记录）：`15a476e`。最新确定性 ERP 证据提交：`df71466`；live ERP/API/Web/GUI 尝试提交：`490de9b`；live 汇总校正提交：`8d90f2e`。最终文档 HEAD 将单独列出，避免自引用。
+实现代码冻结 HEAD：`15a476e`。最新确定性 ERP 证据提交：`df71466`；live ERP/API/Web/GUI 尝试提交：`490de9b`；live 汇总校正提交：`8d90f2e`。本次文档收口提交之后的最终文档 HEAD 以 `git log -1` 记录，不在报告正文内自引用。
 
 ## 3. 步骤完成度
 

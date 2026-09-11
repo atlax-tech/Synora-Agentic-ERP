@@ -2,7 +2,7 @@
 
 状态：`BLOCKED / REVIEW_ROUNDS_EXHAUSTED / VISION_PROVIDER_UNAVAILABLE / LIVE_GUI_MISMATCH / HARNESS_DRIFT`。
 
-实现代码冻结 HEAD（待最终文档提交后重新记录）：`15a476e`。本卡只描述实验和固定开发 ERP 只读证据，不授予业务 Runtime 或 ERP 写入权限。
+实现代码冻结 HEAD：`15a476e`。本卡只描述实验和固定开发 ERP 只读证据，不授予业务 Runtime 或 ERP 写入权限；文档收口提交的最终 HEAD 以提交历史记录，避免自引用。
 
 主要证据：
 
