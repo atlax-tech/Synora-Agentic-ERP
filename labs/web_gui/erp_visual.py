@@ -19,7 +19,7 @@ from labs.web_gui.gui import (
     _model_output_size,
     _validate_visual_action,
 )
-from labs.web_gui.recovery import ProgressGuard, RecoveryFailure
+from labs.web_gui.recovery import ProgressGuard, RecoveryFailure, run_with_deadline
 from labs.web_gui.redaction import RedactedCapture, capture_redacted_page
 
 VisualDecider = Callable[[bytes, Observation, TaskSpec], VisualDecision]
@@ -229,15 +229,34 @@ def run_erp_visual_task(
                             if model_calls >= task.budget.max_model_calls:
                                 status, reason = "BUDGET_EXCEEDED", "model_call_budget"
                                 break
+                            remaining = task.budget.wall_time_seconds - (monotonic() - started)
+                            if remaining <= 0:
+                                status, reason = "BUDGET_EXCEEDED", "wall_time_budget"
+                                break
                             decision: VisualDecision | None = None
                             model_started = monotonic()
+                            model_calls += 1
+
+                            def invoke_visual(
+                                image: bytes = screenshots[-1],
+                                current_observation: Observation = observation,
+                                current_task: TaskSpec = task,
+                            ) -> VisualDecision:
+                                return decider(image, current_observation, current_task)
+
                             try:
-                                decision = decider(screenshots[-1], observation, task)
-                            except Exception:
-                                status, reason = "FAILED", "model_call_failed"
+                                decision = run_with_deadline(
+                                    invoke_visual,
+                                    min(task.budget.action_timeout_seconds, remaining),
+                                )
+                            except RecoveryFailure as failure:
+                                status, reason = (
+                                    ("BUDGET_EXCEEDED", "model_timeout")
+                                    if failure.code == "MODEL_TIMEOUT"
+                                    else ("FAILED", "model_call_failed")
+                                )
                                 break
                             model_elapsed = monotonic() - model_started
-                            model_calls += 1
                             if not isinstance(decision, VisualDecision):
                                 status, reason = "FAILED", "invalid_model_decision"
                                 break
@@ -334,7 +353,9 @@ def run_erp_visual_task(
                                 elif proposal.action_type == "scroll":
                                     page.mouse.wheel(0, 500)
                                 else:
-                                    page.wait_for_timeout(100)
+                                    page.wait_for_timeout(
+                                        min(100, int(task.budget.action_timeout_seconds * 1000))
+                                    )
                             except BrowserPolicyError as error:
                                 code = (
                                     "STALE_SCREENSHOT"

@@ -24,7 +24,7 @@ from labs.web_gui.contracts import (
     TaskStatus,
 )
 from labs.web_gui.fixtures import fixture_fields
-from labs.web_gui.recovery import ProgressGuard, RecoveryFailure
+from labs.web_gui.recovery import ProgressGuard, RecoveryFailure, run_with_deadline
 from labs.web_gui.security import BrowserSecurityPolicy
 
 MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024
@@ -186,7 +186,11 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
         page.on("download", on_download)
         page.on("dialog", on_dialog)
         try:
-            page.goto(f"{origin}/", wait_until="domcontentloaded", timeout=10_000)
+            page.goto(
+                f"{origin}/",
+                wait_until="domcontentloaded",
+                timeout=int(spec.budget.action_timeout_seconds * 1000),
+            )
             observation, screenshot = _visual_observation(page, spec.data_source)
             observations.append(observation)
             screenshots.append(screenshot)
@@ -199,19 +203,37 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "model_call_budget"
                     break
+                remaining = spec.budget.wall_time_seconds - (monotonic() - started)
+                if remaining <= 0:
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = "wall_time_budget"
+                    break
                 model_started = monotonic()
+                model_calls += 1
+
+                def invoke_visual(
+                    current_screenshot: bytes = screenshot,
+                    current_observation: Observation = observation,
+                    current_spec: TaskSpec = spec,
+                ) -> VisualDecision:
+                    return decider(current_screenshot, current_observation, current_spec)
+
                 try:
-                    decision = decider(screenshot, observation, spec)
-                except Exception:
-                    status = "FAILED"
-                    stop_reason = "model_call_failed"
+                    decision = run_with_deadline(
+                        invoke_visual,
+                        min(spec.budget.action_timeout_seconds, remaining),
+                    )
+                except RecoveryFailure as failure:
+                    status = "BUDGET_EXCEEDED" if failure.code == "MODEL_TIMEOUT" else "FAILED"
+                    stop_reason = (
+                        "model_timeout" if failure.code == "MODEL_TIMEOUT" else "model_call_failed"
+                    )
                     break
                 model_elapsed = monotonic() - model_started
                 if not isinstance(decision, VisualDecision):
                     status = "FAILED"
                     stop_reason = "invalid_model_decision"
                     break
-                model_calls += 1
                 if model_elapsed > spec.budget.action_timeout_seconds:
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "model_timeout"
@@ -310,7 +332,9 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     elif proposal.action_type == "scroll":
                         page.mouse.wheel(0, 500)
                     elif proposal.action_type == "wait":
-                        page.wait_for_timeout(100)
+                        page.wait_for_timeout(
+                            min(100, int(spec.budget.action_timeout_seconds * 1000))
+                        )
                 except Exception as error:
                     receipts.append(
                         ActionReceipt(

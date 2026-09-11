@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from queue import Empty, Queue
+from threading import Thread
+from typing import Any, cast
 
 
 class RecoveryFailure(RuntimeError):
@@ -12,6 +15,40 @@ class RecoveryFailure(RuntimeError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+def run_with_deadline[T](call: Callable[[], T], timeout_seconds: float) -> T:
+    """Run an injected model call with a real caller-side deadline.
+
+    The worker is daemonized because Python cannot safely kill an arbitrary
+    provider call.  The task returns at the deadline and closes its browser;
+    the isolated worker receives only the already-redacted observation.
+    """
+
+    if timeout_seconds <= 0:
+        raise RecoveryFailure("MODEL_TIMEOUT")
+    result: Queue[tuple[str, object]] = Queue(maxsize=1)
+
+    def worker() -> None:
+        try:
+            result.put(("ok", call()))
+        except BaseException as error:
+            result.put(("error", error))
+
+    thread = Thread(target=worker, daemon=True, name="phase11-model-call")
+    thread.start()
+    thread.join(timeout_seconds)
+    if thread.is_alive():
+        raise RecoveryFailure("MODEL_TIMEOUT")
+    try:
+        kind, value = result.get_nowait()
+    except Empty as error:  # pragma: no cover - defensive worker contract
+        raise RecoveryFailure("MODEL_CALL_FAILED") from error
+    if kind == "error":
+        if isinstance(value, BaseException):
+            raise RecoveryFailure("MODEL_CALL_FAILED") from value
+        raise RecoveryFailure("MODEL_CALL_FAILED")
+    return cast(T, value)
 
 
 def wait_for_ready(page: Any, *, timeout_ms: float, scenario: str) -> None:
@@ -43,4 +80,4 @@ class ProgressGuard:
         self.actions += 1
 
 
-__all__ = ["ProgressGuard", "RecoveryFailure", "wait_for_ready"]
+__all__ = ["ProgressGuard", "RecoveryFailure", "run_with_deadline", "wait_for_ready"]

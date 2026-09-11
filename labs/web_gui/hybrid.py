@@ -26,7 +26,7 @@ from labs.web_gui.contracts import (
     TaskStatus,
 )
 from labs.web_gui.fixtures import fixture_fields
-from labs.web_gui.recovery import ProgressGuard, RecoveryFailure
+from labs.web_gui.recovery import ProgressGuard, RecoveryFailure, run_with_deadline
 from labs.web_gui.security import BrowserSecurityPolicy
 
 
@@ -225,7 +225,11 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
         page.on("download", on_download)
         page.on("dialog", on_dialog)
         try:
-            page.goto(f"{origin}/", wait_until="domcontentloaded", timeout=10_000)
+            page.goto(
+                f"{origin}/",
+                wait_until="domcontentloaded",
+                timeout=int(spec.budget.action_timeout_seconds * 1000),
+            )
             frame = _hybrid_frame(page, spec)
             frames.append(frame)
             for _ in range(spec.budget.max_actions):
@@ -237,19 +241,36 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "model_call_budget"
                     break
+                remaining = spec.budget.wall_time_seconds - (monotonic() - started)
+                if remaining <= 0:
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = "wall_time_budget"
+                    break
                 model_started = monotonic()
+                model_calls += 1
+
+                def invoke_hybrid(
+                    current_frame: HybridFrame = frame,
+                    current_spec: TaskSpec = spec,
+                ) -> HybridDecision:
+                    return decider(current_frame, current_spec)
+
                 try:
-                    decision = decider(frame, spec)
-                except Exception:
-                    status = "FAILED"
-                    stop_reason = "model_call_failed"
+                    decision = run_with_deadline(
+                        invoke_hybrid,
+                        min(spec.budget.action_timeout_seconds, remaining),
+                    )
+                except RecoveryFailure as failure:
+                    status = "BUDGET_EXCEEDED" if failure.code == "MODEL_TIMEOUT" else "FAILED"
+                    stop_reason = (
+                        "model_timeout" if failure.code == "MODEL_TIMEOUT" else "model_call_failed"
+                    )
                     break
                 model_elapsed = monotonic() - model_started
                 if not isinstance(decision, HybridDecision):
                     status = "FAILED"
                     stop_reason = "invalid_model_decision"
                     break
-                model_calls += 1
                 if model_elapsed > spec.budget.action_timeout_seconds:
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "model_timeout"
@@ -354,17 +375,22 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     break
                 try:
                     if proposal.action_type == "search":
-                        _locator_for(page, "search-input").fill(proposal.text or "")
-                        _locator_for(page, "search-submit").click()
+                        timeout_ms = int(spec.budget.action_timeout_seconds * 1000)
+                        _locator_for(page, "search-input").fill(
+                            proposal.text or "", timeout=timeout_ms
+                        )
+                        _locator_for(page, "search-submit").click(timeout=timeout_ms)
                     elif proposal.action_type == "click":
                         locator = _locator_for(page, proposal.target_ref or "")
                         if locator.count() != 1:
                             raise BrowserPolicyError("hybrid target is not unique")
-                        locator.click()
+                        locator.click(timeout=int(spec.budget.action_timeout_seconds * 1000))
                     elif proposal.action_type == "scroll":
                         page.mouse.wheel(0, 500)
                     elif proposal.action_type == "wait":
-                        page.wait_for_timeout(100)
+                        page.wait_for_timeout(
+                            min(100, int(spec.budget.action_timeout_seconds * 1000))
+                        )
                     page.wait_for_load_state(
                         "domcontentloaded",
                         timeout=int(spec.budget.action_timeout_seconds * 1000),
