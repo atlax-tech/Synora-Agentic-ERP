@@ -405,7 +405,7 @@ Phase 11 已完成。实验页和执行器保持 `LAB_ONLY`，覆盖 DOM、ARIA�
 - 同一真实 ERP 采购单已完成 API/Web/GUI 只读对照：API/Web `MATCHED=3/3`，GUI `SUCCEEDED=2/3`，一次模型响应为空的失败如实保留；版本稳定、四字段一致、业务写入为 0。
 - live synthetic 批次为 45 个主 trial、78 个故障/安全记录；API、DOM、ARIA、视觉和 Hybrid 均有真实正常轨迹，安全记录全部安全停止。失败率和延迟只作实验限制，不作生产收益或可靠性承诺。
 - 阶段实现、证据、报告和最终审查绑定：实现基线 `98ee158`，证据冻结 `cb4a473`，最新测试修复 `f713f05`，最终报告为 `output/phase11/phase11-stage-report-final-98ee158.md`；最终独立对抗 Review 为 `PASS`。
-- `make format-check`、`make lint`、`make type`、`make unit`（974 passed）、`make integration`（248/248）、Phase11 专项（118 passed）、实验 mypy、Harness structure/manifest/references/drift 和 `git diff --check` 均通过；最终引用检查 862 项、0 断链，drift=0。
+- `make format-check`、`make lint`、`make type`、`make unit`（974 passed）、`make integration`（248/248）、Phase11 专项（118 passed）、实验 mypy、Harness structure/manifest/references/drift 和 `git diff --check` 均通过；最终引用检查 887 项、0 断链，drift=0。
 
 阶段出口后停止在 Phase 11，不自动开始 Phase 12；不生成学习笔记或问答，不修改 README、`.env*`、ERP/Frappe 核心或业务 Runtime。
 

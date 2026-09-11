@@ -106,9 +106,9 @@ v2 把列表行属性从 `data-order-name` 改为 `data-order-id`。修复前 ar
 | `make integration` | 0 | Frappe 集成 248/248，`OK` |
 | `uv run --python 3.14 --group web-gui-lab mypy labs/web_gui` | 0 | 17 个实验源码文件无错误 |
 | `uv run --python 3.14 --group web-gui-lab pytest tests/test_phase11_*.py` | 0 | 118 passed in 45.29s；无 skip |
-| `python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .` | 0 | valid；862 references，broken 0；read-only |
+| `python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .` | 0 | valid；887 references，broken 0；read-only |
 | `python3 .agents/skills/harness-check/scripts/validate_manifest.py .` | 0 | valid；warnings 0 |
-| `python3 .agents/skills/harness-check/scripts/check_references.py .` | 0 | 862 checked，broken 0，scan 未截断 |
+| `python3 .agents/skills/harness-check/scripts/check_references.py .` | 0 | 887 checked，broken 0，scan 未截断 |
 | `python3 .agents/skills/harness-check/scripts/score_harness_health.py .` | 0 | read-only 79/100，grade C；分数受 host evidence 和 drift 影响，不作业务通过依据 |
 | `git diff --check` | 0 | whitespace clean |
 | `python3 .agents/skills/harness-check/scripts/detect_drift.py .` | 0 | Harness 同步后无剩余 drift |
@@ -134,7 +134,7 @@ v2 把列表行属性从 `data-order-name` 改为 `data-order-id`。修复前 ar
 
 - 审查范围：实现基线 `98ee158`、证据冻结提交 `cb4a473`、最新测试修复 `f713f05`、候选文档提交 `321e2a0`、Phase11 专项测试、全量门禁、GLM 双图 probe、synthetic/ERP live artifact、脱敏边界、页面变化前后复盘以及 `.env*`、ERP 核心和业务 Runtime 未修改证据。
 - 本轮最终确认复核为第 2 次收口审查周期中的确认步骤，结论 `PASS`。前次提出的三项 P2 已逐项核销：所有 trial 内 Playwright 调用绑定剩余墙钟；当前 `98ee158` 的 `detail=high`/探测语义与双图 PASS artifact 一致；报告与 Rubric 均记录 unit `974`、Phase11 `118`。
-- Harness 只同步用户已授权的管理范围：`pyproject.toml`、`uv.lock`、`docs/PLAN.md` 的 source fingerprint 和对应 manifest 管理哈希；未修改 README、`.env*`、ERP/Frappe 核心或其它 Harness 内容。最终结构检查核对 862 项引用、0 断链；manifest、references、drift（0）和 diff 均通过。
+- Harness 只同步用户已授权的管理范围：`pyproject.toml`、`uv.lock`、`docs/PLAN.md` 的 source fingerprint 和对应 manifest 管理哈希；未修改 README、`.env*`、ERP/Frappe 核心或其它 Harness 内容。最终结构检查核对 887 项引用、0 断链；manifest、references、drift（0）和 diff 均通过。
 - 阶段停止在 Phase 11。typed API 仍是业务默认；网页、截图和 Hybrid 仅保持 `LAB_ONLY` 实验候选，不取得业务写入权限。
 
 ## 9. 手工复验
