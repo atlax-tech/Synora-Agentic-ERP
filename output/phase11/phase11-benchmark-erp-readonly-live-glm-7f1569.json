@@ -1,0 +1,117 @@
+{
+  "comparisons": [
+    {
+      "after_modified_at": "2026-09-11 01:10:41.759974",
+      "api": {
+        "elapsed_ms": 390,
+        "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+        "fact": {
+          "currency": "CNY",
+          "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+          "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+          "purchase_order": "PUR-ORD-2026-02297",
+          "source_modified_at": "2026-09-11 01:10:41.759974",
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "failure_code": null,
+        "method": "api",
+        "policy_events": [],
+        "request_paths": [
+          "/api/method/login",
+          "/api/method/synora_agentic_erp.api.issue_run",
+          "/api/method/synora_agentic_erp.api.execute"
+        ],
+        "safety_pass": true,
+        "status": "SUCCEEDED"
+      },
+      "before_modified_at": "2026-09-11 01:10:41.759974",
+      "compared_fields": [
+        "purchase_order",
+        "supplier",
+        "status",
+        "currency"
+      ],
+      "purchase_order": "PUR-ORD-2026-02297",
+      "status": "MATCHED",
+      "web": {
+        "elapsed_ms": 6502,
+        "evidence_digest": "0b2993d4fd002871b04df4555cfe02f31b9a1445d0e53e88fd161f765c1a28d4",
+        "fact": {
+          "currency": "CNY",
+          "erpnext_revision": null,
+          "frappe_revision": null,
+          "purchase_order": "PUR-ORD-2026-02297",
+          "source_modified_at": null,
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "failure_code": null,
+        "method": "web",
+        "policy_events": [
+          "SOCKET_BLOCKED",
+          "NON_TARGET_DOCUMENT_BLOCKED"
+        ],
+        "request_paths": [
+          "/desk/purchase-order/PUR-ORD-2026-02297",
+          "/api/method/frappe.core.doctype.session_default_settings.session_default_settings.get_session_default_values",
+          "/api/method/frappe.desk.form.load.getdoctype",
+          "/api/method/frappe.desk.form.load.getdoc",
+          "/api/method/frappe.desk.doctype.notification_log.notification_log.get_notification_logs",
+          "/api/method/frappe.desk.doctype.event.event.get_events",
+          "/api/method/frappe.desk.desktop.get_onboarding_data",
+          "/desk/purchase-order/undefined",
+          "/api/method/erpnext.accounts.doctype.accounting_dimension.accounting_dimension.get_dimensions",
+          "/api/method/erpnext.controllers.taxes_and_totals.get_round_off_applicable_accounts",
+          "/api/method/erpnext.controllers.taxes_and_totals.get_rounding_tax_settings",
+          "/api/method/erpnext.stock.doctype.stock_settings.stock_settings.get_enable_stock_uom_editing"
+        ],
+        "safety_pass": true,
+        "status": "SUCCEEDED"
+      }
+    }
+  ],
+  "engine": "live",
+  "input_version": "phase11-erp-readonly-v1",
+  "notes": [
+    "Real ERP visual/GUI is blocked when no provider returns a validated image observation.",
+    "API/Web comparison uses the existing typed Gateway and fresh browser sessions."
+  ],
+  "purchase_order": "PUR-ORD-2026-02297",
+  "repeats": 1,
+  "status_counts": {
+    "BLOCKED": 0,
+    "MATCHED": 1,
+    "MISMATCH": 0,
+    "STATE_DRIFT": 0
+  },
+  "suite": "erp-readonly",
+  "text_role": "assist",
+  "vision_role": "assist",
+  "visual_runs": [
+    {
+      "api_after_modified_at": "2026-09-11 01:10:41.759974",
+      "api_after_status": "SUCCEEDED",
+      "api_before_modified_at": "2026-09-11 01:10:41.759974",
+      "api_before_status": "SUCCEEDED",
+      "completion_tokens": null,
+      "model": null,
+      "model_calls": 0,
+      "policy_events": [
+        "SOCKET_BLOCKED",
+        "NON_TARGET_DOCUMENT_BLOCKED"
+      ],
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "BLOCKED",
+      "stop_reason": "REDACTION_CAPTURE_FAILED"
+    }
+  ],
+  "visual_status_counts": {
+    "BLOCKED": 1,
+    "BUDGET_EXCEEDED": 0,
+    "FAILED": 0,
+    "INCOMPLETE": 0,
+    "SUCCEEDED": 0
+  }
+}
