@@ -1,0 +1,20 @@
+{
+  "case_id": "p11-normal-open-aria",
+  "code_head": "925b96a",
+  "command": "source env/dev/.env && uv run --python 3.14 --group web-gui-lab python <live-structured-smoke>",
+  "engine": "live",
+  "failure_code": "ACTION_REJECTED",
+  "fields": {},
+  "latency_ms": 5123,
+  "model": "glm-5.3-flash",
+  "model_calls": 1,
+  "observed_status": "FAILED",
+  "preserved": true,
+  "root_cause_hypothesis": "ARIA observation omitted the temporary target references required by the action validator",
+  "stop_reason": "ACTION_REJECTED",
+  "text_role": "assist",
+  "usage": {
+    "completion_tokens": 350,
+    "prompt_tokens": 550
+  }
+}

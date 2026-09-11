@@ -104,7 +104,6 @@ def _snapshot(page: Any, spec: TaskSpec, mode: str = "dom") -> DomSnapshot:
             raise BrowserPolicyError("accessibility observation failed") from error
         if not isinstance(aria, str) or len(aria) > 50_000:
             raise BrowserPolicyError("accessibility observation is too large")
-        content = aria
         if page.get_by_role("textbox", name="Purchase order number").count() == 1:
             targets.add("search-input")
         if page.get_by_role("button", name="Search").count() == 1:
@@ -115,6 +114,12 @@ def _snapshot(page: Any, spec: TaskSpec, mode: str = "dom") -> DomSnapshot:
             match = re.fullmatch(r"View (PUR-[A-Z0-9-]+) details", label.strip())
             if match:
                 targets.add(f"order:{match.group(1)}")
+        content = json.dumps(
+            {"page_version": version, "aria": aria, "targets": sorted(targets)},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
     else:
         if page.locator("#order-search").count() == 1:
             targets.add("search-input")

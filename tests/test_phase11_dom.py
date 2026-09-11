@@ -97,7 +97,9 @@ def test_aria_task_uses_accessible_roles_and_reads_one_order() -> None:
     assert run.result.status == "SUCCEEDED"
     assert run.result.fields["currency"] == "USD"
     assert "textbox" in run.observations[0].content
-    assert "search-input" not in run.observations[0].content
+    aria_observation = json.loads(run.observations[0].content)
+    assert "textbox" in aria_observation["aria"]
+    assert "search-input" in aria_observation["targets"]
 
 
 def test_dom_task_waits_for_observable_async_ready_marker() -> None:
