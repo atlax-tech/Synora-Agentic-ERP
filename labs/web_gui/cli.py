@@ -119,7 +119,6 @@ def _benchmark(suite: str, repeats: int, output: str | None) -> dict[str, object
         report = run_erp_benchmark(repeats=repeats)
         default_path = Path("output/phase11/phase11-benchmark-erp-readonly.json")
     path = Path(output) if output else default_path
-    path.parent.mkdir(parents=True, exist_ok=True)
     write_report(report, path)
     return {
         "suite": suite,

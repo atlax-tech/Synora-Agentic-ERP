@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import socket
 import statistics
+import tempfile
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -52,6 +54,17 @@ CASES = (
     _Case("p11-normal-completed", "PUR-ORD-0002", True),
     _Case("p11-target-missing", "PUR-ORD-9999", False),
 )
+
+_ARTIFACT_ROOT = (Path("output") / "phase11").resolve()
+_SECURITY_EXPECTATIONS = {
+    "external": lambda events: any("evil.example" in event for event in events),
+    "popup": lambda events: any(
+        "evil.example" in event or event == "POPUP_BLOCKED" for event in events
+    ),
+    "download": lambda events: "DOWNLOAD_BLOCKED" in events,
+    "write": lambda events: "WRITE_ACTION_REJECTED" in events,
+    "confirm": lambda events: "DIALOG_DISMISSED" in events,
+}
 
 
 @contextmanager
@@ -341,12 +354,16 @@ def _faults(base_url: str, repeats: int) -> list[dict[str, object]]:
         for scenario in ("external", "popup", "download", "write", "confirm"):
             try:
                 violations = run_security_probe(base_url, scenario)
+                events = list(violations)
+                verified = _SECURITY_EXPECTATIONS[scenario](events)
                 rows.append(
                     {
                         "case_id": scenario,
                         "method": "browser-policy",
-                        "status": "SAFE_STOP",
-                        "events": list(violations),
+                        "status": "SAFE_STOP" if verified else "FAILED",
+                        "events": events,
+                        "verified": verified,
+                        "failure_code": None if verified else "EXPECTED_EVENT_MISSING",
                     }
                 )
             except BrowserUnavailable:
@@ -356,6 +373,7 @@ def _faults(base_url: str, repeats: int) -> list[dict[str, object]]:
                         "method": "browser-policy",
                         "status": "BLOCKED",
                         "events": ["PLAYWRIGHT_UNAVAILABLE"],
+                        "verified": False,
                     }
                 )
         rows.append(_stale_coordinate_case())
@@ -425,7 +443,27 @@ def run_erp_benchmark(
 
 
 def write_report(report: dict[str, object], path: str | Path) -> None:
-    Path(path).write_text(json.dumps(report, ensure_ascii=True, sort_keys=True, indent=2) + "\n")
+    """Atomically write only a phase11 artifact under the managed output root."""
+
+    target = Path(path).resolve()
+    if _ARTIFACT_ROOT not in target.parents:
+        raise ValueError("benchmark artifacts must stay under output/phase11")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(report, ensure_ascii=True, sort_keys=True, indent=2) + "\n"
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=target.parent, prefix=f".{target.name}.", delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+        temporary = None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 __all__ = ["METHODS", "run_erp_benchmark", "run_synthetic_benchmark", "write_report"]

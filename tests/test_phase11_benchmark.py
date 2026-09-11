@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import cast
 
 import pytest
 
-from labs.web_gui.benchmark import METHODS, run_synthetic_benchmark
+from labs.web_gui.benchmark import METHODS, run_synthetic_benchmark, write_report
 
 
 @pytest.fixture(scope="module")
@@ -39,6 +41,15 @@ def test_synthetic_benchmark_freezes_all_methods_and_fault_cases(
         "confirm",
         "stale-coordinate",
     } <= fault_ids
+    security_faults = [
+        item
+        for item in faults
+        if item["case_id"] in {"external", "popup", "download", "write", "confirm"}
+    ]
+    assert security_faults
+    assert all(
+        item["status"] == "SAFE_STOP" and item["verified"] is True for item in security_faults
+    )
 
 
 def test_synthetic_trials_include_frozen_model_and_input_metadata(
@@ -53,3 +64,15 @@ def test_synthetic_trials_include_frozen_model_and_input_metadata(
     assert isinstance(trial["output_digest"], str)
     assert len(trial["input_digest"]) == 64
     assert len(trial["output_digest"]) == 64
+
+
+def test_benchmark_artifacts_are_allowlisted_and_atomic(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="output/phase11"):
+        write_report({}, tmp_path / "outside.json")
+
+    target = Path("output/phase11/.phase11-test-atomic.json")
+    try:
+        write_report({"status": "ok"}, target)
+        assert json.loads(target.read_text()) == {"status": "ok"}
+    finally:
+        target.unlink(missing_ok=True)
