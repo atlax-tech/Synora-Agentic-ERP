@@ -599,6 +599,28 @@ def run_erp_benchmark(
                 {
                     "status": visual.result.status,
                     "stop_reason": visual.result.stop_reason,
+                    "fields": dict(visual.result.fields),
+                    "observation_complete": visual.result.observation_complete,
+                    "evidence_refs": [str(ref) for ref in visual.result.evidence_refs],
+                    "action_receipts": [
+                        {
+                            "result": receipt.result,
+                            "error_code": receipt.error_code,
+                            "stop_reason": receipt.stop_reason,
+                        }
+                        for receipt in visual.result.actions
+                    ],
+                    "screenshot_sha256": [
+                        observation.screenshot_sha256
+                        for observation in visual.observations
+                    ],
+                    "field_differences": [
+                        field
+                        for field in READ_FIELDS
+                        if visual.result.fields.get(field) != before.fact.model_dump(
+                            mode="json"
+                        ).get(field)
+                    ],
                     "model_calls": visual.model_calls,
                     "model": visual.model,
                     "prompt_tokens": visual.prompt_tokens,
