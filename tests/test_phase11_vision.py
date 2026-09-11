@@ -11,6 +11,7 @@ from labs.web_gui.vision import (
     VisionProbeError,
     parse_vision_observation,
     probe_vision,
+    request_vision_json,
 )
 
 PNG = b"\x89PNG\r\n\x1a\nsynthetic-pixels"
@@ -148,6 +149,37 @@ def test_probe_accepts_a_strict_json_code_fence_only() -> None:
 
     with pytest.raises(VisionProbeError, match="RESPONSE_SCHEMA"):
         parse_vision_observation("prefix ```json\n{}\n```", PNG)
+
+
+def test_request_vision_json_returns_untrusted_decision_without_oracle() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["messages"][0]["content"][1]["image_url"]["detail"] == "high"
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"action_type":"finish","fields":{}}'
+                        }
+                    }
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+            },
+        )
+
+    result = request_vision_json(
+        "return one action",
+        [PNG],
+        role="assist",
+        environ=_env(),
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert result.payload == {"action_type": "finish", "fields": {}}
+    assert result.role == "assist"
+    assert result.prompt_tokens == 1
 
 
 def test_probe_without_config_is_an_explicit_block() -> None:

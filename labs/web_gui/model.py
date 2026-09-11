@@ -7,6 +7,7 @@ import json
 import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from agent_runtime.providers import (
     Provider,
@@ -17,6 +18,10 @@ from agent_runtime.providers import (
 )
 
 from labs.web_gui.contracts import ActionProposal, ActionType, Observation, StrictModel, TaskSpec
+from labs.web_gui.vision import VisionProbeError, request_vision_json
+
+if TYPE_CHECKING:
+    import httpx
 
 MAX_MODEL_PROMPT_CHARS = 50_000
 
@@ -202,6 +207,53 @@ class LiveTextModel:
             raise ModelCallError("MODEL_CALL_FAILED") from error
 
 
+class LiveVisionModel:
+    """Call one explicitly selected image-capable role for an untrusted decision."""
+
+    def __init__(
+        self,
+        role: str,
+        *,
+        environ: Mapping[str, str] | None = None,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        self.role = role
+        self._environ = environ
+        self._transport = transport
+        values = environ if environ is not None else os.environ
+        self.model = values.get(
+            {
+                "primary": "OLLAMA_MODEL",
+                "assist": "ASSIST_MODEL",
+                "backup": "BACKUP_MODEL",
+                "last_local": "BACKUP_OLLAMA_MODEL",
+            }.get(role, ""),
+            "",
+        ) or "configured"
+
+    def call(
+        self, prompt: str, images: list[bytes] | tuple[bytes, ...], *, max_tokens: int = 1_024
+    ) -> ModelResponse:
+        if max_tokens != 1_024:
+            raise ModelCallError("MODEL_OUTPUT_BUDGET")
+        try:
+            response = request_vision_json(
+                prompt,
+                images,
+                role=self.role,
+                environ=self._environ,
+                transport=self._transport,
+            )
+        except VisionProbeError as error:
+            raise ModelCallError(error.code) from error
+        return ModelResponse(
+            payload=response.payload,
+            model=response.model,
+            prompt_tokens=response.prompt_tokens,
+            completion_tokens=response.completion_tokens,
+        )
+
+
 def decision_from_model(
     client: LiveTextModel,
     spec: TaskSpec,
@@ -220,6 +272,28 @@ def decision_from_model(
     )
 
 
+def decision_from_vision(
+    client: LiveVisionModel,
+    spec: TaskSpec,
+    observation: Observation,
+    image: bytes,
+    remaining_actions: int,
+) -> ModelDecision:
+    response = client.call(
+        structured_prompt(spec, observation, remaining_actions),
+        [image],
+    )
+    decision = parse_model_decision(response.payload, observation)
+    return ModelDecision(
+        proposal=decision.proposal,
+        fields=decision.fields,
+        visual_fields=decision.visual_fields,
+        model=response.model,
+        prompt_tokens=response.prompt_tokens,
+        completion_tokens=response.completion_tokens,
+    )
+
+
 __all__ = [
     "MAX_MODEL_PROMPT_CHARS",
     "LiveTextModel",
@@ -227,6 +301,7 @@ __all__ = [
     "ModelDecision",
     "ModelResponse",
     "decision_from_model",
+    "decision_from_vision",
     "parse_model_decision",
     "structured_prompt",
 ]

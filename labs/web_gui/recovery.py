@@ -45,6 +45,11 @@ def run_with_deadline[T](call: Callable[[], T], timeout_seconds: float) -> T:
     except Empty as error:  # pragma: no cover - defensive worker contract
         raise RecoveryFailure("MODEL_CALL_FAILED") from error
     if kind == "error":
+        if isinstance(value, RecoveryFailure):
+            raise value
+        code = getattr(value, "code", None)
+        if isinstance(code, str) and code:
+            raise RecoveryFailure(code)
         if isinstance(value, BaseException):
             raise RecoveryFailure("MODEL_CALL_FAILED") from value
         raise RecoveryFailure("MODEL_CALL_FAILED")

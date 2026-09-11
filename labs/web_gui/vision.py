@@ -90,6 +90,15 @@ class VisionProbeResult:
     observations: tuple[VisionObservation, ...] = ()
 
 
+@dataclass(frozen=True)
+class VisionModelResponse:
+    payload: dict[str, object]
+    role: str
+    model: str
+    prompt_tokens: int | None
+    completion_tokens: int | None
+
+
 def _image_data(images: list[bytes] | tuple[bytes, ...]) -> list[str]:
     if not images or len(images) > MAX_IMAGES:
         raise VisionProbeError("IMAGE_COUNT")
@@ -360,13 +369,68 @@ def probe_vision(
     )
 
 
+def request_vision_json(
+    prompt: str,
+    images: list[bytes] | tuple[bytes, ...],
+    *,
+    role: str,
+    environ: Mapping[str, str] | None = None,
+    transport: httpx.BaseTransport | None = None,
+) -> VisionModelResponse:
+    """Send one untrusted image decision request to one frozen role.
+
+    Unlike :func:`probe_vision`, this returns an untrusted JSON decision without
+    an oracle comparison. The browser executor must validate the decision before
+    any action, and the final task result still needs independent verification.
+    """
+
+    encoded = _image_data(images)
+    if role not in _ROLE_ENV:
+        raise VisionProbeError("INVALID_CONFIGURATION")
+    values = os.environ if environ is None else environ
+    try:
+        config = _role_config(role, values)
+    except VisionProbeError:
+        raise
+    if config is None:
+        raise VisionProbeError("VISION_PROVIDER_UNAVAILABLE")
+    base_url, api_key, model, responses = config
+    try:
+        request = _payload(prompt, encoded, model, responses)
+        headers = {"Accept": "application/json", "Content-Type": "application/json"}
+        headers["Authorization"] = f"Bearer {api_key}"
+        proxy = values.get(MODEL_PROXY_ENV, "").strip() or None
+        with httpx.Client(
+            timeout=httpx.Timeout(VISION_TIMEOUT_SECONDS),
+            transport=transport,
+            trust_env=False,
+            follow_redirects=False,
+            proxy=proxy,
+            headers=headers,
+        ) as client:
+            response = client.post(_endpoint(base_url, responses), json=request)
+        if len(response.content) > MAX_RESPONSE_BYTES or not response.is_success:
+            raise VisionProbeError("UPSTREAM_UNAVAILABLE")
+        text, prompt_tokens, completion_tokens = _response_text(response.json())
+        payload = _json_loads(text)
+        if not isinstance(payload, dict):
+            raise VisionProbeError("RESPONSE_SCHEMA")
+        return VisionModelResponse(payload, role, model, prompt_tokens, completion_tokens)
+    except VisionProbeError:
+        raise
+    except (httpx.HTTPError, ValueError, OSError) as error:
+        raise VisionProbeError("TRANSPORT_ERROR") from error
+
+
 __all__ = [
     "MAX_IMAGES",
     "MAX_IMAGE_BYTES",
     "VisionAttempt",
+    "VisionModelResponse",
     "VisionObservation",
     "VisionProbeError",
     "VisionProbeResult",
     "parse_vision_observation",
     "probe_vision",
+    "request_vision_json",
 ]
