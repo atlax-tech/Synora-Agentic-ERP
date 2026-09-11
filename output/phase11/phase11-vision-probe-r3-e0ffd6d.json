@@ -1,0 +1,137 @@
+{
+  "artifact": "phase11-vision-probe-r3",
+  "code_head": "e0ffd6d",
+  "input": {
+    "source": "synthetic",
+    "image_count_limit": 2,
+    "image_bytes": [51413, 50918],
+    "image_sha256": [
+      "80b3e3f8eb0ee079c6d723cadcc57ab46ed3d3d637f19059b9f0bd1ddd6aa2f9",
+      "934309d8c7d89b06f53c78fae087fc89d841fb259b81d7f8b68514136f577945"
+    ],
+    "expected_fields": ["purchase_order", "supplier", "status", "currency"],
+    "expected_values_are_in_prompt": false
+  },
+  "connectivity": {
+    "assist": {
+      "model": "glm-5.3-flash",
+      "protocol": "chat_completions",
+      "http_status": 200,
+      "response_shape": "choices",
+      "content_present": true,
+      "prompt_tokens": 26,
+      "completion_tokens": 27,
+      "note": "A plain ping without JSON response format returned reasoning-only content; a structured JSON probe returned final content."
+    },
+    "backup": {
+      "model": "grok-4.5",
+      "protocol": "responses",
+      "http_status": 200,
+      "response_shape": "output",
+      "content_present": true,
+      "prompt_tokens": 4627,
+      "completion_tokens": 23,
+      "reasoning_tokens": 22
+    }
+  },
+  "probes": [
+    {
+      "role": "assist",
+      "model": "glm-5.3-flash",
+      "protocol": "chat_completions",
+      "image_count": 2,
+      "status": "PASS",
+      "failure_code": null,
+      "failure_stage": null,
+      "http_status": 200,
+      "response_shape": "choices",
+      "response_content_type": "application/json",
+      "response_bytes": 1193,
+      "elapsed_ms": 20852,
+      "prompt_tokens": 3165,
+      "completion_tokens": 224,
+      "response_fields": ["complete", "currency", "purchase_order", "status", "supplier"],
+      "observation_count": 2,
+      "declared_complete": true,
+      "mismatch_fields": [],
+      "observations": [
+        {
+          "purchase_order": "PUR-ORD-0001",
+          "supplier": "Supplier A",
+          "status": "To Receive and Bill",
+          "currency": "CNY",
+          "complete": true,
+          "source_image_sha256": "80b3e3f8eb0ee079c6d723cadcc57ab46ed3d3d637f19059b9f0bd1ddd6aa2f9"
+        },
+        {
+          "purchase_order": "PUR-ORD-0002",
+          "supplier": "Supplier B",
+          "status": "Completed",
+          "currency": "USD",
+          "complete": true,
+          "source_image_sha256": "934309d8c7d89b06f53c78fae087fc89d841fb259b81d7f8b68514136f577945"
+        }
+      ]
+    },
+    {
+      "role": "backup",
+      "model": "grok-4.5",
+      "protocol": "responses",
+      "image_count": 1,
+      "status": "FAILED",
+      "failure_code": "RESPONSE_CONTENT_MISMATCH",
+      "failure_stage": "trusted_content_validation",
+      "http_status": 200,
+      "response_shape": "output",
+      "response_content_type": "application/json",
+      "response_bytes": 22882,
+      "elapsed_ms": 9538,
+      "prompt_tokens": 5876,
+      "completion_tokens": 423,
+      "response_fields": ["complete", "currency", "purchase_order", "status", "supplier"],
+      "observation_count": 1,
+      "declared_complete": true,
+      "mismatch_fields": ["currency", "purchase_order", "status", "supplier"]
+    },
+    {
+      "role": "backup",
+      "model": "grok-4.5",
+      "protocol": "responses",
+      "image_count": 2,
+      "status": "FAILED",
+      "failure_code": "RESPONSE_CONTENT_MISMATCH",
+      "failure_stage": "trusted_content_validation",
+      "http_status": 200,
+      "response_shape": "output",
+      "response_content_type": "application/json",
+      "response_bytes": 23108,
+      "elapsed_ms": 5828,
+      "prompt_tokens": 7036,
+      "completion_tokens": 242,
+      "response_fields": ["complete", "currency", "purchase_order", "status", "supplier"],
+      "observation_count": 2,
+      "declared_complete": true,
+      "mismatch_fields": ["currency", "purchase_order", "status", "supplier"]
+    }
+  ],
+  "selection": {
+    "status": "FROZEN",
+    "role": "assist",
+    "model": "glm-5.3-flash",
+    "protocol": "chat_completions",
+    "max_output_tokens": 1024,
+    "model_timeout_seconds": 60,
+    "reason": "First configured image-capable role with a successful two-image synthetic read; Grok response reached the parser but failed trusted field comparison."
+  },
+  "safety": {
+    "synthetic_only": true,
+    "raw_response_recorded": false,
+    "api_keys_recorded": false,
+    "expected_values_added_to_prompt": false,
+    "provider_added": false,
+    "env_files_modified": false
+  },
+  "references": {
+    "xai_image_input": "https://docs.x.ai/developers/model-capabilities/images/understanding"
+  }
+}
