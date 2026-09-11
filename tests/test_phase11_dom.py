@@ -315,6 +315,7 @@ def test_visual_task_uses_only_screenshots_and_validates_final_fields() -> None:
     assert run.result.status == "SUCCEEDED"
     assert len(run.screenshots) == 2
     assert all(kind is bytes for kind, _ in seen)
+    assert run.result.actions[0].after_observation_id is not None
 
 
 def test_generic_visual_runner_rejects_real_source_before_decider() -> None:
@@ -440,3 +441,80 @@ def test_visual_task_stops_at_model_call_budget() -> None:
     assert run.model_calls == 1
     assert run.result.status == "BUDGET_EXCEEDED"
     assert run.result.stop_reason == "model_call_budget"
+
+
+def test_visual_task_stops_repeated_waits_as_no_progress() -> None:
+    def decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="wait",
+                observation_id=observation.observation_id,  # type: ignore[attr-defined]
+            )
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-no-progress", purchase_order="PUR-ORD-0001", mode="vision"
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.model_calls == 2
+    assert run.result.status == "FAILED"
+    assert run.result.stop_reason == "NO_PROGRESS"
+
+
+def test_visual_task_enforces_model_deadline_and_output_budget() -> None:
+    def slow_decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
+        time.sleep(0.06)
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="finish",
+                observation_id=observation.observation_id,  # type: ignore[attr-defined]
+            )
+        )
+
+    try:
+        with _server() as base_url:
+            timed = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-model-timeout",
+                    purchase_order="PUR-ORD-0001",
+                    mode="vision",
+                    budget=TrialBudget(action_timeout_seconds=0.05),
+                ),
+                slow_decider,
+            )
+            limited = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-output-budget",
+                    purchase_order="PUR-ORD-0001",
+                    mode="vision",
+                    budget=TrialBudget(max_output_tokens=1),
+                ),
+                lambda _image, observation, _spec: VisualDecision(
+                    proposal=ActionProposal(
+                        action_type="finish", observation_id=observation.observation_id
+                    ),
+                    fields={
+                        "purchase_order": "PUR-ORD-0001",
+                        "supplier": "Supplier A",
+                        "status": "To Receive and Bill",
+                        "currency": "CNY",
+                    },
+                ),
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert timed.result.status == "BUDGET_EXCEEDED"
+    assert timed.result.stop_reason == "model_timeout"
+    assert limited.result.status == "BUDGET_EXCEEDED"
+    assert limited.result.stop_reason == "model_output_budget"

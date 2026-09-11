@@ -24,6 +24,7 @@ from labs.web_gui.contracts import (
     TaskStatus,
 )
 from labs.web_gui.fixtures import fixture_fields
+from labs.web_gui.recovery import ProgressGuard, RecoveryFailure
 from labs.web_gui.security import BrowserSecurityPolicy
 
 MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024
@@ -109,6 +110,14 @@ def _fields_from_decision(decision: VisualDecision) -> dict[str, str | None]:
     return {field: fields.get(field) for field in sorted(allowed)}
 
 
+def _model_output_size(decision: VisualDecision) -> int:
+    payload = {
+        "proposal": decision.proposal.model_dump(mode="json"),
+        "fields": decision.fields,
+    }
+    return len(json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")))
+
+
 def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> VisualRun:
     """Run a screenshot-only task with a bounded, injected visual decider."""
 
@@ -128,6 +137,8 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
     fields: dict[str, str | None] = {}
     stop_reason: str | None = "visual_decider_stopped"
     model_calls = 0
+    progress = ProgressGuard(max_actions=spec.budget.max_actions)
+    unchanged_reobservations = 0
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         policy = BrowserSecurityPolicy(origin=origin)
@@ -165,13 +176,41 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "model_call_budget"
                     break
-                if not isinstance(
-                    decision := decider(screenshot, observation, spec), VisualDecision
-                ):
+                model_started = monotonic()
+                decision = decider(screenshot, observation, spec)
+                model_elapsed = monotonic() - model_started
+                if not isinstance(decision, VisualDecision):
                     raise BrowserPolicyError("visual decider returned an invalid decision")
                 model_calls += 1
+                if model_elapsed > spec.budget.action_timeout_seconds:
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = "model_timeout"
+                    break
+                if monotonic() - started > spec.budget.wall_time_seconds:
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = "wall_time_budget"
+                    break
+                if _model_output_size(decision) > spec.budget.max_output_tokens * 4:
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = "model_output_budget"
+                    break
                 _validate_visual_action(decision.proposal, observation)
                 proposal = decision.proposal
+                try:
+                    progress.record(
+                        observation.page_version,
+                        json.dumps(
+                            proposal.model_dump(
+                                mode="json", exclude={"action_id", "observation_id"}
+                            ),
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        ),
+                    )
+                except RecoveryFailure as failure:
+                    status = "BUDGET_EXCEEDED" if failure.code == "ACTION_BUDGET" else "FAILED"
+                    stop_reason = failure.code
+                    break
                 if proposal.action_type == "finish":
                     fields = _fields_from_decision(decision)
                     trusted = fixture_fields(spec.purchase_order)
@@ -197,7 +236,10 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                 try:
                     if proposal.action_type == "click":
                         page.mouse.click(proposal.x or 0, proposal.y or 0)
-                        page.wait_for_load_state("domcontentloaded", timeout=10_000)
+                        page.wait_for_load_state(
+                            "domcontentloaded",
+                            timeout=int(spec.budget.action_timeout_seconds * 1000),
+                        )
                     elif proposal.action_type == "scroll":
                         page.mouse.wheel(0, 500)
                     elif proposal.action_type == "wait":
@@ -216,21 +258,31 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     status = "FAILED"
                     stop_reason = "visual_action_failed"
                     break
-                receipts.append(
-                    ActionReceipt(
-                        action_id=proposal.action_id,
-                        observation_id=proposal.observation_id,
-                        result="APPLIED",
-                        before_observation_id=observation.observation_id,
-                    )
+                before_observation = observation
+                observation, screenshot = _visual_observation(page, spec.data_source)
+                observations.append(observation)
+                screenshots.append(screenshot)
+                unchanged_reobservations = (
+                    unchanged_reobservations + 1
+                    if observation.page_version == before_observation.page_version
+                    else 0
                 )
+                receipt = ActionReceipt(
+                    action_id=proposal.action_id,
+                    observation_id=proposal.observation_id,
+                    result="APPLIED",
+                    before_observation_id=before_observation.observation_id,
+                    after_observation_id=observation.observation_id,
+                )
+                receipts.append(receipt)
+                if unchanged_reobservations > spec.budget.max_reobservations:
+                    status = "FAILED"
+                    stop_reason = "NO_PROGRESS"
+                    break
                 terminal = _terminal_page_state(page)
                 if terminal is not None:
                     status, stop_reason = terminal
                     break
-                observation, screenshot = _visual_observation(page, spec.data_source)
-                observations.append(observation)
-                screenshots.append(screenshot)
             else:
                 status = "BUDGET_EXCEEDED"
                 stop_reason = "action_budget"

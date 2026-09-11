@@ -26,6 +26,7 @@ from labs.web_gui.contracts import (
     TaskStatus,
 )
 from labs.web_gui.fixtures import fixture_fields
+from labs.web_gui.recovery import ProgressGuard, RecoveryFailure
 from labs.web_gui.security import BrowserSecurityPolicy
 
 
@@ -146,6 +147,15 @@ def _safe_fields(values: dict[str, str | None] | None) -> dict[str, str | None]:
     return {field: fields.get(field) for field in sorted(allowed)}
 
 
+def _model_output_size(decision: HybridDecision) -> int:
+    payload = {
+        "proposal": decision.proposal.model_dump(mode="json"),
+        "fields": decision.fields,
+        "visual_fields": decision.visual_fields,
+    }
+    return len(json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")))
+
+
 def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> HybridRun:
     """Run a hybrid task where every decision sees one synchronized frame."""
 
@@ -164,6 +174,8 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
     fields: dict[str, str | None] = {}
     stop_reason: str | None = "hybrid_decider_stopped"
     model_calls = 0
+    progress = ProgressGuard(max_actions=spec.budget.max_actions)
+    unchanged_reobservations = 0
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         policy = BrowserSecurityPolicy(origin=origin)
@@ -202,12 +214,41 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "model_call_budget"
                     break
+                model_started = monotonic()
                 decision = decider(frame, spec)
+                model_elapsed = monotonic() - model_started
                 if not isinstance(decision, HybridDecision):
                     raise BrowserPolicyError("hybrid decider returned an invalid decision")
                 model_calls += 1
+                if model_elapsed > spec.budget.action_timeout_seconds:
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = "model_timeout"
+                    break
+                if monotonic() - started > spec.budget.wall_time_seconds:
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = "wall_time_budget"
+                    break
+                if _model_output_size(decision) > spec.budget.max_output_tokens * 4:
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = "model_output_budget"
+                    break
                 _validate_hybrid_action(decision, frame)
                 proposal = decision.proposal
+                try:
+                    progress.record(
+                        frame.observation.page_version,
+                        json.dumps(
+                            proposal.model_dump(
+                                mode="json", exclude={"action_id", "observation_id"}
+                            ),
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        ),
+                    )
+                except RecoveryFailure as failure:
+                    status = "BUDGET_EXCEEDED" if failure.code == "ACTION_BUDGET" else "FAILED"
+                    stop_reason = failure.code
+                    break
                 if proposal.action_type == "finish":
                     fields = _safe_fields(decision.fields)
                     visual_fields = _safe_fields(decision.visual_fields)
@@ -251,7 +292,10 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                         page.mouse.wheel(0, 500)
                     elif proposal.action_type == "wait":
                         page.wait_for_timeout(100)
-                    page.wait_for_load_state("domcontentloaded", timeout=10_000)
+                    page.wait_for_load_state(
+                        "domcontentloaded",
+                        timeout=int(spec.budget.action_timeout_seconds * 1000),
+                    )
                 except BrowserPolicyError:
                     raise
                 except Exception as error:
@@ -268,20 +312,31 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     status = "FAILED"
                     stop_reason = "hybrid_action_failed"
                     break
+                before_frame = frame
+                frame = _hybrid_frame(page, spec)
+                frames.append(frame)
+                unchanged_reobservations = (
+                    unchanged_reobservations + 1
+                    if frame.observation.page_version == before_frame.observation.page_version
+                    else 0
+                )
                 receipts.append(
                     ActionReceipt(
                         action_id=proposal.action_id,
                         observation_id=proposal.observation_id,
                         result="APPLIED",
-                        before_observation_id=frame.observation.observation_id,
+                        before_observation_id=before_frame.observation.observation_id,
+                        after_observation_id=frame.observation.observation_id,
                     )
                 )
+                if unchanged_reobservations > spec.budget.max_reobservations:
+                    status = "FAILED"
+                    stop_reason = "NO_PROGRESS"
+                    break
                 terminal = _terminal_page_state(page)
                 if terminal is not None:
                     status, stop_reason = terminal
                     break
-                frame = _hybrid_frame(page, spec)
-                frames.append(frame)
             else:
                 status = "BUDGET_EXCEEDED"
                 stop_reason = "action_budget"

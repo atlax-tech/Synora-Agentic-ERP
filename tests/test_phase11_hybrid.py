@@ -157,6 +157,89 @@ def test_hybrid_task_stops_at_model_call_budget() -> None:
     assert run.result.stop_reason == "model_call_budget"
 
 
+def test_hybrid_task_stops_repeated_waits_as_no_progress() -> None:
+    def decider(frame: HybridFrame, _spec: TaskSpec) -> HybridDecision:
+        return HybridDecision(
+            proposal=ActionProposal(
+                action_type="wait",
+                observation_id=frame.observation.observation_id,
+            )
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_hybrid_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-hybrid-no-progress",
+                    purchase_order="PUR-ORD-0001",
+                    mode="hybrid",
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.model_calls == 2
+    assert run.result.status == "FAILED"
+    assert run.result.stop_reason == "NO_PROGRESS"
+
+
+def test_hybrid_success_receipt_links_after_observation() -> None:
+    calls = 0
+
+    def decider(frame: HybridFrame, spec: TaskSpec) -> HybridDecision:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return HybridDecision(
+                proposal=ActionProposal(
+                    action_type="search",
+                    observation_id=frame.observation.observation_id,
+                    target_ref="search-input",
+                    text=spec.purchase_order,
+                )
+            )
+        if calls == 2:
+            return HybridDecision(
+                proposal=ActionProposal(
+                    action_type="click",
+                    observation_id=frame.observation.observation_id,
+                    target_ref="order:PUR-ORD-0001",
+                )
+            )
+        fields = {
+            "purchase_order": "PUR-ORD-0001",
+            "supplier": "Supplier A",
+            "status": "To Receive and Bill",
+            "currency": "CNY",
+        }
+        return HybridDecision(
+            proposal=ActionProposal(
+                action_type="finish", observation_id=frame.observation.observation_id
+            ),
+            fields=fields,
+            visual_fields=fields,
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_hybrid_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-hybrid-receipt-lineage",
+                    purchase_order="PUR-ORD-0001",
+                    mode="hybrid",
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "SUCCEEDED"
+    assert all(receipt.after_observation_id is not None for receipt in run.result.actions[:2])
+
+
 def test_hybrid_rejects_coordinate_or_unknown_actions() -> None:
     frame = HybridFrame(
         observation=Observation(
