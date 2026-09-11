@@ -10,7 +10,7 @@
 | D4 Agent 信任与成本 | 3 | 模型输出严格动作契约、调用/耗时/输出上限、trusted oracle、输入/输出摘要、usage `null` 策略和 test double 标记；真实 provider 不可用 |
 | D5 安全与数据保护 | 4 | origin/路径/方法/下载/弹窗/写入白名单，Service Worker 禁用，重定向/响应/正文上限，注入和陈旧坐标/版本拒绝，ERP 截图遮罩与敏感标记门禁；无未授权副作用证据 |
 | D6 UI、可访问性与双语 | 2 | ARIA role/name、焦点样式、表头语义、空/错误/权限状态有测试；实验页面当前只有英文，未完成完整 ERP 双语/无障碍审计 |
-| D7 测试、真实集成与复现 | 3 | `make unit` 901 passed、Frappe 248 tests、修复后重新冻结的三次 synthetic/ERP 报告、修复前后页面变化摘要；真实图片理解仍为环境阻塞 |
+| D7 测试、真实集成与复现 | 3 | `make unit` 915 passed、Frappe 248 tests、修复后重新冻结的三次 synthetic/ERP 报告、修复前后页面变化摘要；真实图片理解仍为环境阻塞 |
 | D8 治理、追踪与非虚构 | 3 | 每轮开发日志、提交边界、失败保留、Adoption Card 和 artifact hash，第一轮 Review 问题与修复可追踪；Harness 对 pyproject/uv.lock 的 drift 尚待受保护同步 |
 | D9 简洁性与可运维性 | 3 | 独立可选依赖组、单模块 CLI、明确超时/错误码/证据路径；真实 provider 和跨版本浏览器升级需重新探测 |
 

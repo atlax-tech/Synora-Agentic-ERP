@@ -83,19 +83,22 @@ v2 将列表行属性从 `data-order-name` 改为 `data-order-id`。原始文件
 
 | 检查 | 退出码 | 实际结果 |
 | --- | ---: | --- |
-| `make format-check` | 0 | 422 files already formatted |
+| `make format-check` | 0 | 426 files already formatted |
 | `make lint` | 0 | All checks passed |
 | `make type` | 0（修复后） | 131 个项目源/测试路径无错误 |
-| `make unit` | 待最终出口复跑 | 修复后需重新记录全量结果；当前 Phase 11 相关回归已通过 |
+| `make unit` | 0 | 915 passed；55 warnings |
 | `make integration` | 0 | Frappe 248 tests `OK` |
-| `uv run --python 3.14 mypy labs/web_gui` | 0 | 修复后实验源码无错误 |
+| `uv run --python 3.14 mypy labs/web_gui` | 0 | 16 个实验源码文件无错误 |
 | synthetic benchmark | 0 | 45 business + 33 fault trials written |
 | ERP benchmark | 0 | 修复后 3/3 `MATCHED` |
 | `git diff --check` | 0 | whitespace clean |
-| Harness manifest | 0 | valid；references 772、broken 0 |
+| `python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .` | 0 | valid；references 802、broken 0；read-only |
+| `python3 .agents/skills/harness-check/scripts/validate_manifest.py .` | 0 | valid |
+| `python3 .agents/skills/harness-check/scripts/check_references.py .` | 0 | checked 802；broken 0；explicit 124；inline 678 |
+| `python3 .agents/skills/harness-check/scripts/score_harness_health.py .` | 0 | read-only；79/100，grade C；drift 2 files |
 | Harness drift | 1 | `pyproject.toml`、`uv.lock` fingerprint 尚未同步 |
 
-首次 `make type` 退出码 `1` 的 9 个新增测试注解错误已在 `4708b5e` 修复；修复后 full type 与 29 个受影响测试通过。按计划原样运行无 `--python` 的 `uv run --group web-gui-lab ...` 曾因主机选中 3.13 与项目 3.14 不兼容退出码 `2`；所有实际验收命令显式使用已安装 Python 3.14，未降低项目基线。
+首次 `make type` 退出码 `1` 的 9 个新增测试注解错误已在 `4708b5e` 修复；修复后 full type 与 29 个受影响测试通过。按计划原样运行无 `--python` 的 `uv run --group web-gui-lab ...` 曾因主机选中 3.13 与项目 3.14 不兼容退出码 `2`；所有实际验收命令显式使用已安装 Python 3.14，未降低项目基线。阶段出口还完成了 ponytail-audit（结论为代码已足够精简）、ponytail-debt（现有 1 条固定上限标记，无新增遗留）和只读 Harness 健康检查；健康分数受待同步 fingerprint 漂移影响，不能作为通过依据。
 
 ## 8. Adoption、Rubric 与风险
 
