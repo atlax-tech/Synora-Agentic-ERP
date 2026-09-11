@@ -8,11 +8,18 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any
+from urllib.parse import quote
 
 from labs.web_gui.browser import BrowserPolicyError, BrowserUnavailable, _origin, _playwright_sync
 from labs.web_gui.contracts import ActionReceipt, Observation, TaskResult, TaskSpec
-from labs.web_gui.erp_browser import _RealPolicy
-from labs.web_gui.erp_readonly import MAX_RESPONSE_BYTES, READ_FIELDS, ErpReadConfig, ErpReadResult
+from labs.web_gui.erp_browser import _RealPolicy, _response_body_too_large
+from labs.web_gui.erp_readonly import (
+    ERP_LOGIN_PATH,
+    MAX_RESPONSE_BYTES,
+    READ_FIELDS,
+    ErpReadConfig,
+    ErpReadResult,
+)
 from labs.web_gui.gui import (
     VisualDecision,
     _fields_from_decision,
@@ -161,11 +168,27 @@ def run_erp_visual_task(
             service_workers="block", accept_downloads=False, viewport={"width": 1024, "height": 768}
         )
 
+        response_events: list[str] = []
+
         def route_handler(route: Any) -> None:
-            if policy.check(route.request.method, route.request.url):
-                route.continue_()
-            else:
+            request = route.request
+            path = request.url.split("?", 1)[0].split(policy.origin, 1)[-1]
+            if not policy.check(request.method, request.url):
                 route.abort(error_code="blockedbyclient")
+                return
+            if path.startswith("/api/") or path == f"/desk/purchase-order/{config.purchase_order}":
+                try:
+                    response = route.fetch()
+                    body = response.body()
+                    if _response_body_too_large(body, response.headers):
+                        response_events.append("RESPONSE_TOO_LARGE")
+                        route.abort(error_code="blockedbyclient")
+                        return
+                    route.fulfill(response=response)
+                except Exception:
+                    route.abort(error_code="blockedbyclient")
+                return
+            route.continue_()
 
         context.route("**/*", route_handler)
         page = context.new_page()
@@ -182,38 +205,28 @@ def run_erp_visual_task(
             events.append("DIALOG_DISMISSED")
             dialog.dismiss()
 
-        def on_response(response: Any) -> None:
-            response_path = str(response.url).split(policy.origin, 1)[-1].split("?", 1)[0]
-            if not (
-                response_path.startswith("/api/")
-                or response_path == f"/desk/purchase-order/{config.purchase_order}"
-            ):
-                return
-            try:
-                content_length = int(response.headers.get("content-length", "0"))
-            except TypeError, ValueError:
-                content_length = 0
-            if content_length > MAX_RESPONSE_BYTES:
-                events.append("RESPONSE_TOO_LARGE")
-
         context.on("page", on_popup)
         page.on("download", on_download)
         page.on("dialog", on_dialog)
-        page.on("response", on_response)
 
         try:
             login = context.request.post(
-                f"{_origin(config.base_url)}/api/method/login",
+                f"{_origin(config.base_url)}{ERP_LOGIN_PATH}",
                 form={"usr": config.user, "pwd": os.environ["SYNORA_P2P_USER_PWD"]},
                 max_redirects=0,
+                timeout=int(config.timeout_seconds * 1000),
             )
-            if login.status in {401, 403}:
+            login_body = login.body()
+            if _response_body_too_large(login_body, login.headers):
+                status, reason = "FAILED", "ERP_RESPONSE_TOO_LARGE"
+            elif login.status in {401, 403}:
                 status, reason = "AUTH_REQUIRED", "ERP_LOGIN_REJECTED"
             elif not 200 <= login.status < 300:
                 status, reason = "FAILED", "ERP_LOGIN_FAILED"
             else:
                 page.goto(
-                    f"{_origin(config.base_url)}/desk/purchase-order/{config.purchase_order}",
+                    f"{_origin(config.base_url)}/desk/purchase-order/"
+                    f"{quote(config.purchase_order, safe='-_.')}",
                     wait_until="domcontentloaded",
                     timeout=int(config.timeout_seconds * 1000),
                 )
@@ -454,15 +467,15 @@ def run_erp_visual_task(
         finally:
             context.close()
             browser.close()
-    policy_events = tuple(policy.violations + policy.blocked + events)
-    if policy.violations or events:
+    policy_events = tuple(policy.violations + policy.blocked + events + response_events)
+    if policy.violations or events or response_events:
         status, reason = "FAILED", "browser_security_violation"
     result = _result(task, status, fields, observations, receipts, reason)
     return ErpVisualRun(
         result,
         tuple(observations),
         tuple(screenshots),
-        not policy.violations and not events,
+        not policy.violations and not events and not response_events,
         policy_events,
         capture,
     )
