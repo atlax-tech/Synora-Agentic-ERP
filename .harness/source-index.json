@@ -246,9 +246,9 @@
       "id": "p32-state-machine",
       "path": "synora_agentic_erp/agent/state_machine.py",
       "kind": "code",
-      "locator": "Run 确定性状态机（非法转换 fail-closed）；state_version CAS、失败恢复和同 Run plan 行锁已覆盖",
+      "locator": "Run 确定性状态机（非法转换 fail-closed）；state_version CAS、失败恢复、P2P cancellation/reconciliation 和同 Run plan 行锁已覆盖",
       "status": "CONFIRMED",
-      "sha256": "6219f2a2f203059482899674ead22ee234c0c97bb3c9be3016d388056e7f92fd"
+      "sha256": "299541b7c158fcb0a11a296d7903fc13d45823bc8b0f011ceeb38df2ba97cb93"
     },
     {
       "id": "p36-knowledge-source-map",
@@ -288,7 +288,7 @@
       "kind": "code",
       "locator": "P3.5 plan/analyze 编排、Run capability/state/CAS、失败恢复、Runtime tokenized HTTP boundary",
       "status": "CONFIRMED",
-      "sha256": "040983f96aeeb22a7d310cc48829beb95b7f0bb79d36674c4fe7d95564dd0367"
+      "sha256": "159347a2a454e19b5729dba82b18c9500db5fb2c7fe703c0b8eda03d2f847a02"
     },
     {
       "id": "p35-runtime-app",
@@ -296,15 +296,15 @@
       "kind": "code",
       "locator": "Runtime /enhance：内部令牌校验、BYOK provider label、确定性回退和 evidence 返回",
       "status": "CONFIRMED",
-      "sha256": "34dfa040622cf5a9d29c95b2f0a65f46463ee443d429d7361253edd304b9dabd"
+      "sha256": "c7e405406e2eaf5ed26ca1c294b73af87cb0e3e9d8d356ad3858550f8aa1cd2d"
     },
     {
       "id": "p35-api-evidence",
       "path": "synora_agentic_erp/api.py",
       "kind": "code",
-      "locator": "Run Plan evidence API 与 T03 Memory review queue/detail/review wrappers；provider/token/权限边界保持受控",
+      "locator": "Run Plan evidence API、P2P chain projection/resume/finalize/cancel 与 T03 Memory review wrappers；provider/token/权限边界保持受控",
       "status": "CONFIRMED",
-      "sha256": "583b7abdfc194156844036391c994193c3c59b08b4f46b7324a2a519242a350e"
+      "sha256": "9820bd536179f4ea74a4b39ac7253d782b1b24af558f8299e701eec1a63879ea"
     },
     {
       "id": "p35-run-plan-doctype",
@@ -383,8 +383,8 @@
       "path": "services/agent_runtime/src/agent_runtime/workflow/contracts.py",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "907198d684cd4cec50606274c8707fd8d9b7759015c17aa687747781ea87cbd5",
-      "locator": "版本化 WorkflowState/WorkflowResult、PlanStep、状态转换、澄清和重规划契约"
+      "sha256": "a88cdb8a05a42643207ecc0893df5b38eb74780e7e1362b7b9c7a9889be3e649",
+      "locator": "版本化 WorkflowState/WorkflowResult、PlanStep、P2P governed-action checkpoint、状态转换、澄清和重规划契约"
     },
     {
       "id": "phase5-workflow-checkpoint",
@@ -399,16 +399,16 @@
       "path": "services/agent_runtime/src/agent_runtime/workflow/engine.py",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "f4c513d5a129174b3a616e68f74df325c4747a1367340ac5dcbc24404c61f566",
-      "locator": "engine-neutral WorkflowEngine 协议和手写执行安全边界"
+      "sha256": "aea8232933b85e78690964b1c6d84981241693e38b1db5de7a4e909ed4ea7949",
+      "locator": "engine-neutral WorkflowEngine 协议、P2P plan request 兼容和手写执行安全边界"
     },
     {
       "id": "phase5-workflow-runtime",
       "path": "services/agent_runtime/src/agent_runtime/workflow/runtime.py",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "74e76faf33f4fb8b7e161b261228c2060907d761e7f04c6636313326eeace325",
-      "locator": "Runtime workflow start/resume/cancel/status、短期 capability 和恢复处理"
+      "sha256": "518a5262ebb0dc727c3a4cf32ae07a7e5051c41855f457610853998e0309e013",
+      "locator": "Runtime workflow start/resume/cancel/status、P2P governed-action checkpoint、短期 capability 和恢复处理；P2P 请求不能执行普通 tool step"
     },
     {
       "id": "phase5-workflow-engine-tests",
@@ -599,8 +599,8 @@
       "path": "synora_agentic_erp/synora_agentic_erp/page/runs/runs.js",
       "kind": "code",
       "status": "CONFIRMED",
-      "sha256": "edcb58fa6f7c7f57cc10ae5adeab39904320a9ed257e3f440add788b6d23dbec",
-      "locator": "Runs Trace metadata rendering, escaping, status announcements, keyboard controls, pagination, and permission-filtered details"
+      "sha256": "9038f4218b099ef9594609b12bb6d1ff22a1ff6770410eba933bac63d3040b76",
+      "locator": "Runs Trace metadata and P2P chain rendering, Receipt/dependency/recovery states, escaping, status announcements, keyboard controls, pagination, and permission-filtered details"
     },
     {
       "id": "phase8-memory-doctype",
@@ -913,6 +913,142 @@
       "status": "CONFIRMED",
       "sha256": "49d2d441e1deb61b82e210a7318580f4963f37bab847db9da53792466c99abd9",
       "locator": "locked Phase 9 MCP and A2A SDK dependency graph"
+    },
+    {
+      "id": "phase10-p2p-contracts",
+      "path": "synora_agentic_erp/governance/contracts.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "70dd9aa692addf2c53f3ad2cda6521af7ebffcb714fbe7d3c4829431fc48cce2",
+      "locator": "Phase 10 typed P2P Action payloads, approval summaries, versions and bounded business parameters"
+    },
+    {
+      "id": "phase10-p2p-execution",
+      "path": "synora_agentic_erp/governance/p2p_execution.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "d541a547fdd43409af0a4346b582e1b693165efa51798d3e87be87c13b1d9618",
+      "locator": "Phase 10 governed PO, Purchase Receipt, Purchase Invoice and Payment Entry create/submit/cancel execution, reservation, receipt and reconciliation"
+    },
+    {
+      "id": "phase10-p2p-orchestration",
+      "path": "synora_agentic_erp/governance/p2p_orchestration.py",
+      "kind": "code",
+      "status": "CONFIRMED",
+      "sha256": "a7cbaec636fc09eaece76b1e8f7c158d5d0ef0b3e1f6c97f34233e06f10748eb",
+      "locator": "Phase 10 durable P2P goal/version, PlanStep dependency projection, re-investigation, resume/finalize/cancel and verified business completion"
+    },
+    {
+      "id": "phase10-e2e-tests",
+      "path": "synora_agentic_erp/tests/test_phase10_e2e.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "e7704f01d132cb4ac2dc5d5394115aba208725652147be5a2b265759a0e168ea",
+      "locator": "Phase 10 real Frappe P2P lifecycle, response-loss replay, Receipt-missing reconciliation and goal revision tests"
+    },
+    {
+      "id": "phase10-orchestration-tests",
+      "path": "synora_agentic_erp/tests/test_phase10_orchestration.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "976cd771a67e7e06213877e77859360accc30c1cb5809b1b4146074755091137",
+      "locator": "Phase 10 PlanStep dependency, Receipt, cancellation, deadline and verified finalize projection tests"
+    },
+    {
+      "id": "phase10-fault-matrix",
+      "path": "env/dev/p10/phase10_fault_matrix.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "002289dca24aac880d7e54eb6a347e126ee8bff53089aaf358b30941e921cbf9",
+      "locator": "R10.4 isolated process fault matrix runner: 7 action types x 4 failure boundaries with independent readback"
+    },
+    {
+      "id": "phase10-fault-worker",
+      "path": "env/dev/p10/phase10_fault_worker.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "a9de6ed89b502c85d979f79ebc2170919d3fe9ac4ddd008794030fe91f4d9316",
+      "locator": "R10.4 subprocess worker that creates one governed action, exits at an isolated fault boundary and leaves reconciliation facts"
+    },
+    {
+      "id": "phase10-lab-comparison",
+      "path": "labs/p2p_orchestration/phase10_comparison.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "6fa46d0493a4b4560a257da75c3588e4f23a2862da5fa3adec92e516876353e5",
+      "locator": "R10.3 LAB_ONLY fixed Workflow/single Agent/Planner-Reviewer comparison with bounded real-provider evidence"
+    },
+    {
+      "id": "phase10-lab-runner",
+      "path": "services/agent_runtime/scripts/phase10_orchestration.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "70f8ed943be0f9e8a8b99f652225519c25bf8a9c760cac952a10dd520e47ed80",
+      "locator": "R10.3 reproducible real/recorded orchestration comparison artifact generator and adoption decision"
+    },
+    {
+      "id": "phase10-lab-tests",
+      "path": "tests/test_phase10_orchestration_lab.py",
+      "kind": "testing",
+      "status": "CONFIRMED",
+      "sha256": "4000d5da3772248ff0ceb5cc4a777adfd5ec418c7236eafde0261b38bca514ef",
+      "locator": "R10.3 fixed matrix, event reorder/duplicate/restart, provider failure retention and bounded artifact tests"
+    },
+    {
+      "id": "phase10-fault-artifact",
+      "path": "output/phase10/phase10-r104-real-fault-matrix-v1.json",
+      "kind": "acceptance",
+      "status": "CONFIRMED",
+      "sha256": "7e1e7846ffc5a908926964b9ebf42241211c76a5d62ab4b6a5397864f372e0eb",
+      "locator": "Immutable R10.4 28-case process fault matrix with source and worktree-diff binding"
+    },
+    {
+      "id": "phase10-browser-artifact",
+      "path": "output/phase10/phase10-r104-browser-acceptance-v2.json",
+      "kind": "acceptance",
+      "status": "CONFIRMED",
+      "sha256": "3d138402ca5ef97d1a70a05ae40ccfd86fb3b7f9a2ea700034bc88a33b2fc0a7",
+      "locator": "Immutable R10.4 real-login initiator/independent-approver/unauthorized-viewer browser evidence and ERP/GL readback"
+    },
+    {
+      "id": "phase10-real-lab-artifact",
+      "path": "output/phase10/phase10-p2p-orchestration-real-glm-v1.json",
+      "kind": "acceptance",
+      "status": "CONFIRMED",
+      "sha256": "4accbbb38cb0ad8f29325cecd231520fa710b8a49c6e101a28a4ab998f20546e",
+      "locator": "Immutable R10.3 18-trial real-provider comparison; missing usage and all failure outcomes retained"
+    },
+    {
+      "id": "phase10-stage-report",
+      "path": "output/phase10/phase10-stage-report-draft-80abbba.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "80056d38d8b45cfaee989134c08ce24074ab656e596cb344290893804bc2a3ca",
+      "locator": "R10.5 evidence-bound Phase 10 report with D1-D9 rescore, gates, risks, review PASS and protected-sync boundary"
+    },
+    {
+      "id": "phase10-final-manifest",
+      "path": "output/phase10/phase10-final-manifest-80abbba.json",
+      "kind": "acceptance",
+      "status": "CONFIRMED",
+      "sha256": "9050ab379be7ff4cc0996b02990f5387071db63c46912efa8d167a267d600699",
+      "locator": "R10.5 machine manifest binding implementation head, artifact hashes, 724 references, review PASS and pending protected scope"
+    },
+    {
+      "id": "phase10-sync-proposal",
+      "path": "output/phase10/phase10-harness-sync-proposal-80abbba.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "a20f6a45f46176bb335229c935fbf11421cb41c89735ce79462cd95435fa9f7e",
+      "locator": "R10.6 approved file-level Harness/README synchronization proposal; docs/PLAN excluded"
+    },
+    {
+      "id": "phase10-development-log",
+      "path": "docs/development-log/20260910-Phase-10-开发日志.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "4a7ccf318c72c0e42b91416b9b8e59e383a3ae3eba51ee9560a6da6e6a77c6f8",
+      "locator": "Reverse-ordered Phase 10 R10.1-R10.6 implementation, validation, evidence binding, independent review and protected-sync history"
     }
   ]
 }

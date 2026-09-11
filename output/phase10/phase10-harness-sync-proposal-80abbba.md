@@ -73,4 +73,4 @@ git diff --check
 
 预期结构、manifest、references 和 `git diff --check` 退出码为 `0`，`detect_drift.py` 的 drift 为空；若 `docs/PLAN.md` 仍存在用户未提交修改，必须单独标记，不得隐藏在同步提交中。
 
-当前状态：业务实现和 R10.5 门禁已通过；独立对抗审查待完成；受保护同步等待单独确认。本提案不是已应用的 Harness 或 README 变更。
+当前状态：业务实现和 R10.5 门禁已通过；独立对抗审查两轮均为 `PASS`；受保护同步已获用户对本文件级范围的授权，待按本提案应用。本提案不授权 `docs/PLAN.md`、README 或 `REVIEW_REQUIRED` 权威文档之外的范围。
