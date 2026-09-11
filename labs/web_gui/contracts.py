@@ -43,6 +43,7 @@ class TrialBudget(StrictModel):
     max_actions: int = Field(default=12, ge=1, le=12)
     max_model_calls: int = Field(default=8, ge=0, le=8)
     action_timeout_seconds: float = Field(default=10.0, gt=0, le=10.0)
+    model_timeout_seconds: float = Field(default=60.0, gt=0, le=60.0)
     wall_time_seconds: float = Field(default=180.0, gt=0, le=180.0)
     max_output_tokens: int = Field(default=1024, ge=1, le=1024)
     max_reobservations: int = Field(default=1, ge=0, le=1)

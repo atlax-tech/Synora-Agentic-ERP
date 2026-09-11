@@ -361,7 +361,7 @@ def run_erp_visual_task(
                             try:
                                 decision = run_with_deadline(
                                     invoke_visual,
-                                    min(task.budget.action_timeout_seconds, remaining),
+                                    min(task.budget.model_timeout_seconds, remaining),
                                 )
                             except RecoveryFailure as failure:
                                 status, reason = (
@@ -395,7 +395,7 @@ def run_erp_visual_task(
                                 if decision.completion_tokens is not None
                                 else completion_tokens
                             )
-                            if model_elapsed > task.budget.action_timeout_seconds:
+                            if model_elapsed > task.budget.model_timeout_seconds:
                                 status, reason = "BUDGET_EXCEEDED", "model_timeout"
                                 break
                             if monotonic() - started > task.budget.wall_time_seconds:

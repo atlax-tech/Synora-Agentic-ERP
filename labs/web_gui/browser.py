@@ -597,7 +597,7 @@ def run_model_dom_task(base_url: str, spec: TaskSpec, decider: StructuredDecider
                         try:
                             decision = run_with_deadline(
                                 invoke_decision,
-                                min(spec.budget.action_timeout_seconds, remaining),
+                                min(spec.budget.model_timeout_seconds, remaining),
                             )
                         except ModelCallError as error:
                             status = (

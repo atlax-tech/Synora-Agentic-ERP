@@ -264,7 +264,7 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                 try:
                     decision = run_with_deadline(
                         invoke_visual,
-                        min(spec.budget.action_timeout_seconds, remaining),
+                        min(spec.budget.model_timeout_seconds, remaining),
                     )
                 except RecoveryFailure as failure:
                     status = (
@@ -299,7 +299,7 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     if decision.completion_tokens is not None
                     else completion_tokens
                 )
-                if model_elapsed > spec.budget.action_timeout_seconds:
+                if model_elapsed > spec.budget.model_timeout_seconds:
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "model_timeout"
                     break

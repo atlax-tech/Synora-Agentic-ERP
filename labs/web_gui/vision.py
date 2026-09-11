@@ -328,11 +328,24 @@ def _request_text(
     proxy: str | None,
     transport: httpx.BaseTransport | None,
     max_output_tokens: int = MAX_OUTPUT_TOKENS,
+    timeout_seconds: float = VISION_TIMEOUT_SECONDS,
 ) -> tuple[str, VisionAttempt]:
     """Send one bounded request and retain only safe response diagnostics."""
 
     started = monotonic()
     protocol = _protocol_name(responses)
+    if timeout_seconds <= 0 or timeout_seconds > VISION_TIMEOUT_SECONDS:
+        raise VisionProbeError(
+            "MODEL_TIMEOUT_CONFIGURATION",
+            diagnostic=_attempt(
+                role=role,
+                model=model,
+                protocol=protocol,
+                started=started,
+                failure_code="MODEL_TIMEOUT_CONFIGURATION",
+                failure_stage="request_validation",
+            ),
+        )
     try:
         request = _payload(prompt, images, model, responses, max_output_tokens)
     except VisionProbeError as error:
@@ -351,7 +364,7 @@ def _request_text(
     headers["Authorization"] = f"Bearer {api_key}"
     try:
         with httpx.Client(
-            timeout=httpx.Timeout(VISION_TIMEOUT_SECONDS),
+            timeout=httpx.Timeout(timeout_seconds),
             transport=transport,
             trust_env=False,
             follow_redirects=False,
@@ -694,6 +707,7 @@ def request_vision_json(
     environ: Mapping[str, str] | None = None,
     transport: httpx.BaseTransport | None = None,
     max_output_tokens: int = MAX_OUTPUT_TOKENS,
+    timeout_seconds: float = VISION_TIMEOUT_SECONDS,
 ) -> VisionModelResponse:
     """Send one untrusted image decision request to one frozen role.
 
@@ -726,6 +740,7 @@ def request_vision_json(
             proxy=proxy,
             transport=transport,
             max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
         )
         try:
             payload = _json_loads(text)

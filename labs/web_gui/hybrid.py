@@ -306,7 +306,7 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                 try:
                     decision = run_with_deadline(
                         invoke_hybrid,
-                        min(spec.budget.action_timeout_seconds, remaining),
+                        min(spec.budget.model_timeout_seconds, remaining),
                     )
                 except RecoveryFailure as failure:
                     status = (
@@ -341,7 +341,7 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     if decision.completion_tokens is not None
                     else completion_tokens
                 )
-                if model_elapsed > spec.budget.action_timeout_seconds:
+                if model_elapsed > spec.budget.model_timeout_seconds:
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "model_timeout"
                     break

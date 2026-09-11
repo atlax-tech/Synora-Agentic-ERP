@@ -568,7 +568,7 @@ def test_visual_task_enforces_model_deadline_and_output_budget() -> None:
                     case_id="p11-vision-model-timeout",
                     purchase_order="PUR-ORD-0001",
                     mode="vision",
-                    budget=TrialBudget(action_timeout_seconds=0.1),
+                    budget=TrialBudget(action_timeout_seconds=0.1, model_timeout_seconds=0.1),
                 ),
                 slow_decider,
             )
@@ -599,6 +599,40 @@ def test_visual_task_enforces_model_deadline_and_output_budget() -> None:
     assert timed.result.stop_reason == "model_timeout"
     assert limited.result.status == "BUDGET_EXCEEDED"
     assert limited.result.stop_reason == "model_output_budget"
+
+
+def test_visual_model_timeout_is_separate_from_page_action_timeout() -> None:
+    def slow_decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
+        time.sleep(0.12)
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="finish",
+                observation_id=observation.observation_id,  # type: ignore[attr-defined]
+            ),
+            fields={
+                "purchase_order": "PUR-ORD-0001",
+                "supplier": "Supplier A",
+                "status": "To Receive and Bill",
+                "currency": "CNY",
+            },
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-model-budget-separated",
+                    purchase_order="PUR-ORD-0001",
+                    mode="vision",
+                    budget=TrialBudget(action_timeout_seconds=1.0, model_timeout_seconds=0.2),
+                ),
+                slow_decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "SUCCEEDED"
 
 
 def test_visual_task_records_stale_action_as_structured_rejection() -> None:
