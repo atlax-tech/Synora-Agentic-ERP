@@ -1,0 +1,78 @@
+{
+  "attempts": [
+    {
+      "completion_tokens": null,
+      "declared_complete": null,
+      "elapsed_ms": 53,
+      "failure_code": "HTTP_ERROR",
+      "failure_stage": "http_status",
+      "http_status": 400,
+      "mismatch_fields": [],
+      "model": "qwen3:8b",
+      "observation_count": null,
+      "prompt_tokens": null,
+      "protocol": "responses",
+      "response_bytes": 232,
+      "response_content_type": "application/json",
+      "response_fields": [],
+      "response_shape": null,
+      "role": "primary",
+      "status": "FAILED"
+    },
+    {
+      "completion_tokens": 210,
+      "declared_complete": true,
+      "elapsed_ms": 5886,
+      "failure_code": null,
+      "failure_stage": null,
+      "http_status": 200,
+      "mismatch_fields": [],
+      "model": "glm-5.3-flash",
+      "observation_count": 2,
+      "prompt_tokens": 2147,
+      "protocol": "chat_completions",
+      "response_bytes": 1345,
+      "response_content_type": "application/json",
+      "response_fields": [
+        "complete",
+        "currency",
+        "purchase_order",
+        "status",
+        "supplier"
+      ],
+      "response_shape": "choices",
+      "role": "assist",
+      "status": "PASS"
+    }
+  ],
+  "completion_tokens": 210,
+  "model": "glm-5.3-flash",
+  "observation": {
+    "complete": true,
+    "currency": "CNY",
+    "purchase_order": "PUR-ORD-0001",
+    "source_image_sha256": "27049210760d1b0bd88fc94f2c58a72fa8eab823b7ef77eeccde3b746f5cbd5e",
+    "status": "To Receive and Bill",
+    "supplier": "Supplier A"
+  },
+  "observations": [
+    {
+      "complete": true,
+      "currency": "CNY",
+      "purchase_order": "PUR-ORD-0001",
+      "source_image_sha256": "27049210760d1b0bd88fc94f2c58a72fa8eab823b7ef77eeccde3b746f5cbd5e",
+      "status": "To Receive and Bill",
+      "supplier": "Supplier A"
+    },
+    {
+      "complete": true,
+      "currency": "USD",
+      "purchase_order": "PUR-ORD-0002",
+      "source_image_sha256": "70134f7c3961fe7f532e72dc4b953c9b5998fed68555b4d19b08474d45471b44",
+      "status": "Completed",
+      "supplier": "Supplier B"
+    }
+  ],
+  "prompt_tokens": 2147,
+  "status": "PASS"
+}
