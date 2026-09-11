@@ -75,6 +75,9 @@ def _order_json(order: FixtureOrder) -> dict[str, object]:
 def _layout(*, query: str, rows: str, body_title: str, body: str, scenario: str = "") -> str:
     safe_query = html.escape(query, quote=True)
     safe_scenario = html.escape(scenario, quote=True)
+    page_version = (
+        "synthetic-procurement-v2" if scenario == "changed" else "synthetic-procurement-v1"
+    )
     return f"""<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>Synora Lab Procurement</title>
@@ -86,7 +89,7 @@ th,td{{border:1px solid #bbb;padding:.5rem;text-align:left}}
 .lab{{font-weight:700;color:#7a2e00}}
 </style>
 </head>
-<body data-page-version="synthetic-procurement-v1">
+<body data-page-version="{page_version}">
 <header><p class="lab">LAB_ONLY / SYNTHETIC DATA</p><h1>Procurement read-only task</h1></header>
 <main><section aria-labelledby="search-heading"><h2 id="search-heading">Find a purchase order</h2>
 <form method="get" action="/" role="search"><label for="order-search">Purchase order number</label>
@@ -146,8 +149,9 @@ def _list_rows(orders: tuple[FixtureOrder, ...], scenario: str = "") -> str:
     if not orders:
         return '<p role="status" data-state="empty">No purchase orders found.</p>'
     query_suffix = "?scenario=" + html.escape(scenario, quote=True) if scenario else ""
+    row_attribute = "data-order-id" if scenario == "changed" else "data-order-name"
     rows = "".join(
-        f'<tr data-order-name="{html.escape(order.purchase_order, quote=True)}">'
+        f'<tr {row_attribute}="{html.escape(order.purchase_order, quote=True)}">'
         f"<td>{html.escape(order.purchase_order)}</td>"
         f"<td>{html.escape(order.supplier)}</td>"
         f"<td>{html.escape(order.status)}</td>"

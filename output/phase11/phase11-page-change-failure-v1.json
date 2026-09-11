@@ -1,0 +1,12 @@
+{
+  "case_id": "p11-page-change-001",
+  "scenario": "changed",
+  "page_version": "synthetic-procurement-v2",
+  "method": "dom",
+  "expected_status": "SUCCEEDED",
+  "observed_status": "NOT_FOUND",
+  "failure_code": "TARGET_NOT_OBSERVED",
+  "root_cause": "v2 renamed the stable row attribute from data-order-name to data-order-id; the v1 observer only read data-order-name",
+  "preserved": true,
+  "status": "FAILURE_BEFORE_FIX"
+}

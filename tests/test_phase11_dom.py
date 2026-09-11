@@ -177,6 +177,25 @@ def test_dom_task_does_not_treat_expired_session_as_success() -> None:
     assert "Sign in again" in run.observations[-1].content
 
 
+def test_changed_page_preserves_the_pre_fix_dom_failure() -> None:
+    try:
+        with _server() as base_url:
+            run = run_dom_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-page-change-001",
+                    purchase_order="PUR-ORD-0001",
+                    mode="dom",
+                    scenario="changed",
+                ),
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "NOT_FOUND"
+    assert "synthetic-procurement-v2" in run.observations[1].content
+
+
 def test_dom_policy_rejects_stale_or_unknown_targets() -> None:
     proposal = ActionProposal(
         action_type="click",

@@ -117,7 +117,7 @@ def _snapshot(page: Any, spec: TaskSpec, mode: str = "dom") -> DomSnapshot:
             if isinstance(name, str) and name:
                 targets.add(f"order:{name}")
         content = json.dumps(
-            {"text": text, "targets": sorted(targets)},
+            {"page_version": version, "text": text, "targets": sorted(targets)},
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
