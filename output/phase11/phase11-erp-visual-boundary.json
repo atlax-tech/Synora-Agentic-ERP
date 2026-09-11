@@ -15,30 +15,36 @@
     ],
     "safety_pass": true,
     "screenshot_bytes": [
-      24107
+      19072
     ],
     "status": "SUCCEEDED",
     "stop_reason": null,
-    "trusted_fact_required": true
+    "trusted_fact_required": true,
+    "trusted_snapshot": {
+      "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+      "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+      "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+      "source_modified_at": "2026-09-11 01:10:41.759974"
+    }
   },
   "notes": [
-    "The GUI test double received a redacted screenshot and returned fields only after an explicit trusted API field mapping; this is execution evidence, not model capability evidence.",
+    "The GUI test double received a redacted screenshot and returned fields only after a successful versioned typed API snapshot; this is execution evidence, not model capability evidence.",
     "No screenshot bytes, provider response, credentials, Cookie, Authorization or capability were written to this artifact.",
     "A real three-way ERP comparison remains blocked until a configured provider returns a validated image observation."
   ],
   "origin": "http://127.0.0.1:8000",
   "purchase_order": "PUR-ORD-2026-02297",
   "redaction": {
-    "bytes": 24107,
+    "bytes": 19072,
     "failure_code": null,
-    "image_sha256": "24d7fcd124c5debf8433e7acc5e9df97ad3bce998f10137711b645cfa4a1a71d",
-    "masked_selector_count": 17,
+    "image_sha256": "60b4e1e6b313dbd693c0f21226d88934e2891a9cb601a043d15ea21e18325a06",
+    "masked_selector_count": 16,
     "status": "READY",
     "viewport": [
       1024,
       768
     ],
-    "visible_text_sha256": "58e29226d11ea54022a73364667b554cb327890ba7caca1f14dd270ae13c5f51"
+    "visible_text_sha256": "8e58bc6d561514b15c146d26c3ffad207227b4d0cf9de1e5b925ca38bf119942"
   },
   "site": "dev.localhost",
   "three_way_status": "BLOCKED",
@@ -58,7 +64,7 @@
         "status": "FAILED"
       },
       {
-        "failure_code": "RESPONSE_CONTENT_MISSING",
+        "failure_code": "TRANSPORT_ERROR",
         "model": "grok-4.5",
         "role": "backup",
         "status": "FAILED"
