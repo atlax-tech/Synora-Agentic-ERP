@@ -1,6 +1,6 @@
 # Phase 11 Adoption Card
 
-状态：`PENDING_REVIEW_RECHECK / BLOCKED / VISION_PROVIDER_UNAVAILABLE / LIVE_GUI_MISMATCH / HARNESS_DRIFT`。
+状态：`BLOCKED / REVIEW_ROUNDS_EXHAUSTED / VISION_PROVIDER_UNAVAILABLE / LIVE_GUI_MISMATCH / HARNESS_DRIFT`。
 
 实现代码冻结 HEAD（待最终文档提交后重新记录）：`15a476e`。本卡只描述实验和固定开发 ERP 只读证据，不授予业务 Runtime 或 ERP 写入权限。
 
@@ -42,7 +42,7 @@
 ## 当前风险和门禁
 
 - 图片 provider 能力和 live GUI mismatch 是阶段必做阻断；不得用 DOM/API 答案或 recorded response 填补。
-- 首轮独立 Review 的四项修复已完成，当前等待同一授权周期的唯一一次复查；首轮 `CHANGES_REQUIRED` 保留为修复依据，不能当作当前 PASS。
-- `.harness` structure/manifest/references 已通过，pyproject/uv.lock 指纹同步和 drift 复跑待最终审查后执行。
+- 两轮独立 Review 均未给出 `PASS`：首轮四项代码问题已修复并复验，第二轮只发现 Harness 引用计数 830/831 不一致；执行者已在 `fab8e22` 修正并重跑扫描。两轮上限已用完，本周期不再启动第三轮，审查门禁保持 `REVIEW_ROUNDS_EXHAUSTED`。
+- `.harness` structure/manifest/references 已通过，pyproject/uv.lock 指纹 drift 仍存在；由于 Review 未 PASS，本周期不执行已批准的 Harness 写入同步。
 
-本卡保持 `BLOCKED`，typed API 继续作为业务默认；Phase 11 结束后停止，不进入 Phase 12。
+本卡保持 `BLOCKED`，typed API 继续作为业务默认；需在新授权周期完成 Review、视觉能力和真实 GUI 三方门禁后才能重新评估，不进入 Phase 12。

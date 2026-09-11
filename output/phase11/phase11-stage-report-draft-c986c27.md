@@ -1,6 +1,6 @@
 # Phase 11 阶段报告（当前草稿）
 
-状态：`PENDING_REVIEW_RECHECK / BLOCKED / VISION_PROVIDER_UNAVAILABLE / LIVE_GUI_MISMATCH / HARNESS_DRIFT`。
+状态：`BLOCKED / REVIEW_ROUNDS_EXHAUSTED / VISION_PROVIDER_UNAVAILABLE / LIVE_GUI_MISMATCH / HARNESS_DRIFT`。
 
 本报告只描述已运行的实验和固定开发 ERP 只读证据，不把实验页面、test double、模型单次成功或开发站点结果描述为生产部署、客户采用或业务写入授权。上一份 `phase11-stage-report-draft-4708b5e.md` 是历史快照，本报告绑定当前实现和最新证据。
 
@@ -34,7 +34,7 @@ Phase 11 交付了一个隔离的 `LAB_ONLY / SYNTHETIC DATA` 采购读取实验
 | P11.11 | deterministic ERP API/Web 三次稳定；live Web 一次与 API 匹配 | `3f5d55a`、`df71466`、live ERP artifact |
 | P11.12 | 脱敏 GUI runner 可运行并完成一次真实 provider 调用，但字段 mismatch；GUI 成功现绑定 API-after；三方成功未完成 | `7656119`、`490de9b`、`8aca94b`、visual boundary |
 | P11.13 | deterministic 45 trial/33 fault 已冻结；live 引擎和元数据已接线，完整 live 矩阵受视觉门禁阻塞；汇总漏项已校正 | `3674be8`、`dc09d6f`、`8d90f2e` |
-| P11.14–P11.15 | 全量回归完成；首轮 Review 的四项修复已完成，复查、权威状态和 Harness 指纹同步待完成 | 本报告及后续收口提交 |
+| P11.14–P11.15 | 全量回归完成；两轮独立 Review 均未 PASS，文档计数复查问题已修正；权威状态和 Harness 指纹同步仍被审查门禁阻断 | 本报告、风险登记和最终收口日志 |
 
 ## 4. 运行证据
 
@@ -92,25 +92,30 @@ v2 将列表行属性由 `data-order-name` 改为 `data-order-id`。原始失败
 
 Ponytail 只读审计未发现本轮新增可安全删除的复杂度；全仓仅 1 条已有 `ponytail:` 标记且带升级触发器。没有为追求分数删除安全、错误处理、可访问性或数据保护。
 
-## 7. 首轮审查与修复复验
+## 7. 独立审查与修复复验
 
-首轮独立对抗 Review 结论为 `CHANGES_REQUIRED`，指出四项问题：模型输出预算未接线、live 汇总和报告证据不一致、观察操作缺少有限墙钟 timeout、GUI 成功未绑定 API-after。对应修复提交为 `585f275`、`8d90f2e`、`a6ab919` 和 `8aca94b`；新增的定向测试与全量门禁已通过。当前仍等待同一授权周期的唯一一次复查，不能把首轮结果写成 PASS。
+本授权周期已完成允许的两轮独立对抗 Review。首轮结论为 `CHANGES_REQUIRED`，指出四项问题：模型输出预算未接线、live 汇总和报告证据不一致、观察操作缺少有限墙钟 timeout、GUI 成功未绑定 API-after。对应修复提交为 `585f275`、`8d90f2e`、`a6ab919` 和 `8aca94b`；新增的定向测试与全量门禁已通过。
+
+第二轮复查确认上述四项修复、预算传递、视觉输入隔离、API-after 绑定和安全边界均已满足，但发现 Harness 引用计数仍写成 830，而结构和引用扫描实际为 831。执行者已在 `fab8e22` 将报告与日志修正为 831，并重新完成结构、manifest、references 和 diff 检查；该修复不改变业务代码或实验结果。根据本阶段最多两轮独立审查的约束，不再启动第三轮，因此审查门禁最终保持 `CHANGES_REQUIRED / REVIEW_ROUNDS_EXHAUSTED`，不能写成 `PASS`。
 
 ## 8. 当前阻断、风险和采用结论
 
 1. `R11-VISION`：四个已配置图片 role 未通过真实内容探测，且一次真实 GUI 返回事实错误字段。没有可冻结的视觉模型，因此 P11.5、P11.12 的视觉成功门禁未关闭。
-2. `R11-REVIEW`：四项修复已完成，本报告等待本授权周期的 Review 复查；首轮 `CHANGES_REQUIRED` 只作为修复依据，不能冒充当前 PASS。
-3. `R11-HARNESS`：structure、manifest、references 已通过，但 pyproject/uv.lock 指纹需按已批准范围同步后再复跑 drift。
+2. `R11-REVIEW`：两轮 Review 均未给出 `PASS`；第二轮唯一问题已由 `fab8e22` 修正，但两轮上限已用完，当前周期不能再启动审查，必须在新的授权周期重新审查后才能关闭。
+3. `R11-HARNESS`：structure、manifest、references 已通过，pyproject/uv.lock 指纹 drift 仍存在；因 Review 未 PASS，本周期不执行已批准的 Harness 写入同步，保留为阻断。
 4. `R11-TEXT-LATENCY`：DOM 有一次 live 成功，ARIA 修复后一次因模型超时停止；当前样本不足以宣称稳定 p95 或生产收益。
 
 typed API 保持业务默认。DOM/ARIA 可作为 `LAB_ONLY CANDIDATE`，前提是页面结构、可访问名称和模型延迟适用；Hybrid 仍需同版本结构/截图并在冲突时停止；截图 GUI 保持 `BLOCKED / EXPERIMENT ONLY`，直到真实图片模型读对两张合成图并完成同一真实 ERP 单据的 API/Web/GUI 对照。Phase 11 不授予业务 Runtime 或 ERP 写入权限，不进入 Phase 12。
 
-## 9. 新周期剩余工作
+## 9. 剩余阻断与下一授权周期工作
 
-1. 在当前实现和本报告上启动一次独立对抗 Review；如需修复，先补回归和受影响门禁，最多一轮复查。
-2. Review PASS 后，按已批准范围只同步 `.harness/source-index.json` 中 pyproject/uv.lock 两个来源指纹及 `.harness/manifest.json` 管理哈希；不修改 README 或其它 Harness 内容。
-3. 复跑 structure、manifest、references、drift、全量静态/测试门禁，更新最终文档 HEAD 和哈希。
-4. 只有图片探测和真实 GUI 三方对照也通过时，才可能将阶段状态改为 `COMPLETED / PASS / READY FOR NEXT PHASE`；当前证据不满足，保留 `BLOCKED`。
+当前实现、测试和证据已经冻结，本周期没有未提交的业务代码工作。阶段不能收口为 `COMPLETED / PASS / READY FOR NEXT PHASE` 的阻断如下：
+
+1. 外部图片能力仍为 `VISION_PROVIDER_UNAVAILABLE`；四个已配置 role 的两图真实探测没有通过，且 live ERP GUI 曾出现字段 mismatch。需要在服务配置或协议问题得到外部状态变化后，重新执行一次有界探测并冻结通过的 role/model/protocol。
+2. 两轮独立 Review 已用完且最终不是 `PASS`。新的授权周期必须从当前冻结 HEAD 重新启动一次审查；如审查发现代码问题，先补回归和全量门禁，再按该周期规则决定是否复查。
+3. Review 通过后，才能按已批准范围更新 `.harness/source-index.json` 的 pyproject/uv.lock 指纹和 `.harness/manifest.json` 管理哈希，并复跑 drift。当前刻意不修改 `.harness/`，所以 drift 退出码 1 是已知阻断，不是遗漏。
+4. 视觉能力恢复后，还需在同一真实 ERP 单据、同一脱敏映射和稳定版本下取得 API/Web/GUI 四字段一致的成功对照；原有 live GUI mismatch 必须保留并作为修复前证据。
+5. 上述阻断关闭后才可更新权威阶段状态；在此之前保持 `BLOCKED`，不改 PLAN 为完成、不更新 README、不进入 Phase 12。
 
 ## 10. 手工验证
 
