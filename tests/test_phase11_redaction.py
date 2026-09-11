@@ -65,7 +65,7 @@ class _Page:
     def get_by_text(self, _value: str, *, exact: bool) -> _Locator:
         return _Locator(1)
 
-    def add_style_tag(self, *, content: str, **_kwargs: Any) -> None:
+    def add_style_tag(self, *, content: str) -> None:
         self.style = content
 
     def screenshot(self, **_kwargs: Any) -> bytes:

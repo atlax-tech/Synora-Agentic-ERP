@@ -154,10 +154,9 @@ def capture_redacted_page(
     if page.get_by_text(purchase_order, exact=True).count() == 0:
         return _blocked("PURCHASE_ORDER_NOT_VISIBLE")
     try:
-        if timeout_ms is None:
-            page.add_style_tag(content=REDACTION_CSS)
-        else:
-            page.add_style_tag(content=REDACTION_CSS, timeout=timeout_ms)
+        # The installed Playwright sync API does not expose a timeout argument
+        # for add_style_tag; later checks still carry the caller's deadline.
+        page.add_style_tag(content=REDACTION_CSS)
         if not _sensitive_regions_hidden(page):
             return _blocked("REDACTION_PIXEL_REGION_VISIBLE")
         if not _preserve_purchase_order_label(page, purchase_order):
