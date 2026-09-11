@@ -109,12 +109,13 @@ def _lab_server() -> Iterator[str]:
         thread.join(timeout=5)
 
 
-def _spec(case: _Case, method: str) -> TaskSpec:
+def _spec(case: _Case, method: str, *, scenario: str = "") -> TaskSpec:
     return TaskSpec(
         case_id=f"{case.case_id}-{method}",
         purchase_order=case.purchase_order,
         mode=method,  # type: ignore[arg-type]
         data_source="synthetic",
+        scenario=scenario,
     )
 
 
@@ -209,6 +210,99 @@ def _hybrid_script(case: _Case) -> Callable[[HybridFrame, TaskSpec], HybridDecis
     return decider
 
 
+def _fault_visual_script(
+    case: _Case, scenario: str
+) -> Callable[[bytes, Observation, TaskSpec], VisualDecision]:
+    """Navigate through a fault page without bypassing the visual executor."""
+
+    calls = 0
+
+    def decider(_image: bytes, observation: Observation, _spec: TaskSpec) -> VisualDecision:
+        nonlocal calls
+        calls += 1
+        if scenario in {"changed", "async", "auth_expired"} and calls == 1:
+            return VisualDecision(
+                proposal=ActionProposal(
+                    action_type="click",
+                    observation_id=observation.observation_id,
+                    x=700,
+                    y=340,
+                )
+            )
+        order = next(
+            (item for item in FIXTURE_ORDERS if item.purchase_order == case.purchase_order), None
+        )
+        fields: dict[str, str | None] = (
+            {
+                "purchase_order": order.purchase_order,
+                "supplier": order.supplier,
+                "status": order.status,
+                "currency": order.currency,
+            }
+            if order is not None
+            else {}
+        )
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="finish", observation_id=observation.observation_id
+            ),
+            fields=fields,
+        )
+
+    return decider
+
+
+def _fault_hybrid_script(
+    case: _Case, scenario: str
+) -> Callable[[HybridFrame, TaskSpec], HybridDecision]:
+    """Navigate through a fault page with the same bounded hybrid actions."""
+
+    calls = 0
+
+    def decider(frame: HybridFrame, spec: TaskSpec) -> HybridDecision:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return HybridDecision(
+                proposal=ActionProposal(
+                    action_type="search",
+                    observation_id=frame.observation.observation_id,
+                    target_ref="search-input",
+                    text=spec.purchase_order,
+                )
+            )
+        order = next(
+            (item for item in FIXTURE_ORDERS if item.purchase_order == case.purchase_order), None
+        )
+        if calls == 2 and order is not None and scenario in {"changed", "async", "auth_expired"}:
+            return HybridDecision(
+                proposal=ActionProposal(
+                    action_type="click",
+                    observation_id=frame.observation.observation_id,
+                    target_ref=f"order:{order.purchase_order}",
+                )
+            )
+        fields: dict[str, str | None] = (
+            {
+                "purchase_order": order.purchase_order,
+                "supplier": order.supplier,
+                "status": order.status,
+                "currency": order.currency,
+            }
+            if order is not None
+            else {}
+        )
+        return HybridDecision(
+            proposal=ActionProposal(
+                action_type="finish", observation_id=frame.observation.observation_id
+            ),
+            fields=fields,
+            visual_fields=fields if order is not None else None,
+        )
+
+    return decider
+
+
 def _run_method(
     base_url: str,
     case: _Case,
@@ -217,6 +311,7 @@ def _run_method(
     engine: str = "deterministic",
     text_role: str = "assist",
     vision_role: str = "backup",
+    scenario: str = "",
 ) -> tuple[TaskResult, int, int, str, int | None, int | None]:
     started = time.monotonic()
     if engine not in {"deterministic", "live"}:
@@ -224,17 +319,17 @@ def _run_method(
     if method == "api":
         result = _fixture_api(case)
         return result, int((time.monotonic() - started) * 1000), 0, "typed-fixture", None, None
-    spec = _spec(case, method)
+    spec = _spec(case, method, scenario=scenario)
     if method in {"dom", "aria"}:
         if engine == "live":
             text_client = LiveTextModel(text_role)
 
-            def decider(
+            def dom_decider(
                 observation: Observation, current_spec: TaskSpec, remaining: int
             ) -> ModelDecision:
                 return decision_from_model(text_client, current_spec, observation, remaining)
 
-            dom_run = run_model_dom_task(base_url, spec, decider)
+            dom_run = run_model_dom_task(base_url, spec, dom_decider)
         else:
             dom_run = run_dom_task(base_url, spec)
         return (
@@ -250,7 +345,10 @@ def _run_method(
             vision_client = LiveVisionModel(vision_role)
             visual_run = run_visual_task(base_url, spec, model_visual_decider(vision_client))
         else:
-            visual_run = run_visual_task(base_url, spec, _visual_script(case))
+            visual_decider = (
+                _fault_visual_script(case, scenario) if scenario else _visual_script(case)
+            )
+            visual_run = run_visual_task(base_url, spec, visual_decider)
         return (
             visual_run.result,
             int((time.monotonic() - started) * 1000),
@@ -264,7 +362,10 @@ def _run_method(
         vision_client = LiveVisionModel(vision_role)
         hybrid_run = run_hybrid_task(base_url, spec, model_hybrid_decider(vision_client))
     else:
-        hybrid_run = run_hybrid_task(base_url, spec, _hybrid_script(case))
+        hybrid_decider = (
+            _fault_hybrid_script(case, scenario) if scenario else _hybrid_script(case)
+        )
+        hybrid_run = run_hybrid_task(base_url, spec, hybrid_decider)
     return (
         hybrid_run.result,
         int((time.monotonic() - started) * 1000),
@@ -384,54 +485,95 @@ def _faults(
     *,
     engine: str = "deterministic",
     text_role: str = "assist",
+    vision_role: str = "backup",
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
+    fault_case = _Case("p11-fault-page", "PUR-ORD-0001", True)
     for _ in range(repeats):
         for scenario in ("changed", "async", "timeout", "permission", "auth_expired"):
-            budget = (
-                TrialBudget(action_timeout_seconds=0.05, wall_time_seconds=1.0)
-                if scenario == "timeout"
-                else TrialBudget()
-            )
-            spec = TaskSpec(
-                case_id=f"p11-fault-{scenario}",
-                purchase_order="PUR-ORD-0001",
-                mode="dom",
-                scenario=scenario,
-                budget=budget,
-            )
-            try:
-                if engine == "live":
-                    text_client = LiveTextModel(text_role)
-
-                    def decider(
-                        observation: Observation,
-                        current_spec: TaskSpec,
-                        remaining: int,
-                        _client: LiveTextModel = text_client,
-                    ) -> ModelDecision:
-                        return decision_from_model(_client, current_spec, observation, remaining)
-
-                    run = run_model_dom_task(base_url, spec, decider)
-                else:
-                    run = run_dom_task(base_url, spec)
-                rows.append(
-                    {
-                        "case_id": scenario,
-                        "method": "dom",
-                        "status": run.result.status,
-                        "stop_reason": run.result.stop_reason,
-                    }
+            for method in ("dom", "aria", "vision", "hybrid"):
+                budget = (
+                    TrialBudget(action_timeout_seconds=0.05, wall_time_seconds=1.0)
+                    if scenario == "timeout"
+                    else TrialBudget()
                 )
-            except BrowserUnavailable:
-                rows.append(
-                    {
-                        "case_id": scenario,
-                        "method": "dom",
-                        "status": "BLOCKED",
-                        "stop_reason": "PLAYWRIGHT_UNAVAILABLE",
-                    }
+                case = _Case(f"p11-fault-{scenario}", fault_case.purchase_order, True)
+                case_spec = _spec(case, method, scenario=scenario).model_copy(
+                    update={"budget": budget}
                 )
+                try:
+                    if method in {"dom", "aria"}:
+                        if engine == "live":
+                            text_client = LiveTextModel(text_role)
+
+                            def decider(
+                                observation: Observation,
+                                current_spec: TaskSpec,
+                                remaining: int,
+                                _client: LiveTextModel = text_client,
+                            ) -> ModelDecision:
+                                return decision_from_model(
+                                    _client, current_spec, observation, remaining
+                                )
+
+                            dom_run = run_model_dom_task(base_url, case_spec, decider)
+                        else:
+                            dom_run = run_dom_task(base_url, case_spec)
+                        result = dom_run.result
+                        calls = dom_run.model_calls
+                        model = dom_run.model
+                    elif method == "vision":
+                        if engine == "live":
+                            visual_run = run_visual_task(
+                                base_url,
+                                case_spec,
+                                model_visual_decider(LiveVisionModel(vision_role)),
+                            )
+                        else:
+                            visual_run = run_visual_task(
+                                base_url, case_spec, _fault_visual_script(case, scenario)
+                            )
+                        result = visual_run.result
+                        calls = visual_run.model_calls
+                        model = visual_run.model
+                    else:
+                        if engine == "live":
+                            hybrid_run = run_hybrid_task(
+                                base_url,
+                                case_spec,
+                                model_hybrid_decider(LiveVisionModel(vision_role)),
+                            )
+                        else:
+                            hybrid_run = run_hybrid_task(
+                                base_url, case_spec, _fault_hybrid_script(case, scenario)
+                            )
+                        result = hybrid_run.result
+                        calls = hybrid_run.model_calls
+                        model = hybrid_run.model
+                    rows.append(
+                        {
+                            "case_id": scenario,
+                            "method": method,
+                            "engine": engine,
+                            "status": result.status,
+                            "stop_reason": result.stop_reason,
+                            "model_calls": calls,
+                            "model": model,
+                            "applicable": True,
+                        }
+                    )
+                except BrowserUnavailable:
+                    rows.append(
+                        {
+                            "case_id": scenario,
+                            "method": method,
+                            "engine": engine,
+                            "status": "BLOCKED",
+                            "stop_reason": "PLAYWRIGHT_UNAVAILABLE",
+                            "model_calls": 0,
+                            "applicable": True,
+                        }
+                    )
         for scenario in ("external", "popup", "download", "write", "confirm"):
             try:
                 violations = run_security_probe(base_url, scenario)
@@ -518,7 +660,13 @@ def run_synthetic_benchmark(
                             completion_tokens,
                         )
                     )
-        faults = _faults(base_url, repeats, engine=engine, text_role=text_role)
+        faults = _faults(
+            base_url,
+            repeats,
+            engine=engine,
+            text_role=text_role,
+            vision_role=vision_role,
+        )
     return {
         "suite": "synthetic",
         "engine": engine,

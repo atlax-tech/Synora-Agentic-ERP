@@ -48,6 +48,21 @@ def test_synthetic_benchmark_freezes_all_methods_and_fault_cases(
         "confirm",
         "stale-coordinate",
     } <= fault_ids
+    page_faults = [
+        item
+        for item in faults
+        if item["case_id"] in {"changed", "async", "timeout", "permission", "auth_expired"}
+    ]
+    assert len(page_faults) == 5 * 4
+    assert {
+        (item["case_id"], item["method"])
+        for item in page_faults
+    } == {
+        (scenario, method)
+        for scenario in {"changed", "async", "timeout", "permission", "auth_expired"}
+        for method in {"dom", "aria", "vision", "hybrid"}
+    }
+    assert all(item["applicable"] is True for item in page_faults)
     security_faults = [
         item
         for item in faults
