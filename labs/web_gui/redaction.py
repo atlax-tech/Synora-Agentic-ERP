@@ -159,11 +159,7 @@ def _read_required_visual_values(page: Any, purchase_order: str) -> tuple[str, s
         po_locator = page.locator(".form-name-container")
         status_locator = page.locator(".page-head .indicator-pill")
         currency_locator = page.locator('[data-fieldname="currency"] .control-value')
-        if (
-            po_locator.count() != 1
-            or status_locator.count() != 1
-            or currency_locator.count() != 1
-        ):
+        if po_locator.count() != 1 or status_locator.count() != 1 or currency_locator.count() != 1:
             return None
         if po_locator.inner_text().strip() != purchase_order:
             return None
@@ -188,9 +184,7 @@ def _read_required_visual_values(page: Any, purchase_order: str) -> tuple[str, s
     return status, currency
 
 
-def _preserve_task_labels(
-    page: Any, purchase_order: str, status: str, currency: str
-) -> bool:
+def _preserve_task_labels(page: Any, purchase_order: str, status: str, currency: str) -> bool:
     """Place bounded copies of the three required fields in the safe viewport."""
 
     if not hasattr(page, "evaluate"):

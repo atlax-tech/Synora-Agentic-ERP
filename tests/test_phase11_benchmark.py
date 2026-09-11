@@ -54,10 +54,7 @@ def test_synthetic_benchmark_freezes_all_methods_and_fault_cases(
         if item["case_id"] in {"changed", "async", "timeout", "permission", "auth_expired"}
     ]
     assert len(page_faults) == 5 * 4
-    assert {
-        (item["case_id"], item["method"])
-        for item in page_faults
-    } == {
+    assert {(item["case_id"], item["method"]) for item in page_faults} == {
         (scenario, method)
         for scenario in {"changed", "async", "timeout", "permission", "auth_expired"}
         for method in {"dom", "aria", "vision", "hybrid"}

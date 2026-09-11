@@ -375,9 +375,7 @@ def _run_method(
         vision_client = LiveVisionModel(vision_role)
         hybrid_run = run_hybrid_task(base_url, spec, model_hybrid_decider(vision_client))
     else:
-        hybrid_decider = (
-            _fault_hybrid_script(case, scenario) if scenario else _hybrid_script(case)
-        )
+        hybrid_decider = _fault_hybrid_script(case, scenario) if scenario else _hybrid_script(case)
         hybrid_run = run_hybrid_task(base_url, spec, hybrid_decider)
     return (
         hybrid_run.result,
@@ -772,15 +770,13 @@ def run_erp_benchmark(
                         for receipt in visual.result.actions
                     ],
                     "screenshot_sha256": [
-                        observation.screenshot_sha256
-                        for observation in visual.observations
+                        observation.screenshot_sha256 for observation in visual.observations
                     ],
                     "field_differences": [
                         field
                         for field in READ_FIELDS
-                        if visual.result.fields.get(field) != before.fact.model_dump(
-                            mode="json"
-                        ).get(field)
+                        if visual.result.fields.get(field)
+                        != before.fact.model_dump(mode="json").get(field)
                     ],
                     "model_calls": visual.model_calls,
                     "model": visual.model,
