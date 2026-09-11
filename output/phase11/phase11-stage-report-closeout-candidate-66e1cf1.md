@@ -4,7 +4,7 @@
 
 实现和运行证据已经完成，尚未把阶段写成 `COMPLETED / PASS`：还需要一次最终独立对抗审查，以及按已授权范围同步 Harness 的两个配置来源指纹和阶段权威状态。本文只引用已经提交、已经运行并能复核的事实。
 
-实现基线 HEAD：`66e1cf1`（`style(lab): format phase11 closeout code`）。
+实现基线 HEAD：`89ded56`（`fix(lab): retain ERP after snapshot evidence`）。收口候选在 `71fc646` 冻结，API-after 证据修复和新批次随后以独立提交加入。
 
 ## 1. 业务结果和用户可见范围
 
@@ -35,13 +35,13 @@ Phase 11 交付了一个只绑定 loopback 的 `LAB_ONLY / SYNTHETIC DATA` 采�
 | P11.8 | 已完成：可观察就绪、一次恢复和动作/模型/墙钟预算 | `7867f70`、`89dbfbb` |
 | P11.9 | 已完成：独立会话、认证失效、权限拒绝和安全弹窗处理 | `7867f70`、`fc87b2f` |
 | P11.10 | 已完成：v2 页面变化先失败，修复后复验，旧失败保留 | [failure](phase11-page-change-failure-v1.json)、[repair](phase11-page-change-repair-v1.json) |
-| P11.11 | 已完成：真实 ERP typed API/Web 与模型 Web 对照，三次版本稳定 | [ERP live batch](phase11-benchmark-erp-readonly-live-glm-2011048-r3.json) |
-| P11.12 | 已完成：确定性字段映射、脱敏截图、真实模型 GUI 对照 | 同一 ERP live batch；[redaction boundary](phase11-erp-visual-boundary.json) |
+| P11.11 | 已完成：真实 ERP typed API/Web 与模型 Web 对照，三次版本稳定 | [ERP live batch](phase11-benchmark-erp-readonly-live-glm-89ded56-r3.json) |
+| P11.12 | 已完成：确定性字段映射、脱敏截图、真实模型 GUI 对照 | 同一 ERP live batch；[current redaction boundary](phase11-erp-visual-boundary-live-glm-89ded56.json)；历史阻塞文件仍保留 |
 | P11.13 | 已完成：live synthetic 45 个主 trial、78 个故障/安全记录，失败保留 | [synthetic live batch](phase11-benchmark-synthetic-live-glm-e9e0ccf-r3.json) |
 | P11.14 | 代码和证据已齐，待最终独立对抗审查 | 本报告冻结后启动审查 |
 | P11.15 | 待审查 PASS 后同步 PLAN 和 Harness 指纹，再重跑 drift | 已生成精确同步范围，尚未改 `.harness` |
 
-阶段内提交均为小步原子提交；未修改 ERP/Frappe 核心、业务 Runtime、`.env*`、README 或 `.harness`，没有推送或改写历史。`eb8c2cd` 的大格式证据提交已由 `2314ec4` 显式 revert，当前只保留紧凑同数据 artifact `2011048`。
+阶段内提交均为小步原子提交；未修改 ERP/Frappe 核心、业务 Runtime、`.env*`、README 或 `.harness`，没有推送或改写历史。`eb8c2cd` 的大格式证据提交已由 `2314ec4` 显式 revert，当前只保留紧凑同数据 artifact `2011048`；API-after 修复批次另存为 `89ded56-r3`。
 
 ## 3. 真实多模态诊断和冻结选择
 
@@ -73,12 +73,12 @@ artifact SHA-256：`c20c9fa6f822c551fcf3660eb5fb30c2fccd32feda124a156cf84d4109c8
 
 ### 真实 ERP API/Web/GUI
 
-artifact SHA-256：`b9470912dc54c1594e631b1d5e8483db21353bc7c82560a08365dfe82548cd3b`。采购单 `PUR-ORD-2026-02297` 在固定 `dev.localhost`、同一 Buyer/Company 和同一版本下运行三次：
+artifact SHA-256：`a36373bcb07902cf8848d1f3f947623ba5375c86d07e67fc2a37fe76bf73a38f`。采购单 `PUR-ORD-2026-02297` 在固定 `dev.localhost`、同一 Buyer/Company 和同一版本下运行三次：
 
 - API/Web：`MATCHED=3/3`，`MISMATCH=0`，`STATE_DRIFT=0`，`BLOCKED=0`。
 - GUI：`SUCCEEDED=2/3`，`FAILED=1/3`；失败为 `MODEL_RESPONSE_SCHEMA`，四字段差异完整保留，没有执行动作写入。
 - 两次 GUI 成功都读出 `PUR-ORD-2026-02297`、`SYNORA-P1-Supplier-1`、`To Receive and Bill`、`CNY`，`field_differences=[]`。
-- API-before/after 的 `source_modified_at` 均为 `2026-09-11 01:10:41.759974`；三次 policy events 只有预期的 `SOCKET_BLOCKED` 和 `NON_TARGET_DOCUMENT_BLOCKED`。
+- 三次记录都落盘了 `api_before_snapshot` 和 `api_after_snapshot`，包含四字段、`source_modified_at`、Frappe/ERPNext revision 和 evidence digest；成功记录的 `reconciliation.fields_match=true`、`versions_match=true`。时间均为 `2026-09-11 01:10:41.759974`；三次 policy events 只有预期的 `SOCKET_BLOCKED` 和 `NON_TARGET_DOCUMENT_BLOCKED`。
 
 因此已经有至少一次同一真实 ERP 单据的 API/Web/GUI 四字段一致、版本稳定、零业务写入对照；同时 GUI 的一次模型结构失败仍然计入结果。
 
@@ -91,7 +91,7 @@ v2 把列表行属性从 `data-order-name` 改为 `data-order-id`。修复前 ar
 - 动作只允许打开预定义页面、点击当前观察目标、限定搜索、滚动、有界等待和结束；模型不能指定任意 URL、JavaScript、剪贴板、文件、上传、下载、ERP 写入或任意 HTTP。
 - BrowserContext 禁用 Service Worker，阻断新窗口、下载、外域、非目标文档、非 allowlist 方法和超大响应；登录失效立即返回 `AUTH_REQUIRED`，不会让模型填写凭证。
 - 视觉输入最多两张 PNG、每张不超过 2 MiB；响应最多 2,000,000 bytes；trial 最多 12 actions、8 model calls、180 秒；模型预算与页面动作预算分离，迟到结果不执行动作。
-- 脱敏截图边界 artifact `phase11-erp-visual-boundary.json` SHA-256 `48a61e3c621454358048d9584320b1e6e6aaaa9294a07ad512105b0fba1fadab`；截图 1024×768、19072 bytes，只保留任务四字段，账号、导航、时间线、评论和动作区隐藏。
+- 当前脱敏边界 artifact [phase11-erp-visual-boundary-live-glm-89ded56.json](phase11-erp-visual-boundary-live-glm-89ded56.json)，SHA-256 `5fd3538f70278a8e81b7309c5a98bc5c55bcfab2a4b189d459cd3dd4256005b7`，明确记录 `READY`、1024×768、当前截图 SHA 和 GLM probe/batch 引用；旧的 `phase11-erp-visual-boundary.json` 保留为历史阻塞快照，不能当作当前状态。
 - GLM 已证明当前配置的真实图片链路可用；视觉方法的成功率和延迟仍受模型输出波动影响，不能当作生产收益或生产稳定率。Grok 保留为“协议可读但可信字段不一致”的限制样本，不用它替换已冻结的 GLM。
 - typed API 继续是业务默认；所有网页/GUI/Hybrid 代码保持 `LAB_ONLY`，不注册到业务 Runtime，不获得业务写入权限。
 
@@ -106,9 +106,9 @@ v2 把列表行属性从 `data-order-name` 改为 `data-order-id`。修复前 ar
 | `make integration` | 0 | Frappe 集成 248/248，`OK` |
 | `uv run --python 3.14 --group web-gui-lab mypy labs/web_gui` | 0 | 17 个实验源码文件无错误 |
 | `uv run --python 3.14 --group web-gui-lab pytest tests/test_phase11_*.py` | 0 | 112 passed in 45.24s；无 skip |
-| `python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .` | 0 | valid；833 references，broken 0；read-only |
+| `python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .` | 0 | valid；855 references，broken 0；read-only |
 | `python3 .agents/skills/harness-check/scripts/validate_manifest.py .` | 0 | valid；warnings 0 |
-| `python3 .agents/skills/harness-check/scripts/check_references.py .` | 0 | 833 checked，broken 0，scan 未截断 |
+| `python3 .agents/skills/harness-check/scripts/check_references.py .` | 0 | 855 checked，broken 0，scan 未截断 |
 | `python3 .agents/skills/harness-check/scripts/score_harness_health.py .` | 0 | read-only 79/100，grade C；分数受 host evidence 和 drift 影响，不作业务通过依据 |
 | `git diff --check` | 0 | whitespace clean |
 | `python3 .agents/skills/harness-check/scripts/detect_drift.py .` | 1 | 仅 `pyproject.toml` 和 `uv.lock` source fingerprint 未同步 |
@@ -126,7 +126,7 @@ v2 把列表行属性从 `data-order-name` 改为 `data-order-id`。修复前 ar
 
 候选 Rubric 保持谨慎的 `27/36`（平均 `3.00`）：安全边界和真实集成证据已满足当前要求，D6 仍是部分无障碍/双语覆盖，D8 等最终审查和 Harness 同步后再重算。当前 P0=0；视觉 provider 不再是阻塞项，剩余开放项是评审和管理指纹同步，以及模型稳定性这一明确限制。
 
-最终独立审查的输入范围冻结为：实现 HEAD `66e1cf1`、本报告、Phase11 测试和全量门禁输出、vision probe、synthetic live batch、ERP live batch、redaction boundary、页面变化前后 artifact，以及 `.env*`/ERP 核心/业务 Runtime 未被修改的证据。审查重点是模型输入隔离、动作与网络 allowlist、API-after 漂移、真实三方字段一致、Grok/GLM 诊断是否如实和失败样本是否完整保留。
+最终独立审查的输入范围以修复后重新冻结：实现 HEAD `89ded56`、本报告、Phase11 测试和全量门禁输出、vision probe、synthetic live batch、`89ded56-r3` ERP live batch、当前 redaction boundary、页面变化前后 artifact，以及 `.env*`/ERP 核心/业务 Runtime 未被修改的证据。审查重点是模型输入隔离、动作与网络 allowlist、API-after 漂移、真实三方字段一致、Grok/GLM 诊断是否如实和失败样本是否完整保留。
 
 审查 PASS 后，按已授权范围只同步：`docs/PLAN.md` 的 Phase11 状态、`.harness/source-index.json` 中 `pyproject.toml` 与 `uv.lock` 两条当前 SHA、`.harness/manifest.json` 对应管理 SHA，以及必要的 Phase11 权威报告引用。README 不因本阶段实验而改变。同步后必须重新运行 structure、manifest、references、drift 和 `git diff --check`，drift 目标为 0。
 

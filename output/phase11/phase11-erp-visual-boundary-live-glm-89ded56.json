@@ -1,0 +1,44 @@
+{
+  "artifact": "phase11-erp-visual-boundary-live-glm-89ded56",
+  "case_id": "p11-erp-visual-001",
+  "evidence_kind": "CURRENT_REDACTED_ERP_GUI_MODEL_BOUNDARY",
+  "status": "CURRENT_LIVE_VERIFIED",
+  "origin": "http://127.0.0.1:8000",
+  "site": "dev.localhost",
+  "purchase_order": "PUR-ORD-2026-02297",
+  "user": "synora-p1-buyer@dev.localhost",
+  "redaction": {
+    "status": "READY",
+    "viewport": [1024, 768],
+    "screenshot_sha256": "eaf7b8561599519f9f26e7b5ce91b1e1812186ce152366c23d88341f9ab5dc9e",
+    "task_fields_only": true,
+    "credentials_and_navigation_hidden": true,
+    "raw_screenshot_recorded": false
+  },
+  "vision": {
+    "role": "assist",
+    "model": "glm-5.3-flash",
+    "probe_status": "PASS",
+    "probe_artifact": "phase11-vision-probe-r3-e0ffd6d.json",
+    "probe_sha256": "7015be5535ad7405ac1c70ec135912179317137206ad6d905c01e7c2a95b564c"
+  },
+  "erp_batch": {
+    "path": "phase11-benchmark-erp-readonly-live-glm-89ded56-r3.json",
+    "sha256": "a36373bcb07902cf8848d1f3f947623ba5375c86d07e67fc2a37fe76bf73a38f",
+    "api_web_status": "MATCHED_3_OF_3",
+    "visual_status": "SUCCEEDED_2_OF_3_BLOCKED_1_OF_3",
+    "state_drift": 0,
+    "business_writes": 0
+  },
+  "three_way_status": "MATCHED_WITH_TWO_LIVE_GUI_SUCCESSES",
+  "historical_blocked_artifact": {
+    "path": "phase11-erp-visual-boundary.json",
+    "status": "HISTORICAL_PRE_PROVIDER_FIX",
+    "preserved": true
+  },
+  "notes": [
+    "This current artifact supersedes no historical evidence; it records the post-fix GLM live boundary.",
+    "API-before and API-after fields, source_modified_at, revisions, and evidence digests are independently recorded in the ERP batch.",
+    "The GUI model receives only the redacted screenshot, viewport and task; trusted API facts are used after the run for reconciliation, never as model input."
+  ]
+}

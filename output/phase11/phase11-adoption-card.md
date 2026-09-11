@@ -1,48 +1,35 @@
 # Phase 11 Adoption Card
 
-状态：`BLOCKED / REVIEW_ROUNDS_EXHAUSTED / VISION_PROVIDER_UNAVAILABLE / LIVE_GUI_MISMATCH / HARNESS_DRIFT`。
+状态：`READY_FOR_FINAL_REVIEW / HARNESS_SYNC_PENDING`。
 
-实现代码冻结 HEAD：`15a476e`。本卡只描述实验和固定开发 ERP 只读证据，不授予业务 Runtime 或 ERP 写入权限；文档收口提交的最终 HEAD 以提交历史记录，避免自引用。
+实现基线 HEAD：`89ded56`；本卡只描述 `LAB_ONLY` 实验和固定开发 ERP 只读证据，不授予业务 Runtime 或 ERP 写入权限。旧阻塞 artifact 保留为历史记录，当前结论只引用下列新证据。
 
 主要证据：
 
-- Synthetic deterministic：[phase11-benchmark-synthetic.json](phase11-benchmark-synthetic.json)，SHA-256 `1956c43950d3a22a407827cc7f8f1991eb64a9324b49a14bb4bd4c72b80487f6`，45 条业务 trial、33 条故障记录。
-- 真实 ERP deterministic API/Web：[phase11-benchmark-erp-readonly-deterministic-20260911.json](phase11-benchmark-erp-readonly-deterministic-20260911.json)，SHA-256 `b8a12b8cf958053583f0f2c1f52de18e5ed151747154f5621fbf7a3be1805f24`，3/3 `MATCHED`。
-- 真实 ERP live API/Web/GUI：[phase11-benchmark-erp-readonly-live-d444e97.json](phase11-benchmark-erp-readonly-live-d444e97.json)，SHA-256 `1973dbe929dc2eefc989cf7a79e074f212df98c2067e7ce793d05cba553e08bf`，API/Web `MATCHED`，GUI `INCOMPLETE / visual_fields_mismatch`。
-- live 汇总校正：[phase11-benchmark-erp-readonly-live-reconciled-8fd20d8.json](phase11-benchmark-erp-readonly-live-reconciled-8fd20d8.json)，SHA-256 `4c305afa040d884b786eee0f0c26e27b129516b870d1ab3c57c458ea457cbf6c`，逐 trial 汇总保留 `INCOMPLETE=1`。
-- 图片探测：[phase11-vision-probe-925b96a.json](phase11-vision-probe-925b96a.json)，SHA-256 `273cc7971d7191260cd393f08de87b45a20d76c619de06c98674628598dd12fb`；四个已配置 role 均未通过两张合成图的可读性验证，状态 `VISION_PROVIDER_UNAVAILABLE`。
+- 真实图片探测：[phase11-vision-probe-r3-e0ffd6d.json](phase11-vision-probe-r3-e0ffd6d.json)，SHA-256 `7015be5535ad7405ac1c70ec135912179317137206ad6d905c01e7c2a95b564c`；assist/`glm-5.3-flash` 双图 `PASS`，backup/`grok-4.5` HTTP 200、Responses `output` 可解析但可信字段 `RESPONSE_CONTENT_MISMATCH`。
+- synthetic live 冻结：[phase11-benchmark-synthetic-live-glm-e9e0ccf-r3.json](phase11-benchmark-synthetic-live-glm-e9e0ccf-r3.json)，SHA-256 `c20c9fa6f822c551fcf3660eb5fb30c2fccd32feda124a156cf84d4109c823c2`；45 主 trial、78 fault、安全记录，`test_double_methods=[]`。
+- 真实 ERP live：[phase11-benchmark-erp-readonly-live-glm-89ded56-r3.json](phase11-benchmark-erp-readonly-live-glm-89ded56-r3.json)，SHA-256 `a36373bcb07902cf8848d1f3f947623ba5375c86d07e67fc2a37fe76bf73a38f`；API/Web `MATCHED=3/3`，GUI `SUCCEEDED=2/3`、一次 `BLOCKED/TRANSPORT_ERROR`，before/after 字段、revision、时间和 digest 已落盘。
+- 当前视觉边界：[phase11-erp-visual-boundary-live-glm-89ded56.json](phase11-erp-visual-boundary-live-glm-89ded56.json)；脱敏 `READY`、任务字段保留、账号和导航隐藏、业务写入为 0。
+- 页面变化复盘：[failure](phase11-page-change-failure-v1.json) 保留修复前失败；[repair](phase11-page-change-repair-v1.json) 为 `FIXED_AND_RETESTED/SUCCEEDED`。
 
 ## 方法决策
 
 | 方法 | 决策 | 适用条件 | 当前证据和限制 |
 | --- | --- | --- | --- |
-| typed API | `KEEP BUSINESS DEFAULT` | 采购事实有稳定、受治理的 typed Gateway | 固定 ERP API/Web 三次 `MATCHED`；继续经过现有 Run、capability、权限和审计边界 |
-| DOM | `LAB_ONLY CANDIDATE` | 结构、临时引用和目标唯一且模型延迟在预算内 | live `glm-5.3-flash` 成功读取 synthetic DOM 一次；deterministic 9/9；未注册业务 Runtime |
-| ARIA | `LAB_ONLY CANDIDATE WITH TIMEOUT LIMIT` | role、accessible name、键盘路径稳定且模型及时返回 | 修复前目标引用缺失已保留；修复后进入第二次调用但因 10 秒动作上限安全超时；没有稳定率结论 |
-| screenshot GUI | `BLOCKED / EXPERIMENT ONLY` | 脱敏可靠、图片模型通过内容探测、坐标动作可确认 | backup `grok-4.5` 一次返回与 trusted API 不一致；真实三方成功缺失，不能使用 test double 替代 |
-| hybrid | `LAB_ONLY CANDIDATE` | 结构和截图来自同一 page version，冲突能停止 | deterministic test double 9/9；live 视觉 provider 尚无通过证据，不能静默降级 |
+| typed API | `KEEP BUSINESS DEFAULT` | 有稳定、受治理的 typed Gateway | 真实 ERP API/Web 三次一致，继续经过 Run、capability、权限和审计边界 |
+| DOM | `LAB_ONLY CANDIDATE` | 结构稳定、临时引用唯一、模型在预算内 | live `glm-5.3-flash` 有成功轨迹；冻结批次 4/9 正确，失败保留，不宣称生产稳定率 |
+| ARIA | `LAB_ONLY CANDIDATE` | role/name、焦点和键盘路径稳定 | 冻结批次 9/9 正确；只覆盖本实验页面，不等同 ERP 无障碍审计 |
+| screenshot GUI | `LAB_ONLY CANDIDATE / EXPERIMENT ONLY` | 脱敏可靠、坐标可确认、模型能读当前截图 | GLM 双图真实 PASS，ERP GUI 2/3 成功；不接入业务 Runtime |
+| hybrid | `LAB_ONLY CANDIDATE` | 结构和截图同一 page version，冲突即停止 | 冻结批次 8/9 正确；不能从视觉失败静默切 DOM/API |
 
-## 统一任务
+统一任务：找到采购单并读取采购单号、供应商、业务状态和币种；目标不存在、权限、加载、登录、冲突、陈旧引用和预算问题都返回明确终态，未知字段不猜测。
 
-找到指定采购单，读取单号、供应商、业务状态和币种，并说明观察是否完整。目标不存在、权限拒绝、未完成加载、登录失效、观察冲突、陈旧引用和预算耗尽都返回明确终态；数量明细不跨单位相加。
+## 采用边界和剩余风险
 
-## 采用边界
+- 所有新增执行器只绑定 loopback/独立会话，保持 `LAB_ONLY`，不注册业务 Runtime，不执行 ERP 写入。
+- Grok 的失败是内容校验不一致，不能改写为 provider 不可用；冻结后续对照使用已验证的 assist/`glm-5.3-flash`。
+- 视觉和 DOM 的成功率受模型版本、响应结构和延迟波动影响；小样本只报告实际 trial，不生成生产 p95 或收益结论。
+- 原始 `phase11-erp-visual-boundary.json`、旧 probe 和旧 live mismatch 文件保留为历史证据，不作为当前状态。
+- 最终独立 Review PASS 和 Harness drift 清零是阶段出口前剩余门禁；通过后再把状态写入 PLAN。
 
-- 所有新增执行器仍为 `LAB_ONLY`，只绑定 loopback/独立会话，不进入业务 Runtime。
-- deterministic 视觉/Hybrid 成绩明确是 `scripted-fixture-replay`，只证明执行器回归；live DOM 的单次成功也不构成生产收益或模型稳定性承诺。
-- 真实 ERP Web 结果只读且版本稳定；live GUI 字段必须同时满足截图观察、可信 API 版本和安全事件检查才可成功。
-- usage 缺失保持 `null`，没有核验价格就不换算货币成本；不自动反复调用付费 provider。
-
-## 重新评估触发器
-
-1. `probe-vision` 用两张内容不同的合成 PNG 返回严格结构化且逐图可核验的四字段，冻结 role/model/protocol/预算。
-2. 同一真实 ERP 单据、同一脱敏映射和同一页面版本完成 API/Web/GUI 三方只读对照，四字段一致且无副作用。
-3. 新页面、provider 或浏览器版本变化时保留旧失败，先补回归测试和独立审查，再刷新本卡。
-
-## 当前风险和门禁
-
-- 图片 provider 能力和 live GUI mismatch 是阶段必做阻断；不得用 DOM/API 答案或 recorded response 填补。
-- 两轮独立 Review 均未给出 `PASS`：首轮四项代码问题已修复并复验，第二轮只发现 Harness 引用计数 830/831 不一致；执行者已在 `fab8e22` 修正并重跑扫描。两轮上限已用完，本周期不再启动第三轮，审查门禁保持 `REVIEW_ROUNDS_EXHAUSTED`。
-- `.harness` structure/manifest/references 已通过，pyproject/uv.lock 指纹 drift 仍存在；由于 Review 未 PASS，本周期不执行已批准的 Harness 写入同步。
-
-本卡保持 `BLOCKED`，typed API 继续作为业务默认；需在新授权周期完成 Review、视觉能力和真实 GUI 三方门禁后才能重新评估，不进入 Phase 12。
+本卡不进入 Phase 12；阶段结束前不生成学习笔记或自动问答。
