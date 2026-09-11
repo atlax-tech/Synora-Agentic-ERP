@@ -48,6 +48,14 @@ class DomRun:
     security_violations: tuple[str, ...] = ()
 
 
+def _terminal_page_state(page: Any) -> tuple[TaskStatus, str] | None:
+    if page.locator('[data-state="auth-required"]').count() == 1:
+        return "AUTH_REQUIRED", "AUTH_REQUIRED"
+    if page.locator('[data-state="permission-denied"]').count() == 1:
+        return "PERMISSION_DENIED", "PERMISSION_DENIED"
+    return None
+
+
 def _playwright_sync() -> Any:
     try:
         from playwright.sync_api import sync_playwright
@@ -264,8 +272,13 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
         def on_download(download: Any) -> None:
             browser_events.append("DOWNLOAD_BLOCKED")
 
+        def on_dialog(dialog: Any) -> None:
+            browser_events.append("DIALOG_DISMISSED")
+            dialog.dismiss()
+
         context.on("page", on_popup)
         page.on("download", on_download)
+        page.on("dialog", on_dialog)
         try:
             page.goto(
                 f"{origin}/?scenario={spec.scenario}",
@@ -274,6 +287,18 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
             )
             snapshot = _snapshot(page, spec, spec.mode)
             observations.append(snapshot.observation)
+            terminal = _terminal_page_state(page)
+            if terminal is not None:
+                status, stop_reason = terminal
+                security_violations = tuple(policy.violations + browser_events)
+                result = TaskResult(
+                    case_id=spec.case_id,
+                    status=status,
+                    evidence_refs=tuple(item.observation_id for item in observations),
+                    actions=tuple(receipts),
+                    stop_reason=stop_reason,
+                )
+                return DomRun(result, tuple(observations), security_violations)
             try:
                 wait_for_ready(
                     page,
@@ -317,9 +342,21 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                 return DomRun(result, tuple(observations), security_violations)
             snapshot = _snapshot(page, spec, spec.mode)
             observations.append(snapshot.observation)
+            terminal = _terminal_page_state(page)
+            if terminal is not None:
+                status, stop_reason = terminal
+                security_violations = tuple(policy.violations + browser_events)
+                result = TaskResult(
+                    case_id=spec.case_id,
+                    status=status,
+                    evidence_refs=tuple(item.observation_id for item in observations),
+                    actions=tuple(receipts),
+                    stop_reason=stop_reason,
+                )
+                return DomRun(result, tuple(observations), security_violations)
             target = f"order:{spec.purchase_order}"
             if target not in snapshot.targets:
-                status: TaskStatus = "NOT_FOUND"
+                status = "NOT_FOUND"
             else:
                 click = ActionProposal(
                     action_type="click",
@@ -329,6 +366,18 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                 receipts.append(_apply_action(page, click, snapshot, spec))
                 snapshot = _snapshot(page, spec, spec.mode)
                 observations.append(snapshot.observation)
+                terminal = _terminal_page_state(page)
+                if terminal is not None:
+                    status, stop_reason = terminal
+                    security_violations = tuple(policy.violations + browser_events)
+                    result = TaskResult(
+                        case_id=spec.case_id,
+                        status=status,
+                        evidence_refs=tuple(item.observation_id for item in observations),
+                        actions=tuple(receipts),
+                        stop_reason=stop_reason,
+                    )
+                    return DomRun(result, tuple(observations), security_violations)
                 values = _fields(page)
                 status = "SUCCEEDED" if all(values.values()) else "INCOMPLETE"
             elapsed = int((monotonic() - started) * 1000)
@@ -359,7 +408,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
 def run_security_probe(base_url: str, scenario: str) -> tuple[str, ...]:
     """Exercise one fixture hazard and return recorded security events."""
 
-    if scenario not in {"external", "popup", "download", "write"}:
+    if scenario not in {"external", "popup", "download", "write", "confirm"}:
         raise ValueError("unknown security scenario")
     origin = _origin(base_url)
     sync_playwright = _playwright_sync()
@@ -386,15 +435,20 @@ def run_security_probe(base_url: str, scenario: str) -> tuple[str, ...]:
         def on_download(download: Any) -> None:
             events.append("DOWNLOAD_BLOCKED")
 
+        def on_dialog(dialog: Any) -> None:
+            events.append("DIALOG_DISMISSED")
+            dialog.dismiss()
+
         context.on("page", on_popup)
         page.on("download", on_download)
+        page.on("dialog", on_dialog)
         try:
             page.goto(
                 f"{origin}/?scenario={scenario}",
                 wait_until="domcontentloaded",
                 timeout=10_000,
             )
-            if scenario in {"external", "popup", "download"}:
+            if scenario in {"external", "popup", "download", "confirm"}:
                 try:
                     page.locator(f'[data-security="{scenario}"]').click(timeout=1_000)
                 except Exception:

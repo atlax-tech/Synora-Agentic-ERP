@@ -138,6 +138,45 @@ def test_dom_task_stops_when_async_page_never_becomes_ready() -> None:
     assert run.result.stop_reason == "PAGE_NOT_READY"
 
 
+def test_dom_task_stops_on_permission_denial() -> None:
+    try:
+        with _server() as base_url:
+            run = run_dom_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-authz-001",
+                    purchase_order="PUR-ORD-0001",
+                    mode="dom",
+                    scenario="permission",
+                ),
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "PERMISSION_DENIED"
+    assert run.result.fields == {}
+
+
+def test_dom_task_does_not_treat_expired_session_as_success() -> None:
+    try:
+        with _server() as base_url:
+            run = run_dom_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-authz-002",
+                    purchase_order="PUR-ORD-0001",
+                    mode="dom",
+                    scenario="auth_expired",
+                ),
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "AUTH_REQUIRED"
+    assert run.result.fields == {}
+    assert "Sign in again" in run.observations[-1].content
+
+
 def test_dom_policy_rejects_stale_or_unknown_targets() -> None:
     proposal = ActionProposal(
         action_type="click",
@@ -176,7 +215,12 @@ def test_browser_security_policy_allows_only_loopback_read_routes() -> None:
 
 @pytest.mark.parametrize(
     ("scenario", "expected"),
-    [("external", "evil.example"), ("download", "DOWNLOAD_BLOCKED"), ("popup", "evil.example")],
+    [
+        ("external", "evil.example"),
+        ("download", "DOWNLOAD_BLOCKED"),
+        ("popup", "evil.example"),
+        ("confirm", "DIALOG_DISMISSED"),
+    ],
 )
 def test_browser_security_probe_blocks_side_effect_surfaces(scenario: str, expected: str) -> None:
     try:

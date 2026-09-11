@@ -112,6 +112,12 @@ def _security_controls(scenario: str) -> str:
         return '<p><a data-security="download" href="/secret.txt" download>Download secret</a></p>'
     if scenario == "write":
         return '<p><button data-security="write" type="button">Submit ERP change</button></p>'
+    if scenario == "confirm":
+        return (
+            '<p><button data-security="confirm" '
+            "onclick=\"window.confirm('This fixture has no side effect')\">"
+            "Open confirmation</button></p>"
+        )
     return ""
 
 
@@ -130,16 +136,23 @@ def _async_rows(*, query: str, scenario: str, ready: bool, rows: str) -> str:
     )
 
 
-def _list_rows(orders: tuple[FixtureOrder, ...]) -> str:
+def _session_notice(scenario: str) -> str:
+    if scenario == "permission":
+        return '<p role="alert" data-state="permission-denied">Permission denied for this task.</p>'
+    return ""
+
+
+def _list_rows(orders: tuple[FixtureOrder, ...], scenario: str = "") -> str:
     if not orders:
         return '<p role="status" data-state="empty">No purchase orders found.</p>'
+    query_suffix = "?scenario=" + html.escape(scenario, quote=True) if scenario else ""
     rows = "".join(
         f'<tr data-order-name="{html.escape(order.purchase_order, quote=True)}">'
         f"<td>{html.escape(order.purchase_order)}</td>"
         f"<td>{html.escape(order.supplier)}</td>"
         f"<td>{html.escape(order.status)}</td>"
         f'<td><a data-order-link href="/purchase-orders/'
-        f'{html.escape(order.purchase_order, quote=True)}">View '
+        f'{html.escape(order.purchase_order, quote=True)}{query_suffix}">View '
         f"{html.escape(order.purchase_order)} details</a></td></tr>"
         for order in orders
     )
@@ -214,11 +227,12 @@ def create_app() -> FastAPI:
         return HTMLResponse(
             _layout(
                 query=q,
-                rows=_async_rows(
+                rows=_session_notice(scenario)
+                or _async_rows(
                     query=q,
                     scenario=scenario,
                     ready=bool(ready),
-                    rows=_list_rows(orders),
+                    rows=_list_rows(orders, scenario),
                 ),
                 body_title="",
                 body="",
@@ -227,7 +241,10 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/purchase-orders/{name}", response_class=HTMLResponse)
-    def detail(name: str) -> HTMLResponse:
+    def detail(
+        name: str,
+        scenario: str = Query(default="", max_length=20),
+    ) -> HTMLResponse:
         order = _find_order(name)
         if order is None:
             return HTMLResponse(
@@ -239,8 +256,22 @@ def create_app() -> FastAPI:
                 ),
                 status_code=404,
             )
+        if scenario == "auth_expired":
+            return HTMLResponse(
+                _layout(
+                    query="",
+                    rows="",
+                    body_title="<h2>Session expired</h2>",
+                    body=(
+                        '<p role="alert" data-state="auth-required">Sign in again to continue.</p>'
+                    ),
+                    scenario=scenario,
+                )
+            )
         title, body = _detail_body(order)
-        return HTMLResponse(_layout(query="", rows="", body_title=title, body=body))
+        return HTMLResponse(
+            _layout(query="", rows="", body_title=title, body=body, scenario=scenario)
+        )
 
     return app
 

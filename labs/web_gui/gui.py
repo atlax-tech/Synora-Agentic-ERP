@@ -9,7 +9,12 @@ from dataclasses import dataclass
 from time import monotonic
 from typing import Any
 
-from labs.web_gui.browser import BrowserPolicyError, _origin, _playwright_sync
+from labs.web_gui.browser import (
+    BrowserPolicyError,
+    _origin,
+    _playwright_sync,
+    _terminal_page_state,
+)
 from labs.web_gui.contracts import (
     ActionProposal,
     ActionReceipt,
@@ -204,6 +209,10 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                         before_observation_id=observation.observation_id,
                     )
                 )
+                terminal = _terminal_page_state(page)
+                if terminal is not None:
+                    status, stop_reason = terminal
+                    break
                 observation, screenshot = _visual_observation(page, spec.data_source)
                 observations.append(observation)
                 screenshots.append(screenshot)

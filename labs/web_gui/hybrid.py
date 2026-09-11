@@ -15,6 +15,7 @@ from labs.web_gui.browser import (
     _locator_for,
     _origin,
     _playwright_sync,
+    _terminal_page_state,
 )
 from labs.web_gui.contracts import (
     ActionProposal,
@@ -260,6 +261,10 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                         before_observation_id=frame.observation.observation_id,
                     )
                 )
+                terminal = _terminal_page_state(page)
+                if terminal is not None:
+                    status, stop_reason = terminal
+                    break
                 frame = _hybrid_frame(page, spec)
                 frames.append(frame)
             else:
