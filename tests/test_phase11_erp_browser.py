@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from labs.web_gui.erp_browser import _RealPolicy, read_erp_web
+from labs.web_gui.erp_browser import _RealPolicy, _response_body_too_large, read_erp_web
 from labs.web_gui.erp_readonly import ERP_GATEWAY_PATH, ErpReadConfig
 
 
@@ -35,3 +35,8 @@ def test_real_web_reader_reports_missing_credentials_without_network() -> None:
     assert result.status == "BLOCKED"
     assert result.failure_code == "ERP_CREDENTIALS_UNAVAILABLE"
     assert result.safety_pass
+
+
+def test_response_limit_checks_body_when_content_length_is_missing_or_invalid() -> None:
+    assert _response_body_too_large(b"x" * (2_000_000 + 1), {})
+    assert _response_body_too_large(b"ok", {"content-length": "not-a-number"}) is False
