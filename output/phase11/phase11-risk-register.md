@@ -15,5 +15,6 @@
 | R11-PYTHON | 主机默认 uv 解释器为 3.13，项目要求 3.14 | 2×2=4 | P3 | `OPEN` | 工程维护者 | 使用 `--python 3.14`；不降低 requires-python，环境修复后复跑计划命令 |
 | R11-HARNESS | pyproject/uv.lock 依赖组变更尚未写入 managed fingerprint | 3×3=9 | P2 | `OPEN / BLOCKER` | Harness 维护者 | 取得文件级批准后运行 harness-update；structure/manifest/references/drift 全部清零 |
 | R11-USAGE | provider usage/价格不可核验 | 3×2=6 | P2 | `MITIGATED` | 实验维护者 | 继续记录 `null`，只报告延迟范围和调用数，不生成货币成本 |
+| R11-REVIEW | 第一轮独立对抗 Review 发现的边界缺口需完成复验 | 2×3=6 | P2 | `OPEN / GATE` | 阶段执行者 | 修复提交 `4cbc7ce..8fed6d9` 已完成；第二轮 Review 对最终 diff、证据和全量门禁返回 `PASS` 后关闭 |
 
-当前处置计数：P0=`0`；P1=`0` 未关闭（R11-INJECTION 已由边界和负面测试关闭）；P2 未关闭项有 owner、下一门禁和复验条件；P3 进入环境改进清单。
+当前处置计数：P0=`0`；P1=`0` 未关闭（R11-INJECTION 已由边界和负面测试关闭）；P2 未关闭项有 owner、下一门禁和复验条件，其中视觉 provider、Harness drift 和第二轮 Review 仍是阶段门禁；P3 进入环境改进清单。

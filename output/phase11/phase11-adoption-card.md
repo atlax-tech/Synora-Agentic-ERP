@@ -1,14 +1,14 @@
 # Phase 11 Adoption Card
 
-状态：`PENDING INDEPENDENT REVIEW`；业务采用结论受真实图片 provider 和受保护 Harness 同步门禁约束。
+状态：`PENDING SECOND INDEPENDENT REVIEW`；业务采用结论受真实图片 provider 和受保护 Harness 同步门禁约束。
 
-实现代码基线：`4708b5ebe7eac624b1edf3dc8b2293a5ba2a4dad`。
+实现代码基线：`9cf8e9e862419023b1355ee8156dc7efa50e2d7e`。
 
 主要证据：
 
-- synthetic 五方法报告：[phase11-benchmark-synthetic.json](phase11-benchmark-synthetic.json)，SHA-256 `b9826a20af630cd757bd3b27cb84930902567b799f5affb3bd106ef3bd76993f`。
-- 真实 ERP API/Web 报告：[phase11-benchmark-erp-readonly.json](phase11-benchmark-erp-readonly.json)，SHA-256 `3087cdcf7e52420c7793978e145d28c34bc60dc6664b5b9aeb4bc06bee5b4063`。
-- 真实 ERP 脱敏 GUI 边界：[phase11-erp-visual-boundary.json](phase11-erp-visual-boundary.json)，SHA-256 `a523a39b831058d76a30117c7b4d25760c1651a95874ab23cce8e3283557c575`。
+- synthetic 五方法报告：[phase11-benchmark-synthetic.json](phase11-benchmark-synthetic.json)，SHA-256 `c26d75c33396ef3dd8e5c43de7f3de210f3b9bef40fa240c183dc30c54b41fdd`。
+- 真实 ERP API/Web 报告：[phase11-benchmark-erp-readonly.json](phase11-benchmark-erp-readonly.json)，SHA-256 `bb517ff2f6a9fccc29db25af245aacf3f8005a8bd5faa4aa10053cad2a1a6a9e`。
+- 真实 ERP 脱敏 GUI 边界：[phase11-erp-visual-boundary.json](phase11-erp-visual-boundary.json)，SHA-256 `50a32c4454ee65b83fc286c5ed9c382fc83a25925fd5114bf3cc97763a23ab37`。
 
 ## 方法决策
 
@@ -17,8 +17,8 @@
 | typed API | `KEEP BUSINESS DEFAULT` | 采购事实有稳定、受治理的 typed Gateway | 真实 ERP API/Web 三次均 `MATCHED`；继续经过现有 Run、capability 和权限边界，不新增写入权限 |
 | DOM | `LAB_ONLY CANDIDATE` | 页面结构已知、selector/引用可观察且唯一 | synthetic 9/9 正确；v2 属性变化先失败后修复；尚未授权接入业务 Runtime |
 | ARIA | `LAB_ONLY CANDIDATE` | 控件有稳定 role、accessible name、焦点顺序 | synthetic 9/9 正确；只证明本实验页面的可访问性路径，不是完整 ERP 无障碍审计 |
-| screenshot GUI | `BLOCKED / EXPERIMENT ONLY` | 仅在截图可靠脱敏且真实图片模型通过内容验证 | 脱敏 GUI test double 可安全返回四字段；四个已配置角色均 `VISION_PROVIDER_UNAVAILABLE`，因此没有真实 GUI 准确率或 ERP 三方成功 |
-| hybrid | `LAB_ONLY CANDIDATE` | DOM/ARIA 与同页面版本截图同步且冲突可停止 | synthetic test double 6/9 正确，冲突会返回 `OBSERVATION_CONFLICT`；不能在视觉失败后静默降级为成功 |
+| screenshot GUI | `BLOCKED / EXPERIMENT ONLY` | 仅在截图可靠脱敏且真实图片模型通过内容验证 | 脱敏 GUI test double 在显式 trusted API mapping 下安全返回四字段；四个已配置角色均 `VISION_PROVIDER_UNAVAILABLE`，因此没有真实 GUI 准确率或 ERP 三方成功 |
+| hybrid | `LAB_ONLY CANDIDATE` | DOM/ARIA 与同页面版本截图同步且冲突可停止 | synthetic test double 9/9 正确，目标不存在返回 `NOT_FOUND`，冲突会返回 `OBSERVATION_CONFLICT`；不能在视觉失败后静默降级为成功 |
 
 ## 统一业务任务
 

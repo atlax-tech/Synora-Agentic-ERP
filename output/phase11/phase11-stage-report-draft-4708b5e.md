@@ -1,6 +1,6 @@
 # Phase 11 阶段报告（草稿）
 
-状态：`PENDING INDEPENDENT REVIEW / BLOCKED BY VISION PROVIDER`。
+状态：`PENDING SECOND INDEPENDENT REVIEW / BLOCKED BY VISION PROVIDER`。
 
 本草稿不把实验页面、test double 或固定开发 ERP 读对照描述为生产部署、客户采用、模型质量提升或业务写入授权。真实视觉依赖和 managed Harness fingerprint 同步尚未闭合，因此不能写 `COMPLETED / PASS`。
 
@@ -18,7 +18,7 @@ Phase 11 交付了一套只绑定 loopback 的 `LAB_ONLY` 采购读取实验。�
 2. [labs/web_gui/browser.py](../../labs/web_gui/browser.py)、[labs/web_gui/gui.py](../../labs/web_gui/gui.py)、[labs/web_gui/hybrid.py](../../labs/web_gui/hybrid.py)：DOM/ARIA、截图坐标和同步混合循环。
 3. [labs/web_gui/erp_readonly.py](../../labs/web_gui/erp_readonly.py)、[labs/web_gui/erp_browser.py](../../labs/web_gui/erp_browser.py)、[labs/web_gui/redaction.py](../../labs/web_gui/redaction.py)、[labs/web_gui/erp_visual.py](../../labs/web_gui/erp_visual.py)：真实 ERP 只读 API/Web、截图遮罩和 GUI 边界。
 
-实现代码 HEAD（最后一个业务代码提交）：`4708b5ebe7eac624b1edf3dc8b2293a5ba2a4dad`。
+实现与证据 HEAD（第二轮 Review 输入）：`9cf8e9e862419023b1355ee8156dc7efa50e2d7e`。
 
 ## 3. 步骤与提交追踪
 
@@ -36,6 +36,7 @@ Phase 11 交付了一套只绑定 loopback 的 `LAB_ONLY` 采购读取实验。�
 | P11.11 | 真实 ERP typed API 与精确 allowlist Web 对照 | `8feaee1`、`b0d9961`、[comparison](phase11-erp-readonly-comparison.json) |
 | P11.12 | 真实 ERP 确定性截图遮罩和 GUI test-double 安全边界 | `16bd822`、`a3433ea`、[boundary](phase11-erp-visual-boundary.json) |
 | P11.13 | 调用预算、统一 CLI、五方法 benchmark、三次冻结证据 | `9bb4c5b`、`701413d`、`4da1986`、`bd05dae`、[synthetic](phase11-benchmark-synthetic.json)、[ERP](phase11-benchmark-erp-readonly.json) |
+| Review remediation | 输入隔离、trusted oracle、模型预算/无进展、结构化拒绝、页面版本、ERP 浏览器事件、benchmark 断言和原子写入 | `4cbc7ce`、`1e495f3`、`611f55b`、`d2a349f`、`cd96d6c`、`50f342d`、`a4d6842`、`823233f`、`8fed6d9`、`d9823fc` |
 
 每个提交只包含一个可回滚的实验结果；未修改 ERP/Frappe 核心、业务 Runtime、`.env*`、README 或 `.harness`。
 
@@ -43,29 +44,29 @@ Phase 11 交付了一套只绑定 loopback 的 `LAB_ONLY` 采购读取实验。�
 
 ### Synthetic
 
-`phase11-benchmark-synthetic.json` SHA-256 为 `b9826a20af630cd757bd3b27cb84930902567b799f5affb3bd106ef3bd76993f`。三次重复包含 45 个业务 trial 和 33 个故障 trial；所有业务 trial `safety_pass`，不删除 `INCOMPLETE`。
+`phase11-benchmark-synthetic.json` SHA-256 为 `c26d75c33396ef3dd8e5c43de7f3de210f3b9bef40fa240c183dc30c54b41fdd`。三次重复包含 45 个业务 trial 和 33 个故障 trial；所有业务 trial `safety_pass`，不删除失败或 `INCOMPLETE`。
 
 | 方法 | 正确 | 业务 trial | 模型调用 | 延迟统计（ms） | 说明 |
 | --- | ---: | ---: | ---: | --- | --- |
 | API | 9 | 9 | 0 | 0/0/0（min/median/max） | typed fixture oracle |
-| DOM | 9 | 9 | 0 | 345/419/934 | bounded Playwright |
-| ARIA | 9 | 9 | 0 | 329/402/436 | bounded Playwright |
-| 视觉 | 6 | 9 | 9 | 278/303/367 | `scripted-fixture-replay` test double；目标不存在保留 `INCOMPLETE` |
-| 混合 | 6 | 9 | 24 | 475/541/648 | `scripted-fixture-replay` test double；同上 |
+| DOM | 9 | 9 | 0 | 320/399/854 | bounded Playwright |
+| ARIA | 9 | 9 | 0 | 337/399/506 | bounded Playwright |
+| 视觉 | 9 | 9 | 9 | 276/286/322 | `scripted-fixture-replay` test double；目标不存在由 trusted oracle 返回 `NOT_FOUND` |
+| 混合 | 9 | 9 | 24 | 472/639/749 | `scripted-fixture-replay` test double；冲突仍返回 `OBSERVATION_CONFLICT` |
 
 故障集三次重复均可区分：页面变化修复后 `SUCCEEDED`、异步 `SUCCEEDED`、持续加载 `FAILED/PAGE_NOT_READY`、权限 `PERMISSION_DENIED`、登录失效 `AUTH_REQUIRED`、外域/弹窗/下载/写入/确认均安全停止、陈旧坐标拒绝。
 
 ### Real ERP API/Web
 
-`PUR-ORD-2026-02297` 在固定 `dev.localhost`、同一 Buyer/Company 范围和同一单据版本下运行三次，报告 SHA-256 为 `3087cdcf7e52420c7793978e145d28c34bc60dc6664b5b9aeb4bc06bee5b4063`，状态为 `MATCHED=3`、`STATE_DRIFT=0`、`BLOCKED=0`。四个字段为采购单号 `PUR-ORD-2026-02297`、供应商 `SYNORA-P1-Supplier-1`、状态 `To Receive and Bill`、币种 `CNY`；API-before/after `source_modified_at` 一致。Frappe/ERPNext 固定 revision 仍为 `6a329d068416768ec47ccd3326b9cc95a8d7bf99` / `11e0ba0a1c45f217e2e73e885f699102d06da325`。
+`PUR-ORD-2026-02297` 在固定 `dev.localhost`、同一 Buyer/Company 范围和同一单据版本下运行三次，报告 SHA-256 为 `bb517ff2f6a9fccc29db25af245aacf3f8005a8bd5faa4aa10053cad2a1a6a9e`，状态为 `MATCHED=3`、`MISMATCH=0`、`STATE_DRIFT=0`、`BLOCKED=0`。四个字段为采购单号 `PUR-ORD-2026-02297`、供应商 `SYNORA-P1-Supplier-1`、状态 `To Receive and Bill`、币种 `CNY`；API-before/after `source_modified_at` 一致。Frappe/ERPNext 固定 revision 仍为 `6a329d068416768ec47ccd3326b9cc95a8d7bf99` / `11e0ba0a1c45f217e2e73e885f699102d06da325`。
 
 API 使用现有 `purchase_order.current` typed Gateway、正常 Run/capability 机制和独立会话；Web 只读页面及列举出的 Frappe 只读请求，socket/非目标文档被阻断。前后没有创建或修改业务采购单。
 
 ### Real ERP visual
 
-脱敏截图边界报告 SHA-256 为 `a523a39b831058d76a30117c7b4d25760c1651a95874ab23cce8e3283557c575`。截图为 1024×768、约 24 KiB，遮罩后保留任务字段，账号、导航、时间线、评论和动作区隐藏；GUI test double 返回四字段且 `safety_pass=true`。
+脱敏截图边界报告 SHA-256 为 `50a32c4454ee65b83fc286c5ed9c382fc83a25925fd5114bf3cc97763a23ab37`。截图为 1024×768、约 24 KiB，遮罩后保留任务字段，账号、导航、时间线、评论和动作区隐藏；GUI test double 只有在显式 trusted API mapping 下返回四字段且 `trusted_fact_required=true`。
 
-四个已配置 provider role 的两图真实探测均失败：primary/last_local=`TRANSPORT_ERROR`、assist=`RESPONSE_SCHEMA`、backup=`RESPONSE_CONTENT_MISSING`；最终状态 `VISION_PROVIDER_UNAVAILABLE`，usage 为 `null`。因此 P11.12 要求的真实 ERP API/Web/GUI 三方对照未完成，不能用 test double 或 DOM/API 结果冒充视觉模型成功。
+四个已配置 provider role 的两图真实探测均失败：primary=`TRANSPORT_ERROR`、assist=`RESPONSE_SCHEMA`、backup/last_local=`TRANSPORT_ERROR`；最终状态 `VISION_PROVIDER_UNAVAILABLE`，usage 为 `null`。因此 P11.12 要求的真实 ERP API/Web/GUI 三方对照未完成，不能用 test double 或 DOM/API 结果冒充视觉模型成功。
 
 ## 5. 页面变化失败与修复
 
@@ -74,7 +75,7 @@ v2 将列表行属性从 `data-order-name` 改为 `data-order-id`。原始文件
 ## 6. 安全、权限和成本边界
 
 - 允许动作只有预定义打开、观察中目标点击、限定搜索、滚动、有界等待和结束；禁止任意 URL、JavaScript、剪贴板、文件、上传、下载、写入和任意 HTTP。
-- BrowserContext 禁用 Service Worker、拒绝下载/弹窗/外域/非目标文档/非 allowlist 方法；动作必须绑定当前 Observation/page version，截图坐标必须在可信视口内。
+- BrowserContext 禁用 Service Worker、拒绝下载/弹窗/外域/非目标文档/非 allowlist 方法，登录请求不自动重定向，API/目标页面正文有响应大小上限；动作必须绑定当前 Observation/page version，截图坐标必须在可信视口内。
 - 页面内容视为不可信数据；模型输出不能改变权限、外发目标或业务状态。登录由可信初始化完成，登录页不进入模型观察。
 - 图片最多两张 PNG、每张 ≤2 MiB，响应 ≤2,000,000 bytes，输出 ≤1,024 tokens；每 trial ≤12 actions、≤8 model calls、≤180s，usage 不可核验时为 `null`。
 
@@ -85,11 +86,11 @@ v2 将列表行属性从 `data-order-name` 改为 `data-order-id`。原始文件
 | `make format-check` | 0 | 422 files already formatted |
 | `make lint` | 0 | All checks passed |
 | `make type` | 0（修复后） | 131 个项目源/测试路径无错误 |
-| `make unit` | 0 | 901 passed；55 个既有弃用 warning |
+| `make unit` | 待最终出口复跑 | 修复后需重新记录全量结果；当前 Phase 11 相关回归已通过 |
 | `make integration` | 0 | Frappe 248 tests `OK` |
-| `uv run --python 3.14 mypy labs/web_gui` | 0 | 16 个实验源码文件无错误 |
+| `uv run --python 3.14 mypy labs/web_gui` | 0 | 修复后实验源码无错误 |
 | synthetic benchmark | 0 | 45 business + 33 fault trials written |
-| ERP benchmark | 0 | 3/3 `MATCHED` |
+| ERP benchmark | 0 | 修复后 3/3 `MATCHED` |
 | `git diff --check` | 0 | whitespace clean |
 | Harness manifest | 0 | valid；references 772、broken 0 |
 | Harness drift | 1 | `pyproject.toml`、`uv.lock` fingerprint 尚未同步 |
@@ -100,17 +101,17 @@ v2 将列表行属性从 `data-order-name` 改为 `data-order-id`。原始文件
 
 - 方法采用结论见 [phase11-adoption-card.md](phase11-adoption-card.md)：typed API 保持业务默认；DOM/ARIA/hybrid 仅为 `LAB_ONLY CANDIDATE`；视觉为 `BLOCKED / EXPERIMENT ONLY`。
 - Rubric 见 [phase11-rubric.md](phase11-rubric.md)：`27/36`、平均 `3.00`；D1/D2/D3/D5/D7/D8 均 ≥3，D6 因英文实验页和未完成完整 ERP 无障碍审计为 2。
-- 风险登记见 [phase11-risk-register.md](phase11-risk-register.md)：当前未关闭 P0/P1 为 0；视觉 provider 和 Harness drift 为带 owner/下一门禁/复验条件的 P2 阻塞项。
+- 风险登记见 [phase11-risk-register.md](phase11-risk-register.md)：当前未关闭 P0/P1 为 0；视觉 provider、Harness drift 和第二轮 Review 为带 owner/下一门禁/复验条件的 P2 阻塞项。
 
 ## 9. 独立审查与受保护同步
 
-本报告草稿提交后，才启动一次独立对抗 Review。审查输入包括原始 Phase 11 计划、`35627ba..` 最终 diff、全部 Phase 11 测试输出、synthetic/ERP/视觉/失败修复 artifact、Adoption Card、Rubric、风险表和秘密保护边界；审查只返回 `PASS`、`CHANGES_REQUIRED` 或 `BLOCKED`。
+本报告草稿提交后启动的第一轮独立对抗 Review 返回 `CHANGES_REQUIRED`，指出 8 类边界问题。执行 agent 已在 `4cbc7ce..d9823fc` 逐项修复并补回归，随后以 `9cf8e9e` 重建原始 evidence；第二轮独立 Review 将检查最终 diff、修复后测试、真实 ERP 对照、视觉 provider 探测、秘密保护和失败复盘，只返回 `PASS`、`CHANGES_REQUIRED` 或 `BLOCKED`。
 
 `.harness/manifest.json` 当前有效，但依赖组变更导致 `pyproject.toml` 与 `uv.lock` fingerprint drift。根据 `harness-update` 规则，需先提交文件级只读 proposal，再由用户明确批准具体 Harness 文件/指纹同步；在批准前不修改 `.harness`、README 或其它用户维护文件。
 
 ## 10. 阶段结论（草稿）
 
-代码、合成实验、浏览器安全边界、真实 ERP API/Web 对照和失败修复均已完成并可复跑；真实 ERP 脱敏截图和 GUI 坐标边界可运行，但真实图片 provider 未返回可验证观察，导致三方视觉验收阻塞。阶段暂定 `BLOCKED`，不进入 Phase 12，不获得业务写入权限。只有 provider 真实探测通过、Harness 受保护同步获批且独立 Review 最终 `PASS` 后，才能重新评估阶段是否满足 `COMPLETED / PASS`。
+代码、合成实验、浏览器安全边界、真实 ERP API/Web 对照和第一轮 Review 修复均已完成并可复跑；真实 ERP 脱敏截图和 GUI 坐标边界可运行，但真实图片 provider 未返回可验证观察，导致三方视觉验收阻塞，第二轮 Review 也尚未通过。阶段暂定 `BLOCKED`，不进入 Phase 12，不获得业务写入权限。只有 provider 真实探测通过、Harness 受保护同步获批且独立 Review 最终 `PASS` 后，才能重新评估阶段是否满足 `COMPLETED / PASS`。
 
 ## 11. 手工验收
 
