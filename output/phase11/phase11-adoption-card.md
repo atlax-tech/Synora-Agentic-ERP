@@ -2,7 +2,7 @@
 
 状态：`BLOCKED / SECOND REVIEW CHANGES_REQUIRED`；业务采用结论受真实图片 provider、独立审查和受保护 Harness 同步门禁约束。
 
-实现与证据基线：`f01ca6e`。
+实现代码基线：`f01ca6e`；最新真实 ERP 证据提交：`1974dcf`。
 
 主要证据：
 

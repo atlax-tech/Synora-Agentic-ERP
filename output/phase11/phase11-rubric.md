@@ -1,6 +1,6 @@
 # Phase 11 Rubric（阶段报告草稿）
 
-评分依据 `docs/PLAN.md` §4.6，范围为代码/证据 HEAD `f01ca6e`、Phase 11 测试、真实 ERP API/Web、脱敏 GUI 边界、synthetic benchmark 和失败修复证据。第一轮独立对抗 Review 的 `CHANGES_REQUIRED` 已按修复提交处理；第二轮以 `8dd18a7` 为输入返回 `CHANGES_REQUIRED`，已完成已知修复但没有第三轮复核。
+评分依据 `docs/PLAN.md` §4.6，范围为实现代码 HEAD `f01ca6e`、最新真实 ERP 证据 HEAD `1974dcf`、Phase 11 测试、真实 ERP API/Web、脱敏 GUI 边界、synthetic benchmark 和失败修复证据。第一轮独立对抗 Review 的 `CHANGES_REQUIRED` 已按修复提交处理；第二轮以 `8dd18a7` 为输入返回 `CHANGES_REQUIRED`，已完成已知修复但没有第三轮复核。
 
 | 维度 | 分数（0–4） | 证据与当前边界 |
 | --- | ---: | --- |

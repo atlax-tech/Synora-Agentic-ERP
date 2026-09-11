@@ -18,7 +18,7 @@ Phase 11 交付了一套只绑定 loopback 的 `LAB_ONLY` 采购读取实验。�
 2. [labs/web_gui/browser.py](../../labs/web_gui/browser.py)、[labs/web_gui/gui.py](../../labs/web_gui/gui.py)、[labs/web_gui/hybrid.py](../../labs/web_gui/hybrid.py)：DOM/ARIA、截图坐标和同步混合循环。
 3. [labs/web_gui/erp_readonly.py](../../labs/web_gui/erp_readonly.py)、[labs/web_gui/erp_browser.py](../../labs/web_gui/erp_browser.py)、[labs/web_gui/redaction.py](../../labs/web_gui/redaction.py)、[labs/web_gui/erp_visual.py](../../labs/web_gui/erp_visual.py)：真实 ERP 只读 API/Web、截图遮罩和 GUI 边界。
 
-实现与证据冻结 HEAD：`f01ca6e`（完整代码、修复和当前 benchmark artifact）；本报告内容的最终文档提交哈希在交付时单独列出，避免报告自引用。
+实现代码冻结 HEAD：`f01ca6e`；最新真实 ERP 证据 HEAD：`1974dcf`（含单次 comparison artifact）。本报告内容的最终文档提交哈希在交付时单独列出，避免报告自引用。
 
 ## 3. 步骤与提交追踪
 
@@ -33,7 +33,7 @@ Phase 11 交付了一套只绑定 loopback 的 `LAB_ONLY` 采购读取实验。�
 | P11.6–P11.7 | 截图坐标与显式 hybrid 观察，冲突 fail-closed | `7b44bdd`、`7aa9764` |
 | P11.8–P11.9 | 可观察就绪、一次恢复、预算、登录失效、权限和弹窗 | `3582958`、`1a1ded8` |
 | P11.10 | v2 定位变化先失败、保留失败、修复后复验 | `ef405f1`、`f69354c`、[failure](phase11-page-change-failure-v1.json)、[repair](phase11-page-change-repair-v1.json) |
-| P11.11 | 真实 ERP typed API 与精确 allowlist Web 对照 | `8feaee1`、`b0d9961`、[comparison](phase11-erp-readonly-comparison.json) |
+| P11.11 | 真实 ERP typed API 与精确 allowlist Web 对照 | `8feaee1`、`b0d9961`、`1974dcf`、[comparison](phase11-erp-readonly-comparison.json) |
 | P11.12 | 真实 ERP 确定性截图遮罩和 GUI test-double 安全边界 | `16bd822`、`a3433ea`、[boundary](phase11-erp-visual-boundary.json) |
 | P11.13 | 调用预算、统一 CLI、五方法 benchmark、三次冻结证据 | `9bb4c5b`、`701413d`、`4da1986`、`bd05dae`、`f01ca6e`、[synthetic](phase11-benchmark-synthetic.json)、[ERP](phase11-benchmark-erp-readonly.json) |
 | Review remediation | 输入隔离、trusted oracle、模型预算/无进展、结构化拒绝、页面版本、ERP 浏览器事件、响应正文限制、脱敏采购单号和最新证据 | `4cbc7ce`、`1e495f3`、`611f55b`、`d2a349f`、`cd96d6c`、`50f342d`、`a4d6842`、`823233f`、`8fed6d9`、`d9823fc`、`dad892b`、`cfed0ee`、`74b8a1d`、`11923d7`、`80bbe50`、`740ff88`、`4d52ba6`、`393191d`、`72fbaf1`、`f915af0`、`f01ca6e` |
