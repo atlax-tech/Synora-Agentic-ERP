@@ -13,8 +13,9 @@ import json
 import os
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+from time import monotonic
 from urllib.parse import urlparse
 
 import httpx
@@ -78,9 +79,10 @@ _ROLE_ENV: dict[str, tuple[str, str, str, bool]] = {
 class VisionProbeError(RuntimeError):
     """A safe, classified image request failure."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, diagnostic: VisionAttempt | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.diagnostic = diagnostic
 
 
 @dataclass(frozen=True)
@@ -89,6 +91,15 @@ class VisionAttempt:
     model: str | None
     status: str
     failure_code: str | None = None
+    protocol: str | None = None
+    failure_stage: str | None = None
+    http_status: int | None = None
+    response_content_type: str | None = None
+    response_shape: str | None = None
+    response_bytes: int | None = None
+    elapsed_ms: int | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -119,6 +130,7 @@ class VisionModelResponse:
     model: str
     prompt_tokens: int | None
     completion_tokens: int | None
+    diagnostic: VisionAttempt | None = None
 
 
 def _image_data(images: list[bytes] | tuple[bytes, ...]) -> list[str]:
@@ -190,6 +202,255 @@ def _payload(
         "stream": False,
         "response_format": {"type": "json_object"},
     }
+
+
+def _protocol_name(responses: bool) -> str:
+    return "responses" if responses else "chat_completions"
+
+
+def _response_content_type(response: httpx.Response) -> str | None:
+    value = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    return value[:80] or None
+
+
+def _response_shape(data: object) -> str:
+    if not isinstance(data, dict):
+        return "non_object"
+    for key in ("output_text", "output", "choices"):
+        if key in data:
+            return key
+    return "unknown"
+
+
+def _attempt(
+    *,
+    role: str,
+    model: str | None,
+    protocol: str,
+    started: float,
+    failure_code: str | None = None,
+    failure_stage: str | None = None,
+    http_status: int | None = None,
+    response_content_type: str | None = None,
+    response_shape: str | None = None,
+    response_bytes: int | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    status: str = "FAILED",
+) -> VisionAttempt:
+    return VisionAttempt(
+        role=role,
+        model=model,
+        status=status,
+        failure_code=failure_code,
+        protocol=protocol,
+        failure_stage=failure_stage,
+        http_status=http_status,
+        response_content_type=response_content_type,
+        response_shape=response_shape,
+        response_bytes=response_bytes,
+        elapsed_ms=max(0, int((monotonic() - started) * 1000)),
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
+
+
+def _status_failure_code(status_code: int) -> str:
+    if status_code == 408 or status_code == 504:
+        return "TIMEOUT"
+    if status_code == 429:
+        return "RATE_LIMITED"
+    if status_code in {401, 403}:
+        return "AUTH_ERROR"
+    if 500 <= status_code <= 599:
+        return "UPSTREAM_UNAVAILABLE"
+    return "HTTP_ERROR"
+
+
+def _parse_failure_stage(code: str) -> str:
+    if code == "RESPONSE_INCOMPLETE":
+        return "observation_validation"
+    if code == "RESPONSE_CONTENT_MISMATCH":
+        return "trusted_content_validation"
+    if code == "RESPONSE_CONTENT_MISSING":
+        return "response_content"
+    return "response_schema"
+
+
+def _transport_failure(
+    error: BaseException,
+    *,
+    role: str,
+    model: str,
+    protocol: str,
+    started: float,
+) -> VisionProbeError:
+    if isinstance(error, httpx.ConnectTimeout):
+        code, stage = "CONNECT_TIMEOUT", "connect"
+    elif isinstance(error, httpx.ReadTimeout):
+        code, stage = "READ_TIMEOUT", "read"
+    elif isinstance(error, httpx.WriteTimeout):
+        code, stage = "WRITE_TIMEOUT", "write"
+    elif isinstance(error, httpx.PoolTimeout):
+        code, stage = "POOL_TIMEOUT", "pool"
+    elif isinstance(error, httpx.TimeoutException):
+        code, stage = "TIMEOUT", "request"
+    elif isinstance(error, httpx.ConnectError):
+        code, stage = "TRANSPORT_ERROR", "connect"
+    elif isinstance(error, (httpx.ReadError, httpx.WriteError)):
+        code, stage = "TRANSPORT_ERROR", "read_write"
+    elif isinstance(error, httpx.RemoteProtocolError):
+        code, stage = "PROTOCOL_ERROR", "response_headers"
+    else:
+        code, stage = "TRANSPORT_ERROR", "request"
+    return VisionProbeError(
+        code,
+        diagnostic=_attempt(
+            role=role,
+            model=model,
+            protocol=protocol,
+            started=started,
+            failure_code=code,
+            failure_stage=stage,
+        ),
+    )
+
+
+def _request_text(
+    prompt: str,
+    images: list[str],
+    *,
+    role: str,
+    model: str,
+    api_key: str,
+    base_url: str,
+    responses: bool,
+    proxy: str | None,
+    transport: httpx.BaseTransport | None,
+    max_output_tokens: int = MAX_OUTPUT_TOKENS,
+) -> tuple[str, VisionAttempt]:
+    """Send one bounded request and retain only safe response diagnostics."""
+
+    started = monotonic()
+    protocol = _protocol_name(responses)
+    try:
+        request = _payload(prompt, images, model, responses, max_output_tokens)
+    except VisionProbeError as error:
+        raise VisionProbeError(
+            error.code,
+            diagnostic=_attempt(
+                role=role,
+                model=model,
+                protocol=protocol,
+                started=started,
+                failure_code=error.code,
+                failure_stage="request_validation",
+            ),
+        ) from error
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    headers["Authorization"] = f"Bearer {api_key}"
+    try:
+        with httpx.Client(
+            timeout=httpx.Timeout(VISION_TIMEOUT_SECONDS),
+            transport=transport,
+            trust_env=False,
+            follow_redirects=False,
+            proxy=proxy,
+            headers=headers,
+        ) as client:
+            response = client.post(_endpoint(base_url, responses), json=request)
+    except (httpx.HTTPError, OSError) as error:
+        raise _transport_failure(
+            error,
+            role=role,
+            model=model,
+            protocol=protocol,
+            started=started,
+        ) from error
+
+    response_bytes = len(response.content)
+    content_type = _response_content_type(response)
+    if response_bytes > MAX_RESPONSE_BYTES:
+        raise VisionProbeError(
+            "RESPONSE_TOO_LARGE",
+            diagnostic=_attempt(
+                role=role,
+                model=model,
+                protocol=protocol,
+                started=started,
+                failure_code="RESPONSE_TOO_LARGE",
+                failure_stage="response_body",
+                http_status=response.status_code,
+                response_content_type=content_type,
+                response_bytes=response_bytes,
+            ),
+        )
+    if not response.is_success:
+        code = _status_failure_code(response.status_code)
+        raise VisionProbeError(
+            code,
+            diagnostic=_attempt(
+                role=role,
+                model=model,
+                protocol=protocol,
+                started=started,
+                failure_code=code,
+                failure_stage="http_status",
+                http_status=response.status_code,
+                response_content_type=content_type,
+                response_bytes=response_bytes,
+            ),
+        )
+    try:
+        data = response.json()
+    except (TypeError, ValueError) as error:
+        raise VisionProbeError(
+            "RESPONSE_JSON_INVALID",
+            diagnostic=_attempt(
+                role=role,
+                model=model,
+                protocol=protocol,
+                started=started,
+                failure_code="RESPONSE_JSON_INVALID",
+                failure_stage="json_decode",
+                http_status=response.status_code,
+                response_content_type=content_type,
+                response_shape="invalid_json",
+                response_bytes=response_bytes,
+            ),
+        ) from error
+    shape = _response_shape(data)
+    try:
+        text, prompt_tokens, completion_tokens = _response_text(data)
+    except VisionProbeError as error:
+        raise VisionProbeError(
+            error.code,
+            diagnostic=_attempt(
+                role=role,
+                model=model,
+                protocol=protocol,
+                started=started,
+                failure_code=error.code,
+                failure_stage="response_content",
+                http_status=response.status_code,
+                response_content_type=content_type,
+                response_shape=shape,
+                response_bytes=response_bytes,
+            ),
+        ) from error
+    return text, _attempt(
+        role=role,
+        model=model,
+        protocol=protocol,
+        started=started,
+        status="PASS",
+        http_status=response.status_code,
+        response_content_type=content_type,
+        response_shape=shape,
+        response_bytes=response_bytes,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
 
 
 def _response_text(data: object) -> tuple[str, int | None, int | None]:
@@ -348,45 +609,71 @@ def probe_vision(
         try:
             config = _role_config(role, values)
         except VisionProbeError as error:
-            attempts.append(VisionAttempt(role, None, "FAILED", error.code))
+            attempts.append(
+                _attempt(
+                    role=role,
+                    model=None,
+                    protocol=_protocol_name(_ROLE_ENV[role][3]),
+                    started=monotonic(),
+                    failure_code=error.code,
+                    failure_stage="configuration",
+                )
+            )
             continue
         if config is None:
             continue
         base_url, api_key, model, responses = config
+        attempt: VisionAttempt | None = None
         try:
-            request = _payload(prompt, encoded, model, responses)
-            headers = {"Accept": "application/json", "Content-Type": "application/json"}
-            headers["Authorization"] = f"Bearer {api_key}"
             proxy = values.get(MODEL_PROXY_ENV, "").strip() or None
-            with httpx.Client(
-                timeout=httpx.Timeout(VISION_TIMEOUT_SECONDS),
-                transport=transport,
-                trust_env=False,
-                follow_redirects=False,
+            text, attempt = _request_text(
+                prompt,
+                encoded,
+                role=role,
+                model=model,
+                api_key=api_key,
+                base_url=base_url,
+                responses=responses,
                 proxy=proxy,
-                headers=headers,
-            ) as client:
-                response = client.post(_endpoint(base_url, responses), json=request)
-            if len(response.content) > MAX_RESPONSE_BYTES or not response.is_success:
-                raise VisionProbeError("UPSTREAM_UNAVAILABLE")
-            text, prompt_tokens, completion_tokens = _response_text(response.json())
+                transport=transport,
+            )
             observations = _parse_observations(text, images)
             _validate_expected(observations, expected_observations)
             observation = observations[0]
         except VisionProbeError as error:
-            attempts.append(VisionAttempt(role, model, "FAILED", error.code))
+            diagnostic = error.diagnostic
+            if diagnostic is None:
+                if attempt is None:  # pragma: no cover - defensive request contract
+                    attempt = _attempt(
+                        role=role,
+                        model=model,
+                        protocol=_protocol_name(responses),
+                        started=monotonic(),
+                    )
+                diagnostic = replace(
+                    attempt,
+                    status="FAILED",
+                    failure_code=error.code,
+                    failure_stage=_parse_failure_stage(error.code),
+                )
+            else:
+                diagnostic = replace(
+                    diagnostic,
+                    status="FAILED",
+                    failure_code=error.code,
+                    failure_stage=diagnostic.failure_stage or _parse_failure_stage(error.code),
+                )
+            attempts.append(diagnostic)
             continue
-        except httpx.HTTPError, ValueError, OSError:
-            attempts.append(VisionAttempt(role, model, "FAILED", "TRANSPORT_ERROR"))
-            continue
-        attempts.append(VisionAttempt(role, model, "PASS"))
+        assert attempt is not None
+        attempts.append(attempt)
         return VisionProbeResult(
             status="PASS",
             observation=observation,
             attempts=tuple(attempts),
             model=model,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
+            prompt_tokens=attempt.prompt_tokens,
+            completion_tokens=attempt.completion_tokens,
             observations=observations,
         )
     return VisionProbeResult(
@@ -427,30 +714,51 @@ def request_vision_json(
         raise VisionProbeError("VISION_PROVIDER_UNAVAILABLE")
     base_url, api_key, model, responses = config
     try:
-        request = _payload(prompt, encoded, model, responses, max_output_tokens)
-        headers = {"Accept": "application/json", "Content-Type": "application/json"}
-        headers["Authorization"] = f"Bearer {api_key}"
         proxy = values.get(MODEL_PROXY_ENV, "").strip() or None
-        with httpx.Client(
-            timeout=httpx.Timeout(VISION_TIMEOUT_SECONDS),
-            transport=transport,
-            trust_env=False,
-            follow_redirects=False,
+        text, attempt = _request_text(
+            prompt,
+            encoded,
+            role=role,
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            responses=responses,
             proxy=proxy,
-            headers=headers,
-        ) as client:
-            response = client.post(_endpoint(base_url, responses), json=request)
-        if len(response.content) > MAX_RESPONSE_BYTES or not response.is_success:
-            raise VisionProbeError("UPSTREAM_UNAVAILABLE")
-        text, prompt_tokens, completion_tokens = _response_text(response.json())
-        payload = _json_loads(text)
+            transport=transport,
+            max_output_tokens=max_output_tokens,
+        )
+        try:
+            payload = _json_loads(text)
+        except VisionProbeError as error:
+            raise VisionProbeError(
+                error.code,
+                diagnostic=replace(
+                    attempt,
+                    status="FAILED",
+                    failure_code=error.code,
+                    failure_stage="json_payload",
+                ),
+            ) from error
         if not isinstance(payload, dict):
-            raise VisionProbeError("RESPONSE_SCHEMA")
-        return VisionModelResponse(payload, role, model, prompt_tokens, completion_tokens)
+            raise VisionProbeError(
+                "RESPONSE_SCHEMA",
+                diagnostic=replace(
+                    attempt,
+                    status="FAILED",
+                    failure_code="RESPONSE_SCHEMA",
+                    failure_stage="json_payload",
+                ),
+            )
+        return VisionModelResponse(
+            payload,
+            role,
+            model,
+            attempt.prompt_tokens,
+            attempt.completion_tokens,
+            attempt,
+        )
     except VisionProbeError:
         raise
-    except (httpx.HTTPError, ValueError, OSError) as error:
-        raise VisionProbeError("TRANSPORT_ERROR") from error
 
 
 __all__ = [

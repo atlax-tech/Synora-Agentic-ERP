@@ -76,6 +76,14 @@ def test_probe_uses_existing_role_and_never_returns_key() -> None:
     assert seen[0]["messages"][0]["content"][1]["image_url"]["detail"] == "high"
     assert base64.b64encode(PNG).decode() in json.dumps(seen[0])
     assert "secret-key" not in repr(result)
+    attempt = result.attempts[0]
+    assert attempt.protocol == "chat_completions"
+    assert attempt.http_status == 200
+    assert attempt.response_shape == "choices"
+    assert attempt.response_content_type == "application/json"
+    assert attempt.prompt_tokens == 10
+    assert attempt.completion_tokens == 20
+    assert attempt.elapsed_ms is not None
 
 
 def test_probe_reads_standard_responses_nested_output() -> None:
@@ -129,6 +137,71 @@ def test_probe_reads_standard_responses_nested_output() -> None:
     assert result.status == "PASS"
     assert result.prompt_tokens == 4
     assert result.completion_tokens == 7
+    assert result.attempts[0].protocol == "responses"
+    assert result.attempts[0].response_shape == "output"
+
+
+def test_probe_classifies_http_and_json_failures_without_response_body() -> None:
+    def http_handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={"error": {"message": "rate limited"}})
+
+    limited = probe_vision(
+        "read",
+        [PNG],
+        environ=_env(),
+        transport=httpx.MockTransport(http_handler),
+        expected_observations=({"purchase_order": "PUR-ORD-0001"},),
+    )
+    attempt = limited.attempts[0]
+    assert attempt.failure_code == "RATE_LIMITED"
+    assert attempt.failure_stage == "http_status"
+    assert attempt.http_status == 429
+    assert "rate limited" not in repr(limited)
+
+    def invalid_json(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"not-json", headers={"content-type": "text/plain"})
+
+    invalid = probe_vision(
+        "read",
+        [PNG],
+        environ=_env(),
+        transport=httpx.MockTransport(invalid_json),
+        expected_observations=({"purchase_order": "PUR-ORD-0001"},),
+    )
+    attempt = invalid.attempts[0]
+    assert attempt.failure_code == "RESPONSE_JSON_INVALID"
+    assert attempt.failure_stage == "json_decode"
+    assert attempt.http_status == 200
+    assert attempt.response_content_type == "text/plain"
+    assert attempt.response_shape == "invalid_json"
+
+
+def test_probe_classifies_connect_and_read_timeouts() -> None:
+    def connect_timeout(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("connection refused")
+
+    connected = probe_vision(
+        "read",
+        [PNG],
+        environ=_env(),
+        transport=httpx.MockTransport(connect_timeout),
+        expected_observations=({"purchase_order": "PUR-ORD-0001"},),
+    )
+    assert connected.attempts[0].failure_code == "CONNECT_TIMEOUT"
+    assert connected.attempts[0].failure_stage == "connect"
+
+    def read_timeout(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("response took too long")
+
+    read = probe_vision(
+        "read",
+        [PNG],
+        environ=_env(),
+        transport=httpx.MockTransport(read_timeout),
+        expected_observations=({"purchase_order": "PUR-ORD-0001"},),
+    )
+    assert read.attempts[0].failure_code == "READ_TIMEOUT"
+    assert read.attempts[0].failure_stage == "read"
 
 
 def test_probe_accepts_a_strict_json_code_fence_only() -> None:
@@ -198,6 +271,26 @@ def test_request_vision_json_forwards_output_budget() -> None:
     )
 
     assert seen[0]["max_tokens"] == 7
+
+
+def test_request_vision_json_preserves_safe_diagnostic_on_invalid_json() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"not-json", headers={"content-type": "text/plain"})
+
+    with pytest.raises(VisionProbeError) as caught:
+        request_vision_json(
+            "return one action",
+            [PNG],
+            role="assist",
+            environ=_env(),
+            transport=httpx.MockTransport(handler),
+        )
+
+    assert caught.value.code == "RESPONSE_JSON_INVALID"
+    assert caught.value.diagnostic is not None
+    assert caught.value.diagnostic.failure_stage == "json_decode"
+    assert caught.value.diagnostic.response_content_type == "text/plain"
+    assert "secret-key" not in repr(caught.value)
 
 
 def test_probe_without_config_is_an_explicit_block() -> None:
