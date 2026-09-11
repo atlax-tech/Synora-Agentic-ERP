@@ -42,6 +42,7 @@ class ErpVisualRun:
     safety_pass: bool
     policy_events: tuple[str, ...] = ()
     redaction: RedactedCapture | None = None
+    model_calls: int = 0
     model: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
@@ -507,6 +508,7 @@ def run_erp_visual_task(
         not policy.violations and not events and not response_events,
         policy_events,
         capture,
+        model_calls,
         model,
         prompt_tokens,
         completion_tokens,

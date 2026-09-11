@@ -111,12 +111,29 @@ def _probe_vision() -> dict[str, object]:
     return asdict(result)
 
 
-def _benchmark(suite: str, repeats: int, output: str | None) -> dict[str, object]:
+def _benchmark(
+    suite: str,
+    repeats: int,
+    output: str | None,
+    engine: str,
+    text_role: str,
+    vision_role: str,
+) -> dict[str, object]:
     if suite == "synthetic":
-        report = run_synthetic_benchmark(repeats=repeats)
+        report = run_synthetic_benchmark(
+            repeats=repeats,
+            engine=engine,
+            text_role=text_role,
+            vision_role=vision_role,
+        )
         default_path = Path("output/phase11/phase11-benchmark-synthetic.json")
     else:
-        report = run_erp_benchmark(repeats=repeats)
+        report = run_erp_benchmark(
+            repeats=repeats,
+            engine=engine,
+            text_role=text_role,
+            vision_role=vision_role,
+        )
         default_path = Path("output/phase11/phase11-benchmark-erp-readonly.json")
     path = Path(output) if output else default_path
     write_report(report, path)
@@ -143,6 +160,19 @@ def _parser() -> argparse.ArgumentParser:
     benchmark = subparsers.add_parser("benchmark", help="run a reproducible comparison suite")
     benchmark.add_argument("--suite", choices=("synthetic", "erp-readonly"), required=True)
     benchmark.add_argument("--repeats", type=int, choices=(1, 2, 3), default=3)
+    benchmark.add_argument(
+        "--engine", choices=("deterministic", "live"), default="deterministic"
+    )
+    benchmark.add_argument(
+        "--text-role",
+        choices=("primary", "assist", "backup", "last_local"),
+        default="assist",
+    )
+    benchmark.add_argument(
+        "--vision-role",
+        choices=("primary", "assist", "backup", "last_local"),
+        default="backup",
+    )
     benchmark.add_argument("--output")
     return parser
 
@@ -160,7 +190,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "probe-vision":
         _json_print(_probe_vision())
         return 0
-    _json_print(_benchmark(args.suite, args.repeats, args.output))
+    _json_print(
+        _benchmark(
+            args.suite,
+            args.repeats,
+            args.output,
+            args.engine,
+            args.text_role,
+            args.vision_role,
+        )
+    )
     return 0
 
 

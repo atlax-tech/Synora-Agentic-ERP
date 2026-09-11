@@ -22,6 +22,7 @@ from labs.web_gui.browser import (
     BrowserPolicyError,
     BrowserUnavailable,
     run_dom_task,
+    run_model_dom_task,
     run_security_probe,
 )
 from labs.web_gui.contracts import (
@@ -32,11 +33,26 @@ from labs.web_gui.contracts import (
     TrialBudget,
     TrialResult,
 )
-from labs.web_gui.erp_browser import compare_erp_readonly
-from labs.web_gui.erp_readonly import ErpReadConfig
+from labs.web_gui.erp_browser import (
+    compare_erp_readonly,
+    model_web_decider,
+    read_erp_web,
+)
+from labs.web_gui.erp_readonly import READ_FIELDS, ErpComparison, ErpReadConfig, read_erp_api
+from labs.web_gui.erp_visual import run_live_erp_visual_task
 from labs.web_gui.fixtures import FIXTURE_ORDERS, create_app
-from labs.web_gui.gui import VisualDecision, VisualRun, run_visual_task
-from labs.web_gui.hybrid import HybridDecision, HybridFrame, HybridRun, run_hybrid_task
+from labs.web_gui.gui import (
+    VisualDecision,
+    model_visual_decider,
+    run_visual_task,
+)
+from labs.web_gui.hybrid import (
+    HybridDecision,
+    HybridFrame,
+    model_hybrid_decider,
+    run_hybrid_task,
+)
+from labs.web_gui.model import LiveTextModel, LiveVisionModel, ModelDecision, decision_from_model
 
 SYNTHETIC_INPUT_VERSION = "phase11-synthetic-v1"
 METHODS = ("api", "dom", "aria", "vision", "hybrid")
@@ -192,34 +208,74 @@ def _hybrid_script(case: _Case) -> Callable[[HybridFrame, TaskSpec], HybridDecis
     return decider
 
 
-def _run_method(base_url: str, case: _Case, method: str) -> tuple[TaskResult, int, int, str]:
+def _run_method(
+    base_url: str,
+    case: _Case,
+    method: str,
+    *,
+    engine: str = "deterministic",
+    text_role: str = "assist",
+    vision_role: str = "backup",
+) -> tuple[TaskResult, int, int, str, int | None, int | None]:
     started = time.monotonic()
+    if engine not in {"deterministic", "live"}:
+        raise ValueError("engine must be deterministic or live")
     if method == "api":
         result = _fixture_api(case)
-        return result, int((time.monotonic() - started) * 1000), 0, "typed-fixture"
+        return result, int((time.monotonic() - started) * 1000), 0, "typed-fixture", None, None
     spec = _spec(case, method)
     if method in {"dom", "aria"}:
-        dom_run = run_dom_task(base_url, spec)
+        if engine == "live":
+            text_client = LiveTextModel(text_role)
+
+            def decider(
+                observation: Observation, current_spec: TaskSpec, remaining: int
+            ) -> ModelDecision:
+                return decision_from_model(text_client, current_spec, observation, remaining)
+
+            dom_run = run_model_dom_task(base_url, spec, decider)
+        else:
+            dom_run = run_dom_task(base_url, spec)
         return (
             dom_run.result,
             int((time.monotonic() - started) * 1000),
-            0,
-            "bounded-playwright",
+            dom_run.model_calls,
+            dom_run.model or (f"live:{text_role}" if engine == "live" else "bounded-playwright"),
+            dom_run.prompt_tokens,
+            dom_run.completion_tokens,
         )
     if method == "vision":
-        visual_run: VisualRun = run_visual_task(base_url, spec, _visual_script(case))
+        if engine == "live":
+            vision_client = LiveVisionModel(vision_role)
+            visual_run = run_visual_task(
+                base_url, spec, model_visual_decider(vision_client)
+            )
+        else:
+            visual_run = run_visual_task(base_url, spec, _visual_script(case))
         return (
             visual_run.result,
             int((time.monotonic() - started) * 1000),
             visual_run.model_calls,
-            "scripted-fixture-replay",
+            visual_run.model
+            or (f"live:{vision_role}" if engine == "live" else "scripted-fixture-replay"),
+            visual_run.prompt_tokens,
+            visual_run.completion_tokens,
         )
-    hybrid_run: HybridRun = run_hybrid_task(base_url, spec, _hybrid_script(case))
+    if engine == "live":
+        vision_client = LiveVisionModel(vision_role)
+        hybrid_run = run_hybrid_task(
+            base_url, spec, model_hybrid_decider(vision_client)
+        )
+    else:
+        hybrid_run = run_hybrid_task(base_url, spec, _hybrid_script(case))
     return (
         hybrid_run.result,
         int((time.monotonic() - started) * 1000),
         hybrid_run.model_calls,
-        "scripted-fixture-replay",
+        hybrid_run.model
+        or (f"live:{vision_role}" if engine == "live" else "scripted-fixture-replay"),
+        hybrid_run.prompt_tokens,
+        hybrid_run.completion_tokens,
     )
 
 
@@ -229,7 +285,14 @@ def _digest(value: object) -> str:
 
 
 def _trial(
-    case: _Case, method: str, result: TaskResult, latency_ms: int, model_calls: int, model: str
+    case: _Case,
+    method: str,
+    result: TaskResult,
+    latency_ms: int,
+    model_calls: int,
+    model: str,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
 ) -> TrialResult:
     expected = "SUCCEEDED" if case.expected_found else "NOT_FOUND"
     expected_fields = {}
@@ -256,6 +319,8 @@ def _trial(
         safety_pass=safety_pass,
         latency_ms=max(0, latency_ms),
         model_calls=model_calls,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
         failure_code=None if task_correct else (result.stop_reason or result.status),
         input_digest=_digest(
             {"case": case.__dict__, "method": method, "input_version": SYNTHETIC_INPUT_VERSION}
@@ -316,7 +381,13 @@ def _stale_coordinate_case() -> dict[str, object]:
     return {"case_id": "stale-coordinate", "status": "FAILED", "failure_code": "NOT_REJECTED"}
 
 
-def _faults(base_url: str, repeats: int) -> list[dict[str, object]]:
+def _faults(
+    base_url: str,
+    repeats: int,
+    *,
+    engine: str = "deterministic",
+    text_role: str = "assist",
+) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for _ in range(repeats):
         for scenario in ("changed", "async", "timeout", "permission", "auth_expired"):
@@ -333,7 +404,22 @@ def _faults(base_url: str, repeats: int) -> list[dict[str, object]]:
                 budget=budget,
             )
             try:
-                run = run_dom_task(base_url, spec)
+                if engine == "live":
+                    text_client = LiveTextModel(text_role)
+
+                    def decider(
+                        observation: Observation,
+                        current_spec: TaskSpec,
+                        remaining: int,
+                        _client: LiveTextModel = text_client,
+                    ) -> ModelDecision:
+                        return decision_from_model(
+                            _client, current_spec, observation, remaining
+                        )
+
+                    run = run_model_dom_task(base_url, spec, decider)
+                else:
+                    run = run_dom_task(base_url, spec)
                 rows.append(
                     {
                         "case_id": scenario,
@@ -380,18 +466,40 @@ def _faults(base_url: str, repeats: int) -> list[dict[str, object]]:
     return rows
 
 
-def run_synthetic_benchmark(repeats: int = 3) -> dict[str, object]:
+def run_synthetic_benchmark(
+    repeats: int = 3,
+    *,
+    engine: str = "deterministic",
+    text_role: str = "assist",
+    vision_role: str = "backup",
+) -> dict[str, object]:
     if repeats < 1 or repeats > 3:
         raise ValueError("repeats must be between 1 and 3")
+    if engine not in {"deterministic", "live"}:
+        raise ValueError("engine must be deterministic or live")
     trials: list[TrialResult] = []
     with _lab_server() as base_url:
         for _ in range(repeats):
             for case in CASES:
                 for method in METHODS:
                     try:
-                        result, latency, calls, model = _run_method(base_url, case, method)
+                        (
+                            result,
+                            latency,
+                            calls,
+                            model,
+                            prompt_tokens,
+                            completion_tokens,
+                        ) = _run_method(
+                            base_url,
+                            case,
+                            method,
+                            engine=engine,
+                            text_role=text_role,
+                            vision_role=vision_role,
+                        )
                     except BrowserUnavailable:
-                        result, latency, calls, model = (
+                        result, latency, calls, model, prompt_tokens, completion_tokens = (
                             TaskResult(
                                 case_id=case.case_id,
                                 status="BLOCKED",
@@ -400,11 +508,27 @@ def run_synthetic_benchmark(repeats: int = 3) -> dict[str, object]:
                             0,
                             0,
                             "bounded-playwright",
+                            None,
+                            None,
                         )
-                    trials.append(_trial(case, method, result, latency, calls, model))
-        faults = _faults(base_url, repeats)
+                    trials.append(
+                        _trial(
+                            case,
+                            method,
+                            result,
+                            latency,
+                            calls,
+                            model,
+                            prompt_tokens,
+                            completion_tokens,
+                        )
+                    )
+        faults = _faults(base_url, repeats, engine=engine, text_role=text_role)
     return {
         "suite": "synthetic",
+        "engine": engine,
+        "text_role": text_role if engine == "live" else None,
+        "vision_role": vision_role if engine == "live" else None,
         "input_version": SYNTHETIC_INPUT_VERSION,
         "repeats": repeats,
         "cases": [case.__dict__ for case in CASES],
@@ -412,20 +536,93 @@ def run_synthetic_benchmark(repeats: int = 3) -> dict[str, object]:
         "trials": [trial.model_dump(mode="json") for trial in trials],
         "summary": _summary(trials),
         "faults": faults,
-        "test_double_methods": ["vision", "hybrid"],
+        "test_double_methods": ["vision", "hybrid"] if engine == "deterministic" else [],
         "usage_policy": "null when provider did not return usage; no price estimate",
     }
 
 
 def run_erp_benchmark(
-    repeats: int = 3, purchase_order: str = "PUR-ORD-2026-02297"
+    repeats: int = 3,
+    purchase_order: str = "PUR-ORD-2026-02297",
+    *,
+    engine: str = "deterministic",
+    text_role: str = "assist",
+    vision_role: str = "backup",
 ) -> dict[str, object]:
     if repeats < 1 or repeats > 3:
         raise ValueError("repeats must be between 1 and 3")
+    if engine not in {"deterministic", "live"}:
+        raise ValueError("engine must be deterministic or live")
     config = ErpReadConfig(purchase_order=purchase_order)
-    comparisons = [asyncio.run(compare_erp_readonly(config)) for _ in range(repeats)]
+    if engine == "deterministic":
+        comparisons = [asyncio.run(compare_erp_readonly(config)) for _ in range(repeats)]
+        visual_runs: list[dict[str, object]] = []
+    else:
+        comparisons = []
+        visual_runs = []
+        for _ in range(repeats):
+            text_client = LiveTextModel(text_role)
+            before = asyncio.run(read_erp_api(config))
+            web_read = asyncio.run(
+                read_erp_web(config, decider=model_web_decider(text_client))
+            )
+            visual = run_live_erp_visual_task(
+                config,
+                role=vision_role,
+                trusted_api=before,
+            )
+            after = asyncio.run(read_erp_api(config))
+            before_modified = before.fact.source_modified_at
+            after_modified = after.fact.source_modified_at
+            if (
+                before.status == "BLOCKED"
+                or web_read.status == "BLOCKED"
+                or after.status == "BLOCKED"
+            ):
+                comparison_status = "BLOCKED"
+            elif before_modified and after_modified and before_modified != after_modified:
+                comparison_status = "STATE_DRIFT"
+            elif (
+                before.status != "SUCCEEDED"
+                or web_read.status != "SUCCEEDED"
+                or after.status != "SUCCEEDED"
+            ):
+                comparison_status = "MISMATCH"
+            else:
+                api_values = before.fact.model_dump(mode="json", include=set(READ_FIELDS))
+                web_values = web_read.fact.model_dump(mode="json", include=set(READ_FIELDS))
+                comparison_status = "MATCHED" if api_values == web_values else "MISMATCH"
+            comparisons.append(
+                ErpComparison(
+                    purchase_order=purchase_order,
+                    api=before,
+                    web=web_read,
+                    status=comparison_status,  # type: ignore[arg-type]
+                    before_modified_at=before_modified,
+                    after_modified_at=after_modified,
+                )
+            )
+            visual_runs.append(
+                {
+                    "status": visual.result.status,
+                    "stop_reason": visual.result.stop_reason,
+                    "model_calls": visual.model_calls,
+                    "model": visual.model,
+                    "prompt_tokens": visual.prompt_tokens,
+                    "completion_tokens": visual.completion_tokens,
+                    "safety_pass": visual.safety_pass,
+                    "policy_events": list(visual.policy_events),
+                    "api_before_status": before.status,
+                    "api_after_status": after.status,
+                    "api_before_modified_at": before.fact.source_modified_at,
+                    "api_after_modified_at": after.fact.source_modified_at,
+                }
+            )
     return {
         "suite": "erp-readonly",
+        "engine": engine,
+        "text_role": text_role if engine == "live" else None,
+        "vision_role": vision_role if engine == "live" else None,
         "input_version": "phase11-erp-readonly-v1",
         "repeats": repeats,
         "purchase_order": purchase_order,
@@ -434,6 +631,11 @@ def run_erp_benchmark(
             status: sum(item.status == status for item in comparisons)
             for status in ("MATCHED", "MISMATCH", "STATE_DRIFT", "BLOCKED")
         },
+        "visual_status_counts": {
+            status: sum(item["status"] == status for item in visual_runs)
+            for status in ("SUCCEEDED", "BLOCKED", "FAILED", "BUDGET_EXCEEDED")
+        },
+        "visual_runs": visual_runs,
         "notes": [
             "Real ERP visual/GUI is blocked when no provider returns a "
             "validated image observation.",

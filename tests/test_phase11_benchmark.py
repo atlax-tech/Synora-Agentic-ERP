@@ -6,7 +6,13 @@ from typing import cast
 
 import pytest
 
-from labs.web_gui.benchmark import METHODS, run_synthetic_benchmark, write_report
+from labs.web_gui.benchmark import (
+    CASES,
+    METHODS,
+    _run_method,
+    run_synthetic_benchmark,
+    write_report,
+)
 
 
 @pytest.fixture(scope="module")
@@ -64,6 +70,30 @@ def test_synthetic_trials_include_frozen_model_and_input_metadata(
     assert isinstance(trial["output_digest"], str)
     assert len(trial["input_digest"]) == 64
     assert len(trial["output_digest"]) == 64
+
+
+def test_benchmark_declares_engine_and_does_not_label_deterministic_vision_live(
+    synthetic_report: dict[str, object],
+) -> None:
+    assert synthetic_report["engine"] == "deterministic"
+    assert synthetic_report["text_role"] is None
+    assert synthetic_report["vision_role"] is None
+    assert synthetic_report["test_double_methods"] == ["vision", "hybrid"]
+
+
+def test_api_engine_selection_keeps_live_metadata_shape() -> None:
+    with pytest.raises(ValueError, match="engine"):
+        _run_method("http://127.0.0.1:1", CASES[0], "api", engine="invalid")
+
+    result, latency, calls, model, prompt_tokens, completion_tokens = _run_method(
+        "http://127.0.0.1:1", CASES[0], "api", engine="live"
+    )
+    assert result.status == "SUCCEEDED"
+    assert latency >= 0
+    assert calls == 0
+    assert model == "typed-fixture"
+    assert prompt_tokens is None
+    assert completion_tokens is None
 
 
 def test_benchmark_artifacts_are_allowlisted_and_atomic(tmp_path: Path) -> None:
