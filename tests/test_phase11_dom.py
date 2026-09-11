@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import socket
 import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -177,7 +179,13 @@ def test_dom_task_does_not_treat_expired_session_as_success() -> None:
     assert "Sign in again" in run.observations[-1].content
 
 
-def test_changed_page_preserves_the_pre_fix_dom_failure() -> None:
+def test_changed_page_failure_artifact_is_preserved() -> None:
+    artifact = json.loads((Path("output/phase11/phase11-page-change-failure-v1.json")).read_text())
+    assert artifact["observed_status"] == "NOT_FOUND"
+    assert artifact["preserved"] is True
+
+
+def test_changed_page_is_recovered_without_v1_regression() -> None:
     try:
         with _server() as base_url:
             run = run_dom_task(
@@ -192,8 +200,8 @@ def test_changed_page_preserves_the_pre_fix_dom_failure() -> None:
     except BrowserUnavailable:
         pytest.skip("web-gui-lab is not installed")
 
-    assert run.result.status == "NOT_FOUND"
-    assert "synthetic-procurement-v2" in run.observations[1].content
+    assert run.result.status == "SUCCEEDED"
+    assert "synthetic-procurement-v2" in run.observations[0].content
 
 
 def test_dom_policy_rejects_stale_or_unknown_targets() -> None:

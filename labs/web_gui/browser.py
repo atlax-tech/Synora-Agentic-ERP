@@ -111,8 +111,9 @@ def _snapshot(page: Any, spec: TaskSpec, mode: str = "dom") -> DomSnapshot:
             targets.add("search-submit")
         if page.locator('[data-action="back"]').count() == 1:
             targets.add("back")
-        for name in page.locator("[data-order-name]").evaluate_all(
-            "elements => elements.map(element => element.getAttribute('data-order-name'))"
+        for name in page.locator("[data-order-name], [data-order-id]").evaluate_all(
+            "elements => elements.map(element => "
+            "element.getAttribute('data-order-name') || element.getAttribute('data-order-id'))"
         ):
             if isinstance(name, str) and name:
                 targets.add(f"order:{name}")
@@ -170,7 +171,12 @@ def _locator_for(page: Any, target_ref: str, mode: str = "dom") -> Any:
         return page.locator('[data-action="back"]')
     if target_ref.startswith("order:"):
         name = target_ref.removeprefix("order:")
-        return page.locator(f'[data-order-name="{name}"] [data-order-link]')
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,140}", name):
+            raise BrowserPolicyError("order target contains unsafe characters")
+        return page.locator(
+            f'[data-order-name="{name}"] [data-order-link], '
+            f'[data-order-id="{name}"] [data-order-link]'
+        )
     raise BrowserPolicyError("unknown observed target")
 
 
