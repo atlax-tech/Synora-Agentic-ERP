@@ -4,7 +4,10 @@ Status: `CONFIRMED` product-level acceptance direction. Phase 8 is
 `COMPLETED / PASS / READY FOR THE NEXT PHASE` as of 2026-09-03. Phase 9's
 implementation, real acceptance, L3 evidence, independent review, and
 README/Harness synchronization are complete as of 2026-09-04; its status is
-`COMPLETED / PASS / READY FOR THE NEXT PHASE`.
+`COMPLETED / PASS / READY FOR THE NEXT PHASE`. Phase 10's fixed isolated
+development ERP implementation, real acceptance, L3 evidence, independent
+review, and protected documentation synchronization are complete as of
+2026-09-11; its status is `COMPLETED / PASS / READY FOR THE NEXT PHASE`.
 
 ## Product Acceptance Principles
 
@@ -40,9 +43,14 @@ For Phase 4–13, a topic is not complete because a framework demo runs. Accepta
 - Ambiguous success enters reconciliation instead of blind retry.
 - The run is auditable from request through receipt.
 
-## Deferred P2P Acceptance
+## Phase 10 P2P Acceptance
 
-Receipt, Invoice, Payment, and PO submission are staged requirements, not removed scope. Each requires its own permission, accounting, state-transition, approval, idempotency, recovery, and evaluation contract before write access is enabled.
+PO submission, Receipt, Invoice, and Payment Entry are accepted on the fixed
+isolated `dev.localhost` development ERP after each action's permission,
+accounting, state-transition, approval, idempotency, recovery, read-back, and
+reconciliation evidence passed. Other ERP environments, stricter Workflow
+mappings, and production deployment remain evidence-gated and fail closed when
+their rules are missing, conflicting, stale, or unverifiable.
 
 ## Retrieval Acceptance
 
@@ -79,7 +87,8 @@ Receipt, Invoice, Payment, and PO submission are staged requirements, not remove
   fresh capture; current backend Coach, permission, and zero-write evidence
   are separately bound.
 - Independent read-only review completed with `PASS` before this status was
-  written. Phase 9 remains planned and not started.
+  written. Phase 9 final acceptance is recorded below; Phase 10 acceptance is
+  recorded in the following section.
 
 ## Phase 9 final acceptance (2026-09-04)
 
@@ -87,7 +96,14 @@ Receipt, Invoice, Payment, and PO submission are staged requirements, not remove
 - MCP, A2A, and ANP protocol acceptance passed with stdio/loopback lifecycle and fail-closed checks. These remain `LAB_ONLY`; ANP is `NOT ADOPTED` because open-network discovery is not required by Phase 9.
 - The real Buyer → Frappe → Runtime → GLM path passed with Viewer denial, System Manager redaction, revision/scope/fallback/invalid/timeout/cancellation handling, unchanged MR/PO/Bin anchors, and zero ERP business writes. The three role screenshots are bound to implementation HEAD `8b7ff1b`.
 - L3 gates and the independent adversarial review passed. The authoritative report and manifest are `output/phase9/phase9-stage-report-draft-8b7ff1b.md` and `output/phase9/phase9-final-manifest-8b7ff1b.json`; their evidence commit is `a87f254`.
-- README and Harness updates remain a separately approved synchronization step. No production deployment, customer adoption, or unmeasured general model-quality claim is made.
+- At the time of the Phase 9 freeze, README and Harness updates were a separately approved synchronization step; the later R10.6 protected synchronization is recorded in the Phase 10 final manifest. No production deployment, customer adoption, or unmeasured general model-quality claim is made.
+
+## Phase 10 final acceptance (2026-09-11)
+
+- The fixed isolated development ERP completed the governed PO Submit → partial Receipt → partial Invoice → Payment Entry path. Each side-effecting Action carried an independent approval, current-state and permission recheck, reservation, idempotency key, ERP-native controller, `SUCCEEDED` Receipt, and successful read-back; unknown outcomes entered reconciliation instead of blind retry.
+- The R10.4 process-fault matrix passed `28/28` cases across seven Action types and four fault locations. The real-login browser artifact covers role separation, unauthorized Viewer denial, cancellation/recovery, accounting/GL balance, and a retained Runtime `503 UNAVAILABLE` limitation.
+- The final R10.5 gates were `make format-check`, `make lint`, `make type`, `make unit` (`856 passed`), and `make integration` (`248` Frappe tests) with exit code `0`; the two-round independent adversarial review returned `PASS`.
+- The final report and machine manifest are `output/phase10/phase10-stage-report-final-80abbba.md` and `output/phase10/phase10-final-manifest-final-80abbba.json`. This acceptance is development-ERP evidence only; it does not claim production deployment, bank transfer, customer adoption, or general performance improvement.
 
 ## Sources
 

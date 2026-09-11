@@ -1,6 +1,6 @@
 # Testing
 
-Status: `CONFIRMED` strategy; the root format, lint, type, unit, integration, and runtime commands are verified and recorded in `docs/DEVELOPMENT.md`. Phase 8's implementation-specific evaluation and acceptance commands remain backed by the final evidence below. Phase 9's implementation-specific evidence, independent review, and public/Harness synchronization completed on 2026-09-04 with status `COMPLETED / PASS / READY FOR THE NEXT PHASE`.
+Status: `CONFIRMED` strategy; the root format, lint, type, unit, integration, and runtime commands are verified and recorded in `docs/DEVELOPMENT.md`. Phase 8's implementation-specific evaluation and acceptance commands remain backed by the final evidence below. Phase 9's implementation-specific evidence, independent review, and public/Harness synchronization completed on 2026-09-04 with status `COMPLETED / PASS / READY FOR THE NEXT PHASE`. Phase 10's real ERP, process-fault, browser, full-gate, independent-review, and protected-sync evidence completed on 2026-09-11 with status `COMPLETED / PASS / READY FOR THE NEXT PHASE`.
 
 ## Test Layers
 
@@ -80,7 +80,7 @@ direct Bench app-test is recorded as the executed equivalent, not as a claim
 that the Make target ran.
 
 The independent read-only Phase 8 review is an exit gate: only its final
-`PASS` is accepted. Phase 9 is explicitly not started.
+`PASS` is accepted. Phase 9 and Phase 10 closure evidence follow below.
 
 ## Phase 9 final evidence (2026-09-04)
 
@@ -91,6 +91,15 @@ The evidence is bound to implementation HEAD `8b7ff1b1dc51449b51f0335ed63ae2c34b
 - P9.9 real acceptance: Buyer’s real GLM Planner → Reviewer path is `ACCEPTED`; Viewer is denied, System Manager receives only a redacted summary, controlled recovery paths pass, and ERP anchors are unchanged with business writes `0`. Buyer, Viewer, and System Manager screenshots are bound to the same implementation HEAD.
 - P9.10: format-check, lint, type, unit (`843 passed`), integration (`210 tests OK`), focused Phase 9 suite (`44 passed`), artifact/zero-write, lock/compile/import, upstream SHA/dirty, ponytail, and Harness manifest/structure/reference checks exited `0`; `detect_drift.py` exited `1` only for the documented pre-sync managed-document drift.
 - The independent adversarial review returned `PASS`. Full digests, commands, risks, rubric, unrun items, and provider search order are in `output/phase9/phase9-final-manifest-8b7ff1b.json` and the stage report draft.
+
+## Phase 10 final evidence (2026-09-11)
+
+The implementation evidence is bound to code HEAD `80abbbafba6ec4f443bab3f86f43356dee5bf9c0` and the R10.5 evidence freeze. The immutable R10.4 artifacts are the `28/28 PASS` process-fault matrix (`7` Action types × `4` fault locations), the real-login browser acceptance, and the R10.3 real-provider comparison; their SHA-256 values and source bindings are recorded in `output/phase10/phase10-stage-report-final-80abbba.md`.
+
+- The fixed isolated `dev.localhost` path completed PO Submit, Purchase Receipt, Purchase Invoice, and Payment Entry with independent approval, current-state/permission rechecks, reservation, idempotency, ERP-native controllers, Receipt, read-back, and reconciliation gates.
+- `make format-check`, `make lint`, `make type`, `make unit` (`856 passed`), and `make integration` (`248` Frappe tests, `OK`) exited `0`; the previous R10.5 report also records the Python, artifact, upstream-cleanliness, ponytail, and Harness checks.
+- The real browser chain covered partial receipt/billing, cancellation, accounting/GL read-back, state drift, a retained Runtime `503 UNAVAILABLE` failure, role separation, and unauthorized Viewer denial. No production deployment, bank transfer, customer adoption, or LAB_ONLY performance claim is made.
+- Final protected synchronization updated the approved authority docs, both READMEs, and Harness fingerprints. The final report and machine manifest are `output/phase10/phase10-stage-report-final-80abbba.md` and `output/phase10/phase10-final-manifest-final-80abbba.json`; final structure, manifest, reference, drift, health, and whitespace results are recorded there.
 
 ## Sources
 

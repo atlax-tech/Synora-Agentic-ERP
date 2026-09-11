@@ -1,0 +1,154 @@
+{
+  "schema_version": "1",
+  "status": "COMPLETED_PASS_READY_FOR_NEXT_PHASE",
+  "implementation_head": "80abbbafba6ec4f443bab3f86f43356dee5bf9c0",
+  "evidence_commit": "1312f69",
+  "scope": "Phase 10 fixed isolated dev.localhost P2P closure plus authorized R10.6 documentation and Harness synchronization",
+  "checks": {
+    "format": {
+      "command": "make format-check",
+      "exit_code": 0,
+      "result": "390 files already formatted"
+    },
+    "lint": {
+      "command": "make lint",
+      "exit_code": 0,
+      "result": "All checks passed"
+    },
+    "type": {
+      "command": "make type",
+      "exit_code": 0,
+      "result": "120 source files, no issues"
+    },
+    "unit": {
+      "command": "make unit",
+      "exit_code": 0,
+      "result": "856 passed; 55 upstream deprecation warnings"
+    },
+    "integration": {
+      "command": "make integration",
+      "exit_code": 0,
+      "result": "248 Frappe tests OK"
+    },
+    "harness_structure": {
+      "exit_code": 0,
+      "valid": true,
+      "issues": 0,
+      "references_checked": 764
+    },
+    "harness_manifest": {
+      "exit_code": 0,
+      "valid": true,
+      "errors": 0,
+      "warnings": 0
+    },
+    "harness_references": {
+      "exit_code": 0,
+      "checked": 764,
+      "broken": 0,
+      "scan_truncated": false
+    },
+    "harness_drift": {
+      "exit_code": 0,
+      "drift_paths": 0,
+      "result": "empty"
+    },
+    "harness_health": {
+      "exit_code": 0,
+      "score": 87.0,
+      "grade": "B",
+      "read_only": true
+    },
+    "git_diff_check": {
+      "exit_code": 0
+    },
+    "upstream_clean": true
+  },
+  "evidence": {
+    "fault_matrix": {
+      "path": "output/phase10/phase10-r104-real-fault-matrix-v1.json",
+      "sha256": "7e1e7846ffc5a908926964b9ebf42241211c76a5d62ab4b6a5397864f372e0eb",
+      "cases": 28,
+      "status": "PASS"
+    },
+    "browser_acceptance": {
+      "path": "output/phase10/phase10-r104-browser-acceptance-v2.json",
+      "sha256": "3d138402ca5ef97d1a70a05ae40ccfd86fb3b7f9a2ea700034bc88a33b2fc0a7",
+      "run_state": "SUCCEEDED",
+      "business_writes": "governed fixed-development-ERP writes only"
+    },
+    "real_comparison": {
+      "path": "output/phase10/phase10-p2p-orchestration-real-glm-v1.json",
+      "sha256": "4accbbb38cb0ad8f29325cecd231520fa710b8a49c6e101a28a4ab998f20546e",
+      "trials": 18
+    },
+    "final_report": "output/phase10/phase10-stage-report-final-80abbba.md"
+  },
+  "review": {
+    "status": "PASS",
+    "r10_5_rounds": 2,
+    "scope": "implementation diff, real ERP/browser/fault evidence, gates, risks, final documentation boundary",
+    "finding": "No P0/P1 remains; protected synchronization is evidence-bounded and does not claim production deployment."
+  },
+  "rubric": {
+    "D1_requirements_business_correctness": 4,
+    "D2_identity_permissions_scope": 4,
+    "D3_state_concurrency_idempotency_recovery": 4,
+    "D4_agent_trust_cost": 3,
+    "D5_security_data_protection": 4,
+    "D6_ui_accessibility_bilingual": 3,
+    "D7_testing_real_integration_reproducibility": 4,
+    "D8_governance_traceability_nonfiction": 4,
+    "D9_simplicity_operability": 3,
+    "total": "33/36",
+    "average": 3.67,
+    "p0_count": 0,
+    "p1_count": 0
+  },
+  "risks": [
+    {
+      "id": "R-P10-DEV-HISTORY",
+      "level": "P2",
+      "status": "OPEN",
+      "next_gate": "governed cleanup after evidence acceptance; retain immutable evidence"
+    },
+    {
+      "id": "R-P10-LAB-METRICS",
+      "level": "P2",
+      "status": "OPEN",
+      "next_gate": "do not use LAB_ONLY latency or tokens as production claim"
+    },
+    {
+      "id": "R-P10-A11Y",
+      "level": "P3",
+      "status": "OPEN",
+      "next_gate": "full keyboard/aria/empty/error/permission audit later"
+    },
+    {
+      "id": "R-P10-RUNTIME-503",
+      "level": "P2",
+      "status": "OPEN",
+      "next_gate": "keep Runtime unavailable path fail-closed and investigate separately"
+    }
+  ],
+  "protected_sync": {
+    "authorized": true,
+    "files": [
+      "docs/PLAN.md",
+      "docs/ARCHITECTURE.md",
+      "docs/ROADMAP.md",
+      "docs/TESTING.md",
+      "docs/ACCEPTANCE.md",
+      "docs/SPEC.md",
+      "docs/DEVELOPMENT.md",
+      "README.md",
+      "README.zh-CN.md",
+      ".harness/manifest.json",
+      ".harness/source-index.json"
+    ],
+    "unresolved_json": "NO_CHANGE",
+    "phase13_plan_text_preserved": true,
+    "upstream_modified": false,
+    "env_files_modified": false
+  }
+}

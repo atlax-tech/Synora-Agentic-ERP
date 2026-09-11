@@ -74,3 +74,9 @@ git diff --check
 预期结构、manifest、references 和 `git diff --check` 退出码为 `0`，`detect_drift.py` 的 drift 为空；若 `docs/PLAN.md` 仍存在用户未提交修改，必须单独标记，不得隐藏在同步提交中。
 
 当前状态：业务实现和 R10.5 门禁已通过；独立对抗审查两轮均为 `PASS`；受保护同步已获用户对本文件级范围的授权，待按本提案应用。本提案不授权 `docs/PLAN.md`、README 或 `REVIEW_REQUIRED` 权威文档之外的范围。
+
+## R10.6 实际应用记录（2026-09-11）
+
+用户随后明确要求继续执行 Phase 10 收口，并授权按上述文件级提案完成 R10.6 受保护同步。结合该继续指令，原提案中“待确认”的 README、权威阶段文档和 `docs/PLAN.md` 状态同步已在本阶段范围内执行：`docs/PLAN.md` 仅更新 Phase 10 状态和区块，用户已提交的 Phase 13 原文保持不变；README 只写固定隔离开发 ERP 的已验证事实；`.harness/unresolved.json` 保持 `NO_CHANGE`。
+
+最终字节指纹由 `.harness/source-index.json` 和 `.harness/manifest.json` 程序化刷新，未手录复制提案中的旧 SHA。最终状态、命令退出码、引用计数、drift、health 和工作树复验见 `output/phase10/phase10-final-manifest-final-80abbba.json`；历史 R10.5 报告和本提案的原始范围说明均保留，不被改写成新的业务证据。

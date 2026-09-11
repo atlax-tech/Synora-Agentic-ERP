@@ -30,7 +30,7 @@ Material Request
   -> Payment-related status and controlled operations
 ```
 
-Phase 4 builds the bounded Agent execution kernel without writes. Phase 5 adds durable workflow. The first controlled-write milestone is Phase 6 and enables MR Draft and PO Draft only. PO Submit, Receipt, Invoice, and Payment-related writes remain required Phase 10 milestones with separate accounting, permission, approval, idempotency, recovery, and evaluation gates.
+Phase 4 builds the bounded Agent execution kernel without writes. Phase 5 adds durable workflow. The first controlled-write milestone is Phase 6 and enables MR Draft and PO Draft only. Phase 10 completed the separate PO Submit, Receipt, Invoice, and Payment-related accounting, permission, approval, idempotency, recovery, and evaluation gates for the fixed isolated development ERP; other environments remain evidence-gated.
 
 Phase 3 is the one-Agent deterministic baseline. Phase 4 compares Direct, bounded ReAct, Plan-and-Solve, Reflection, a minimal multi-step kernel, and provider-native Tool Calling. Phase 5 compares durable workflow choices. Multi-Agent learning is required in Phase 9, while business-path adoption remains evidence-gated. Retrieval starts with versioned curated sources and SQLite FTS5/BM25; the complete vector/hybrid/reranking comparison moves to Phase 8.
 
@@ -505,6 +505,19 @@ CI must not depend on a paid or nondeterministic model. Assertions check ERP fin
 - Prompt/Context/Skill versions are reproducible and cannot expand capability;
 - scoped Memory/RAG re-query live ERP facts and resist cross-user access and injection;
 - Multi-Agent, MCP, and A2A labs are required learning evidence, while business adoption requires same-task net benefit.
+
+### Phase 10 — Complete P2P operations
+
+- PO Submit, Purchase Receipt, Purchase Invoice, and Payment Entry run through
+  typed contracts, independent approval, current-state and permission
+  revalidation, reservation, idempotency, ERP-native controllers, Receipt,
+  read-back, and reconciliation;
+- partial receipt/billing, cancellation, accounting/GL impact, state drift,
+  process recovery, human takeover, and unauthorized role paths have real
+  fixed-development-ERP evidence;
+- the final status is `COMPLETED / PASS / READY FOR THE NEXT PHASE` for the
+  fixed isolated baseline, while stricter or unverifiable enterprise Workflow
+  mappings remain fail-closed and production claims remain out of scope.
 
 ### Phase 10–13 — Complete operations and advanced learning
 

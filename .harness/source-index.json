@@ -15,24 +15,24 @@
       "path": "docs/ARCHITECTURE.md",
       "kind": "architecture",
       "status": "CONFIRMED",
-      "sha256": "a67b7c68e1e401c8996aaa7ed0b61a213192efa3079c1a9e88e9927676719ca8",
-      "locator": "approved target architecture; open implementation decisions remain explicit"
+      "sha256": "89842d0faf7e0aba3c823a408b7c106997aa0f7da249e10aa44b3efed42e36eb",
+      "locator": "approved target architecture plus Phase 10 governed P2P boundary and production-claim limit"
     },
     {
       "id": "approved-engineering-specification",
       "path": "docs/SPEC.md",
       "kind": "design",
       "status": "CONFIRMED",
-      "sha256": "3194accd8a843b23918e516823d8c3985a441f20708f52a977637d3f0a7e03e3",
-      "locator": "requirement traceability, contracts, state machines, governance, evolution gates, and unresolved decisions"
+      "sha256": "d436017a6dfdca9904f246e9c13ea4797e07a321a4f11c5e79ca376c9f9996d3",
+      "locator": "requirement traceability and Phase 10 contract, approval, recovery, and evidence gates"
     },
     {
       "id": "governed-project-execution-plan",
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "efb8d04309c58f2bc7ea4f75be7f5afe41e61aed6a252dd6dc3db0acd34f0bcc",
-      "locator": "phase selection and execution order, risk-tiered gates, independent adversarial review, and Phase 0 through Phase 13 status"
+      "sha256": "297ee5866a8ae0317d20c0b549091c7f3a493345906e3add0429e67edb0a8155",
+      "locator": "current Phase 10 status, execution order, exit gates, and preserved Phase 13 wording"
     },
     {
       "id": "approved-project-direction-correction",
@@ -87,16 +87,16 @@
       "path": "docs/DEVELOPMENT.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "bef03c02c3b7dacf3125b58f96aa3b06bbb9f0c56e18f2ccdb6d7a5b09beb8f0",
-      "locator": "implementation evidence protocol, mentor-led Assignment requirement, verbatim blocker recording, and phase/release PASS gate"
+      "sha256": "d6abe0de0568fe6aeb6a6be6158412b0161d14817e49888ff2a6987f0c642e3e",
+      "locator": "implementation evidence protocol and Phase 10 closure evidence"
     },
     {
       "id": "repository-readme",
       "path": "README.md",
       "kind": "product",
       "status": "CONFIRMED",
-      "sha256": "34b7aea82b1c27070faca71c1197ade9b18c8aa3ba272c9f41b6e5d89c809040",
-      "locator": "English repository positioning, evidence status, mentor-led learning workflow, phase gates, architecture summary, and roadmap"
+      "sha256": "14f0ae33681a301eeafc18864b890c463ef9845de731cccdda1ea148bb54d527",
+      "locator": "English repository positioning, evidence status, phase gates, and Phase 10 scope"
     },
     {
       "id": "repository-license",
@@ -1039,16 +1039,40 @@
       "path": "output/phase10/phase10-harness-sync-proposal-80abbba.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "a20f6a45f46176bb335229c935fbf11421cb41c89735ce79462cd95435fa9f7e",
-      "locator": "R10.6 approved file-level Harness/README synchronization proposal; docs/PLAN excluded"
+      "sha256": "cf3e5dab299846a1884a594fa850b8982bd68ca3fbd0659ac57f1a7ecdf3745d",
+      "locator": "R10.6 approved file-level synchronization proposal and actual protected-sync application record"
     },
     {
       "id": "phase10-development-log",
       "path": "docs/development-log/20260910-Phase-10-开发日志.md",
       "kind": "development",
       "status": "CONFIRMED",
-      "sha256": "4a7ccf318c72c0e42b91416b9b8e59e383a3ae3eba51ee9560a6da6e6a77c6f8",
-      "locator": "Reverse-ordered Phase 10 R10.1-R10.6 implementation, validation, evidence binding, independent review and protected-sync history"
+      "sha256": "c5718d3e3b3221092843be43a12876c40c97faa37cc7d47bcfc82c6415e1c591",
+      "locator": "Reverse-ordered Phase 10 R10.1-R10.6 implementation, validation, evidence binding, independent review and final protected-sync history"
+    },
+    {
+      "id": "repository-readme-zh",
+      "path": "README.zh-CN.md",
+      "kind": "product",
+      "status": "CONFIRMED",
+      "sha256": "809d1e99a15ecd1e3679031f6aaf551a6f11b12ad32a84368ebda3507ec44715",
+      "locator": "Chinese repository positioning, evidence status, phase gates, and Phase 10 scope"
+    },
+    {
+      "id": "phase10-final-stage-report",
+      "path": "output/phase10/phase10-stage-report-final-80abbba.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "deee328e2fd773acc953d07f8ec6f7c73084e74b1c6e8207ecad3f81cb2f3d70",
+      "locator": "R10.6 final Phase 10 report binding fixed-development-ERP evidence, full gates, risks, and sync boundary"
+    },
+    {
+      "id": "phase10-final-manifest-r106",
+      "path": "output/phase10/phase10-final-manifest-final-80abbba.json",
+      "kind": "acceptance",
+      "status": "CONFIRMED",
+      "sha256": "c8ab0f29f781eba4e531c89bce968436f62526c934a40ea27b46251cf0f516e4",
+      "locator": "R10.6 machine manifest binding final status, evidence digests, review, risks, and protected sync"
     }
   ]
 }

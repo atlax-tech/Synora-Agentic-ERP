@@ -8,7 +8,7 @@
 
 Synora has completed **Phase 0 through Phase 3** for its read-only scope: the governed engineering baseline, the pinned Frappe/ERPNext v16 pair, the typed read-only ERP Gateway (server-side Run/capability model, verified read tools, Agent Runtime HTTPX client), and the read-only procurement Agent (deterministic risk analysis, explainable plans, BYOK model provider, FTS5 retrieval, and fail-closed explanation enhancement) are implemented. The P3.5 Buyer → Frappe → Runtime → BYOK path has been exercised over real HTTP; unsafe, over-budget, or unverified model output is deliberately replaced by the deterministic summary.
 
-Phase 3 exit review **passed**: the independent adversarial review initially returned `CHANGES_REQUIRED` with eight blocking findings; the fixes were re-verified across three review rounds, and the final cleanup also closed the CAS-loser recovery race, Docker sidecar configuration/authentication, redirect handling, reasoning-token accounting, and stale evidence wording. The model guard is accurately described as a request output budget plus provider usage verification—not a provider-side hard cost cap. Phases 4–7 are complete. Phase 8 is **`COMPLETED / PASS / READY FOR THE NEXT PHASE`** (2026-09-03), backed by a real grounded Coach representative, one immutable 12-case run, three-role permission evidence, zero-write checks, and independent read-only review. Phase 9 is now **`COMPLETED / PASS / READY FOR THE NEXT PHASE`** (2026-09-04): the quality-first same-model A/B adopted the bounded GLM `assist/glm-5.3-flash` Planner → Policy/Risk Reviewer route; real Frappe/Runtime acceptance, MCP/A2A/ANP protocol checks, L3 gates, zero ERP business writes, and independent adversarial review passed. MCP/A2A/ANP remain `LAB_ONLY` (ANP not adopted); Phase 10 and later ERP writes remain separately staged.
+Phase 3 exit review **passed**: the independent adversarial review initially returned `CHANGES_REQUIRED` with eight blocking findings; the fixes were re-verified across three review rounds, and the final cleanup also closed the CAS-loser recovery race, Docker sidecar configuration/authentication, redirect handling, reasoning-token accounting, and stale evidence wording. The model guard is accurately described as a request output budget plus provider usage verification—not a provider-side hard cost cap. Phases 4–7 are complete. Phase 8 is **`COMPLETED / PASS / READY FOR THE NEXT PHASE`** (2026-09-03), backed by a real grounded Coach representative, one immutable 12-case run, three-role permission evidence, zero-write checks, and independent read-only review. Phase 9 is **`COMPLETED / PASS / READY FOR THE NEXT PHASE`** (2026-09-04): the quality-first same-model A/B adopted the bounded GLM `assist/glm-5.3-flash` Planner → Policy/Risk Reviewer route; real Frappe/Runtime acceptance, MCP/A2A/ANP protocol checks, L3 gates, zero ERP business writes, and independent adversarial review passed. MCP/A2A/ANP remain `LAB_ONLY` (ANP not adopted). Phase 10 is now **`COMPLETED / PASS / READY FOR THE NEXT PHASE`** (2026-09-11) for the fixed isolated development ERP path: governed PO Submit → Receipt → Invoice → Payment Entry, partial processing, cancellation/recovery, accounting/GL read-back, real-login browser evidence, and the 28-case process-fault matrix passed. This is not a claim of production deployment, bank transfer, or customer adoption; Phases 11–13 remain staged.
 
 Phase 8's Coach route uses named BYOK roles (`qwen3:8b` → `glm-5.3-flash` → `grok-4.5` → `qwen3.8:27b`) with request-scoped, bounded escalation, `tools=[]`, `trust_env=False`, and finite deadlines. Phase 9 kept that provider order and stopped at the first quality-first adoption; `qwen3.8:27b` was not called. The evidence proves the implemented bounded paths and their safety boundaries; it does not claim production deployment, customer adoption, or a general model-quality benchmark.
 
@@ -250,7 +250,7 @@ Before a release or version update, an independent adversarial sub-agent must re
 - [x] Phase 7: Prompt, Context Engineering, and Skills
 - [x] Phase 8: Memory, RAG, and Contextual ERP Coach
 - [x] Phase 9: Multi-Agent, MCP, and A2A evidence-gated adoption (quality-first Planner → Reviewer; MCP/A2A/ANP remain LAB_ONLY)
-- [ ] Phase 10: complete P2P operating Agent
+- [x] Phase 10: complete P2P operating Agent on the fixed isolated development ERP (governed PO Submit, Receipt, Invoice, Payment Entry, recovery, and evidence)
 - [ ] Phase 11: Web/GUI Agents and multimodal observation
 - [ ] Phase 12: self-improvement, post-training, and Agentic RL experiments
 - [ ] Phase 13: AI Infra, hardening, benchmarks, and capstone evidence
@@ -259,7 +259,7 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for milestone entry and exit conditions
 
 ## Contributing
 
-The governed read-only gateway, Phase 3 procurement Agent, Phase 8 contextual Coach, and bounded Phase 9 Planner → Reviewer path are implemented with their evidence recorded in the repository; Phase 10 and later phases remain staged. Before proposing a change, read `AGENTS.md` and the affected requirement, architecture, testing, and acceptance documents. Follow the Assignment/mentor workflow, keep commits small, record the change and verbatim questions in `docs/development-log/`, and report commands that actually ran.
+The governed read-only gateway, Phase 3 procurement Agent, Phase 8 contextual Coach, bounded Phase 9 Planner → Reviewer path, and Phase 10 fixed-development-ERP P2P closure are implemented with their evidence recorded in the repository; Phases 11–13 remain staged. Before proposing a change, read `AGENTS.md` and the affected requirement, architecture, testing, and acceptance documents. Follow the Assignment/mentor workflow, keep commits small, record the change and verbatim questions in `docs/development-log/`, and report commands that actually ran.
 
 ## FAQ
 
@@ -277,7 +277,7 @@ FTS5 is local, inspectable, inexpensive, and provides a clear baseline. The comp
 
 ### Can I run Synora today?
 
-The Phase 3 read-only Gateway and procurement Agent are runnable against the pinned Bench environment: see `docs/DEVELOPMENT.md` and the `env/dev/p26`/`env/dev/p35` real-HTTP checks. Phase 8's real Coach evidence and Phase 9's real Planner → Reviewer, protocol, and zero-write evidence are recorded in `docs/TESTING.md` and `output/phase8/`/`output/phase9/`. Phase 10's later governed writes remain separately staged; the Phase 9 evidence still requires the fixed local Bench and configured Provider environment to reproduce.
+The Phase 3 read-only Gateway and procurement Agent are runnable against the pinned Bench environment: see `docs/DEVELOPMENT.md` and the `env/dev/p26`/`env/dev/p35` real-HTTP checks. Phase 8's real Coach evidence, Phase 9's real Planner → Reviewer evidence, and Phase 10's fixed-development-ERP P2P evidence are recorded in `docs/TESTING.md` and `output/phase8/`, `output/phase9/`, and `output/phase10/`. Reproducing the Phase 9/10 evidence still requires the fixed local Bench and configured Provider/environment; the Phase 10 result does not imply production deployment.
 
 ## License
 

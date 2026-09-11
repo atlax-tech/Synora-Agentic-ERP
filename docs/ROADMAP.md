@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: `CONFIRMED` staged learning and delivery plan. Synora is an Agent-development learning repository and a real ERP practice vehicle. The business application layer and teaching lab live in one repository and one development line; staging does not remove complete business requirements. Phase 8 is `COMPLETED / PASS / READY FOR THE NEXT PHASE` (2026-09-03). Phase 9 is `COMPLETED / PASS / READY FOR THE NEXT PHASE` as of 2026-09-04; Phase 10 has not started.
+Status: `CONFIRMED` staged learning and delivery plan. Synora is an Agent-development learning repository and a real ERP practice vehicle. The business application layer and teaching lab live in one repository and one development line; staging does not remove complete business requirements. Phase 8 is `COMPLETED / PASS / READY FOR THE NEXT PHASE` (2026-09-03). Phase 9 is `COMPLETED / PASS / READY FOR THE NEXT PHASE` as of 2026-09-04. Phase 10 is `COMPLETED / PASS / READY FOR THE NEXT PHASE` as of 2026-09-11 for the fixed isolated development ERP path; later phases remain staged.
 
 ## Phase 0 — Governance Bootstrap
 
@@ -72,7 +72,7 @@ Exit: Prompt/Context/Skill versions are reproducible; compression preserves safe
 - Compare FTS5/BM25, vector, hybrid, and reranking on a fixed dataset.
 - Add a cited Contextual ERP Coach that re-queries live ERP facts rather than trusting memory.
 
-Exit: authorized experience and SOP knowledge can be recalled with provenance; stale, cross-user, and injected memory or retrieval content fails safely. Final evidence is recorded in `docs/PLAN.md`, `docs/TESTING.md`, `docs/ACCEPTANCE.md`, and `output/phase8/`; Phase 9 is the next planned phase and has not started.
+Exit: authorized experience and SOP knowledge can be recalled with provenance; stale, cross-user, and injected memory or retrieval content fails safely. Final evidence is recorded in `docs/PLAN.md`, `docs/TESTING.md`, `docs/ACCEPTANCE.md`, and `output/phase8/`; Phase 9 and Phase 10 closure evidence are recorded in their respective sections and output directories.
 
 ## Phase 9 — Multi-Agent, MCP, and A2A
 
@@ -82,13 +82,14 @@ Exit: authorized experience and SOP knowledge can be recalled with provenance; s
 
 Exit: `COMPLETED / PASS / READY FOR THE NEXT PHASE`; adopted roles show measured quality benefit over the same-model single-Agent baseline, and rejected roles retain runnable experiments and evidence explaining the decision.
 
-## Phase 10 — Complete P2P Operating Agent
+## Phase 10 — Complete P2P Operating Agent — COMPLETED / PASS
 
-- Extend governed execution through PO Submit, Receipt, Invoice, and later Payment-related controls as separate milestones.
-- Cover partial receipt/billing, cancellation, accounting controls, state drift, and human takeover.
-- Use the execution, workflow, context, memory, and multi-Agent capabilities proven in earlier phases.
+- Extend governed execution through PO Submit, Receipt, Invoice, and Payment Entry on the fixed isolated development ERP.
+- Cover partial receipt/billing, cancellation, accounting controls, state drift, process recovery, reconciliation, and human takeover.
+- Use the execution, workflow, context, memory, and multi-Agent capabilities proven in earlier phases; keep unknown outcomes fail-closed.
+- Bind the implementation, real ERP/browser/fault evidence, full validation, independent review, and protected documentation sync to `output/phase10/phase10-stage-report-final-80abbba.md` and `output/phase10/phase10-final-manifest-final-80abbba.json`.
 
-Exit: complete P2P requirements have real implementation and acceptance evidence; no stage is silently dropped.
+Exit: `COMPLETED / PASS / READY FOR THE NEXT PHASE`; complete P2P requirements have real implementation and acceptance evidence in the fixed isolated development ERP, no stage is silently dropped, and no production or customer-adoption claim is made.
 
 ## Phase 11 — Web/GUI Agents and Multimodal Observation
 

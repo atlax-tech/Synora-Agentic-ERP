@@ -1,6 +1,6 @@
 # Development
 
-Status: `CONFIRMED` engineering policy; P2.1 implementation commands are `CONFIRMED` (verified 2026-08-24). Phase 9 implementation, evidence, independent adversarial review, and README/Harness synchronization are complete as of 2026-09-04 with status `COMPLETED / PASS / READY FOR THE NEXT PHASE`.
+Status: `CONFIRMED` engineering policy; P2.1 implementation commands are `CONFIRMED` (verified 2026-08-24). Phase 9 implementation, evidence, independent adversarial review, and README/Harness synchronization are complete as of 2026-09-04 with status `COMPLETED / PASS / READY FOR THE NEXT PHASE`. Phase 10 implementation, real ERP/browser/fault evidence, independent adversarial review, and protected documentation synchronization are complete as of 2026-09-11 with status `COMPLETED / PASS / READY FOR THE NEXT PHASE` for the fixed isolated development ERP path.
 
 ## Change Protocol
 
@@ -255,6 +255,14 @@ Implementation HEAD is `8b7ff1b1dc51449b51f0335ed63ae2c34bc5772e`; the evidence/
 P9.6–P9.8 formal MCP stdio, real `127.0.0.1` TCP A2A, and fixed ANP acceptance passed. P9.9 real Buyer/Viewer/System Manager acceptance passed with genuine GLM calls, controlled recovery, three bound screenshots, unchanged ERP anchors, and zero ERP business writes. P9.10 format, lint, type, unit, integration, focused, Python 3.14, upstream, ponytail, and Harness read-only checks are recorded in `output/phase9/phase9-final-manifest-8b7ff1b.json`; the expected pre-sync Harness drift remains explicit. The sole final independent adversarial review returned `PASS`.
 
 The stage report is `output/phase9/phase9-stage-report-draft-8b7ff1b.md` with status `COMPLETED / PASS / READY FOR THE NEXT PHASE`. The approved file-level proposal `P9-HARNESS-CLOSE-20260904-v2` synchronized both README files and `.harness/` metadata after the independent review passed.
+
+## Phase 10 closure evidence (2026-09-11)
+
+Implementation HEAD is `80abbbafba6ec4f443bab3f86f43356dee5bf9c0`; the R10.5 evidence freeze and two-round independent adversarial review are recorded in `output/phase10/phase10-stage-report-draft-80abbba.md` and `output/phase10/phase10-final-manifest-80abbba.json`. The final R10.6 report and manifest are `output/phase10/phase10-stage-report-final-80abbba.md` and `output/phase10/phase10-final-manifest-final-80abbba.json`.
+
+The fixed isolated `dev.localhost` path completed PO Submit, Purchase Receipt, Purchase Invoice, and Payment Entry with typed payloads, independent approval, current state/permission rechecks, reservation, idempotency, ERP-native controllers, Receipt, read-back, and reconciliation. The immutable R10.4 process-fault matrix passed `28/28` cases; the real-login browser chain covered partial receipt/billing, cancellation, accounting/GL read-back, role separation, unauthorized Viewer denial, state drift and recovery. `503 UNAVAILABLE` from an old Runtime exploration remains an explicit failure limitation.
+
+The full R10.5 checks were `make format-check`, `make lint`, `make type`, `make unit` (`856 passed`) and `make integration` (`248` Frappe tests), all exit `0`; the final protected sync refreshed both READMEs, authority-document fingerprints and Harness references without modifying `.env*`, upstream ERP sources, unresolved decisions, or historical evidence. This is fixed-development-ERP evidence and does not claim production deployment, bank transfer, customer adoption, or LAB_ONLY performance.
 
 ## Sources
 

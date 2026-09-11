@@ -2,6 +2,8 @@
 
 状态：`CONFIRMED` 执行计划。版本：`PLAN-MAP-v1`。
 
+当前阶段状态（2026-09-11）：Phase 10 为 `COMPLETED / PASS / READY FOR THE NEXT PHASE`。该状态仅覆盖固定隔离 `dev.localhost` 的受治理 P2P 闭环和已记录的真实 ERP/浏览器/故障证据，不代表生产部署、银行转账或客户采用；Phase 11–13 尚未开始。
+
 ## 1. 目的、权威与边界
 
 本文告诉 Coding Agent 项目应当按什么顺序推进、每一步怎样取证、何时调用 Skill、怎样测试和审查、什么情况下必须停下。它是 `AGENTS.md` 之后的第二必读文档，但不是产品、架构或验收事实源。
@@ -366,7 +368,7 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 - **T07 / P8.4（历史快照，现已关闭）**：已实现 Provider-neutral Coach 回答契约、严格 Claim/Citation 图校验、服务端确定性实时 MR/PO 读取、Provider `tools=[]`、字段绑定的 ERP grounding、Runtime `ValidatedCoachClaim` 及域隔离 HMAC 签名；Frappe `Synora Coach Claim` 是持久 provenance 权威，服务端重新校验 Run/correlation/company/warehouse、来源版本和 live citation 后才幂等保存，Memory `source_claim_id` 只能解析到同一权威 Claim。当前 `answer_coach` 只编排本次新鲜、服务端选定的 MR/PO ERP context 与有界 FTS5 检索，不注入已审核 Frappe Memory；`MEMORY` citation 在此边界故意拒绝并 fail closed，Claim→Memory 仅是持久 provenance，不等于 Memory-backed Coach answer retrieval。针对历史独立复核 P1 的用户授权窄修复已执行：保留 `UNKNOWN` 类型定义，但契约拒绝其进入 `ANSWERED/CONFLICT`，服务层统一的可签名 Claim allowlist 对非签名类型再次 fail closed；独立安全复核已对 `UNKNOWN`/`MEMORY` 负例、三类合法 Claim、畸形输入、ERP 字段绑定和零写入边界返回 `PASS`。
 - **T08 / P8.5（历史快照，现已关闭）**：T08.1 内部 Runtime transport foundation 已在 `d6ab39c` 实现，并已通过正式独立只读安全/diff Review（`PASS`）；新增 token 保护的 `POST /coach/answer`，Runtime 自己绑定当前 MR/PO Gateway、固定内部 curated FTS5（最多 5 条），并保持 Provider `tools=[]`。T08.2 Frappe adapter 原始实现已在 `7a35eaa` 提交，完成 actor/Run/capability 绑定、服务端派生 correlation/company/warehouse、严格 Coach 回执图校验及原子签名 Claim 持久化；首次正式独立 Review 曾因 JSON 转义 secret 反射和共享 Runtime URL 的 origin/path 歧义返回 `CHANGES_REQUIRED`。窄修复已在 `25e9507` 完成：在 Coach 校验/持久化前扫描解码后的 Runtime JSON 中的 capability/Runtime-token 子串，并将 `SYNORA_RUNTIME_URL` 限制为已批准的裸 origin、由服务端构造固定 endpoint path；修复后的正式独立只读安全/diff Review 为 `PASS`，原 P1/P2 均不可复现。后续通过 named fallback、有限 deadline、grounded Coach 代表题/固定 12 案及角色证据完成 T08/P8.5，详见本节当前收口证据。
 - **T09 / 阶段出口证据（历史快照，现已关闭）**：真实 BYOK、固定 ERP 零写入统计、12 案 Rubric、三角色浏览器绑定和 L3 门禁均已记录于当前收口证据。
-- **T10 / 独立对抗 Review 与收口（历史快照，现已关闭）**：只读独立审查角色完成最终复核并返回 `PASS` 后，才写入本节当前出口状态；Phase 9 尚未开始。
+- **T10 / 独立对抗 Review 与收口（历史快照，现已关闭）**：只读独立审查角色完成最终复核并返回 `PASS` 后，才写入本节当前出口状态；Phase 9 的当前状态见第 18 节，Phase 10 的当前状态见第 19 节。
 - Runtime-local SQLite Memory 只保留为 `LAB_ONLY`、单实例开发证据；Frappe 承担未来持久 Memory 的权威身份、权限与业务集成边界，Runtime Memory/cache/index 不得取代它或 ERP 事实。
 
 - 实现 Working/Episodic/Semantic/Procedural Memory 的写入候选、审核、scope、过期、纠正、删除、召回和污染防护。
@@ -377,7 +379,7 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 
 ## 18. Phase 9 — Multi-Agent、MCP 与 A2A
 
-当前执行状态（2026-09-04）：`COMPLETED / PASS / READY FOR THE NEXT PHASE`。P9.5 按用户批准的 `quality-first-model-v1` 完成真实同模型 A/B：GLM `assist/glm-5.3-flash` 的 v12 是第一份满足质量优先规则的证据，Planner 与 Reviewer 均 `ADOPT`；token 只作为审计数据，不再单独否决。v13 的随机波动失败、qwen3:8b 和 Grok 的失败 artifact 均保留，`qwen3.8:27b` 未调用。P9.6–P9.8 的真实 MCP stdio、`127.0.0.1` TCP A2A 和固定 ANP fail-closed 验收均 `PASS`；MCP/A2A/ANP 保持 `LAB_ONLY`，ANP 为 `NOT ADOPTED`。P9.9 真实 GLM 业务链路、三角色权限、故障恢复、浏览器和 ERP 零写入验收均 `PASS`。P9.10 L3、Rubric、风险登记和阶段报告已冻结，唯一独立对抗审查返回 `PASS`；README/Harness proposal `P9-HARNESS-CLOSE-20260904-v2` 已批准并同步。Phase 10 保持未开始。
+当前执行状态（2026-09-04）：`COMPLETED / PASS / READY FOR THE NEXT PHASE`。P9.5 按用户批准的 `quality-first-model-v1` 完成真实同模型 A/B：GLM `assist/glm-5.3-flash` 的 v12 是第一份满足质量优先规则的证据，Planner 与 Reviewer 均 `ADOPT`；token 只作为审计数据，不再单独否决。v13 的随机波动失败、qwen3:8b 和 Grok 的失败 artifact 均保留，`qwen3.8:27b` 未调用。P9.6–P9.8 的真实 MCP stdio、`127.0.0.1` TCP A2A 和固定 ANP fail-closed 验收均 `PASS`；MCP/A2A/ANP 保持 `LAB_ONLY`，ANP 为 `NOT ADOPTED`。P9.9 真实 GLM 业务链路、三角色权限、故障恢复、浏览器和 ERP 零写入验收均 `PASS`。P9.10 L3、Rubric、风险登记和阶段报告已冻结，唯一独立对抗审查返回 `PASS`；README/Harness proposal `P9-HARNESS-CLOSE-20260904-v2` 已批准并同步。Phase 10 的当前状态见第 19 节。
 
 - 实现 Supervisor、Peer-to-Peer、Hierarchical、managed-agent-as-tool 和显式 graph node 的最小对照。
 - 先评估 `Planner → Policy/Risk Reviewer`，只在异常路径启动 Reconciliation Agent；所有 handoff typed、工具隔离、预算有界。
@@ -385,11 +387,15 @@ Phase 7 最终 Rubric：D1 需求与业务正确性 `3`；D2 身份/权限/范�
 
 出口证据：每个候选角色有同任务质量、安全、延迟、成本、恢复对比；GLM v12 的质量优先 Adoption Card 绑定 `output/phase9/phase9-final-manifest-8b7ff1b.json`，其他候选与角色保留拒绝/保留证据；P9.6–P9.9 与 L3 证据绑定 `8b7ff1b`，审查 PASS 绑定提交 `a87f254`。
 
-## 19. Phase 10 — 完整 P2P 运营 Agent
+## 19. Phase 10 — 完整 P2P 运营 Agent — COMPLETED / PASS
 
-按 PO Submit、Purchase Receipt、Purchase Invoice、Payment 相关流程逐项执行“源码证据 → 契约/审批 → 实现 → 幂等/恢复 → UI → 真实 ERP 测试”，覆盖部分收货/开票、取消、会计影响、状态漂移和人工接管。
+当前执行状态（2026-09-11）：`COMPLETED / PASS / READY FOR THE NEXT PHASE`。固定隔离 `dev.localhost` 已完成 PO Submit、Purchase Receipt、Purchase Invoice、Payment Entry 的受治理闭环；部分收货/开票、取消、会计回读、状态漂移、进程恢复、人工对账和三角色浏览器验收均有真实证据。每个有副作用的 Action 都经过 typed payload、独立审批、当前状态与权限重检、reservation、幂等键、ERP 原生 controller、Receipt 和成功后的回读；未知结果进入 `RECONCILIATION_REQUIRED`，不盲目重试下游。
 
-出口证据：F-009–F-012 各自拥有权限、会计、审批、幂等、恢复和真实 ERP 验收证据，完整 P2P 可运行且无阶段被静默删除。
+- R10.4 真实进程故障矩阵为 `7` 个 Action 类型 × `4` 个故障位置，共 `28/28 PASS`；真实登录态浏览器 Run、PO/PR/PI/Payment Entry 与 GL 回读均通过，失败与 `503 UNAVAILABLE` 限制保留。
+- R10.5 代码、真实 ERP/浏览器/故障证据和全量门禁绑定实现 HEAD `80abbba`；`make format-check`、`make lint`、`make type`、`make unit`（856 passed）和 `make integration`（248 tests OK）均通过；独立对抗审查两轮均为 `PASS`。
+- R10.6 已按用户授权完成 README、权威阶段文档和 Harness 指纹同步；`validate_harness_structure.py`、manifest、references、drift 和 `git diff --check` 的最终结果记录在 `output/phase10/phase10-final-manifest-final-80abbba.json`。上游 Frappe/ERPNext、`.env*`、未决项和历史 artifact 未被覆盖或伪造更新。
+
+出口证据：F-009–F-012 各自拥有权限、会计、审批、幂等、恢复和真实 ERP 验收证据；完整 P2P 在固定隔离开发 ERP 中可运行，且没有把实验指标、开发站点验收或受治理记账描述为生产能力。阶段报告为 `output/phase10/phase10-stage-report-final-80abbba.md`。
 
 ## 20. Phase 11 — Web/GUI Agent 与多模态观察
 
