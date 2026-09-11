@@ -56,6 +56,14 @@ def test_probe_uses_existing_role_and_never_returns_key() -> None:
         [PNG],
         environ=_env(),
         transport=httpx.MockTransport(handler),
+        expected_observations=(
+            {
+                "purchase_order": "PUR-ORD-0001",
+                "supplier": "Supplier A",
+                "status": "To Receive and Bill",
+                "currency": "CNY",
+            },
+        ),
     )
 
     assert result.status == "PASS"
@@ -71,6 +79,24 @@ def test_probe_without_config_is_an_explicit_block() -> None:
     result = probe_vision("read", [PNG], environ={})
     assert result.status == "VISION_PROVIDER_UNAVAILABLE"
     assert result.attempts == ()
+
+
+def test_probe_without_trusted_oracle_cannot_pass() -> None:
+    called = False
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    result = probe_vision(
+        "read",
+        [PNG],
+        environ=_env(),
+        transport=httpx.MockTransport(handler),
+    )
+    assert result.status == "VISION_PROVIDER_UNAVAILABLE"
+    assert called is False
 
 
 def test_image_and_response_limits_fail_closed() -> None:

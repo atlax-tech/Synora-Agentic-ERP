@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any
@@ -12,7 +12,7 @@ from typing import Any
 from labs.web_gui.browser import BrowserPolicyError, BrowserUnavailable, _origin, _playwright_sync
 from labs.web_gui.contracts import ActionReceipt, Observation, TaskResult, TaskSpec
 from labs.web_gui.erp_browser import _RealPolicy
-from labs.web_gui.erp_readonly import MAX_RESPONSE_BYTES, ErpReadConfig
+from labs.web_gui.erp_readonly import MAX_RESPONSE_BYTES, READ_FIELDS, ErpReadConfig, ErpReadResult
 from labs.web_gui.gui import (
     VisualDecision,
     _fields_from_decision,
@@ -105,11 +105,33 @@ def _result(
     )
 
 
+def _trusted_fields(
+    config: ErpReadConfig, trusted_api: ErpReadResult | None
+) -> dict[str, str] | None:
+    """Extract fields only from a successful, versioned typed API snapshot."""
+
+    if trusted_api is None or trusted_api.method != "api" or trusted_api.status != "SUCCEEDED":
+        return None
+    fact = trusted_api.fact
+    if (
+        fact.purchase_order != config.purchase_order
+        or not fact.source_modified_at
+        or not fact.frappe_revision
+        or not fact.erpnext_revision
+        or len(trusted_api.evidence_digest) != 64
+    ):
+        return None
+    values = fact.model_dump(mode="json", include=set(READ_FIELDS))
+    if any(not isinstance(value, str) or not value.strip() for value in values.values()):
+        return None
+    return {key: value for key, value in values.items()}
+
+
 def run_erp_visual_task(
     config: ErpReadConfig,
     decider: VisualDecider,
     *,
-    trusted_fields: Mapping[str, str] | None = None,
+    trusted_api: ErpReadResult | None = None,
 ) -> ErpVisualRun:
     """Run a bounded coordinate loop; the decider receives no DOM or API data."""
 
@@ -302,9 +324,10 @@ def run_erp_visual_task(
                                 reason = code
                                 break
                             if proposal.action_type == "finish":
+                                trusted_fields = _trusted_fields(config, trusted_api)
                                 if trusted_fields is None:
                                     status, reason = "INCOMPLETE", "trusted_erp_fact_unavailable"
-                                elif fields != dict(trusted_fields):
+                                elif fields != trusted_fields:
                                     status, reason = "INCOMPLETE", "visual_fields_mismatch"
                                 else:
                                     status, reason = "SUCCEEDED", None

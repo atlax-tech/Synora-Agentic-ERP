@@ -256,8 +256,17 @@ def probe_vision(
 ) -> VisionProbeResult:
     """Try configured roles in order, stopping at the first valid image read."""
 
-    values = os.environ if environ is None else environ
     encoded = _image_data(images)
+    if expected_observations is None:
+        return VisionProbeResult(
+            status="VISION_PROVIDER_UNAVAILABLE",
+            observation=None,
+            attempts=(),
+            model=None,
+            prompt_tokens=None,
+            completion_tokens=None,
+        )
+    values = os.environ if environ is None else environ
     attempts: list[VisionAttempt] = []
     for role in _ROLE_ENV:
         try:
