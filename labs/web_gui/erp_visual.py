@@ -152,8 +152,9 @@ def run_erp_visual_task(
             events.append("POPUP_BLOCKED")
             popup.close()
 
-        def on_download(_download: Any) -> None:
+        def on_download(download: Any) -> None:
             events.append("DOWNLOAD_BLOCKED")
+            download.cancel()
 
         def on_dialog(dialog: Any) -> None:
             events.append("DIALOG_DISMISSED")

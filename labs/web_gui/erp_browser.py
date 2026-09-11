@@ -182,10 +182,12 @@ async def read_erp_web(
             async def on_popup(_page: Any) -> None:
                 nonlocal popup_seen
                 popup_seen = True
+                await _page.close()
 
-            async def on_download(_download: Any) -> None:
+            async def on_download(download: Any) -> None:
                 nonlocal download_seen
                 download_seen = True
+                await download.cancel()
 
             async def on_dialog(dialog: Any) -> None:
                 nonlocal dialog_seen
