@@ -12,11 +12,15 @@ PNG = b"\x89PNG\r\n\x1a\nsynthetic-redacted"
 
 
 class _Locator:
-    def __init__(self, count: int = 1) -> None:
+    def __init__(self, count: int = 1, *, sensitive_visible: bool = False) -> None:
         self._count = count
+        self._sensitive_visible = sensitive_visible
 
     def count(self) -> int:
         return self._count
+
+    def evaluate_all(self, _script: str) -> bool:
+        return self._sensitive_visible
 
 
 class _TextLocator(_Locator):
@@ -32,16 +36,24 @@ class _Page:
     viewport_size: ClassVar[dict[str, int]] = {"width": 1024, "height": 768}
 
     def __init__(
-        self, *, missing: str | None = None, text: str = "PO Supplier To Receive and Bill CNY"
+        self,
+        *,
+        missing: str | None = None,
+        text: str = "PO Supplier To Receive and Bill CNY",
+        sensitive_visible: bool = False,
     ) -> None:
         self.missing = missing
         self.text = text
+        self.sensitive_visible = sensitive_visible
         self.style = ""
 
     def locator(self, selector: str) -> _Locator:
         if selector == "body":
             return _TextLocator(self.text)
-        return _Locator(0 if selector == self.missing else 1)
+        return _Locator(
+            0 if selector == self.missing else 1,
+            sensitive_visible=self.sensitive_visible,
+        )
 
     def get_by_text(self, _value: str, *, exact: bool) -> _Locator:
         return _Locator(1)
@@ -69,6 +81,12 @@ def test_redaction_rejects_visible_sensitive_markers() -> None:
     assert result.status == "BLOCKED"
     assert result.failure_code == "SENSITIVE_MARKER_VISIBLE"
     assert page.style == REDACTION_CSS
+
+
+def test_redaction_rejects_visible_sensitive_pixels() -> None:
+    result = capture_redacted_page(_Page(sensitive_visible=True), "PUR-ORD-0001")
+    assert result.status == "BLOCKED"
+    assert result.failure_code == "REDACTION_PIXEL_REGION_VISIBLE"
 
 
 def test_redaction_returns_bounded_png_digest() -> None:

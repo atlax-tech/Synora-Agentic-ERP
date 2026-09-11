@@ -33,8 +33,25 @@ REQUIRED_REDACTION_SELECTORS = (
     '[data-fieldname="currency"]',
     ".page-head .indicator-pill",
 )
+SENSITIVE_REDACTION_SELECTORS = (
+    ".body-sidebar-container",
+    ".layout-side-section",
+    ".form-sidebar .sidebar-meta-details",
+    ".form-sidebar .form-name-container",
+    ".new-timeline",
+    ".comment-box",
+    ".page-actions",
+    ".custom-actions",
+    ".standard-actions",
+    ".sidebar-toggle-btn",
+    ".navbar-breadcrumbs",
+    "#datepickers-container",
+)
 REDACTION_CSS = """\
 .body-sidebar-container,
+.layout-side-section,
+.form-sidebar .sidebar-meta-details,
+.form-sidebar .form-name-container,
 .new-timeline,
 .comment-box,
 .page-actions,
@@ -86,6 +103,24 @@ def _blocked(code: str) -> RedactedCapture:
     )
 
 
+def _sensitive_regions_hidden(page: Any) -> bool:
+    """Check computed layout visibility after CSS masking, before PNG export."""
+
+    script = """elements => elements.some(element => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden'
+            && style.opacity !== '0' && rect.width > 0 && rect.height > 0;
+    })"""
+    try:
+        return all(
+            not bool(page.locator(selector).evaluate_all(script))
+            for selector in SENSITIVE_REDACTION_SELECTORS
+        )
+    except Exception:
+        return False
+
+
 def capture_redacted_page(page: Any, purchase_order: str) -> RedactedCapture:
     """Mask known account/navigation regions and capture only a safe viewport."""
 
@@ -96,6 +131,8 @@ def capture_redacted_page(page: Any, purchase_order: str) -> RedactedCapture:
         return _blocked("PURCHASE_ORDER_NOT_VISIBLE")
     try:
         page.add_style_tag(content=REDACTION_CSS)
+        if not _sensitive_regions_hidden(page):
+            return _blocked("REDACTION_PIXEL_REGION_VISIBLE")
         visible_text = page.locator("body").inner_text()
         if _EMAIL.search(visible_text) or _SECRET_WORD.search(visible_text):
             return _blocked("SENSITIVE_MARKER_VISIBLE")
@@ -121,6 +158,7 @@ __all__ = [
     "MAX_REDACTED_SCREENSHOT_BYTES",
     "REDACTION_CSS",
     "REQUIRED_REDACTION_SELECTORS",
+    "SENSITIVE_REDACTION_SELECTORS",
     "RedactedCapture",
     "capture_redacted_page",
 ]

@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from collections.abc import Mapping
@@ -99,6 +100,8 @@ class ErpReadConfig(ErpStrictModel):
             raise ValueError("base_url must be an HTTP(S) origin")
         if parsed.hostname not in {"127.0.0.1", "localhost"}:
             raise ValueError("real ERP comparison is limited to loopback")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,139}", self.purchase_order):
+            raise ValueError("purchase_order contains unsafe URL characters")
         return self
 
 

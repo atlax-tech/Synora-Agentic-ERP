@@ -22,6 +22,8 @@ def test_real_erp_config_is_loopback_only() -> None:
         ErpReadConfig(base_url="https://erp.example.test", purchase_order="PO-1")
     with pytest.raises(ValueError):
         ErpReadConfig(base_url="http://127.0.0.1:8000/?token=secret", purchase_order="PO-1")
+    with pytest.raises(ValueError):
+        ErpReadConfig(purchase_order="PUR-ORD-2026/02297")
 
 
 def test_issue_run_and_fact_parsers_fail_closed() -> None:
