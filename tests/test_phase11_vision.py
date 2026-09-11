@@ -88,7 +88,10 @@ def test_probe_uses_existing_role_and_never_returns_key() -> None:
 
 
 def test_probe_reads_standard_responses_nested_output() -> None:
-    def handler(_request: httpx.Request) -> httpx.Response:
+    seen: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
         return httpx.Response(
             200,
             json={
@@ -140,6 +143,7 @@ def test_probe_reads_standard_responses_nested_output() -> None:
     assert result.completion_tokens == 7
     assert result.attempts[0].protocol == "responses"
     assert result.attempts[0].response_shape == "output"
+    assert seen[0]["input"][0]["content"][1]["detail"] == "high"
 
 
 def test_responses_payload_uses_local_reasoning_contract() -> None:

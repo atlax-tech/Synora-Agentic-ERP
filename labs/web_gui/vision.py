@@ -203,7 +203,14 @@ def _payload(
         raise VisionProbeError("MODEL_OUTPUT_BUDGET")
     if responses:
         content: list[dict[str, object]] = [{"type": "input_text", "text": prompt}]
-        content.extend({"type": "input_image", "image_url": image} for image in images)
+        content.extend(
+            {
+                "type": "input_image",
+                "image_url": image,
+                "detail": "high",
+            }
+            for image in images
+        )
         return {
             "model": model,
             "input": [{"role": "user", "content": content}],

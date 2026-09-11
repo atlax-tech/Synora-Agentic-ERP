@@ -95,8 +95,9 @@ def _probe_vision() -> dict[str, object]:
     result = probe_vision(
         "Read the two synthetic procurement screenshots. Return exactly JSON with "
         "an observations array containing one object per screenshot. Each object must "
-        "contain purchase_order, supplier, status, currency, complete. Do not infer "
-        "or use outside data.",
+        "contain purchase_order, supplier, status, currency, complete. Set complete "
+        "to true only when all four visible fields in that screenshot are readable. "
+        "Do not infer or use outside data.",
         images,
         expected_observations=tuple(
             {
