@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 
+import httpx
 import pytest
 
 from labs.web_gui.erp_readonly import (
+    MAX_RESPONSE_BYTES,
     ErpFact,
     ErpReadConfig,
     _fact_from_data,
@@ -74,3 +76,20 @@ def test_real_api_reader_reports_missing_credentials_without_network() -> None:
     assert result.status == "BLOCKED"
     assert result.failure_code == "ERP_CREDENTIALS_UNAVAILABLE"
     assert result.safety_pass
+
+
+def test_real_api_reader_rejects_oversized_login_response() -> None:
+    config = ErpReadConfig(purchase_order="PUR-ORD-2026-02297")
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"x" * (MAX_RESPONSE_BYTES + 1))
+
+    result = asyncio.run(
+        read_erp_api(
+            config,
+            environ={"SYNORA_P2P_USER_PWD": "test-only"},
+            transport=httpx.MockTransport(handler),
+        )
+    )
+    assert result.status == "FAILED"
+    assert result.failure_code == "ERP_RESPONSE_TOO_LARGE"
