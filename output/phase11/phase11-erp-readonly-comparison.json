@@ -3,90 +3,85 @@
   "case_id": "p11-erp-readonly-001",
   "company": "SYNORA-P1 Test Company",
   "comparison": {
-    "after_modified_at": "2026-09-11 01:10:41.759974",
-    "api": {
-      "elapsed_ms": 220,
-      "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
-      "fact": {
-        "currency": "CNY",
-        "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
-        "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
-        "purchase_order": "PUR-ORD-2026-02297",
-        "source_modified_at": "2026-09-11 01:10:41.759974",
-        "status": "To Receive and Bill",
-        "supplier": "SYNORA-P1-Supplier-1"
-      },
-      "failure_code": null,
-      "method": "api",
-      "policy_events": [],
-      "request_paths": [
-        "/api/method/login",
-        "/api/method/synora_agentic_erp.api.issue_run",
-        "/api/method/synora_agentic_erp.api.execute"
-      ],
-      "safety_pass": true,
-      "status": "SUCCEEDED"
+  "after_modified_at": "2026-09-11 01:10:41.759974",
+  "api": {
+    "elapsed_ms": 364,
+    "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+    "fact": {
+      "currency": "CNY",
+      "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+      "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+      "purchase_order": "PUR-ORD-2026-02297",
+      "source_modified_at": "2026-09-11 01:10:41.759974",
+      "status": "To Receive and Bill",
+      "supplier": "SYNORA-P1-Supplier-1"
     },
-    "before_modified_at": "2026-09-11 01:10:41.759974",
-    "compared_fields": [
-      "purchase_order",
-      "supplier",
-      "status",
-      "currency"
+    "failure_code": null,
+    "method": "api",
+    "policy_events": [],
+    "request_paths": [
+      "/api/method/login",
+      "/api/method/synora_agentic_erp.api.issue_run",
+      "/api/method/synora_agentic_erp.api.execute"
     ],
-    "purchase_order": "PUR-ORD-2026-02297",
-    "status": "MATCHED",
-    "web": {
-      "elapsed_ms": 1537,
-      "evidence_digest": "0b2993d4fd002871b04df4555cfe02f31b9a1445d0e53e88fd161f765c1a28d4",
-      "fact": {
-        "currency": "CNY",
-        "erpnext_revision": null,
-        "frappe_revision": null,
-        "purchase_order": "PUR-ORD-2026-02297",
-        "source_modified_at": null,
-        "status": "To Receive and Bill",
-        "supplier": "SYNORA-P1-Supplier-1"
-      },
-      "failure_code": null,
-      "method": "web",
-      "policy_events": [
-        "SOCKET_BLOCKED",
-        "NON_TARGET_DOCUMENT_BLOCKED"
-      ],
-      "request_paths": [
-        "/desk/purchase-order/PUR-ORD-2026-02297",
-        "/api/method/frappe.core.doctype.session_default_settings.session_default_settings.get_session_default_values",
-        "/api/method/frappe.desk.form.load.getdoctype",
-        "/api/method/frappe.desk.form.load.getdoc",
-        "/api/method/frappe.desk.doctype.notification_log.notification_log.get_notification_logs",
-        "/api/method/frappe.desk.doctype.event.event.get_events",
-        "/api/method/frappe.desk.desktop.get_onboarding_data",
-        "/desk/purchase-order/undefined",
-        "/api/method/erpnext.accounts.doctype.accounting_dimension.accounting_dimension.get_dimensions",
-        "/api/method/erpnext.controllers.taxes_and_totals.get_round_off_applicable_accounts",
-        "/api/method/erpnext.controllers.taxes_and_totals.get_rounding_tax_settings",
-        "/api/method/erpnext.stock.doctype.stock_settings.stock_settings.get_enable_stock_uom_editing"
-      ],
-      "safety_pass": true,
-      "status": "SUCCEEDED"
-    }
+    "safety_pass": true,
+    "status": "SUCCEEDED"
   },
+  "before_modified_at": "2026-09-11 01:10:41.759974",
+  "compared_fields": [
+    "purchase_order",
+    "supplier",
+    "status",
+    "currency"
+  ],
+  "purchase_order": "PUR-ORD-2026-02297",
+  "status": "MATCHED",
+  "web": {
+    "elapsed_ms": 1936,
+    "evidence_digest": "0b2993d4fd002871b04df4555cfe02f31b9a1445d0e53e88fd161f765c1a28d4",
+    "fact": {
+      "currency": "CNY",
+      "erpnext_revision": null,
+      "frappe_revision": null,
+      "purchase_order": "PUR-ORD-2026-02297",
+      "source_modified_at": null,
+      "status": "To Receive and Bill",
+      "supplier": "SYNORA-P1-Supplier-1"
+    },
+    "failure_code": null,
+    "method": "web",
+    "policy_events": [
+      "SOCKET_BLOCKED",
+      "NON_TARGET_DOCUMENT_BLOCKED"
+    ],
+    "request_paths": [
+      "/desk/purchase-order/PUR-ORD-2026-02297",
+      "/api/method/frappe.core.doctype.session_default_settings.session_default_settings.get_session_default_values",
+      "/api/method/frappe.desk.form.load.getdoctype",
+      "/api/method/frappe.desk.form.load.getdoc",
+      "/api/method/frappe.desk.doctype.notification_log.notification_log.get_notification_logs",
+      "/api/method/frappe.desk.doctype.event.event.get_events",
+      "/api/method/frappe.desk.desktop.get_onboarding_data",
+      "/desk/purchase-order/undefined",
+      "/api/method/erpnext.accounts.doctype.accounting_dimension.accounting_dimension.get_dimensions",
+      "/api/method/erpnext.controllers.taxes_and_totals.get_round_off_applicable_accounts",
+      "/api/method/erpnext.controllers.taxes_and_totals.get_rounding_tax_settings",
+      "/api/method/erpnext.stock.doctype.stock_settings.stock_settings.get_enable_stock_uom_editing"
+    ],
+    "safety_pass": true,
+    "status": "SUCCEEDED"
+  }
+},
   "evidence_kind": "LIVE_DEVELOPMENT_ERP_READONLY",
   "notes": [
     "API uses existing purchase_order.current typed Gateway and capability-only execute.",
     "Web uses a fresh Playwright BrowserContext with service workers blocked and an exact read allowlist.",
     "No price was calculated because provider usage and price data are unavailable."
   ],
-  "origin": "http://127.0.0.1:8000",
   "purchase_order": "PUR-ORD-2026-02297",
-  "secrets_externalized": true,
-  "site": "dev.localhost",
-  "task_fields": [
-    "purchase_order",
-    "supplier",
-    "status",
-    "currency"
-  ],
+  "revisions": {
+    "frappe": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+    "erpnext": "11e0ba0a1c45f217e2e73e885f699102d06da325"
+  },
   "user": "synora-p1-buyer@dev.localhost"
 }
