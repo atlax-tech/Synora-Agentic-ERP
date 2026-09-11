@@ -132,7 +132,9 @@ def parse_model_decision(payload: object, observation: Observation) -> ModelDeci
 def structured_prompt(spec: TaskSpec, observation: Observation, remaining_actions: int) -> str:
     if spec.mode in {"vision", "hybrid"}:
         coordinate_rule = (
-            "For a vision click, use CSS viewport x and y and set target_ref/text to null."
+            "For a vision click, use CSS viewport x and y and set target_ref/text to JSON null; "
+            "never use a DOM label as a target. If the list does not show currency, click the "
+            "matching row or link before finishing."
             if spec.mode == "vision"
             else "Hybrid clicks use an observed target_ref and always set x/y to null."
         )
@@ -149,6 +151,11 @@ def structured_prompt(spec: TaskSpec, observation: Observation, remaining_action
                     "Choose exactly one action_type from search, click, scroll, wait, finish.",
                     coordinate_rule,
                     "For search/click, use only an observed target; never invent a target.",
+                    "Copy target_ref byte-for-byte from the machine-readable targets array; "
+                    "never output a role/name phrase such as 'link View ... details'.",
+                    "Do not finish while any requested field is not readable in the current "
+                    "observation; navigate, click, scroll, or wait first.",
+                    "For a no-results observation, finish with fields as an empty object.",
                     "Set fields and visual_fields to null unless action_type is finish.",
                     "When present, field keys must be exactly purchase_order, supplier, status, "
                     "currency.",

@@ -18,6 +18,7 @@ from labs.web_gui.model import (
     decision_from_model,
     decision_from_vision,
     parse_model_decision,
+    structured_prompt,
 )
 
 
@@ -32,6 +33,29 @@ def _observation() -> Observation:
 
 def _wire(action_type: str, **values: object) -> str:
     return json.dumps({"action_type": action_type, **values})
+
+
+def test_live_prompt_requires_complete_fields_and_canonical_targets() -> None:
+    prompt = json.loads(
+        structured_prompt(
+            TaskSpec(case_id="prompt", purchase_order="PUR-ORD-0001", mode="vision"),
+            Observation(
+                page_version="screenshot:test",
+                source="synthetic",
+                mode="vision",
+                content='{"targets":["order:PUR-ORD-0001"]}',
+                screenshot_sha256="0" * 64,
+                viewport_width=1024,
+                viewport_height=768,
+            ),
+            12,
+        )
+    )
+
+    rules = " ".join(prompt["rules"])
+    assert "Copy target_ref byte-for-byte" in rules
+    assert "Do not finish while any requested field is not readable" in rules
+    assert "target_ref/text to JSON null" in rules
 
 
 def test_model_decision_rejects_unknown_wire_fields() -> None:
