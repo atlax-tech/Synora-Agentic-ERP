@@ -13,6 +13,13 @@ from labs.web_gui.contracts import (
     TaskResult,
     TaskSpec,
 )
+from labs.web_gui.erp_readonly import (
+    ErpComparison,
+    ErpFact,
+    ErpReadConfig,
+    ErpReadResult,
+    read_erp_api,
+)
 from labs.web_gui.fixtures import FIXTURE_ORDERS, create_app
 from labs.web_gui.gui import VisualDecision, VisualRun, run_visual_task
 from labs.web_gui.security import BrowserSecurityPolicy
@@ -22,6 +29,10 @@ __all__ = [
     "ActionProposal",
     "ActionReceipt",
     "BrowserSecurityPolicy",
+    "ErpComparison",
+    "ErpFact",
+    "ErpReadConfig",
+    "ErpReadResult",
     "Observation",
     "ObservationMode",
     "TaskResult",
@@ -29,6 +40,7 @@ __all__ = [
     "VisualDecision",
     "VisualRun",
     "create_app",
+    "read_erp_api",
     "run_aria_task",
     "run_dom_task",
     "run_security_probe",
