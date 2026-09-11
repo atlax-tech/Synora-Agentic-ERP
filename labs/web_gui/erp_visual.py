@@ -28,7 +28,12 @@ from labs.web_gui.gui import (
     model_visual_decider,
 )
 from labs.web_gui.model import LiveVisionModel
-from labs.web_gui.recovery import ProgressGuard, RecoveryFailure, run_with_deadline
+from labs.web_gui.recovery import (
+    ProgressGuard,
+    RecoveryFailure,
+    remaining_timeout_ms,
+    run_with_deadline,
+)
 from labs.web_gui.redaction import RedactedCapture, capture_redacted_page
 
 VisualDecider = Callable[[bytes, Observation, TaskSpec], VisualDecision]
@@ -256,12 +261,27 @@ def run_erp_visual_task(
                         page.locator(".page-head .indicator-pill").wait_for(
                             state="visible", timeout=int(config.timeout_seconds * 1000)
                         )
-                        capture = capture_redacted_page(page, config.purchase_order)
+                        try:
+                            capture = capture_redacted_page(
+                                page,
+                                config.purchase_order,
+                                timeout_ms=remaining_timeout_ms(
+                                    started,
+                                    wall_time_seconds=task.budget.wall_time_seconds,
+                                    action_timeout_seconds=task.budget.action_timeout_seconds,
+                                ),
+                            )
+                        except RecoveryFailure as failure:
+                            status, reason = "BUDGET_EXCEEDED", failure.code
                     if capture is None or capture.status != "READY":
-                        status, reason = (
-                            "BLOCKED",
-                            capture.failure_code if capture else "REDACTION_FAILED",
-                        )
+                        failure_code = capture.failure_code if capture else "REDACTION_FAILED"
+                        if status != "BUDGET_EXCEEDED" and failure_code in {
+                            "OBSERVATION_TIMEOUT",
+                            "WALL_TIME_BUDGET",
+                        }:
+                            status, reason = "BUDGET_EXCEEDED", failure_code
+                        elif status != "BUDGET_EXCEEDED":
+                            status, reason = "BLOCKED", failure_code
                     else:
                         observation = _observation(capture)
                         observations.append(observation)
@@ -387,8 +407,19 @@ def run_erp_visual_task(
                             try:
                                 if proposal.action_type == "click":
                                     fresh_capture = capture_redacted_page(
-                                        page, config.purchase_order
+                                        page,
+                                        config.purchase_order,
+                                        timeout_ms=remaining_timeout_ms(
+                                            started,
+                                            wall_time_seconds=task.budget.wall_time_seconds,
+                                            action_timeout_seconds=task.budget.action_timeout_seconds,
+                                        ),
                                     )
+                                    if fresh_capture.failure_code in {
+                                        "OBSERVATION_TIMEOUT",
+                                        "WALL_TIME_BUDGET",
+                                    }:
+                                        raise RecoveryFailure(fresh_capture.failure_code)
                                     if (
                                         fresh_capture.status != "READY"
                                         or fresh_capture.image_sha256
@@ -422,6 +453,17 @@ def run_erp_visual_task(
                                     page.wait_for_timeout(
                                         min(100, int(task.budget.action_timeout_seconds * 1000))
                                     )
+                            except RecoveryFailure as error:
+                                receipts.append(
+                                    _rejected_receipt(
+                                        proposal,
+                                        observation,
+                                        error.code,
+                                        error.code,
+                                    )
+                                )
+                                status, reason = "BUDGET_EXCEEDED", error.code
+                                break
                             except BrowserPolicyError as error:
                                 code = (
                                     "STALE_SCREENSHOT"
@@ -458,7 +500,29 @@ def run_erp_visual_task(
                                 status, reason = "AUTH_REQUIRED", "AUTH_REQUIRED"
                                 break
                             before_observation = observation
-                            capture = capture_redacted_page(page, config.purchase_order)
+                            try:
+                                capture = capture_redacted_page(
+                                    page,
+                                    config.purchase_order,
+                                    timeout_ms=remaining_timeout_ms(
+                                        started,
+                                        wall_time_seconds=task.budget.wall_time_seconds,
+                                        action_timeout_seconds=task.budget.action_timeout_seconds,
+                                    ),
+                                )
+                            except RecoveryFailure as failure:
+                                receipts.append(
+                                    ActionReceipt(
+                                        action_id=proposal.action_id,
+                                        observation_id=observation.observation_id,
+                                        result="FAILED",
+                                        error_code=failure.code,
+                                        before_observation_id=before_observation.observation_id,
+                                        stop_reason=failure.code,
+                                    )
+                                )
+                                status, reason = "BUDGET_EXCEEDED", failure.code
+                                break
                             if capture.status != "READY":
                                 receipts.append(
                                     ActionReceipt(
@@ -468,7 +532,12 @@ def run_erp_visual_task(
                                         before_observation_id=before_observation.observation_id,
                                     )
                                 )
-                                status, reason = "BLOCKED", capture.failure_code
+                                failure_code = capture.failure_code or "REDACTION_FAILED"
+                                status, reason = (
+                                    ("BUDGET_EXCEEDED", failure_code)
+                                    if failure_code in {"OBSERVATION_TIMEOUT", "WALL_TIME_BUDGET"}
+                                    else ("BLOCKED", failure_code)
+                                )
                                 break
                             observation = _observation(capture)
                             observations.append(observation)

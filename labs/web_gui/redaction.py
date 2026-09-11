@@ -143,7 +143,9 @@ def _preserve_purchase_order_label(page: Any, purchase_order: str) -> bool:
         return False
 
 
-def capture_redacted_page(page: Any, purchase_order: str) -> RedactedCapture:
+def capture_redacted_page(
+    page: Any, purchase_order: str, *, timeout_ms: int | None = None
+) -> RedactedCapture:
     """Mask known account/navigation regions and capture only a safe viewport."""
 
     for selector in REQUIRED_REDACTION_SELECTORS:
@@ -152,19 +154,32 @@ def capture_redacted_page(page: Any, purchase_order: str) -> RedactedCapture:
     if page.get_by_text(purchase_order, exact=True).count() == 0:
         return _blocked("PURCHASE_ORDER_NOT_VISIBLE")
     try:
-        page.add_style_tag(content=REDACTION_CSS)
+        if timeout_ms is None:
+            page.add_style_tag(content=REDACTION_CSS)
+        else:
+            page.add_style_tag(content=REDACTION_CSS, timeout=timeout_ms)
         if not _sensitive_regions_hidden(page):
             return _blocked("REDACTION_PIXEL_REGION_VISIBLE")
         if not _preserve_purchase_order_label(page, purchase_order):
             return _blocked("PURCHASE_ORDER_LABEL_UNAVAILABLE")
-        visible_text = page.locator("body").inner_text()
+        body = page.locator("body")
+        visible_text = (
+            body.inner_text() if timeout_ms is None else body.inner_text(timeout=timeout_ms)
+        )
         if _EMAIL.search(visible_text) or _SECRET_WORD.search(visible_text):
             return _blocked("SENSITIVE_MARKER_VISIBLE")
         viewport = page.viewport_size or {}
         width, height = viewport.get("width"), viewport.get("height")
         if not isinstance(width, int) or not isinstance(height, int):
             return _blocked("VIEWPORT_UNAVAILABLE")
-        image = page.screenshot(type="png", animations="disabled", full_page=False)
+        screenshot_options: dict[str, object] = {
+            "type": "png",
+            "animations": "disabled",
+            "full_page": False,
+        }
+        if timeout_ms is not None:
+            screenshot_options["timeout"] = timeout_ms
+        image = page.screenshot(**screenshot_options)
         if len(image) > MAX_REDACTED_SCREENSHOT_BYTES or not image.startswith(_PNG_SIGNATURE):
             return _blocked("REDACTED_IMAGE_INVALID")
         return RedactedCapture(
@@ -174,7 +189,9 @@ def capture_redacted_page(page: Any, purchase_order: str) -> RedactedCapture:
             viewport=(width, height),
             visible_text_sha256=hashlib.sha256(visible_text.encode()).hexdigest(),
         )
-    except Exception:
+    except Exception as error:
+        if type(error).__name__ == "TimeoutError":
+            return _blocked("OBSERVATION_TIMEOUT")
         return _blocked("REDACTION_CAPTURE_FAILED")
 
 

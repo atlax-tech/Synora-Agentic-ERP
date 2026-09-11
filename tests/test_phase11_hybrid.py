@@ -15,9 +15,11 @@ from labs.web_gui.fixtures import create_app
 from labs.web_gui.hybrid import (
     HybridDecision,
     HybridFrame,
+    _hybrid_frame,
     _validate_hybrid_action,
     run_hybrid_task,
 )
+from labs.web_gui.recovery import RecoveryFailure
 
 
 @contextmanager
@@ -100,6 +102,30 @@ def test_hybrid_task_keeps_dom_aria_and_screenshot_in_one_frame() -> None:
     assert run.result.status == "SUCCEEDED"
     assert len(run.frames) == 3
     assert all(frame.observation.page_version.startswith("hybrid:") for frame in run.frames)
+
+
+def test_hybrid_observation_timeout_is_bounded() -> None:
+    class _BlockedLocator:
+        def inner_text(self, **_kwargs: object) -> str:
+            raise TimeoutError("blocked observation")
+
+        def aria_snapshot(self, **_kwargs: object) -> str:
+            raise AssertionError("ARIA should not run after DOM timeout")
+
+    class _BlockedPage:
+        def locator(self, _selector: str) -> _BlockedLocator:
+            return _BlockedLocator()
+
+    with pytest.raises(RecoveryFailure, match="OBSERVATION_TIMEOUT"):
+        _hybrid_frame(
+            _BlockedPage(),
+            TaskSpec(
+                case_id="p11-hybrid-observation-budget",
+                purchase_order="PUR-ORD-0001",
+                mode="hybrid",
+            ),
+            timeout_ms=5,
+        )
 
 
 def test_hybrid_conflict_stops_without_silent_fallback() -> None:

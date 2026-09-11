@@ -7,6 +7,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import ClassVar
 from uuid import UUID
 
 import pytest
@@ -23,8 +24,9 @@ from labs.web_gui.browser import (
 )
 from labs.web_gui.contracts import ActionProposal, Observation, TaskSpec, TrialBudget
 from labs.web_gui.fixtures import create_app
-from labs.web_gui.gui import VisualDecision, run_visual_task
+from labs.web_gui.gui import VisualDecision, _visual_observation, run_visual_task
 from labs.web_gui.hybrid import HybridDecision, run_hybrid_task
+from labs.web_gui.recovery import RecoveryFailure
 from labs.web_gui.security import BrowserSecurityPolicy
 
 
@@ -484,6 +486,44 @@ def test_visual_task_stops_at_model_call_budget() -> None:
     assert run.result.stop_reason == "model_call_budget"
 
 
+def test_visual_observation_timeout_is_a_bounded_failure() -> None:
+    class _BlockedPage:
+        viewport_size: ClassVar[dict[str, int]] = {"width": 100, "height": 100}
+
+        def screenshot(self, **_kwargs: object) -> bytes:
+            raise TimeoutError("blocked screenshot")
+
+    with pytest.raises(RecoveryFailure, match="OBSERVATION_TIMEOUT"):
+        _visual_observation(_BlockedPage(), "synthetic", timeout_ms=5)
+
+
+def test_visual_runner_turns_initial_observation_timeout_into_budget_stop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import labs.web_gui.gui as gui_module
+
+    def blocked(*_args: object, **_kwargs: object) -> tuple[Observation, bytes]:
+        raise RecoveryFailure("OBSERVATION_TIMEOUT")
+
+    monkeypatch.setattr(gui_module, "_visual_observation", blocked)
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-observation-budget",
+                    purchase_order="PUR-ORD-0001",
+                    mode="vision",
+                ),
+                lambda _image, _observation, _spec: pytest.fail("decider must not run"),
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "BUDGET_EXCEEDED"
+    assert run.result.stop_reason == "OBSERVATION_TIMEOUT"
+
+
 def test_visual_task_stops_repeated_waits_as_no_progress() -> None:
     def decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
         return VisualDecision(
@@ -512,7 +552,7 @@ def test_visual_task_stops_repeated_waits_as_no_progress() -> None:
 
 def test_visual_task_enforces_model_deadline_and_output_budget() -> None:
     def slow_decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
-        time.sleep(0.06)
+        time.sleep(0.12)
         return VisualDecision(
             proposal=ActionProposal(
                 action_type="finish",
@@ -528,7 +568,7 @@ def test_visual_task_enforces_model_deadline_and_output_budget() -> None:
                     case_id="p11-vision-model-timeout",
                     purchase_order="PUR-ORD-0001",
                     mode="vision",
-                    budget=TrialBudget(action_timeout_seconds=0.05),
+                    budget=TrialBudget(action_timeout_seconds=0.1),
                 ),
                 slow_decider,
             )
@@ -597,10 +637,12 @@ def test_visual_task_rechecks_page_version_before_click(
     original = gui_module._visual_observation
     calls = 0
 
-    def changed(page: object, source: str) -> tuple[Observation, bytes]:
+    def changed(
+        page: object, source: str, *, timeout_ms: int | None = None
+    ) -> tuple[Observation, bytes]:
         nonlocal calls
         calls += 1
-        observation, screenshot = original(page, source)
+        observation, screenshot = original(page, source, timeout_ms=timeout_ms)
         if calls == 2:
             observation = observation.model_copy(
                 update={"page_version": observation.page_version + ":changed"}

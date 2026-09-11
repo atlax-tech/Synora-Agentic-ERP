@@ -25,7 +25,12 @@ from labs.web_gui.contracts import (
 )
 from labs.web_gui.fixtures import fixture_fields
 from labs.web_gui.model import LiveVisionModel, ModelDecision, decision_from_vision
-from labs.web_gui.recovery import ProgressGuard, RecoveryFailure, run_with_deadline
+from labs.web_gui.recovery import (
+    ProgressGuard,
+    RecoveryFailure,
+    remaining_timeout_ms,
+    run_with_deadline,
+)
 from labs.web_gui.security import BrowserSecurityPolicy
 
 MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024
@@ -53,8 +58,18 @@ class VisualRun:
     completion_tokens: int | None = None
 
 
-def _visual_observation(page: Any, source: str) -> tuple[Observation, bytes]:
-    screenshot = page.screenshot(type="png", animations="disabled")
+def _visual_observation(
+    page: Any, source: str, *, timeout_ms: int | None = None
+) -> tuple[Observation, bytes]:
+    screenshot_options: dict[str, object] = {"type": "png", "animations": "disabled"}
+    if timeout_ms is not None:
+        screenshot_options["timeout"] = timeout_ms
+    try:
+        screenshot = page.screenshot(**screenshot_options)
+    except Exception as error:
+        if type(error).__name__ == "TimeoutError":
+            raise RecoveryFailure("OBSERVATION_TIMEOUT") from error
+        raise
     if len(screenshot) > MAX_SCREENSHOT_BYTES or not screenshot.startswith(b"\x89PNG\r\n\x1a\n"):
         raise BrowserPolicyError("screenshot is invalid or too large")
     digest = hashlib.sha256(screenshot).hexdigest()
@@ -201,10 +216,28 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                 wait_until="domcontentloaded",
                 timeout=int(spec.budget.action_timeout_seconds * 1000),
             )
-            observation, screenshot = _visual_observation(page, spec.data_source)
-            observations.append(observation)
-            screenshots.append(screenshot)
+            try:
+                observation, screenshot = _visual_observation(
+                    page,
+                    spec.data_source,
+                    timeout_ms=remaining_timeout_ms(
+                        started,
+                        wall_time_seconds=spec.budget.wall_time_seconds,
+                        action_timeout_seconds=spec.budget.action_timeout_seconds,
+                    ),
+                )
+            except RecoveryFailure as failure:
+                observation = None
+                screenshot = b""
+                status = "BUDGET_EXCEEDED"
+                stop_reason = failure.code
+            else:
+                assert observation is not None
+                observations.append(observation)
+                screenshots.append(screenshot)
             for _ in range(spec.budget.max_actions):
+                if observation is None:
+                    break
                 if monotonic() - started > spec.budget.wall_time_seconds:
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "wall_time_budget"
@@ -300,8 +333,24 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                 if proposal.action_type != "finish":
                     try:
                         current_observation, current_screenshot = _visual_observation(
-                            page, spec.data_source
+                            page,
+                            spec.data_source,
+                            timeout_ms=remaining_timeout_ms(
+                                started,
+                                wall_time_seconds=spec.budget.wall_time_seconds,
+                                action_timeout_seconds=spec.budget.action_timeout_seconds,
+                            ),
                         )
+                    except RecoveryFailure as failure:
+                        code = failure.code
+                        receipts.append(_rejected_receipt(proposal, observation, code, code))
+                        status = (
+                            "BUDGET_EXCEEDED"
+                            if code in {"OBSERVATION_TIMEOUT", "WALL_TIME_BUDGET"}
+                            else "FAILED"
+                        )
+                        stop_reason = code
+                        break
                     except BrowserPolicyError:
                         receipts.append(
                             _rejected_receipt(
@@ -382,7 +431,32 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     stop_reason = "visual_action_failed"
                     break
                 before_observation = observation
-                observation, screenshot = _visual_observation(page, spec.data_source)
+                try:
+                    observation, screenshot = _visual_observation(
+                        page,
+                        spec.data_source,
+                        timeout_ms=remaining_timeout_ms(
+                            started,
+                            wall_time_seconds=spec.budget.wall_time_seconds,
+                            action_timeout_seconds=spec.budget.action_timeout_seconds,
+                        ),
+                    )
+                except RecoveryFailure as failure:
+                    receipts.append(
+                        _rejected_receipt(
+                            proposal,
+                            before_observation,
+                            failure.code,
+                            failure.code,
+                        )
+                    )
+                    status = (
+                        "BUDGET_EXCEEDED"
+                        if failure.code in {"OBSERVATION_TIMEOUT", "WALL_TIME_BUDGET"}
+                        else "FAILED"
+                    )
+                    stop_reason = failure.code
+                    break
                 observations.append(observation)
                 screenshots.append(screenshot)
                 unchanged_reobservations = (

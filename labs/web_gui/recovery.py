@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from queue import Empty, Queue
 from threading import Thread
+from time import monotonic
 from typing import Any, cast
 
 
@@ -56,6 +57,17 @@ def run_with_deadline[T](call: Callable[[], T], timeout_seconds: float) -> T:
     return cast(T, value)
 
 
+def remaining_timeout_ms(
+    started: float, *, wall_time_seconds: float, action_timeout_seconds: float
+) -> int:
+    """Return one finite operation timeout bounded by the trial wall clock."""
+
+    remaining = wall_time_seconds - (monotonic() - started)
+    if remaining <= 0:
+        raise RecoveryFailure("WALL_TIME_BUDGET")
+    return max(1, int(min(action_timeout_seconds, remaining) * 1000))
+
+
 def wait_for_ready(page: Any, *, timeout_ms: float, scenario: str) -> None:
     """Wait for an observable ready marker only when a fixture needs one."""
 
@@ -85,4 +97,10 @@ class ProgressGuard:
         self.actions += 1
 
 
-__all__ = ["ProgressGuard", "RecoveryFailure", "run_with_deadline", "wait_for_ready"]
+__all__ = [
+    "ProgressGuard",
+    "RecoveryFailure",
+    "remaining_timeout_ms",
+    "run_with_deadline",
+    "wait_for_ready",
+]

@@ -27,7 +27,12 @@ from labs.web_gui.contracts import (
 )
 from labs.web_gui.fixtures import fixture_fields
 from labs.web_gui.model import LiveVisionModel, ModelDecision, decision_from_vision
-from labs.web_gui.recovery import ProgressGuard, RecoveryFailure, run_with_deadline
+from labs.web_gui.recovery import (
+    ProgressGuard,
+    RecoveryFailure,
+    remaining_timeout_ms,
+    run_with_deadline,
+)
 from labs.web_gui.security import BrowserSecurityPolicy
 
 
@@ -64,11 +69,26 @@ class HybridRun:
 HybridDecider = Callable[[HybridFrame, TaskSpec], HybridDecision]
 
 
-def _hybrid_frame(page: Any, spec: TaskSpec) -> HybridFrame:
+def _hybrid_frame(page: Any, spec: TaskSpec, *, timeout_ms: int | None = None) -> HybridFrame:
+    deadline = monotonic() + (
+        (timeout_ms if timeout_ms is not None else spec.budget.action_timeout_seconds * 1000) / 1000
+    )
+
+    def operation_timeout() -> int:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise RecoveryFailure("WALL_TIME_BUDGET")
+        return max(1, int(remaining * 1000))
+
     body = page.locator("body")
-    dom_text = body.inner_text(timeout=spec.budget.action_timeout_seconds * 1000)
-    aria_text = body.aria_snapshot(timeout=spec.budget.action_timeout_seconds * 1000)
-    screenshot = page.screenshot(type="png", animations="disabled")
+    try:
+        dom_text = body.inner_text(timeout=operation_timeout())
+        aria_text = body.aria_snapshot(timeout=operation_timeout())
+        screenshot = page.screenshot(type="png", animations="disabled", timeout=operation_timeout())
+    except Exception as error:
+        if type(error).__name__ == "TimeoutError":
+            raise RecoveryFailure("OBSERVATION_TIMEOUT") from error
+        raise
     if not isinstance(aria_text, str) or not isinstance(dom_text, str):
         raise BrowserPolicyError("hybrid observation is unavailable")
     if len(dom_text) > 50_000 or len(aria_text) > 50_000 or len(screenshot) > 2 * 1024 * 1024:
@@ -241,9 +261,26 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                 wait_until="domcontentloaded",
                 timeout=int(spec.budget.action_timeout_seconds * 1000),
             )
-            frame = _hybrid_frame(page, spec)
-            frames.append(frame)
+            try:
+                frame = _hybrid_frame(
+                    page,
+                    spec,
+                    timeout_ms=remaining_timeout_ms(
+                        started,
+                        wall_time_seconds=spec.budget.wall_time_seconds,
+                        action_timeout_seconds=spec.budget.action_timeout_seconds,
+                    ),
+                )
+            except RecoveryFailure as failure:
+                frame = None
+                status = "BUDGET_EXCEEDED"
+                stop_reason = failure.code
+            else:
+                assert frame is not None
+                frames.append(frame)
             for _ in range(spec.budget.max_actions):
+                if frame is None:
+                    break
                 if monotonic() - started > spec.budget.wall_time_seconds:
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "wall_time_budget"
@@ -337,7 +374,25 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     break
                 if proposal.action_type != "finish":
                     try:
-                        current_frame = _hybrid_frame(page, spec)
+                        current_frame = _hybrid_frame(
+                            page,
+                            spec,
+                            timeout_ms=remaining_timeout_ms(
+                                started,
+                                wall_time_seconds=spec.budget.wall_time_seconds,
+                                action_timeout_seconds=spec.budget.action_timeout_seconds,
+                            ),
+                        )
+                    except RecoveryFailure as failure:
+                        code = failure.code
+                        receipts.append(_rejected_receipt(proposal, frame.observation, code, code))
+                        status = (
+                            "BUDGET_EXCEEDED"
+                            if code in {"OBSERVATION_TIMEOUT", "WALL_TIME_BUDGET"}
+                            else "FAILED"
+                        )
+                        stop_reason = code
+                        break
                     except BrowserPolicyError:
                         receipts.append(
                             _rejected_receipt(
@@ -456,7 +511,32 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     stop_reason = "hybrid_action_failed"
                     break
                 before_frame = frame
-                frame = _hybrid_frame(page, spec)
+                try:
+                    frame = _hybrid_frame(
+                        page,
+                        spec,
+                        timeout_ms=remaining_timeout_ms(
+                            started,
+                            wall_time_seconds=spec.budget.wall_time_seconds,
+                            action_timeout_seconds=spec.budget.action_timeout_seconds,
+                        ),
+                    )
+                except RecoveryFailure as failure:
+                    receipts.append(
+                        _rejected_receipt(
+                            proposal,
+                            before_frame.observation,
+                            failure.code,
+                            failure.code,
+                        )
+                    )
+                    status = (
+                        "BUDGET_EXCEEDED"
+                        if failure.code in {"OBSERVATION_TIMEOUT", "WALL_TIME_BUDGET"}
+                        else "FAILED"
+                    )
+                    stop_reason = failure.code
+                    break
                 frames.append(frame)
                 unchanged_reobservations = (
                     unchanged_reobservations + 1
