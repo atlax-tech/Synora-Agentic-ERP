@@ -167,13 +167,41 @@ def _response_text(data: object) -> tuple[str, int | None, int | None]:
     output = data.get("output_text")
     if isinstance(output, str) and output.strip():
         return output, prompt_tokens, completion_tokens
+    output_items = data.get("output")
+    if isinstance(output_items, list):
+        text_parts: list[str] = []
+        for item in output_items:
+            if not isinstance(item, dict) or item.get("type") != "message":
+                continue
+            content = item.get("content")
+            if not isinstance(content, list):
+                continue
+            for part in content:
+                if not isinstance(part, dict) or part.get("type") != "output_text":
+                    continue
+                value = part.get("text")
+                if isinstance(value, str) and value.strip():
+                    text_parts.append(value)
+        if text_parts:
+            return "".join(text_parts), prompt_tokens, completion_tokens
     choices = data.get("choices")
     if isinstance(choices, list) and choices and isinstance(choices[0], dict):
         message = choices[0].get("message")
-        if isinstance(message, dict) and isinstance(message.get("content"), str):
-            text = message["content"]
-            if text.strip():
-                return text, prompt_tokens, completion_tokens
+        if isinstance(message, dict):
+            content = message.get("content")
+            if isinstance(content, str) and content.strip():
+                return content, prompt_tokens, completion_tokens
+            if isinstance(content, list):
+                text_parts = [
+                    part["text"]
+                    for part in content
+                    if isinstance(part, dict)
+                    and part.get("type") in {"text", "output_text"}
+                    and isinstance(part.get("text"), str)
+                    and part["text"].strip()
+                ]
+                if text_parts:
+                    return "".join(text_parts), prompt_tokens, completion_tokens
     raise VisionProbeError("RESPONSE_CONTENT_MISSING")
 
 

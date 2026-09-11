@@ -75,6 +75,59 @@ def test_probe_uses_existing_role_and_never_returns_key() -> None:
     assert "secret-key" not in repr(result)
 
 
+def test_probe_reads_standard_responses_nested_output() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "output": [
+                    {"type": "reasoning", "summary": []},
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": json.dumps(
+                                    {
+                                        "purchase_order": "PUR-ORD-0001",
+                                        "supplier": "Supplier A",
+                                        "status": "To Receive and Bill",
+                                        "currency": "CNY",
+                                        "complete": True,
+                                    }
+                                ),
+                            }
+                        ],
+                    },
+                ],
+                "usage": {"input_tokens": 4, "output_tokens": 7},
+            },
+        )
+
+    result = probe_vision(
+        "read",
+        [PNG],
+        environ={
+            "BACKUP_BASE_URL": "https://vision.example/v1",
+            "BACKUP_API_KEY": "secret-key",
+            "BACKUP_MODEL": "vision-test",
+        },
+        transport=httpx.MockTransport(handler),
+        expected_observations=(
+            {
+                "purchase_order": "PUR-ORD-0001",
+                "supplier": "Supplier A",
+                "status": "To Receive and Bill",
+                "currency": "CNY",
+            },
+        ),
+    )
+
+    assert result.status == "PASS"
+    assert result.prompt_tokens == 4
+    assert result.completion_tokens == 7
+
+
 def test_probe_without_config_is_an_explicit_block() -> None:
     result = probe_vision("read", [PNG], environ={})
     assert result.status == "VISION_PROVIDER_UNAVAILABLE"
