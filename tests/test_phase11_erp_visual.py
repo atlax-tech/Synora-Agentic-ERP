@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from typing import Never
 
+import pytest
+
 from labs.web_gui.contracts import TaskSpec
 from labs.web_gui.erp_readonly import ErpReadConfig
 from labs.web_gui.erp_visual import run_erp_visual_task
 
 
-def test_real_visual_runner_blocks_before_browser_without_credentials(monkeypatch) -> None:
+def test_real_visual_runner_blocks_before_browser_without_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("SYNORA_P2P_USER_PWD", raising=False)
 
     def decider(_image: bytes, _observation: object, _spec: object) -> Never:

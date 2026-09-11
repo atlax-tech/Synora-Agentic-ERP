@@ -10,7 +10,7 @@ import pytest
 import uvicorn
 
 from labs.web_gui.browser import BrowserPolicyError, BrowserUnavailable
-from labs.web_gui.contracts import ActionProposal, Observation, TaskSpec
+from labs.web_gui.contracts import ActionProposal, Observation, TaskSpec, TrialBudget
 from labs.web_gui.fixtures import create_app
 from labs.web_gui.hybrid import (
     HybridDecision,
@@ -145,7 +145,7 @@ def test_hybrid_task_stops_at_model_call_budget() -> None:
                     case_id="p11-hybrid-budget",
                     purchase_order="PUR-ORD-0001",
                     mode="hybrid",
-                    budget={"max_model_calls": 1},
+                    budget=TrialBudget(max_model_calls=1),
                 ),
                 decider,
             )

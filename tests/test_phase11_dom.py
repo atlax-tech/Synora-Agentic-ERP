@@ -353,7 +353,7 @@ def test_visual_task_stops_at_model_call_budget() -> None:
                     case_id="p11-vision-budget",
                     purchase_order="PUR-ORD-0001",
                     mode="vision",
-                    budget={"max_model_calls": 1},
+                    budget=TrialBudget(max_model_calls=1),
                 ),
                 decider,
             )

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from labs.web_gui.cli import main
 
 
-def test_cli_api_smoke_returns_structured_result(capsys) -> None:  # type: ignore[no-untyped-def]
+def test_cli_api_smoke_returns_structured_result(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["smoke", "--mode", "api"]) == 0
 
     output = json.loads(capsys.readouterr().out)
@@ -18,6 +20,6 @@ def test_cli_parser_requires_explicit_command() -> None:
     from labs.web_gui.cli import _parser
 
     parser = _parser()
-    assert {"serve", "smoke", "probe-vision", "benchmark"} <= set(
-        parser._subparsers._group_actions[0].choices  # type: ignore[attr-defined]
-    )
+    assert parser.parse_args(["smoke", "--mode", "api"]).command == "smoke"
+    assert parser.parse_args(["probe-vision"]).command == "probe-vision"
+    assert parser.parse_args(["benchmark", "--suite", "synthetic"]).command == "benchmark"
