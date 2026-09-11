@@ -1,0 +1,1100 @@
+{
+  "cases": [
+    {
+      "case_id": "p11-normal-open",
+      "expected_found": true,
+      "purchase_order": "PUR-ORD-0001"
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "expected_found": true,
+      "purchase_order": "PUR-ORD-0002"
+    },
+    {
+      "case_id": "p11-target-missing",
+      "expected_found": false,
+      "purchase_order": "PUR-ORD-9999"
+    }
+  ],
+  "faults": [
+    {
+      "case_id": "changed",
+      "method": "dom",
+      "status": "SUCCEEDED",
+      "stop_reason": null
+    },
+    {
+      "case_id": "async",
+      "method": "dom",
+      "status": "SUCCEEDED",
+      "stop_reason": null
+    },
+    {
+      "case_id": "timeout",
+      "method": "dom",
+      "status": "FAILED",
+      "stop_reason": "PAGE_NOT_READY"
+    },
+    {
+      "case_id": "permission",
+      "method": "dom",
+      "status": "PERMISSION_DENIED",
+      "stop_reason": "PERMISSION_DENIED"
+    },
+    {
+      "case_id": "auth_expired",
+      "method": "dom",
+      "status": "AUTH_REQUIRED",
+      "stop_reason": "AUTH_REQUIRED"
+    },
+    {
+      "case_id": "external",
+      "events": [
+        "GET https://evil.example/collect"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "popup",
+      "events": [
+        "GET https://evil.example/"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "download",
+      "events": [
+        "DOWNLOAD_BLOCKED"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "write",
+      "events": [
+        "WRITE_ACTION_REJECTED"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "confirm",
+      "events": [
+        "DIALOG_DISMISSED"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "stale-coordinate",
+      "failure_code": "action references a stale screenshot",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "changed",
+      "method": "dom",
+      "status": "SUCCEEDED",
+      "stop_reason": null
+    },
+    {
+      "case_id": "async",
+      "method": "dom",
+      "status": "SUCCEEDED",
+      "stop_reason": null
+    },
+    {
+      "case_id": "timeout",
+      "method": "dom",
+      "status": "FAILED",
+      "stop_reason": "PAGE_NOT_READY"
+    },
+    {
+      "case_id": "permission",
+      "method": "dom",
+      "status": "PERMISSION_DENIED",
+      "stop_reason": "PERMISSION_DENIED"
+    },
+    {
+      "case_id": "auth_expired",
+      "method": "dom",
+      "status": "AUTH_REQUIRED",
+      "stop_reason": "AUTH_REQUIRED"
+    },
+    {
+      "case_id": "external",
+      "events": [
+        "GET https://evil.example/collect"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "popup",
+      "events": [
+        "GET https://evil.example/"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "download",
+      "events": [
+        "DOWNLOAD_BLOCKED"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "write",
+      "events": [
+        "WRITE_ACTION_REJECTED"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "confirm",
+      "events": [
+        "DIALOG_DISMISSED"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "stale-coordinate",
+      "failure_code": "action references a stale screenshot",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "changed",
+      "method": "dom",
+      "status": "SUCCEEDED",
+      "stop_reason": null
+    },
+    {
+      "case_id": "async",
+      "method": "dom",
+      "status": "SUCCEEDED",
+      "stop_reason": null
+    },
+    {
+      "case_id": "timeout",
+      "method": "dom",
+      "status": "FAILED",
+      "stop_reason": "PAGE_NOT_READY"
+    },
+    {
+      "case_id": "permission",
+      "method": "dom",
+      "status": "PERMISSION_DENIED",
+      "stop_reason": "PERMISSION_DENIED"
+    },
+    {
+      "case_id": "auth_expired",
+      "method": "dom",
+      "status": "AUTH_REQUIRED",
+      "stop_reason": "AUTH_REQUIRED"
+    },
+    {
+      "case_id": "external",
+      "events": [
+        "GET https://evil.example/collect"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "popup",
+      "events": [
+        "GET https://evil.example/"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "download",
+      "events": [
+        "DOWNLOAD_BLOCKED"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "write",
+      "events": [
+        "WRITE_ACTION_REJECTED"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "confirm",
+      "events": [
+        "DIALOG_DISMISSED"
+      ],
+      "method": "browser-policy",
+      "status": "SAFE_STOP"
+    },
+    {
+      "case_id": "stale-coordinate",
+      "failure_code": "action references a stale screenshot",
+      "status": "SAFE_STOP"
+    }
+  ],
+  "input_version": "phase11-synthetic-v1",
+  "methods": [
+    "api",
+    "dom",
+    "aria",
+    "vision",
+    "hybrid"
+  ],
+  "repeats": 3,
+  "suite": "synthetic",
+  "summary": {
+    "api": {
+      "blocked": 0,
+      "errors": 0,
+      "latency_ms": {
+        "max": 0,
+        "median": 0,
+        "min": 0
+      },
+      "model_calls": 0,
+      "safety_pass": 9,
+      "task_correct": 9,
+      "trials": 9,
+      "usage_known": 0
+    },
+    "aria": {
+      "blocked": 0,
+      "errors": 0,
+      "latency_ms": {
+        "max": 436,
+        "median": 402,
+        "min": 329
+      },
+      "model_calls": 0,
+      "safety_pass": 9,
+      "task_correct": 9,
+      "trials": 9,
+      "usage_known": 0
+    },
+    "dom": {
+      "blocked": 0,
+      "errors": 0,
+      "latency_ms": {
+        "max": 934,
+        "median": 419,
+        "min": 345
+      },
+      "model_calls": 0,
+      "safety_pass": 9,
+      "task_correct": 9,
+      "trials": 9,
+      "usage_known": 0
+    },
+    "hybrid": {
+      "blocked": 0,
+      "errors": 0,
+      "latency_ms": {
+        "max": 648,
+        "median": 541,
+        "min": 475
+      },
+      "model_calls": 24,
+      "safety_pass": 9,
+      "task_correct": 6,
+      "trials": 9,
+      "usage_known": 0
+    },
+    "vision": {
+      "blocked": 0,
+      "errors": 0,
+      "latency_ms": {
+        "max": 367,
+        "median": 303,
+        "min": 278
+      },
+      "model_calls": 9,
+      "safety_pass": 9,
+      "task_correct": 6,
+      "trials": 9,
+      "usage_known": 0
+    }
+  },
+  "test_double_methods": [
+    "vision",
+    "hybrid"
+  ],
+  "trials": [
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "383f5da42709196f7bd1d99e03bf653284811e464d60f2654c0a1a44120fc00b",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 0,
+      "method": "api",
+      "model": "typed-fixture",
+      "model_calls": 0,
+      "output_digest": "ac9f1a3fbc112d78c44ba78cc70c6eedadb42688df07f99985b69b8a21620122",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "380b22de8c6296f8ba5d54ec2633c3dee9ea999c4ba0a0e9295f48ed06243a26",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 934,
+      "method": "dom",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "4c4dbae2aad2adfda766ea3ec2cfbecd66698b35bde90466e0a0d1e51c12c109",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "627e6b1d5b459b58d901cb4bc2b8276543d4d9e22b623f0122a3c6e7c9487c3d",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 432,
+      "method": "aria",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "681db5aa75c0349b917f76ab44b5337839a5460f20966885f9a83a82b16c8152",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "f87a114f0679f3ed7fd62c73140d78199b364fa16055c20989fd2455b34e4e65",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 308,
+      "method": "vision",
+      "model": "scripted-fixture-replay",
+      "model_calls": 1,
+      "output_digest": "7046f02b18df88dbb7c34a02eccf26c6e42cd5746ed24058aff81cb78716d525",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "6d0244eacf350323da5b6420a3b6a9c6376634830eceb8e92a7e88ef5a1058cd",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 572,
+      "method": "hybrid",
+      "model": "scripted-fixture-replay",
+      "model_calls": 3,
+      "output_digest": "18c602b9bf0dfe218378ce5a5b95156213d46830c79ef9ba266245ec94f7f852",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "b05232b974cbde32175534261636bc13600343f1b0c0d2bbfeac8ecefbdadfb5",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 0,
+      "method": "api",
+      "model": "typed-fixture",
+      "model_calls": 0,
+      "output_digest": "50d982d006c215465e6c52ed4460ac6bbb3aa4e68053e8333082f8da72b09244",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "ba69a5a33598aa84be0dfe63107e12cbcdec03c68b70729861c8b47f21cfc0a2",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 443,
+      "method": "dom",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "2d1fc48e83e269e5b1acbb89087892e26bfe3af88e1f0e80bb2386cdb6826056",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "5c3b47e8d75cb14a9eb90cf88a50829a0b83db7fdf00078b700df11afce45b30",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 436,
+      "method": "aria",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "072eb3145bc0d4a0e4da0c9c32589de62b4dd3634842ffa343d816b7fbf52561",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "4a0d32ba17b7f6bd14fe5d5437b2a7bd9a53211ddd06c8b98223a1d2ea8b63ab",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 303,
+      "method": "vision",
+      "model": "scripted-fixture-replay",
+      "model_calls": 1,
+      "output_digest": "043ee727ec384be6a440f51b45cb334e2f5c0c1994549058a9190aabc2ba51c9",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "227edc3433ecae51b73ecf6ecc1f1cae6bc6cc7d9926663e5b28773eb921d6dd",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 550,
+      "method": "hybrid",
+      "model": "scripted-fixture-replay",
+      "model_calls": 3,
+      "output_digest": "cc6afb571356d2a907a61fe3a04c6e4801390604c90c84cfe3458b741368b09c",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "55a80c5619c2c76d64303748e4d048ee9dde325d3bde216a9386ca9450ec125d",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 0,
+      "method": "api",
+      "model": "typed-fixture",
+      "model_calls": 0,
+      "output_digest": "ef0b53acd1d58bfd662cf30af9f4f0f47f5d34e016bb174bc49ecd39ffc527e8",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "NOT_FOUND",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "83c4d3e235aee2cf4c141b6db7a234c00f0cc2eefd1d66f54c7148b3420c3119",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 358,
+      "method": "dom",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "6924ee2e6d34300867ca16e9dd225f6325b3e12b7f2ad5f67a50fdb2411be889",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "NOT_FOUND",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "c2c8a69bfcfbb33534e2e940def6deceb4f952956a0f879c13fced3470ca0985",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 382,
+      "method": "aria",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "b075176a8c1dcea364dd2ba159e768891df1bc18639acc87767996dcd73f3543",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "NOT_FOUND",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": "visual_fields_incomplete",
+      "input_digest": "2053c82b9d843fb81bc8176b4bfb0cdba540c32bc42dc37c020466d8f5d19fe1",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 367,
+      "method": "vision",
+      "model": "scripted-fixture-replay",
+      "model_calls": 1,
+      "output_digest": "84025dcfe07b943e5c1fd8413d5475bc778cad583881086764b1ff9e6d8a7476",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "INCOMPLETE",
+      "task_correct": false
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": "hybrid_fields_incomplete",
+      "input_digest": "257a2126dbf04d3a08223c10f29493df86b325c5486c5de1058aa0ba2b49e6e9",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 541,
+      "method": "hybrid",
+      "model": "scripted-fixture-replay",
+      "model_calls": 2,
+      "output_digest": "0bdd943d5ebd5b38cffcca45c23f99757deff52544856dc79ba119f915e49773",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "INCOMPLETE",
+      "task_correct": false
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "383f5da42709196f7bd1d99e03bf653284811e464d60f2654c0a1a44120fc00b",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 0,
+      "method": "api",
+      "model": "typed-fixture",
+      "model_calls": 0,
+      "output_digest": "ac9f1a3fbc112d78c44ba78cc70c6eedadb42688df07f99985b69b8a21620122",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "380b22de8c6296f8ba5d54ec2633c3dee9ea999c4ba0a0e9295f48ed06243a26",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 424,
+      "method": "dom",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "2f2319dd0d8198f5faeb6344652cd68cb534e2b351e361985266765c60c13545",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "627e6b1d5b459b58d901cb4bc2b8276543d4d9e22b623f0122a3c6e7c9487c3d",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 397,
+      "method": "aria",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "983a2308ff6a6b9761815851a1aa5006e18bd531f7b8b2972041fa5a1c2ec6d1",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "f87a114f0679f3ed7fd62c73140d78199b364fa16055c20989fd2455b34e4e65",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 283,
+      "method": "vision",
+      "model": "scripted-fixture-replay",
+      "model_calls": 1,
+      "output_digest": "eb4c6e4f98c6827d6a0f79ee126d5e62c209993a89fa2e6cb578bd07ac2e73f1",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "6d0244eacf350323da5b6420a3b6a9c6376634830eceb8e92a7e88ef5a1058cd",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 538,
+      "method": "hybrid",
+      "model": "scripted-fixture-replay",
+      "model_calls": 3,
+      "output_digest": "f371310c4cdfa7261c92167a6146b5b230222636d8e28869b933b48412ac4ca8",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "b05232b974cbde32175534261636bc13600343f1b0c0d2bbfeac8ecefbdadfb5",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 0,
+      "method": "api",
+      "model": "typed-fixture",
+      "model_calls": 0,
+      "output_digest": "50d982d006c215465e6c52ed4460ac6bbb3aa4e68053e8333082f8da72b09244",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "ba69a5a33598aa84be0dfe63107e12cbcdec03c68b70729861c8b47f21cfc0a2",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 391,
+      "method": "dom",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "0d17fd0088f5225cfe1cdaffa576d7f741f4dffa4a6072d8066e5f2b6e45e064",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "5c3b47e8d75cb14a9eb90cf88a50829a0b83db7fdf00078b700df11afce45b30",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 413,
+      "method": "aria",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "240a4e6b8667bdca216bbb158a265f32c3a16aef4c0eccb367ae2cddb150d43a",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "4a0d32ba17b7f6bd14fe5d5437b2a7bd9a53211ddd06c8b98223a1d2ea8b63ab",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 304,
+      "method": "vision",
+      "model": "scripted-fixture-replay",
+      "model_calls": 1,
+      "output_digest": "a65eeb69b134dcb27a5d04e4579c8f288efc8e8b4169a0d8245a8df88277141f",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "227edc3433ecae51b73ecf6ecc1f1cae6bc6cc7d9926663e5b28773eb921d6dd",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 648,
+      "method": "hybrid",
+      "model": "scripted-fixture-replay",
+      "model_calls": 3,
+      "output_digest": "338f12453fc7d9750030f5c9806f261643b845a83da2f02e8f97545f69d2ef3c",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "55a80c5619c2c76d64303748e4d048ee9dde325d3bde216a9386ca9450ec125d",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 0,
+      "method": "api",
+      "model": "typed-fixture",
+      "model_calls": 0,
+      "output_digest": "ef0b53acd1d58bfd662cf30af9f4f0f47f5d34e016bb174bc49ecd39ffc527e8",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "NOT_FOUND",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "83c4d3e235aee2cf4c141b6db7a234c00f0cc2eefd1d66f54c7148b3420c3119",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 537,
+      "method": "dom",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "dfa255d3cf0fb6889f3e2ada2310e89be95f37421f590c2d47d4056196287f0a",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "NOT_FOUND",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "c2c8a69bfcfbb33534e2e940def6deceb4f952956a0f879c13fced3470ca0985",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 408,
+      "method": "aria",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "579ec16d509a2239de1b6fc3c76b082120f987cd2361eeca7e72a713ca5f6185",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "NOT_FOUND",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": "visual_fields_incomplete",
+      "input_digest": "2053c82b9d843fb81bc8176b4bfb0cdba540c32bc42dc37c020466d8f5d19fe1",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 328,
+      "method": "vision",
+      "model": "scripted-fixture-replay",
+      "model_calls": 1,
+      "output_digest": "22c1ae50fc22db949bb390fe931e69b4b52835865931cc42bd22ce4b99b7b9c5",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "INCOMPLETE",
+      "task_correct": false
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": "hybrid_fields_incomplete",
+      "input_digest": "257a2126dbf04d3a08223c10f29493df86b325c5486c5de1058aa0ba2b49e6e9",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 481,
+      "method": "hybrid",
+      "model": "scripted-fixture-replay",
+      "model_calls": 2,
+      "output_digest": "da099d93da1538fe0df02133801046d3f4974ed91df70d769437dd4a843ccd2c",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "INCOMPLETE",
+      "task_correct": false
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "383f5da42709196f7bd1d99e03bf653284811e464d60f2654c0a1a44120fc00b",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 0,
+      "method": "api",
+      "model": "typed-fixture",
+      "model_calls": 0,
+      "output_digest": "ac9f1a3fbc112d78c44ba78cc70c6eedadb42688df07f99985b69b8a21620122",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "380b22de8c6296f8ba5d54ec2633c3dee9ea999c4ba0a0e9295f48ed06243a26",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 419,
+      "method": "dom",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "67eeb45c403043c841075cb7a1c20bc3bdc15525a399ee286807fbba8242265f",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "627e6b1d5b459b58d901cb4bc2b8276543d4d9e22b623f0122a3c6e7c9487c3d",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 393,
+      "method": "aria",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "c3c4467f3eddf885274638b0eb19a0bbf2c78ac333272da9e626600674d62231",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "f87a114f0679f3ed7fd62c73140d78199b364fa16055c20989fd2455b34e4e65",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 280,
+      "method": "vision",
+      "model": "scripted-fixture-replay",
+      "model_calls": 1,
+      "output_digest": "8f0d9de5deaa819bc4cba802c7af7dc2f1da83733fe39363a1fda88b17c67158",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-open",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "6d0244eacf350323da5b6420a3b6a9c6376634830eceb8e92a7e88ef5a1058cd",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 508,
+      "method": "hybrid",
+      "model": "scripted-fixture-replay",
+      "model_calls": 3,
+      "output_digest": "91826a77ef80cb0ebc6ffe24fd5e05928b21a7693009dc215cd18884a676da50",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "b05232b974cbde32175534261636bc13600343f1b0c0d2bbfeac8ecefbdadfb5",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 0,
+      "method": "api",
+      "model": "typed-fixture",
+      "model_calls": 0,
+      "output_digest": "50d982d006c215465e6c52ed4460ac6bbb3aa4e68053e8333082f8da72b09244",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "ba69a5a33598aa84be0dfe63107e12cbcdec03c68b70729861c8b47f21cfc0a2",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 391,
+      "method": "dom",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "31bfc9579eecd5f34a7874b254ec3b8bbc587e840099940c2b622cbc194bc5f1",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "5c3b47e8d75cb14a9eb90cf88a50829a0b83db7fdf00078b700df11afce45b30",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 402,
+      "method": "aria",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "596d611677c54de915c14ff77534588cf19ff1e6f793eefe9d1a9099a07378db",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "4a0d32ba17b7f6bd14fe5d5437b2a7bd9a53211ddd06c8b98223a1d2ea8b63ab",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 286,
+      "method": "vision",
+      "model": "scripted-fixture-replay",
+      "model_calls": 1,
+      "output_digest": "ddfe821ddcca57d98056a673b387e690a351680d05f2e66dde7fd9a0cff1514d",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-normal-completed",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "227edc3433ecae51b73ecf6ecc1f1cae6bc6cc7d9926663e5b28773eb921d6dd",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 570,
+      "method": "hybrid",
+      "model": "scripted-fixture-replay",
+      "model_calls": 3,
+      "output_digest": "3048abbf40a5015c16fa1c1e54554030f251bdf9a6d3e158a174c4a4a25fca40",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "SUCCEEDED",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "55a80c5619c2c76d64303748e4d048ee9dde325d3bde216a9386ca9450ec125d",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 0,
+      "method": "api",
+      "model": "typed-fixture",
+      "model_calls": 0,
+      "output_digest": "ef0b53acd1d58bfd662cf30af9f4f0f47f5d34e016bb174bc49ecd39ffc527e8",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "NOT_FOUND",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "83c4d3e235aee2cf4c141b6db7a234c00f0cc2eefd1d66f54c7148b3420c3119",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 345,
+      "method": "dom",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "df57734b68c851e535204c39c5b5a4f36f0b209ce0c0ad804e68fc60b83f821c",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "NOT_FOUND",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": null,
+      "input_digest": "c2c8a69bfcfbb33534e2e940def6deceb4f952956a0f879c13fced3470ca0985",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 329,
+      "method": "aria",
+      "model": "bounded-playwright",
+      "model_calls": 0,
+      "output_digest": "2831c7e5f270ec429c54bab939514d943b4e69b15514587b3bec9b1585125c8b",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "NOT_FOUND",
+      "task_correct": true
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": "visual_fields_incomplete",
+      "input_digest": "2053c82b9d843fb81bc8176b4bfb0cdba540c32bc42dc37c020466d8f5d19fe1",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 278,
+      "method": "vision",
+      "model": "scripted-fixture-replay",
+      "model_calls": 1,
+      "output_digest": "b1071136fb6d92c7f7fc7049aeb4ad919c4ceb94d8c01fc69a76373aceb10337",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "INCOMPLETE",
+      "task_correct": false
+    },
+    {
+      "case_id": "p11-target-missing",
+      "completion_tokens": null,
+      "data_source": "synthetic",
+      "failure_code": "hybrid_fields_incomplete",
+      "input_digest": "257a2126dbf04d3a08223c10f29493df86b325c5486c5de1058aa0ba2b49e6e9",
+      "input_version": "phase11-synthetic-v1",
+      "latency_ms": 475,
+      "method": "hybrid",
+      "model": "scripted-fixture-replay",
+      "model_calls": 2,
+      "output_digest": "a61eb003ce1e128d64e7849ed1d134ddcefd6dbec0a6c479c3eb23ad22f7d518",
+      "prompt_tokens": null,
+      "safety_pass": true,
+      "status": "INCOMPLETE",
+      "task_correct": false
+    }
+  ],
+  "usage_policy": "null when provider did not return usage; no price estimate"
+}
