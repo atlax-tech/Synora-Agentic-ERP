@@ -11,7 +11,7 @@ import base64
 import hashlib
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -86,6 +86,7 @@ class VisionProbeResult:
     model: str | None
     prompt_tokens: int | None
     completion_tokens: int | None
+    observations: tuple[VisionObservation, ...] = ()
 
 
 def _image_data(images: list[bytes] | tuple[bytes, ...]) -> list[str]:
@@ -192,11 +193,11 @@ def parse_vision_observation(text: str, image: bytes) -> VisionObservation:
     values: dict[str, str | None] = {}
     for field in ("purchase_order", "supplier", "status", "currency"):
         value = data[field]
-        if value is not None and (not isinstance(value, str) or len(value) > 140):
+        if not isinstance(value, str) or not value.strip() or len(value) > 140:
             raise VisionProbeError("RESPONSE_SCHEMA")
         values[field] = value
-    if not isinstance(data["complete"], bool):
-        raise VisionProbeError("RESPONSE_SCHEMA")
+    if data["complete"] is not True:
+        raise VisionProbeError("RESPONSE_INCOMPLETE")
     return VisionObservation(
         purchase_order=values["purchase_order"],
         supplier=values["supplier"],
@@ -207,12 +208,51 @@ def parse_vision_observation(text: str, image: bytes) -> VisionObservation:
     )
 
 
+def _parse_observations(text: str, images: Sequence[bytes]) -> tuple[VisionObservation, ...]:
+    if len(images) == 1:
+        return (parse_vision_observation(text, images[0]),)
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError) as error:
+        raise VisionProbeError("RESPONSE_SCHEMA") from error
+    if not isinstance(data, dict) or set(data) != {"observations"}:
+        raise VisionProbeError("RESPONSE_SCHEMA")
+    raw = data.get("observations")
+    if not isinstance(raw, list) or len(raw) != len(images):
+        raise VisionProbeError("RESPONSE_SCHEMA")
+    return tuple(
+        parse_vision_observation(json.dumps(item, ensure_ascii=True), image)
+        for item, image in zip(raw, images, strict=True)
+    )
+
+
+def _validate_expected(
+    observations: Sequence[VisionObservation],
+    expected: Sequence[Mapping[str, str]] | None,
+) -> None:
+    if expected is None:
+        return
+    if len(observations) != len(expected):
+        raise VisionProbeError("RESPONSE_CONTENT_MISMATCH")
+    fields = ("purchase_order", "supplier", "status", "currency")
+    for observation, expected_fields in zip(observations, expected, strict=True):
+        actual = {
+            "purchase_order": observation.purchase_order,
+            "supplier": observation.supplier,
+            "status": observation.status,
+            "currency": observation.currency,
+        }
+        if any(actual[field] != expected_fields.get(field) for field in fields):
+            raise VisionProbeError("RESPONSE_CONTENT_MISMATCH")
+
+
 def probe_vision(
     prompt: str,
     images: list[bytes] | tuple[bytes, ...],
     *,
     environ: Mapping[str, str] | None = None,
     transport: httpx.BaseTransport | None = None,
+    expected_observations: Sequence[Mapping[str, str]] | None = None,
 ) -> VisionProbeResult:
     """Try configured roles in order, stopping at the first valid image read."""
 
@@ -245,7 +285,9 @@ def probe_vision(
             if len(response.content) > MAX_RESPONSE_BYTES or not response.is_success:
                 raise VisionProbeError("UPSTREAM_UNAVAILABLE")
             text, prompt_tokens, completion_tokens = _response_text(response.json())
-            observation = parse_vision_observation(text, images[0])
+            observations = _parse_observations(text, images)
+            _validate_expected(observations, expected_observations)
+            observation = observations[0]
         except VisionProbeError as error:
             attempts.append(VisionAttempt(role, model, "FAILED", error.code))
             continue
@@ -260,6 +302,7 @@ def probe_vision(
             model=model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            observations=observations,
         )
     return VisionProbeResult(
         status="VISION_PROVIDER_UNAVAILABLE",

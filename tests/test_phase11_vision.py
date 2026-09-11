@@ -80,3 +80,117 @@ def test_image_and_response_limits_fail_closed() -> None:
         probe_vision("read", [PNG[:8] + b"x" * MAX_IMAGE_BYTES], environ={})
     with pytest.raises(VisionProbeError, match="RESPONSE_SCHEMA"):
         parse_vision_observation("{}", PNG)
+
+
+def test_contentless_or_incomplete_image_response_cannot_pass() -> None:
+    with pytest.raises(VisionProbeError, match="RESPONSE_SCHEMA"):
+        parse_vision_observation(
+            json.dumps(
+                {
+                    "purchase_order": None,
+                    "supplier": None,
+                    "status": None,
+                    "currency": None,
+                    "complete": True,
+                }
+            ),
+            PNG,
+        )
+    with pytest.raises(VisionProbeError, match="RESPONSE_INCOMPLETE"):
+        parse_vision_observation(
+            json.dumps(
+                {
+                    "purchase_order": "PUR-ORD-0001",
+                    "supplier": "Supplier A",
+                    "status": "To Receive and Bill",
+                    "currency": "CNY",
+                    "complete": False,
+                }
+            ),
+            PNG,
+        )
+
+
+def test_two_image_probe_requires_each_observation_and_oracle_match() -> None:
+    second = b"\x89PNG\r\n\x1a\nother-pixels"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert len(payload["messages"][0]["content"]) == 3
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "observations": [
+                                        {
+                                            "purchase_order": "PUR-ORD-0001",
+                                            "supplier": "Supplier A",
+                                            "status": "To Receive and Bill",
+                                            "currency": "CNY",
+                                            "complete": True,
+                                        },
+                                        {
+                                            "purchase_order": "PUR-ORD-0002",
+                                            "supplier": "Supplier B",
+                                            "status": "Completed",
+                                            "currency": "USD",
+                                            "complete": True,
+                                        },
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    result = probe_vision(
+        "read",
+        [PNG, second],
+        environ=_env(),
+        transport=httpx.MockTransport(handler),
+        expected_observations=(
+            {
+                "purchase_order": "PUR-ORD-0001",
+                "supplier": "Supplier A",
+                "status": "To Receive and Bill",
+                "currency": "CNY",
+            },
+            {
+                "purchase_order": "PUR-ORD-0002",
+                "supplier": "Supplier B",
+                "status": "Completed",
+                "currency": "USD",
+            },
+        ),
+    )
+    assert result.status == "PASS"
+    assert len(result.observations) == 2
+
+    mismatch = probe_vision(
+        "read",
+        [PNG, second],
+        environ=_env(),
+        transport=httpx.MockTransport(handler),
+        expected_observations=(
+            {
+                "purchase_order": "PUR-ORD-0001",
+                "supplier": "Wrong",
+                "status": "To Receive and Bill",
+                "currency": "CNY",
+            },
+            {
+                "purchase_order": "PUR-ORD-0002",
+                "supplier": "Supplier B",
+                "status": "Completed",
+                "currency": "USD",
+            },
+        ),
+    )
+    assert mismatch.status == "VISION_PROVIDER_UNAVAILABLE"
+    assert mismatch.attempts[0].failure_code == "RESPONSE_CONTENT_MISMATCH"

@@ -21,7 +21,7 @@ from labs.web_gui.benchmark import (
     write_report,
 )
 from labs.web_gui.browser import BrowserUnavailable, _playwright_sync, run_dom_task
-from labs.web_gui.fixtures import create_app
+from labs.web_gui.fixtures import FIXTURE_ORDERS, create_app
 from labs.web_gui.gui import VisualRun, run_visual_task
 from labs.web_gui.hybrid import HybridRun, run_hybrid_task
 from labs.web_gui.vision import probe_vision
@@ -94,9 +94,19 @@ def _probe_vision() -> dict[str, object]:
                 browser.close()
     result = probe_vision(
         "Read the two synthetic procurement screenshots. Return exactly JSON with "
-        "purchase_order, supplier, status, currency, complete. Use null when a value "
-        "cannot be confirmed; do not infer or use outside data.",
+        "an observations array containing one object per screenshot. Each object must "
+        "contain purchase_order, supplier, status, currency, complete. Do not infer "
+        "or use outside data.",
         images,
+        expected_observations=tuple(
+            {
+                "purchase_order": order.purchase_order,
+                "supplier": order.supplier,
+                "status": order.status,
+                "currency": order.currency,
+            }
+            for order in FIXTURE_ORDERS
+        ),
     )
     return asdict(result)
 
