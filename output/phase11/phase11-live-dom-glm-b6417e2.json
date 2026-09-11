@@ -1,0 +1,86 @@
+{
+  "action_receipts": [
+    {
+      "action_id": "a508dbf2-210f-4f92-a330-5fe0674c51ee",
+      "after_observation_id": "0aa47d94-38b1-4c0c-a8e6-f7a952cbf5a8",
+      "before_observation_id": "d60487b5-7264-434c-9840-3e6d3fb705f0",
+      "error_code": null,
+      "observation_id": "d60487b5-7264-434c-9840-3e6d3fb705f0",
+      "result": "APPLIED",
+      "stop_reason": null
+    },
+    {
+      "action_id": "4ffbd8e5-0123-4cbd-840a-0fddb69ddedf",
+      "after_observation_id": null,
+      "before_observation_id": "0aa47d94-38b1-4c0c-a8e6-f7a952cbf5a8",
+      "error_code": null,
+      "observation_id": "0aa47d94-38b1-4c0c-a8e6-f7a952cbf5a8",
+      "result": "APPLIED",
+      "stop_reason": null
+    }
+  ],
+  "case_id": "p11-live-dom-success-current",
+  "code_head": "b6417e2",
+  "completion_tokens": 916,
+  "decisions": [
+    {
+      "action_type": "click",
+      "fields": null,
+      "observation_id": "d60487b5-7264-434c-9840-3e6d3fb705f0",
+      "page_version": "synthetic-procurement-v1:33184f8025fc1014",
+      "target_ref": "order:PUR-ORD-0001",
+      "text": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "action_type": "finish",
+      "fields": {
+        "currency": "CNY",
+        "purchase_order": "PUR-ORD-0001",
+        "status": "To Receive and Bill",
+        "supplier": "Supplier A"
+      },
+      "observation_id": "0aa47d94-38b1-4c0c-a8e6-f7a952cbf5a8",
+      "page_version": "synthetic-procurement-v1:4845485dac5056cc",
+      "target_ref": null,
+      "text": null,
+      "x": null,
+      "y": null
+    }
+  ],
+  "engine": "live",
+  "expected_fields": {
+    "currency": "CNY",
+    "purchase_order": "PUR-ORD-0001",
+    "status": "To Receive and Bill",
+    "supplier": "Supplier A"
+  },
+  "fields": {
+    "currency": "CNY",
+    "purchase_order": "PUR-ORD-0001",
+    "status": "To Receive and Bill",
+    "supplier": "Supplier A"
+  },
+  "mode": "dom",
+  "model": "glm-5.3-flash",
+  "model_calls": 2,
+  "observation_complete": true,
+  "observations": [
+    {
+      "content_sha256": "7e2e5daf15849c1bcfb6dccbfb2776fa0d3ee37b2c16c60974029e4d068d742c",
+      "observation_id": "d60487b5-7264-434c-9840-3e6d3fb705f0",
+      "page_version": "synthetic-procurement-v1:33184f8025fc1014"
+    },
+    {
+      "content_sha256": "c5d4111edd928241e7ff338a83c3956c9d4d653eedf5026312201a73e940b9d8",
+      "observation_id": "0aa47d94-38b1-4c0c-a8e6-f7a952cbf5a8",
+      "page_version": "synthetic-procurement-v1:4845485dac5056cc"
+    }
+  ],
+  "prompt_tokens": 650,
+  "role": "assist",
+  "security_violations": [],
+  "status": "SUCCEEDED",
+  "stop_reason": null
+}
