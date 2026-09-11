@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import httpx
 import pytest
 from agent_runtime.providers import DeterministicProvider, ProviderResponse
 
@@ -10,10 +11,12 @@ from labs.web_gui.browser import run_model_dom_task
 from labs.web_gui.contracts import Observation, TaskSpec
 from labs.web_gui.model import (
     LiveTextModel,
+    LiveVisionModel,
     ModelCallError,
     ModelDecision,
     ModelResponse,
     decision_from_model,
+    decision_from_vision,
     parse_model_decision,
 )
 
@@ -139,3 +142,47 @@ def test_model_dom_task_rejects_unobserved_target() -> None:
     assert run.result.status == "FAILED"
     assert run.result.stop_reason == "ACTION_REJECTED"
     assert run.result.actions[0].result == "REJECTED"
+
+
+def test_vision_decision_adapter_keeps_image_result_untrusted() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"action_type":"finish","fields":{}}'
+                        }
+                    }
+                ]
+            },
+        )
+
+    client = LiveVisionModel(
+        "assist",
+        environ={
+            "ASSIST_BASE_URL": "https://vision.example/v1",
+            "ASSIST_API_KEY": "secret",
+            "ASSIST_MODEL": "vision-test",
+        },
+        transport=httpx.MockTransport(handler),
+    )
+    decision = decision_from_vision(
+        client,
+        TaskSpec(case_id="vision-model", purchase_order="PUR-ORD-0001", mode="vision"),
+        Observation(
+            page_version="screenshot:test",
+            source="synthetic",
+            mode="vision",
+            content='{"screenshot_sha256":"' + "0" * 64 + '"}',
+            screenshot_sha256="0" * 64,
+            viewport_width=100,
+            viewport_height=100,
+        ),
+        b"\x89PNG\r\n\x1a\nsynthetic",
+        12,
+    )
+
+    assert decision.proposal.action_type == "finish"
+    assert decision.model == "vision-test"

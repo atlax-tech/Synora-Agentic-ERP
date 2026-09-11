@@ -26,6 +26,7 @@ from labs.web_gui.contracts import (
     TaskStatus,
 )
 from labs.web_gui.fixtures import fixture_fields
+from labs.web_gui.model import LiveVisionModel, ModelDecision, decision_from_vision
 from labs.web_gui.recovery import ProgressGuard, RecoveryFailure, run_with_deadline
 from labs.web_gui.security import BrowserSecurityPolicy
 
@@ -44,6 +45,9 @@ class HybridDecision:
     proposal: ActionProposal
     fields: dict[str, str | None] | None = None
     visual_fields: dict[str, str | None] | None = None
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -52,6 +56,9 @@ class HybridRun:
     frames: tuple[HybridFrame, ...]
     security_violations: tuple[str, ...] = ()
     model_calls: int = 0
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
 
 
 HybridDecider = Callable[[HybridFrame, TaskSpec], HybridDecision]
@@ -188,6 +195,9 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
     fields: dict[str, str | None] = {}
     stop_reason: str | None = "hybrid_decider_stopped"
     model_calls = 0
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
     progress = ProgressGuard(max_actions=spec.budget.max_actions)
     unchanged_reobservations = 0
     with sync_playwright() as playwright:
@@ -262,9 +272,20 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                         min(spec.budget.action_timeout_seconds, remaining),
                     )
                 except RecoveryFailure as failure:
-                    status = "BUDGET_EXCEEDED" if failure.code == "MODEL_TIMEOUT" else "FAILED"
+                    status = (
+                        "BLOCKED"
+                        if failure.code
+                        in {
+                            "VISION_PROVIDER_UNAVAILABLE",
+                            "TRANSPORT_ERROR",
+                            "UPSTREAM_UNAVAILABLE",
+                        }
+                        else "BUDGET_EXCEEDED"
+                        if failure.code == "MODEL_TIMEOUT"
+                        else "FAILED"
+                    )
                     stop_reason = (
-                        "model_timeout" if failure.code == "MODEL_TIMEOUT" else "model_call_failed"
+                        "model_timeout" if failure.code == "MODEL_TIMEOUT" else failure.code
                     )
                     break
                 model_elapsed = monotonic() - model_started
@@ -272,6 +293,17 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     status = "FAILED"
                     stop_reason = "invalid_model_decision"
                     break
+                model = model or decision.model
+                prompt_tokens = (
+                    (prompt_tokens or 0) + decision.prompt_tokens
+                    if decision.prompt_tokens is not None
+                    else prompt_tokens
+                )
+                completion_tokens = (
+                    (completion_tokens or 0) + decision.completion_tokens
+                    if decision.completion_tokens is not None
+                    else completion_tokens
+                )
                 if model_elapsed > spec.budget.action_timeout_seconds:
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "model_timeout"
@@ -473,7 +505,39 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
         frames=tuple(frames),
         security_violations=security_violations,
         model_calls=model_calls,
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
     )
 
 
-__all__ = ["HybridDecision", "HybridFrame", "HybridRun", "run_hybrid_task"]
+def model_hybrid_decider(client: LiveVisionModel) -> HybridDecider:
+    """Adapt one image model to the synchronized hybrid executor."""
+
+    def decide(frame: HybridFrame, spec: TaskSpec) -> HybridDecision:
+        decision: ModelDecision = decision_from_vision(
+            client,
+            spec,
+            frame.observation,
+            frame.screenshot,
+            spec.budget.max_actions,
+        )
+        return HybridDecision(
+            proposal=decision.proposal,
+            fields=decision.fields,
+            visual_fields=decision.visual_fields,
+            model=decision.model,
+            prompt_tokens=decision.prompt_tokens,
+            completion_tokens=decision.completion_tokens,
+        )
+
+    return decide
+
+
+__all__ = [
+    "HybridDecision",
+    "HybridFrame",
+    "HybridRun",
+    "model_hybrid_decider",
+    "run_hybrid_task",
+]

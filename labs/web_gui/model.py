@@ -122,8 +122,16 @@ def structured_prompt(spec: TaskSpec, observation: Observation, remaining_action
                 "action_type": "one allowed action",
                 "target_ref": "an observed temporary target or null",
                 "text": "the requested purchase order for search or null",
-                "x": "CSS viewport coordinate for a visual click or null",
-                "y": "CSS viewport coordinate for a visual click or null",
+                "x": (
+                    "CSS viewport coordinate for a visual click or null"
+                    if spec.mode == "vision"
+                    else "null for structured or hybrid actions"
+                ),
+                "y": (
+                    "CSS viewport coordinate for a visual click or null"
+                    if spec.mode == "vision"
+                    else "null for structured or hybrid actions"
+                ),
                 "fields": "the four observed fields when finishing, otherwise null",
             },
         },
