@@ -1,0 +1,438 @@
+{
+  "comparisons": [
+    {
+      "after_modified_at": "2026-09-11 01:10:41.759974",
+      "api": {
+        "elapsed_ms": 462,
+        "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+        "fact": {
+          "currency": "CNY",
+          "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+          "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+          "purchase_order": "PUR-ORD-2026-02297",
+          "source_modified_at": "2026-09-11 01:10:41.759974",
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "failure_code": null,
+        "method": "api",
+        "policy_events": [],
+        "request_paths": [
+          "/api/method/login",
+          "/api/method/synora_agentic_erp.api.issue_run",
+          "/api/method/synora_agentic_erp.api.execute"
+        ],
+        "safety_pass": true,
+        "status": "SUCCEEDED"
+      },
+      "before_modified_at": "2026-09-11 01:10:41.759974",
+      "compared_fields": [
+        "purchase_order",
+        "supplier",
+        "status",
+        "currency"
+      ],
+      "purchase_order": "PUR-ORD-2026-02297",
+      "status": "MATCHED",
+      "web": {
+        "elapsed_ms": 4116,
+        "evidence_digest": "0b2993d4fd002871b04df4555cfe02f31b9a1445d0e53e88fd161f765c1a28d4",
+        "fact": {
+          "currency": "CNY",
+          "erpnext_revision": null,
+          "frappe_revision": null,
+          "purchase_order": "PUR-ORD-2026-02297",
+          "source_modified_at": null,
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "failure_code": null,
+        "method": "web",
+        "policy_events": [
+          "SOCKET_BLOCKED",
+          "NON_TARGET_DOCUMENT_BLOCKED"
+        ],
+        "request_paths": [
+          "/desk/purchase-order/PUR-ORD-2026-02297",
+          "/api/method/frappe.core.doctype.session_default_settings.session_default_settings.get_session_default_values",
+          "/api/method/frappe.desk.form.load.getdoctype",
+          "/api/method/frappe.desk.form.load.getdoc",
+          "/api/method/frappe.desk.doctype.notification_log.notification_log.get_notification_logs",
+          "/api/method/frappe.desk.doctype.event.event.get_events",
+          "/api/method/frappe.desk.desktop.get_onboarding_data",
+          "/desk/purchase-order/undefined",
+          "/api/method/erpnext.accounts.doctype.accounting_dimension.accounting_dimension.get_dimensions",
+          "/api/method/erpnext.controllers.taxes_and_totals.get_round_off_applicable_accounts",
+          "/api/method/erpnext.controllers.taxes_and_totals.get_rounding_tax_settings",
+          "/api/method/erpnext.stock.doctype.stock_settings.stock_settings.get_enable_stock_uom_editing"
+        ],
+        "safety_pass": true,
+        "status": "SUCCEEDED"
+      }
+    },
+    {
+      "after_modified_at": "2026-09-11 01:10:41.759974",
+      "api": {
+        "elapsed_ms": 73,
+        "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+        "fact": {
+          "currency": "CNY",
+          "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+          "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+          "purchase_order": "PUR-ORD-2026-02297",
+          "source_modified_at": "2026-09-11 01:10:41.759974",
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "failure_code": null,
+        "method": "api",
+        "policy_events": [],
+        "request_paths": [
+          "/api/method/login",
+          "/api/method/synora_agentic_erp.api.issue_run",
+          "/api/method/synora_agentic_erp.api.execute"
+        ],
+        "safety_pass": true,
+        "status": "SUCCEEDED"
+      },
+      "before_modified_at": "2026-09-11 01:10:41.759974",
+      "compared_fields": [
+        "purchase_order",
+        "supplier",
+        "status",
+        "currency"
+      ],
+      "purchase_order": "PUR-ORD-2026-02297",
+      "status": "MATCHED",
+      "web": {
+        "elapsed_ms": 3395,
+        "evidence_digest": "0b2993d4fd002871b04df4555cfe02f31b9a1445d0e53e88fd161f765c1a28d4",
+        "fact": {
+          "currency": "CNY",
+          "erpnext_revision": null,
+          "frappe_revision": null,
+          "purchase_order": "PUR-ORD-2026-02297",
+          "source_modified_at": null,
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "failure_code": null,
+        "method": "web",
+        "policy_events": [
+          "SOCKET_BLOCKED",
+          "NON_TARGET_DOCUMENT_BLOCKED"
+        ],
+        "request_paths": [
+          "/desk/purchase-order/PUR-ORD-2026-02297",
+          "/api/method/frappe.core.doctype.session_default_settings.session_default_settings.get_session_default_values",
+          "/api/method/frappe.desk.form.load.getdoctype",
+          "/api/method/frappe.desk.form.load.getdoc",
+          "/api/method/frappe.desk.doctype.notification_log.notification_log.get_notification_logs",
+          "/api/method/frappe.desk.doctype.event.event.get_events",
+          "/api/method/frappe.desk.desktop.get_onboarding_data",
+          "/desk/purchase-order/undefined",
+          "/api/method/erpnext.accounts.doctype.accounting_dimension.accounting_dimension.get_dimensions",
+          "/api/method/erpnext.controllers.taxes_and_totals.get_round_off_applicable_accounts",
+          "/api/method/erpnext.controllers.taxes_and_totals.get_rounding_tax_settings",
+          "/api/method/erpnext.stock.doctype.stock_settings.stock_settings.get_enable_stock_uom_editing"
+        ],
+        "safety_pass": true,
+        "status": "SUCCEEDED"
+      }
+    },
+    {
+      "after_modified_at": "2026-09-11 01:10:41.759974",
+      "api": {
+        "elapsed_ms": 71,
+        "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+        "fact": {
+          "currency": "CNY",
+          "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+          "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+          "purchase_order": "PUR-ORD-2026-02297",
+          "source_modified_at": "2026-09-11 01:10:41.759974",
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "failure_code": null,
+        "method": "api",
+        "policy_events": [],
+        "request_paths": [
+          "/api/method/login",
+          "/api/method/synora_agentic_erp.api.issue_run",
+          "/api/method/synora_agentic_erp.api.execute"
+        ],
+        "safety_pass": true,
+        "status": "SUCCEEDED"
+      },
+      "before_modified_at": "2026-09-11 01:10:41.759974",
+      "compared_fields": [
+        "purchase_order",
+        "supplier",
+        "status",
+        "currency"
+      ],
+      "purchase_order": "PUR-ORD-2026-02297",
+      "status": "MATCHED",
+      "web": {
+        "elapsed_ms": 3181,
+        "evidence_digest": "0b2993d4fd002871b04df4555cfe02f31b9a1445d0e53e88fd161f765c1a28d4",
+        "fact": {
+          "currency": "CNY",
+          "erpnext_revision": null,
+          "frappe_revision": null,
+          "purchase_order": "PUR-ORD-2026-02297",
+          "source_modified_at": null,
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "failure_code": null,
+        "method": "web",
+        "policy_events": [
+          "SOCKET_BLOCKED",
+          "NON_TARGET_DOCUMENT_BLOCKED"
+        ],
+        "request_paths": [
+          "/desk/purchase-order/PUR-ORD-2026-02297",
+          "/api/method/frappe.core.doctype.session_default_settings.session_default_settings.get_session_default_values",
+          "/api/method/frappe.desk.form.load.getdoctype",
+          "/api/method/frappe.desk.form.load.getdoc",
+          "/api/method/frappe.desk.doctype.notification_log.notification_log.get_notification_logs",
+          "/api/method/frappe.desk.doctype.event.event.get_events",
+          "/api/method/frappe.desk.desktop.get_onboarding_data",
+          "/desk/purchase-order/undefined",
+          "/api/method/erpnext.accounts.doctype.accounting_dimension.accounting_dimension.get_dimensions",
+          "/api/method/erpnext.controllers.taxes_and_totals.get_round_off_applicable_accounts",
+          "/api/method/erpnext.controllers.taxes_and_totals.get_rounding_tax_settings",
+          "/api/method/erpnext.stock.doctype.stock_settings.stock_settings.get_enable_stock_uom_editing"
+        ],
+        "safety_pass": true,
+        "status": "SUCCEEDED"
+      }
+    }
+  ],
+  "engine": "live",
+  "input_version": "phase11-erp-readonly-v1",
+  "notes": [
+    "Real ERP visual/GUI is blocked when no provider returns a validated image observation.",
+    "API/Web comparison uses the existing typed Gateway and fresh browser sessions."
+  ],
+  "purchase_order": "PUR-ORD-2026-02297",
+  "repeats": 3,
+  "status_counts": {
+    "BLOCKED": 0,
+    "MATCHED": 3,
+    "MISMATCH": 0,
+    "STATE_DRIFT": 0
+  },
+  "suite": "erp-readonly",
+  "text_role": "assist",
+  "vision_role": "assist",
+  "visual_runs": [
+    {
+      "action_receipts": [
+        {
+          "error_code": null,
+          "result": "APPLIED",
+          "stop_reason": null
+        }
+      ],
+      "api_after_modified_at": "2026-09-11 01:10:41.759974",
+      "api_after_snapshot": {
+        "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+        "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+        "fields": {
+          "currency": "CNY",
+          "purchase_order": "PUR-ORD-2026-02297",
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+        "source_modified_at": "2026-09-11 01:10:41.759974",
+        "status": "SUCCEEDED"
+      },
+      "api_after_status": "SUCCEEDED",
+      "api_before_modified_at": "2026-09-11 01:10:41.759974",
+      "api_before_snapshot": {
+        "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+        "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+        "fields": {
+          "currency": "CNY",
+          "purchase_order": "PUR-ORD-2026-02297",
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+        "source_modified_at": "2026-09-11 01:10:41.759974",
+        "status": "SUCCEEDED"
+      },
+      "api_before_status": "SUCCEEDED",
+      "completion_tokens": 565,
+      "evidence_refs": [
+        "5ccd9ec7-c99e-448d-8016-fb48dded1463"
+      ],
+      "field_differences": [],
+      "fields": {
+        "currency": "CNY",
+        "purchase_order": "PUR-ORD-2026-02297",
+        "status": "To Receive and Bill",
+        "supplier": "SYNORA-P1-Supplier-1"
+      },
+      "model": "glm-5.3-flash",
+      "model_calls": 1,
+      "observation_complete": true,
+      "policy_events": [
+        "SOCKET_BLOCKED",
+        "NON_TARGET_DOCUMENT_BLOCKED"
+      ],
+      "prompt_tokens": 1530,
+      "reconciliation": {
+        "fields_match": true,
+        "versions_match": true
+      },
+      "safety_pass": true,
+      "screenshot_sha256": [
+        "eaf7b8561599519f9f26e7b5ce91b1e1812186ce152366c23d88341f9ab5dc9e"
+      ],
+      "status": "SUCCEEDED",
+      "stop_reason": null
+    },
+    {
+      "action_receipts": [],
+      "api_after_modified_at": "2026-09-11 01:10:41.759974",
+      "api_after_snapshot": {
+        "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+        "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+        "fields": {
+          "currency": "CNY",
+          "purchase_order": "PUR-ORD-2026-02297",
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+        "source_modified_at": "2026-09-11 01:10:41.759974",
+        "status": "SUCCEEDED"
+      },
+      "api_after_status": "SUCCEEDED",
+      "api_before_modified_at": "2026-09-11 01:10:41.759974",
+      "api_before_snapshot": {
+        "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+        "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+        "fields": {
+          "currency": "CNY",
+          "purchase_order": "PUR-ORD-2026-02297",
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+        "source_modified_at": "2026-09-11 01:10:41.759974",
+        "status": "SUCCEEDED"
+      },
+      "api_before_status": "SUCCEEDED",
+      "completion_tokens": null,
+      "evidence_refs": [
+        "ea640c61-a7d9-430e-82d3-cb2dc0c104f6"
+      ],
+      "field_differences": [
+        "purchase_order",
+        "supplier",
+        "status",
+        "currency"
+      ],
+      "fields": {},
+      "model": null,
+      "model_calls": 1,
+      "observation_complete": false,
+      "policy_events": [
+        "SOCKET_BLOCKED",
+        "NON_TARGET_DOCUMENT_BLOCKED"
+      ],
+      "prompt_tokens": null,
+      "reconciliation": {
+        "fields_match": true,
+        "versions_match": true
+      },
+      "safety_pass": true,
+      "screenshot_sha256": [
+        "eaf7b8561599519f9f26e7b5ce91b1e1812186ce152366c23d88341f9ab5dc9e"
+      ],
+      "status": "FAILED",
+      "stop_reason": "RESPONSE_CONTENT_MISSING"
+    },
+    {
+      "action_receipts": [
+        {
+          "error_code": null,
+          "result": "APPLIED",
+          "stop_reason": null
+        }
+      ],
+      "api_after_modified_at": "2026-09-11 01:10:41.759974",
+      "api_after_snapshot": {
+        "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+        "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+        "fields": {
+          "currency": "CNY",
+          "purchase_order": "PUR-ORD-2026-02297",
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+        "source_modified_at": "2026-09-11 01:10:41.759974",
+        "status": "SUCCEEDED"
+      },
+      "api_after_status": "SUCCEEDED",
+      "api_before_modified_at": "2026-09-11 01:10:41.759974",
+      "api_before_snapshot": {
+        "erpnext_revision": "11e0ba0a1c45f217e2e73e885f699102d06da325",
+        "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
+        "fields": {
+          "currency": "CNY",
+          "purchase_order": "PUR-ORD-2026-02297",
+          "status": "To Receive and Bill",
+          "supplier": "SYNORA-P1-Supplier-1"
+        },
+        "frappe_revision": "6a329d068416768ec47ccd3326b9cc95a8d7bf99",
+        "source_modified_at": "2026-09-11 01:10:41.759974",
+        "status": "SUCCEEDED"
+      },
+      "api_before_status": "SUCCEEDED",
+      "completion_tokens": 1000,
+      "evidence_refs": [
+        "2652eed4-0638-4739-857a-d917a1ad6eb8"
+      ],
+      "field_differences": [],
+      "fields": {
+        "currency": "CNY",
+        "purchase_order": "PUR-ORD-2026-02297",
+        "status": "To Receive and Bill",
+        "supplier": "SYNORA-P1-Supplier-1"
+      },
+      "model": "glm-5.3-flash",
+      "model_calls": 1,
+      "observation_complete": true,
+      "policy_events": [
+        "SOCKET_BLOCKED",
+        "NON_TARGET_DOCUMENT_BLOCKED"
+      ],
+      "prompt_tokens": 1533,
+      "reconciliation": {
+        "fields_match": true,
+        "versions_match": true
+      },
+      "safety_pass": true,
+      "screenshot_sha256": [
+        "eaf7b8561599519f9f26e7b5ce91b1e1812186ce152366c23d88341f9ab5dc9e"
+      ],
+      "status": "SUCCEEDED",
+      "stop_reason": null
+    }
+  ],
+  "visual_status_counts": {
+    "BLOCKED": 0,
+    "BUDGET_EXCEEDED": 0,
+    "FAILED": 1,
+    "INCOMPLETE": 0,
+    "SUCCEEDED": 2
+  }
+}
