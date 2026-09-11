@@ -101,9 +101,19 @@ def _safe_fields(fields: dict[str, str | None] | None) -> dict[str, str | None] 
     return {field: fields.get(field) for field in sorted(allowed)}
 
 
+def _unwrap_answer(payload: object) -> object:
+    """Accept the one observed gateway envelope without loosening the schema."""
+
+    if isinstance(payload, dict) and set(payload) == {"answer"}:
+        answer = payload.get("answer")
+        if isinstance(answer, dict):
+            return answer
+    return payload
+
+
 def parse_model_decision(payload: object, observation: Observation) -> ModelDecision:
     try:
-        wire = ModelDecisionWire.model_validate(payload)
+        wire = ModelDecisionWire.model_validate(_unwrap_answer(payload))
         fields = _safe_fields(wire.fields)
         visual_fields = _safe_fields(wire.visual_fields)
         proposal = ActionProposal(

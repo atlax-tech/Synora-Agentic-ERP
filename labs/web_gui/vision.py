@@ -176,11 +176,25 @@ def _endpoint(base_url: str, responses: bool) -> str:
     return base_url if base_url.endswith(suffix) else base_url + suffix
 
 
+def _reasoning_effort(role: str) -> str:
+    """Match the bounded lab request to the configured role contract.
+
+    The runtime already sends ``low`` for the two remote roles and disables
+    reasoning for local Ollama roles.  Keeping the same explicit value here
+    prevents a compatible gateway from returning reasoning-only content before
+    it emits the JSON action.  This is deliberately a closed role mapping;
+    there is no environment-controlled request field.
+    """
+
+    return "low" if role in {"assist", "backup"} else "none"
+
+
 def _payload(
     prompt: str,
     images: list[str],
     model: str,
     responses: bool,
+    role: str,
     max_output_tokens: int = MAX_OUTPUT_TOKENS,
 ) -> dict[str, object]:
     if len(prompt) > MAX_PROMPT_CHARS:
@@ -196,6 +210,7 @@ def _payload(
             "max_output_tokens": max_output_tokens,
             "store": False,
             "text": {"format": {"type": "json_object"}},
+            "reasoning": {"effort": _reasoning_effort(role)},
         }
     content = [{"type": "text", "text": prompt}]
     content.extend(
@@ -207,6 +222,7 @@ def _payload(
         "max_tokens": max_output_tokens,
         "stream": False,
         "response_format": {"type": "json_object"},
+        "reasoning_effort": _reasoning_effort(role),
     }
 
 
@@ -361,7 +377,7 @@ def _request_text(
             ),
         )
     try:
-        request = _payload(prompt, images, model, responses, max_output_tokens)
+        request = _payload(prompt, images, model, responses, role, max_output_tokens)
     except VisionProbeError as error:
         raise VisionProbeError(
             error.code,

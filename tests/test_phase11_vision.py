@@ -74,6 +74,7 @@ def test_probe_uses_existing_role_and_never_returns_key() -> None:
     assert result.prompt_tokens == 10
     assert seen[0]["model"] == "vision-test"
     assert seen[0]["messages"][0]["content"][1]["image_url"]["detail"] == "high"
+    assert seen[0]["reasoning_effort"] == "low"
     assert base64.b64encode(PNG).decode() in json.dumps(seen[0])
     assert "secret-key" not in repr(result)
     attempt = result.attempts[0]
@@ -139,6 +140,49 @@ def test_probe_reads_standard_responses_nested_output() -> None:
     assert result.completion_tokens == 7
     assert result.attempts[0].protocol == "responses"
     assert result.attempts[0].response_shape == "output"
+
+
+def test_responses_payload_uses_local_reasoning_contract() -> None:
+    seen: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "output_text": json.dumps(
+                    {
+                        "purchase_order": "PUR-ORD-0001",
+                        "supplier": "Supplier A",
+                        "status": "To Receive and Bill",
+                        "currency": "CNY",
+                        "complete": True,
+                    }
+                )
+            },
+        )
+
+    result = probe_vision(
+        "read",
+        [PNG],
+        environ={
+            "BACKUP_BASE_URL": "https://vision.example/v1",
+            "BACKUP_API_KEY": "secret-key",
+            "BACKUP_MODEL": "vision-test",
+        },
+        transport=httpx.MockTransport(handler),
+        expected_observations=(
+            {
+                "purchase_order": "PUR-ORD-0001",
+                "supplier": "Supplier A",
+                "status": "To Receive and Bill",
+                "currency": "CNY",
+            },
+        ),
+    )
+
+    assert result.status == "PASS"
+    assert seen[0]["reasoning"]["effort"] == "low"
 
 
 def test_probe_classifies_http_and_json_failures_without_response_body() -> None:

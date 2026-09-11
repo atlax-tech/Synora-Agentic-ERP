@@ -42,6 +42,31 @@ def test_model_decision_rejects_unknown_wire_fields() -> None:
         )
 
 
+def test_model_decision_accepts_observed_answer_envelope_only() -> None:
+    decision = parse_model_decision(
+        {
+            "answer": {
+                "action_type": "finish",
+                "fields": {"purchase_order": "PUR-ORD-0001"},
+            }
+        },
+        _observation(),
+    )
+
+    assert decision.proposal.action_type == "finish"
+    assert decision.fields is not None
+    assert decision.fields["purchase_order"] == "PUR-ORD-0001"
+
+    with pytest.raises(ModelCallError, match="MODEL_RESPONSE_SCHEMA"):
+        parse_model_decision(
+            {
+                "answer": {"action_type": "finish", "fields": {}},
+                "unexpected": True,
+            },
+            _observation(),
+        )
+
+
 def test_live_text_model_preserves_text_only_observation_contract() -> None:
     seen: list[str] = []
 
