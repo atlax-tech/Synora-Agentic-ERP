@@ -66,7 +66,7 @@
       "path": "docs/PLAN.md",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "297ee5866a8ae0317d20c0b549091c7f3a493345906e3add0429e67edb0a8155"
+      "sha256": "5f6ba0842ab2d353aa71cadcae1bca4b4b05326a4c87604fbee66f0de69a7a2d"
     },
     {
       "path": "docs/decisions/README.md",
@@ -120,7 +120,7 @@
       "path": ".harness/source-index.json",
       "owner": "harness-armor",
       "mode": "managed",
-      "sha256": "ae500b6e1d63b5cf75afba958a9b6b25cc3999affc4b790e47bd0300ced38927"
+      "sha256": "603453eaae86ee43fb7a725d98ccfa961edd9cb463a240c42b48017939481f21"
     },
     {
       "path": ".harness/unresolved.json",
@@ -281,5 +281,5 @@
   ],
   "source_index": ".harness/source-index.json",
   "unresolved_index": ".harness/unresolved.json",
-  "last_updated": "2026-09-11T03:34:24Z"
+  "last_updated": "2026-09-11T18:02:45Z"
 }

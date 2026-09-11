@@ -31,8 +31,8 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "297ee5866a8ae0317d20c0b549091c7f3a493345906e3add0429e67edb0a8155",
-      "locator": "current Phase 10 status, execution order, exit gates, and preserved Phase 13 wording"
+      "sha256": "5f6ba0842ab2d353aa71cadcae1bca4b4b05326a4c87604fbee66f0de69a7a2d",
+      "locator": "current Phase 11 status, execution order, exit gates, and preserved Phase 12/13 wording"
     },
     {
       "id": "approved-project-direction-correction",
@@ -903,16 +903,16 @@
       "path": "pyproject.toml",
       "kind": "configuration",
       "status": "CONFIRMED",
-      "sha256": "070e83c8d04a0d89d6d094f43d852f23f66ae0368a5332f9aad47481f7dba473",
-      "locator": "Phase 9 protocol-lab dependency group and project test configuration"
+      "sha256": "6740107e496da165ac6c7e96f0d6b661990957b12bf7247ea1b67dd7d6e32d30",
+      "locator": "Phase 9 and Phase 11 optional lab dependency groups and project test configuration"
     },
     {
       "id": "phase9-python-lock",
       "path": "uv.lock",
       "kind": "configuration",
       "status": "CONFIRMED",
-      "sha256": "49d2d441e1deb61b82e210a7318580f4963f37bab847db9da53792466c99abd9",
-      "locator": "locked Phase 9 MCP and A2A SDK dependency graph"
+      "sha256": "67e06047b204bf5858a3223ae6996f4c94e96cf3d61ea6c15ebe2d18cbe0cbf8",
+      "locator": "locked MCP/A2A and optional Phase 11 web/GUI lab dependency graph"
     },
     {
       "id": "phase10-p2p-contracts",
