@@ -49,6 +49,7 @@ class HybridRun:
     result: TaskResult
     frames: tuple[HybridFrame, ...]
     security_violations: tuple[str, ...] = ()
+    model_calls: int = 0
 
 
 HybridDecider = Callable[[HybridFrame, TaskSpec], HybridDecision]
@@ -157,6 +158,7 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
     status: TaskStatus = "INCOMPLETE"
     fields: dict[str, str | None] = {}
     stop_reason: str | None = "hybrid_decider_stopped"
+    model_calls = 0
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         policy = BrowserSecurityPolicy(origin=origin)
@@ -191,9 +193,14 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "wall_time_budget"
                     break
+                if model_calls >= spec.budget.max_model_calls:
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = "model_call_budget"
+                    break
                 decision = decider(frame, spec)
                 if not isinstance(decision, HybridDecision):
                     raise BrowserPolicyError("hybrid decider returned an invalid decision")
+                model_calls += 1
                 _validate_hybrid_action(decision, frame)
                 proposal = decision.proposal
                 if proposal.action_type == "finish":
@@ -291,6 +298,7 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
         result=result,
         frames=tuple(frames),
         security_violations=security_violations,
+        model_calls=model_calls,
     )
 
 

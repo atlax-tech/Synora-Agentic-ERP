@@ -41,6 +41,7 @@ class VisualRun:
     observations: tuple[Observation, ...]
     screenshots: tuple[bytes, ...]
     security_violations: tuple[str, ...] = ()
+    model_calls: int = 0
 
 
 def _visual_observation(page: Any, source: str) -> tuple[Observation, bytes]:
@@ -121,6 +122,7 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
     status: TaskStatus = "INCOMPLETE"
     fields: dict[str, str | None] = {}
     stop_reason: str | None = "visual_decider_stopped"
+    model_calls = 0
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         policy = BrowserSecurityPolicy(origin=origin)
@@ -154,10 +156,15 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "wall_time_budget"
                     break
+                if model_calls >= spec.budget.max_model_calls:
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = "model_call_budget"
+                    break
                 if not isinstance(
                     decision := decider(screenshot, observation, spec), VisualDecision
                 ):
                     raise BrowserPolicyError("visual decider returned an invalid decision")
+                model_calls += 1
                 _validate_visual_action(decision.proposal, observation)
                 proposal = decision.proposal
                 if proposal.action_type == "finish":
@@ -241,6 +248,7 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
         observations=tuple(observations),
         screenshots=tuple(screenshots),
         security_violations=security_violations,
+        model_calls=model_calls,
     )
 
 

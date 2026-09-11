@@ -128,6 +128,35 @@ def test_hybrid_conflict_stops_without_silent_fallback() -> None:
     assert run.result.stop_reason == "dom_and_visual_answers_conflict"
 
 
+def test_hybrid_task_stops_at_model_call_budget() -> None:
+    def decider(frame: object, _spec: TaskSpec) -> HybridDecision:
+        return HybridDecision(
+            proposal=ActionProposal(
+                action_type="wait",
+                observation_id=frame.observation.observation_id,  # type: ignore[attr-defined]
+            )
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_hybrid_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-hybrid-budget",
+                    purchase_order="PUR-ORD-0001",
+                    mode="hybrid",
+                    budget={"max_model_calls": 1},
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.model_calls == 1
+    assert run.result.status == "BUDGET_EXCEEDED"
+    assert run.result.stop_reason == "model_call_budget"
+
+
 def test_hybrid_rejects_coordinate_or_unknown_actions() -> None:
     frame = HybridFrame(
         observation=Observation(

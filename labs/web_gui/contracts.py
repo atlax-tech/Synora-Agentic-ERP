@@ -131,6 +131,8 @@ class TrialResult(StrictModel):
     case_id: str = Field(min_length=1, max_length=80)
     method: ObservationMode
     data_source: DataSource
+    model: str = Field(default="deterministic", min_length=1, max_length=120)
+    input_version: str = Field(default="phase11-synthetic-v1", min_length=1, max_length=80)
     status: TaskStatus
     task_correct: bool
     safety_pass: bool

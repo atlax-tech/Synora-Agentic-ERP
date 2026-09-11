@@ -334,3 +334,32 @@ def test_visual_action_rejects_out_of_viewport_coordinates() -> None:
     )
     with pytest.raises(BrowserPolicyError, match="outside"):
         _validate_visual_action(proposal, observation)
+
+
+def test_visual_task_stops_at_model_call_budget() -> None:
+    def decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="wait",
+                observation_id=observation.observation_id,  # type: ignore[attr-defined]
+            )
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-budget",
+                    purchase_order="PUR-ORD-0001",
+                    mode="vision",
+                    budget={"max_model_calls": 1},
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.model_calls == 1
+    assert run.result.status == "BUDGET_EXCEEDED"
+    assert run.result.stop_reason == "model_call_budget"
