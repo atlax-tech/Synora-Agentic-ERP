@@ -23,6 +23,7 @@ from labs.web_gui.contracts import (
     TaskSpec,
     TaskStatus,
 )
+from labs.web_gui.fixtures import fixture_fields
 from labs.web_gui.security import BrowserSecurityPolicy
 
 MAX_SCREENSHOT_BYTES = 2 * 1024 * 1024
@@ -113,6 +114,10 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
 
     if spec.mode != "vision":
         raise ValueError("run_visual_task requires a vision TaskSpec")
+    if spec.data_source != "synthetic":
+        raise BrowserPolicyError(
+            "generic visual runner accepts synthetic data only; use redacted ERP runner"
+        )
     origin = _origin(base_url)
     started = monotonic()
     sync_playwright = _playwright_sync()
@@ -169,13 +174,16 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                 proposal = decision.proposal
                 if proposal.action_type == "finish":
                     fields = _fields_from_decision(decision)
-                    status = (
-                        "SUCCEEDED"
-                        if fields.get("purchase_order") == spec.purchase_order
-                        and all(fields.values())
-                        else "INCOMPLETE"
-                    )
-                    stop_reason = None if status == "SUCCEEDED" else "visual_fields_incomplete"
+                    trusted = fixture_fields(spec.purchase_order)
+                    if trusted is None:
+                        status = "NOT_FOUND"
+                        stop_reason = "fixture_not_found"
+                    elif fields != trusted:
+                        status = "INCOMPLETE"
+                        stop_reason = "visual_fields_mismatch"
+                    else:
+                        status = "SUCCEEDED"
+                        stop_reason = None
                     receipts.append(
                         ActionReceipt(
                             action_id=proposal.action_id,

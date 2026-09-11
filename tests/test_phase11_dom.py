@@ -23,6 +23,7 @@ from labs.web_gui.browser import (
 from labs.web_gui.contracts import ActionProposal, Observation, TaskSpec, TrialBudget
 from labs.web_gui.fixtures import create_app
 from labs.web_gui.gui import VisualDecision, run_visual_task
+from labs.web_gui.hybrid import HybridDecision, run_hybrid_task
 from labs.web_gui.security import BrowserSecurityPolicy
 
 
@@ -314,6 +315,82 @@ def test_visual_task_uses_only_screenshots_and_validates_final_fields() -> None:
     assert run.result.status == "SUCCEEDED"
     assert len(run.screenshots) == 2
     assert all(kind is bytes for kind, _ in seen)
+
+
+def test_generic_visual_runner_rejects_real_source_before_decider() -> None:
+    called = False
+
+    def decider(_image: bytes, _observation: object, _spec: TaskSpec) -> VisualDecision:
+        nonlocal called
+        called = True
+        raise AssertionError("real ERP data must use the redacted runner")
+
+    with pytest.raises(BrowserPolicyError, match="synthetic data only"):
+        run_visual_task(
+            "http://127.0.0.1:8765",
+            TaskSpec(
+                case_id="p11-vision-real-source",
+                purchase_order="PUR-ORD-2026-02297",
+                mode="vision",
+                data_source="erp_readonly",
+            ),
+            decider,
+        )
+    assert called is False
+
+
+def test_visual_task_rejects_nonempty_wrong_trusted_fields() -> None:
+    def decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="finish",
+                observation_id=observation.observation_id,  # type: ignore[attr-defined]
+            ),
+            fields={
+                "purchase_order": "PUR-ORD-0001",
+                "supplier": "Wrong supplier",
+                "status": "To Receive and Bill",
+                "currency": "CNY",
+            },
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-wrong-fields", purchase_order="PUR-ORD-0001", mode="vision"
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "INCOMPLETE"
+    assert run.result.fields == {}
+    assert run.result.stop_reason == "visual_fields_mismatch"
+
+
+def test_generic_hybrid_runner_rejects_real_source_before_decider() -> None:
+    called = False
+
+    def decider(_frame: object, _spec: TaskSpec) -> HybridDecision:
+        nonlocal called
+        called = True
+        raise AssertionError("real ERP data must use the redacted runner")
+
+    with pytest.raises(BrowserPolicyError, match="synthetic data only"):
+        run_hybrid_task(
+            "http://127.0.0.1:8765",
+            TaskSpec(
+                case_id="p11-hybrid-real-source",
+                purchase_order="PUR-ORD-2026-02297",
+                mode="hybrid",
+                data_source="erp_readonly",
+            ),
+            decider,
+        )
+    assert called is False
 
 
 def test_visual_action_rejects_out_of_viewport_coordinates() -> None:

@@ -64,6 +64,20 @@ FIXTURE_ORDERS: Final[tuple[FixtureOrder, ...]] = (
 )
 
 
+def fixture_fields(name: str) -> dict[str, str] | None:
+    """Return the trusted task fields for one synthetic purchase order."""
+
+    order = _find_order(name)
+    if order is None:
+        return None
+    return {
+        "purchase_order": order.purchase_order,
+        "supplier": order.supplier,
+        "status": order.status,
+        "currency": order.currency,
+    }
+
+
 def _find_order(name: str) -> FixtureOrder | None:
     return next((order for order in FIXTURE_ORDERS if order.purchase_order == name), None)
 

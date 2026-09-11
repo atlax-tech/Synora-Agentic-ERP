@@ -25,6 +25,7 @@ from labs.web_gui.contracts import (
     TaskSpec,
     TaskStatus,
 )
+from labs.web_gui.fixtures import fixture_fields
 from labs.web_gui.security import BrowserSecurityPolicy
 
 
@@ -150,6 +151,10 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
 
     if spec.mode != "hybrid":
         raise ValueError("run_hybrid_task requires a hybrid TaskSpec")
+    if spec.data_source != "synthetic":
+        raise BrowserPolicyError(
+            "generic hybrid runner accepts synthetic data only; use redacted ERP runner"
+        )
     origin = _origin(base_url)
     started = monotonic()
     sync_playwright = _playwright_sync()
@@ -207,19 +212,22 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     fields = _safe_fields(decision.fields)
                     visual_fields = _safe_fields(decision.visual_fields)
                     structural_fields = _safe_fields(_fields(page))
-                    if decision.visual_fields is not None and (
-                        visual_fields != fields or visual_fields != structural_fields
-                    ):
+                    trusted = fixture_fields(spec.purchase_order)
+                    if trusted is None:
+                        status = "NOT_FOUND"
+                        stop_reason = "fixture_not_found"
+                    elif decision.visual_fields is None:
+                        status = "OBSERVATION_CONFLICT"
+                        stop_reason = "hybrid_visual_evidence_missing"
+                    elif visual_fields != fields or visual_fields != structural_fields:
                         status = "OBSERVATION_CONFLICT"
                         stop_reason = "dom_and_visual_answers_conflict"
+                    elif fields != trusted or structural_fields != trusted:
+                        status = "INCOMPLETE"
+                        stop_reason = "hybrid_trusted_fields_mismatch"
                     else:
-                        status = (
-                            "SUCCEEDED"
-                            if fields.get("purchase_order") == spec.purchase_order
-                            and all(fields.values())
-                            else "INCOMPLETE"
-                        )
-                        stop_reason = None if status == "SUCCEEDED" else "hybrid_fields_incomplete"
+                        status = "SUCCEEDED"
+                        stop_reason = None
                     receipts.append(
                         ActionReceipt(
                             action_id=proposal.action_id,
