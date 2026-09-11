@@ -1,6 +1,6 @@
 # Phase 11 Rubric（最终审查前）
 
-评分绑定实现 HEAD `89ded56`、GLM 双图 probe、synthetic live、ERP live、当前脱敏边界和 Phase11 全量门禁。旧阻塞 artifact 只作历史证据。
+评分绑定实现 HEAD `10cb0e1`、GLM 双图 probe、当前 synthetic live、当前 ERP live、当前脱敏边界和 Phase11 全量门禁。旧阻塞 artifact 只作历史证据。
 
 | 维度 | 分数（0–4） | 证据与边界 |
 | --- | ---: | --- |
