@@ -58,6 +58,20 @@ def test_live_prompt_requires_complete_fields_and_canonical_targets() -> None:
     assert "target_ref/text to JSON null" in rules
 
 
+def test_structured_prompt_requires_navigation_before_complete_fields() -> None:
+    prompt = json.loads(
+        structured_prompt(
+            TaskSpec(case_id="prompt-dom", purchase_order="PUR-ORD-0001", mode="aria"),
+            _observation(),
+            12,
+        )
+    )
+
+    rules = " ".join(prompt["rules"])
+    assert "Do not finish while any requested field is not readable" in rules
+    assert "Set target_ref, text, x, and y to JSON null on finish" in rules
+
+
 def test_model_decision_rejects_unknown_wire_fields() -> None:
     with pytest.raises(ModelCallError, match="MODEL_RESPONSE_SCHEMA"):
         parse_model_decision(

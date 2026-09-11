@@ -168,6 +168,8 @@ def _validate_action(proposal: ActionProposal, snapshot: DomSnapshot) -> None:
             raise BrowserPolicyError("DOM mode does not accept coordinate clicks")
         return
     if proposal.action_type in {"open", "scroll", "wait", "finish"}:
+        if proposal.target_ref is not None or proposal.text is not None:
+            raise BrowserPolicyError("structured action contains an unexpected target")
         return
     raise BrowserPolicyError("action type is not allowed")
 

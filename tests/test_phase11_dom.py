@@ -261,6 +261,24 @@ def test_dom_apply_action_records_policy_rejection() -> None:
     assert receipt.error_code == "ACTION_REJECTED"
 
 
+def test_dom_finish_rejects_unexpected_target_reference() -> None:
+    snapshot = DomSnapshot(
+        observation=Observation(
+            page_version="synthetic-v1",
+            source="synthetic",
+            mode="dom",
+        ),
+        targets=frozenset(),
+    )
+    proposal = ActionProposal(
+        action_type="finish",
+        observation_id=snapshot.observation.observation_id,
+        target_ref="order:PUR-ORD-0001",
+    )
+    with pytest.raises(BrowserPolicyError, match="unexpected target"):
+        _validate_action(proposal, snapshot)
+
+
 def test_browser_security_policy_allows_only_loopback_read_routes() -> None:
     policy = BrowserSecurityPolicy("http://127.0.0.1:8765")
     assert policy.permits("http://127.0.0.1:8765/?q=PUR-ORD-0001")
@@ -529,7 +547,20 @@ def test_generic_dom_runners_reject_real_source_before_browser(mode: str) -> Non
 
 
 def test_visual_task_rejects_nonempty_wrong_trusted_fields() -> None:
+    calls = 0
+
     def decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return VisualDecision(
+                proposal=ActionProposal(
+                    action_type="click",
+                    observation_id=observation.observation_id,  # type: ignore[attr-defined]
+                    x=700,
+                    y=340,
+                )
+            )
         return VisualDecision(
             proposal=ActionProposal(
                 action_type="finish",
@@ -781,7 +812,20 @@ def test_visual_task_enforces_model_deadline_and_output_budget() -> None:
 
 
 def test_visual_model_timeout_is_separate_from_page_action_timeout() -> None:
+    calls = 0
+
     def slow_decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return VisualDecision(
+                proposal=ActionProposal(
+                    action_type="click",
+                    observation_id=observation.observation_id,  # type: ignore[attr-defined]
+                    x=700,
+                    y=340,
+                )
+            )
         time.sleep(0.12)
         return VisualDecision(
             proposal=ActionProposal(
