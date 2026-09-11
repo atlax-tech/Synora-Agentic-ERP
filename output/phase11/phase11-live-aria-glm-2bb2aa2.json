@@ -1,0 +1,40 @@
+{
+  "action_receipts": [
+    {
+      "action_id": "0412eac6-4bb0-414a-8049-7306456722f7",
+      "after_observation_id": null,
+      "before_observation_id": "6e1ae629-5213-42d9-8dae-83f8010bfe42",
+      "error_code": "ACTION_REJECTED",
+      "observation_id": "6e1ae629-5213-42d9-8dae-83f8010bfe42",
+      "result": "REJECTED",
+      "stop_reason": "ACTION_REJECTED"
+    }
+  ],
+  "case_id": "p11-live-aria-success-current",
+  "code_head": "2bb2aa2",
+  "completion_tokens": 355,
+  "engine": "live",
+  "expected_fields": {
+    "currency": "CNY",
+    "purchase_order": "PUR-ORD-0001",
+    "status": "To Receive and Bill",
+    "supplier": "Supplier A"
+  },
+  "fields": {},
+  "mode": "aria",
+  "model": "glm-5.3-flash",
+  "model_calls": 1,
+  "observation_complete": false,
+  "observations": [
+    {
+      "content_sha256": "fbb03e7c80fffe7c30c9c96d612a7da41da6867cb0c0f452616ca6f6ead10f08",
+      "observation_id": "6e1ae629-5213-42d9-8dae-83f8010bfe42",
+      "page_version": "synthetic-procurement-v1:0cd43f32d6f81fa6"
+    }
+  ],
+  "prompt_tokens": 673,
+  "role": "assist",
+  "security_violations": [],
+  "status": "FAILED",
+  "stop_reason": "ACTION_REJECTED"
+}

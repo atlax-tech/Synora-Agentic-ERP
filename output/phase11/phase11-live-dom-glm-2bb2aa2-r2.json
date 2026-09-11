@@ -1,0 +1,57 @@
+{
+  "action_receipts": [
+    {
+      "action_id": "8a0d3ba6-849f-41b8-97ce-ec09960eb991",
+      "after_observation_id": null,
+      "before_observation_id": "9ce961b5-a2a3-447e-9711-f4ca5448e756",
+      "error_code": null,
+      "observation_id": "9ce961b5-a2a3-447e-9711-f4ca5448e756",
+      "result": "APPLIED",
+      "stop_reason": "fields_mismatch"
+    }
+  ],
+  "case_id": "p11-live-dom-success-current-r2",
+  "code_head": "2bb2aa2",
+  "completion_tokens": 723,
+  "decisions": [
+    {
+      "action_type": "finish",
+      "fields": {
+        "currency": null,
+        "purchase_order": "PUR-ORD-0001",
+        "status": "To Receive and Bill",
+        "supplier": "Supplier A"
+      },
+      "observation_id": "9ce961b5-a2a3-447e-9711-f4ca5448e756",
+      "page_version": "synthetic-procurement-v1:91613a59a4ccb6f2",
+      "target_ref": "order:PUR-ORD-0001",
+      "text": null,
+      "x": null,
+      "y": null
+    }
+  ],
+  "engine": "live",
+  "expected_fields": {
+    "currency": "CNY",
+    "purchase_order": "PUR-ORD-0001",
+    "status": "To Receive and Bill",
+    "supplier": "Supplier A"
+  },
+  "fields": {},
+  "mode": "dom",
+  "model": "glm-5.3-flash",
+  "model_calls": 1,
+  "observation_complete": false,
+  "observations": [
+    {
+      "content_sha256": "41ea20229e0d5be52ec5a462eb5e7345f7995653eb9449270d5cf7da9df50087",
+      "observation_id": "9ce961b5-a2a3-447e-9711-f4ca5448e756",
+      "page_version": "synthetic-procurement-v1:91613a59a4ccb6f2"
+    }
+  ],
+  "prompt_tokens": 329,
+  "role": "assist",
+  "security_violations": [],
+  "status": "INCOMPLETE",
+  "stop_reason": "fields_mismatch"
+}
