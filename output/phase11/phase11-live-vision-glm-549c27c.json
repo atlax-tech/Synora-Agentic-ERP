@@ -1,0 +1,94 @@
+{
+  "action_receipts": [
+    {
+      "action_id": "32f6da6e-d2dd-4b00-b0b6-9b9682fe4419",
+      "after_observation_id": "4e9e56b6-16bd-49f9-9189-7a2b0aef3e5d",
+      "before_observation_id": "0e7062af-4d3f-4c09-a5ca-bed704f01a12",
+      "error_code": null,
+      "observation_id": "0e7062af-4d3f-4c09-a5ca-bed704f01a12",
+      "result": "APPLIED",
+      "stop_reason": null
+    },
+    {
+      "action_id": "050db8d8-e54a-4375-99d4-8b9bf7c6bc92",
+      "after_observation_id": null,
+      "before_observation_id": "4e9e56b6-16bd-49f9-9189-7a2b0aef3e5d",
+      "error_code": null,
+      "observation_id": "4e9e56b6-16bd-49f9-9189-7a2b0aef3e5d",
+      "result": "APPLIED",
+      "stop_reason": null
+    }
+  ],
+  "case_id": "p11-live-vision-success",
+  "code_head": "549c27c",
+  "completion_tokens": 1158,
+  "decisions": [
+    {
+      "action_type": "click",
+      "fields": null,
+      "observation_id": "0e7062af-4d3f-4c09-a5ca-bed704f01a12",
+      "page_version": "screenshot:b1ea87324f00d0a823deecbd5114919baa325d7e2442008d1710abb053610922",
+      "target_ref": null,
+      "text": null,
+      "x": 736.0,
+      "y": 338.0
+    },
+    {
+      "action_type": "finish",
+      "fields": {
+        "currency": "CNY",
+        "purchase_order": "PUR-ORD-0001",
+        "status": "To Receive and Bill",
+        "supplier": "Supplier A"
+      },
+      "observation_id": "4e9e56b6-16bd-49f9-9189-7a2b0aef3e5d",
+      "page_version": "screenshot:27049210760d1b0bd88fc94f2c58a72fa8eab823b7ef77eeccde3b746f5cbd5e",
+      "target_ref": null,
+      "text": null,
+      "x": null,
+      "y": null
+    }
+  ],
+  "engine": "live",
+  "expected_fields": {
+    "currency": "CNY",
+    "purchase_order": "PUR-ORD-0001",
+    "status": "To Receive and Bill",
+    "supplier": "Supplier A"
+  },
+  "fields": {
+    "currency": "CNY",
+    "purchase_order": "PUR-ORD-0001",
+    "status": "To Receive and Bill",
+    "supplier": "Supplier A"
+  },
+  "mode": "vision",
+  "model": "glm-5.3-flash",
+  "model_calls": 2,
+  "observation_complete": true,
+  "observations": [
+    {
+      "observation_id": "0e7062af-4d3f-4c09-a5ca-bed704f01a12",
+      "page_version": "screenshot:b1ea87324f00d0a823deecbd5114919baa325d7e2442008d1710abb053610922",
+      "screenshot_sha256": "b1ea87324f00d0a823deecbd5114919baa325d7e2442008d1710abb053610922",
+      "viewport": [
+        1024,
+        768
+      ]
+    },
+    {
+      "observation_id": "4e9e56b6-16bd-49f9-9189-7a2b0aef3e5d",
+      "page_version": "screenshot:27049210760d1b0bd88fc94f2c58a72fa8eab823b7ef77eeccde3b746f5cbd5e",
+      "screenshot_sha256": "27049210760d1b0bd88fc94f2c58a72fa8eab823b7ef77eeccde3b746f5cbd5e",
+      "viewport": [
+        1024,
+        768
+      ]
+    }
+  ],
+  "prompt_tokens": 2872,
+  "role": "assist",
+  "security_violations": [],
+  "status": "SUCCEEDED",
+  "stop_reason": null
+}
