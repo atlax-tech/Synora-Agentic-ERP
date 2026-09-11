@@ -56,13 +56,15 @@ Phase 11 交付了一个隔离的 `LAB_ONLY / SYNTHETIC DATA` 采购读取实验
 
 [phase11-benchmark-erp-readonly-deterministic-20260911.json](phase11-benchmark-erp-readonly-deterministic-20260911.json) SHA-256：`b8a12b8cf958053583f0f2c1f52de18e5ed151747154f5621fbf7a3be1805f24`。固定采购单 `PUR-ORD-2026-02297` 三次 API/Web 均 `MATCHED`，版本未漂移，四字段为采购单号 `PUR-ORD-2026-02297`、供应商 `SYNORA-P1-Supplier-1`、状态 `To Receive and Bill`、币种 `CNY`。
 
-[phase11-benchmark-erp-readonly-live-d444e97.json](phase11-benchmark-erp-readonly-live-d444e97.json) SHA-256：`1973dbe929dc2eefc989cf7a79e074f212df98c2067e7ce793d05cba553e08bf`。live API-before → assist Web → backup GUI → API-after 中，API/Web 为 `MATCHED`，GUI 真实调用 `grok-4.5` 一次并返回可解析结果，但字段与 trusted API 不一致，终态为 `INCOMPLETE / visual_fields_mismatch`，无安全事件、无业务写入。该结果不能计为 API/Web/GUI 三方成功。
+[phase11-benchmark-erp-readonly-live-d444e97.json](phase11-benchmark-erp-readonly-live-d444e97.json) SHA-256：`1973dbe929dc2eefc989cf7a79e074f212df98c2067e7ce793d05cba553e08bf`。这是不可变的原始 live API-before → assist Web → backup GUI → API-after 记录：API/Web 为 `MATCHED`，GUI 真实调用 `grok-4.5` 一次并返回可解析结果，但字段与 trusted API 不一致，终态为 `INCOMPLETE / visual_fields_mismatch`，无安全事件、无业务写入。该结果不能计为 API/Web/GUI 三方成功。
+
+[phase11-benchmark-erp-readonly-live-reconciled-8fd20d8.json](phase11-benchmark-erp-readonly-live-reconciled-8fd20d8.json) SHA-256：`4c305afa040d884b786eee0f0c26e27b129516b870d1ab3c57c458ea457cbf6c`。该副本仅根据原始 `visual_runs` 重算汇总，`visual_status_counts` 为 `INCOMPLETE=1`，并通过来源字段指向原始文件；没有改写 trial 或模型输出。
 
 脱敏边界报告 [phase11-erp-visual-boundary.json](phase11-erp-visual-boundary.json) SHA-256：`48a61e3c621454358048d9584320b1e6e6aaaa9294a07ad512105b0fba1fadab`；截图 1024×768、19072 bytes，遮罩保留任务字段并屏蔽账号、导航、评论和动作区。
 
 ### 4.5 页面变化失败和修复
 
-v2 将列表行属性由 `data-order-name` 改为 `data-order-id`。原始失败 [phase11-page-change-failure-v1.json](phase11-page-change-failure-v1.json) SHA-256 `36f19889d8d2a663f72241d75cde5f26605b822ec971cfc2bd7503fb2c212553` 保留 `NOT_FOUND`；修复后 [phase11-page-change-repair-v1.json](phase11-page-change-repair-v1.json) SHA-256 `b22dc8324bab273d0b8a143311f30ebc2bbe64ce1c8e1d2787bf7ae7384616db` 为 `SUCCEEDED`，v1 正常案例无回归。
+v2 将列表行属性由 `data-order-name` 改为 `data-order-id`。原始失败 [phase11-page-change-failure-v1.json](phase11-page-change-failure-v1.json) SHA-256 `36f19889d8d2a663f72241d75cde5f26605b822ec971cfc2bd7503fb2c212553` 保留 `NOT_FOUND`；修复后 [phase11-page-change-repair-v1.json](phase11-page-change-repair-v1.json) SHA-256 `b22dc8324bab273d0b8a143311f30ebc2bbe64ce1c1e8d2787bf7ae7384616db` 为 `SUCCEEDED`，v1 正常案例无回归。
 
 ## 5. 安全和预算结论
 
