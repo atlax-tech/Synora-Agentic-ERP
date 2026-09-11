@@ -1,42 +1,47 @@
 # Phase 11 Adoption Card
 
-状态：`BLOCKED / SECOND REVIEW CHANGES_REQUIRED`；业务采用结论受真实图片 provider、独立审查和受保护 Harness 同步门禁约束。
+状态：`PENDING_FINAL_REVIEW / BLOCKED / VISION_PROVIDER_UNAVAILABLE / LIVE_GUI_MISMATCH / HARNESS_DRIFT`。
 
-实现代码基线：`f01ca6e`；最新真实 ERP 证据提交：`1974dcf`。
+实现代码冻结 HEAD：`c986c27`。本卡只描述实验和固定开发 ERP 只读证据，不授予业务 Runtime 或 ERP 写入权限。
 
 主要证据：
 
-- synthetic 五方法报告：[phase11-benchmark-synthetic.json](phase11-benchmark-synthetic.json)，SHA-256 `b6f06a7d3b32f5dc6da309c7adb25ef330548e4e0dd9f3714ea629153de9c228`。
-- 真实 ERP API/Web 报告：[phase11-benchmark-erp-readonly.json](phase11-benchmark-erp-readonly.json)，SHA-256 `696eaaf442a4218f8ac7ddd8de3a97936183d3e1a86c1c028ce3fd749895e0f2`，三次均 `MATCHED`。
-- 真实 ERP 脱敏 GUI 边界：[phase11-erp-visual-boundary.json](phase11-erp-visual-boundary.json)，SHA-256 `48a61e3c621454358048d9584320b1e6e6aaaa9294a07ad512105b0fba1fadab`；capture `READY`，provider `VISION_PROVIDER_UNAVAILABLE`。
+- Synthetic deterministic：[phase11-benchmark-synthetic.json](phase11-benchmark-synthetic.json)，SHA-256 `1956c43950d3a22a407827cc7f8f1991eb64a9324b49a14bb4bd4c72b80487f6`，45 条业务 trial、33 条故障记录。
+- 真实 ERP deterministic API/Web：[phase11-benchmark-erp-readonly-deterministic-20260911.json](phase11-benchmark-erp-readonly-deterministic-20260911.json)，SHA-256 `b8a12b8cf958053583f0f2c1f52de18e5ed151747154f5621fbf7a3be1805f24`，3/3 `MATCHED`。
+- 真实 ERP live API/Web/GUI：[phase11-benchmark-erp-readonly-live-d444e97.json](phase11-benchmark-erp-readonly-live-d444e97.json)，SHA-256 `1973dbe929dc2eefc989cf7a79e074f212df98c2067e7ce793d05cba553e08bf`，API/Web `MATCHED`，GUI `INCOMPLETE / visual_fields_mismatch`。
+- 图片探测：[phase11-vision-probe-925b96a.json](phase11-vision-probe-925b96a.json)，SHA-256 `273cc7971d7191260cd393f08de87b45a20d76c619de06c98674628598dd12fb`；四个已配置 role 均未通过两张合成图的可读性验证，状态 `VISION_PROVIDER_UNAVAILABLE`。
 
 ## 方法决策
 
-| 方法 | 决策 | 适用条件 | 证据与限制 |
+| 方法 | 决策 | 适用条件 | 当前证据和限制 |
 | --- | --- | --- | --- |
-| typed API | `KEEP BUSINESS DEFAULT` | 采购事实有稳定、受治理的 typed Gateway | 真实 ERP API/Web 三次均 `MATCHED`；继续经过现有 Run、capability 和权限边界，不新增写入权限 |
-| DOM | `LAB_ONLY CANDIDATE` | 页面结构已知、selector/引用可观察且唯一 | synthetic 9/9 正确；v2 属性变化先失败后修复；尚未授权接入业务 Runtime |
-| ARIA | `LAB_ONLY CANDIDATE` | 控件有稳定 role、accessible name、焦点顺序 | synthetic 9/9 正确；只证明本实验页面的可访问性路径，不是完整 ERP 无障碍审计 |
-| screenshot GUI | `BLOCKED / EXPERIMENT ONLY` | 仅在截图可靠脱敏且真实图片模型通过内容验证 | 脱敏 GUI test double 在显式 trusted API mapping 下安全返回四字段；四个已配置角色均 `VISION_PROVIDER_UNAVAILABLE`，因此没有真实 GUI 准确率或 ERP 三方成功 |
-| hybrid | `LAB_ONLY CANDIDATE` | DOM/ARIA 与同页面版本截图同步且冲突可停止 | synthetic test double 9/9 正确，目标不存在返回 `NOT_FOUND`，冲突会返回 `OBSERVATION_CONFLICT`；不能在视觉失败后静默降级为成功 |
+| typed API | `KEEP BUSINESS DEFAULT` | 采购事实有稳定、受治理的 typed Gateway | 固定 ERP API/Web 三次 `MATCHED`；继续经过现有 Run、capability、权限和审计边界 |
+| DOM | `LAB_ONLY CANDIDATE` | 结构、临时引用和目标唯一且模型延迟在预算内 | live `glm-5.3-flash` 成功读取 synthetic DOM 一次；deterministic 9/9；未注册业务 Runtime |
+| ARIA | `LAB_ONLY CANDIDATE WITH TIMEOUT LIMIT` | role、accessible name、键盘路径稳定且模型及时返回 | 修复前目标引用缺失已保留；修复后进入第二次调用但因 10 秒动作上限安全超时；没有稳定率结论 |
+| screenshot GUI | `BLOCKED / EXPERIMENT ONLY` | 脱敏可靠、图片模型通过内容探测、坐标动作可确认 | backup `grok-4.5` 一次返回与 trusted API 不一致；真实三方成功缺失，不能使用 test double 替代 |
+| hybrid | `LAB_ONLY CANDIDATE` | 结构和截图来自同一 page version，冲突能停止 | deterministic test double 9/9；live 视觉 provider 尚无通过证据，不能静默降级 |
 
-## 统一业务任务
+## 统一任务
 
-找到指定采购单，读取单号、供应商、业务状态和币种，并说明观察是否完整。目标不存在、无权限、加载未完成、证据冲突和登录失效都返回明确终态；数量明细只用于滚动/定位实验，不跨单位相加。
+找到指定采购单，读取单号、供应商、业务状态和币种，并说明观察是否完整。目标不存在、权限拒绝、未完成加载、登录失效、观察冲突、陈旧引用和预算耗尽都返回明确终态；数量明细不跨单位相加。
 
 ## 采用边界
 
-- 所有新增执行器仍在 `LAB_ONLY`，不注册进业务 Runtime，不修改 `ProviderMessage.content`，不调用 ERP 写工具。
-- 业务主线继续使用 typed API；DOM/ARIA 和混合只作为可复跑实验候选，视觉保持阻塞直到 provider 读出合成图片中未在提示词透露的内容。
-- synthetic 视觉/混合成绩是 `scripted-fixture-replay` test double 的执行循环证据，不是模型质量、生产延迟或成本承诺。
-- usage 未返回时记录 `null`，没有可核验价格就不换算成本；三次重复只报告中位数和范围。
+- 所有新增执行器仍为 `LAB_ONLY`，只绑定 loopback/独立会话，不进入业务 Runtime。
+- deterministic 视觉/Hybrid 成绩明确是 `scripted-fixture-replay`，只证明执行器回归；live DOM 的单次成功也不构成生产收益或模型稳定性承诺。
+- 真实 ERP Web 结果只读且版本稳定；live GUI 字段必须同时满足截图观察、可信 API 版本和安全事件检查才可成功。
+- usage 缺失保持 `null`，没有核验价格就不换算货币成本；不自动反复调用付费 provider。
 
 ## 重新评估触发器
 
-1. `probe-vision` 对两张不同合成截图返回严格结构化、可核验的四字段观察，并保存角色/模型/usage 摘要。
-2. 重新在同一真实 ERP 单据、同一脱敏映射和同一页面版本下完成 API/Web/GUI 三方只读对照。
-3. 新页面版本或 provider 变化必须保留旧失败证据，先补回归测试和独立审查，再更新本卡。
+1. `probe-vision` 用两张内容不同的合成 PNG 返回严格结构化且逐图可核验的四字段，冻结 role/model/protocol/预算。
+2. 同一真实 ERP 单据、同一脱敏映射和同一页面版本完成 API/Web/GUI 三方只读对照，四字段一致且无副作用。
+3. 新页面、provider 或浏览器版本变化时保留旧失败，先补回归测试和独立审查，再刷新本卡。
 
-## 审查状态
+## 当前风险和门禁
 
-第一轮独立对抗 Review 的 8 类问题已修复并复验。第二轮以 `8dd18a7` 为输入返回 `CHANGES_REQUIRED`，执行 agent 已完成其指出的 7 类代码、测试和证据修复，但阶段规则最多允许两轮独立审查，因此没有第三轮 `PASS`。本卡保持 `BLOCKED`，不授予业务 Runtime 或 ERP 写入权限。
+- 图片 provider 能力和 live GUI mismatch 是阶段必做阻断；不得用 DOM/API 答案或 recorded response 填补。
+- 新周期独立 Review 尚待启动；上一周期 `CHANGES_REQUIRED` 保留为历史背景，不能当作当前 PASS。
+- `.harness` structure/manifest/references 已通过，pyproject/uv.lock 指纹同步和 drift 复跑待最终审查后执行。
+
+本卡保持 `BLOCKED`，typed API 继续作为业务默认；Phase 11 结束后停止，不进入 Phase 12。

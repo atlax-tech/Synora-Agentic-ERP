@@ -1,0 +1,36 @@
+{
+  "code_head": "925b96a",
+  "command": "source env/dev/.env && uv run --python 3.14 --group web-gui-lab python -m labs.web_gui probe-vision",
+  "attempts": [
+    {
+      "failure_code": "TRANSPORT_ERROR",
+      "model": "qwen3:8b",
+      "role": "primary",
+      "status": "FAILED"
+    },
+    {
+      "failure_code": "TRANSPORT_ERROR",
+      "model": "glm-5.3-flash",
+      "role": "assist",
+      "status": "FAILED"
+    },
+    {
+      "failure_code": "RESPONSE_INCOMPLETE",
+      "model": "grok-4.5",
+      "role": "backup",
+      "status": "FAILED"
+    },
+    {
+      "failure_code": "TRANSPORT_ERROR",
+      "model": "qwen3.8:27b",
+      "role": "last_local",
+      "status": "FAILED"
+    }
+  ],
+  "completion_tokens": null,
+  "model": null,
+  "observation": null,
+  "observations": [],
+  "prompt_tokens": null,
+  "status": "VISION_PROVIDER_UNAVAILABLE"
+}

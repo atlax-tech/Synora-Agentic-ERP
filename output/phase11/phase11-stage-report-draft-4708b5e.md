@@ -1,5 +1,7 @@
 # Phase 11 阶段报告（草稿）
 
+> 历史快照：当前收口依据已迁移到 [phase11-stage-report-draft-c986c27.md](phase11-stage-report-draft-c986c27.md)。本文件保留原始阶段状态和当时证据，不作为最新结论。
+
 状态：`BLOCKED / SECOND REVIEW CHANGES_REQUIRED / VISION_PROVIDER_UNAVAILABLE / HARNESS DRIFT`。
 
 本草稿不把实验页面、test double 或固定开发 ERP 读对照描述为生产部署、客户采用、模型质量提升或业务写入授权。真实视觉依赖和 managed Harness fingerprint 同步尚未闭合，因此不能写 `COMPLETED / PASS`。
