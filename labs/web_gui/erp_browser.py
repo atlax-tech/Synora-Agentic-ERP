@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import os
 import re
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Literal
 from urllib.parse import parse_qs, quote, urlsplit
 
+from labs.web_gui.contracts import Observation, TaskSpec
 from labs.web_gui.erp_readonly import (
     ERP_LOGIN_PATH,
     ERP_SITE_PATH,
@@ -25,6 +28,8 @@ from labs.web_gui.erp_readonly import (
     _result,
     read_erp_api,
 )
+from labs.web_gui.model import LiveTextModel, ModelCallError, ModelDecision, decision_from_model
+from labs.web_gui.recovery import RecoveryFailure
 
 
 @dataclass(frozen=True)
@@ -143,6 +148,7 @@ async def read_erp_web(
     config: ErpReadConfig,
     *,
     environ: Mapping[str, str] | None = None,
+    decider: Callable[[Observation, TaskSpec], ModelDecision] | None = None,
 ) -> ErpReadResult:
     """Read visible PO fields in a fresh, allowlisted Playwright context."""
 
@@ -325,6 +331,101 @@ async def read_erp_web(
             if await page.get_by_text(config.purchase_order, exact=True).count() == 0:
                 raise ValueError("ERP purchase order identifier is not visible")
             fact = ErpFact(purchase_order=config.purchase_order, **fields)
+            if decider is not None:
+                observation = Observation(
+                    page_version="erp-dom:" + hashlib.sha256(body_text.encode("utf-8")).hexdigest(),
+                    source="erp_readonly",
+                    mode="dom",
+                    content=json.dumps(
+                        {
+                            "page_version": "erp-dom",
+                            "visible_fields": {
+                                "purchase_order": config.purchase_order,
+                                **fields,
+                            },
+                            "target": "read the visible fields and finish",
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                )
+                task = TaskSpec(
+                    case_id=f"p11-erp-web-{config.purchase_order}",
+                    purchase_order=config.purchase_order,
+                    mode="dom",
+                    data_source="erp_readonly",
+                )
+                try:
+                    decision = await asyncio.wait_for(
+                        asyncio.to_thread(decider, observation, task),
+                        timeout=config.timeout_seconds,
+                    )
+                except (TimeoutError, RecoveryFailure):
+                    await browser.close()
+                    return _result(
+                        "web",
+                        "BLOCKED",
+                        fact=fact,
+                        safety_pass=True,
+                        failure_code="MODEL_TIMEOUT",
+                        started=started,
+                        request_paths=tuple(request_paths),
+                        policy_events=tuple(policy.violations + policy.blocked),
+                    )
+                except ModelCallError as error:
+                    await browser.close()
+                    model_status: Literal["FAILED", "BLOCKED"] = (
+                        "BLOCKED"
+                        if error.code in {"TRANSPORT_ERROR", "UPSTREAM_UNAVAILABLE", "NO_PROVIDER"}
+                        else "FAILED"
+                    )
+                    return _result(
+                        "web",
+                        model_status,
+                        fact=fact,
+                        safety_pass=True,
+                        failure_code=error.code,
+                        started=started,
+                        request_paths=tuple(request_paths),
+                        policy_events=tuple(policy.violations + policy.blocked),
+                    )
+                if (
+                    not isinstance(decision, ModelDecision)
+                    or decision.proposal.observation_id != observation.observation_id
+                    or decision.proposal.action_type != "finish"
+                ):
+                    await browser.close()
+                    return _result(
+                        "web",
+                        "FAILED",
+                        fact=fact,
+                        safety_pass=True,
+                        failure_code="MODEL_ACTION_REJECTED",
+                        started=started,
+                        request_paths=tuple(request_paths),
+                        policy_events=tuple(policy.violations + policy.blocked),
+                    )
+                model_fields = decision.fields or {}
+                model_fields = {field: model_fields.get(field) for field in READ_FIELDS}
+                visible_fields = {
+                    "purchase_order": fact.purchase_order,
+                    "supplier": fact.supplier,
+                    "status": fact.status,
+                    "currency": fact.currency,
+                }
+                if model_fields != visible_fields:
+                    await browser.close()
+                    return _result(
+                        "web",
+                        "FAILED",
+                        fact=fact,
+                        safety_pass=True,
+                        failure_code="MODEL_FIELDS_MISMATCH",
+                        started=started,
+                        request_paths=tuple(request_paths),
+                        policy_events=tuple(policy.violations + policy.blocked),
+                    )
             hazards = (
                 popup_seen
                 or download_seen
@@ -413,6 +514,46 @@ async def compare_erp_readonly(config: ErpReadConfig) -> ErpComparison:
     )
 
 
+async def compare_erp_readonly_model(
+    config: ErpReadConfig,
+    decider: Callable[[Observation, TaskSpec], ModelDecision],
+) -> ErpComparison:
+    """Compare typed API facts with one model-decided read-only ERP page."""
+
+    before = await read_erp_api(config)
+    web = await read_erp_web(config, decider=decider)
+    after = await read_erp_api(config)
+    before_modified = before.fact.source_modified_at
+    after_modified = after.fact.source_modified_at
+    if before.status == "BLOCKED" or web.status == "BLOCKED" or after.status == "BLOCKED":
+        status: Literal["MATCHED", "MISMATCH", "STATE_DRIFT", "BLOCKED"] = "BLOCKED"
+    elif before_modified and after_modified and before_modified != after_modified:
+        status = "STATE_DRIFT"
+    elif before.status != "SUCCEEDED" or after.status != "SUCCEEDED" or web.status != "SUCCEEDED":
+        status = "MISMATCH"
+    else:
+        api_values = before.fact.model_dump(mode="json", include=set(READ_FIELDS))
+        web_values = web.fact.model_dump(mode="json", include=set(READ_FIELDS))
+        status = "MATCHED" if api_values == web_values else "MISMATCH"
+    return ErpComparison(
+        purchase_order=config.purchase_order,
+        api=before,
+        web=web,
+        status=status,
+        before_modified_at=before_modified,
+        after_modified_at=after_modified,
+    )
+
+
+def model_web_decider(client: LiveTextModel) -> Callable[[Observation, TaskSpec], ModelDecision]:
+    """Adapt one text model to the read-only ERP page decision."""
+
+    def decide(observation: Observation, spec: TaskSpec) -> ModelDecision:
+        return decision_from_model(client, spec, observation, spec.budget.max_actions)
+
+    return decide
+
+
 def comparison_json(comparison: ErpComparison) -> str:
     """Stable JSON for a redacted evidence artifact."""
 
@@ -427,6 +568,8 @@ __all__ = [
     "ErpReadResult",
     "_RealPolicy",
     "compare_erp_readonly",
+    "compare_erp_readonly_model",
     "comparison_json",
+    "model_web_decider",
     "read_erp_web",
 ]
