@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any
@@ -23,7 +24,9 @@ from labs.web_gui.contracts import (
     TaskSpec,
     TaskStatus,
 )
-from labs.web_gui.recovery import RecoveryFailure, wait_for_ready
+from labs.web_gui.fixtures import fixture_fields
+from labs.web_gui.model import ModelCallError, ModelDecision
+from labs.web_gui.recovery import ProgressGuard, RecoveryFailure, run_with_deadline, wait_for_ready
 from labs.web_gui.security import BrowserSecurityPolicy
 
 
@@ -46,6 +49,10 @@ class DomRun:
     result: TaskResult
     observations: tuple[Observation, ...]
     security_violations: tuple[str, ...] = ()
+    model_calls: int = 0
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
 
 
 def _terminal_page_state(page: Any) -> tuple[TaskStatus, str] | None:
@@ -455,6 +462,284 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
     )
 
 
+def _model_decision_size(decision: ModelDecision) -> int:
+    return len(
+        json.dumps(
+            {
+                "proposal": decision.proposal.model_dump(mode="json"),
+                "fields": decision.fields,
+                "visual_fields": decision.visual_fields,
+            },
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+
+
+def _decision_fields(fields: dict[str, str | None] | None) -> dict[str, str | None]:
+    if fields is None:
+        return {}
+    allowed = {"purchase_order", "supplier", "status", "currency"}
+    if set(fields) - allowed:
+        raise BrowserPolicyError("model answer contains an unknown field")
+    if any(
+        value is not None and (not isinstance(value, str) or not value.strip() or len(value) > 140)
+        for value in fields.values()
+    ):
+        raise BrowserPolicyError("model answer contains an invalid field")
+    return {field: fields.get(field) for field in sorted(allowed)}
+
+
+StructuredDecider = Callable[[Observation, TaskSpec, int], ModelDecision]
+
+
+def run_model_dom_task(base_url: str, spec: TaskSpec, decider: StructuredDecider) -> DomRun:
+    """Run one model-decided DOM/ARIA task with the deterministic executor."""
+
+    if spec.mode not in {"dom", "aria"}:
+        raise ValueError("run_model_dom_task requires a DOM or ARIA TaskSpec")
+    if spec.data_source != "synthetic":
+        raise BrowserPolicyError("model DOM/ARIA tasks accept synthetic data only")
+    origin = _origin(base_url)
+    started = monotonic()
+    sync_playwright = _playwright_sync()
+    observations: list[Observation] = []
+    receipts: list[ActionReceipt] = []
+    security_violations: tuple[str, ...] = ()
+    browser_events: list[str] = []
+    status: TaskStatus = "INCOMPLETE"
+    stop_reason: str | None = "model_stopped"
+    fields: dict[str, str | None] = {}
+    model_calls = 0
+    model: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        policy = BrowserSecurityPolicy(origin=origin)
+        context = browser.new_context(service_workers="block", accept_downloads=False)
+
+        def route_handler(route: Any) -> None:
+            request = route.request
+            if policy.permits(request.url, request.method):
+                route.continue_()
+            else:
+                route.abort(error_code="blockedbyclient")
+
+        context.route("**/*", route_handler)
+        page = context.new_page()
+
+        def on_popup(popup: Any) -> None:
+            browser_events.append("POPUP_BLOCKED")
+            popup.close()
+
+        def on_download(download: Any) -> None:
+            browser_events.append("DOWNLOAD_BLOCKED")
+            download.cancel()
+
+        def on_dialog(dialog: Any) -> None:
+            browser_events.append("DIALOG_DISMISSED")
+            dialog.dismiss()
+
+        context.on("page", on_popup)
+        page.on("download", on_download)
+        page.on("dialog", on_dialog)
+        try:
+            page.goto(
+                f"{origin}/?scenario={spec.scenario}",
+                wait_until="domcontentloaded",
+                timeout=int(spec.budget.action_timeout_seconds * 1000),
+            )
+            current = _snapshot(page, spec, spec.mode)
+            observations.append(current.observation)
+            terminal = _terminal_page_state(page)
+            if terminal is not None:
+                status, stop_reason = terminal
+            else:
+                try:
+                    wait_for_ready(
+                        page,
+                        timeout_ms=spec.budget.action_timeout_seconds * 1000,
+                        scenario=spec.scenario,
+                    )
+                except RecoveryFailure as failure:
+                    status, stop_reason = "FAILED", failure.code
+                else:
+                    progress = ProgressGuard(max_actions=spec.budget.max_actions)
+                    for _ in range(spec.budget.max_actions):
+                        if monotonic() - started > spec.budget.wall_time_seconds:
+                            status, stop_reason = "BUDGET_EXCEEDED", "wall_time_budget"
+                            break
+                        if model_calls >= spec.budget.max_model_calls:
+                            status, stop_reason = "BUDGET_EXCEEDED", "model_call_budget"
+                            break
+                        remaining = spec.budget.wall_time_seconds - (monotonic() - started)
+                        if remaining <= 0:
+                            status, stop_reason = "BUDGET_EXCEEDED", "wall_time_budget"
+                            break
+                        model_calls += 1
+                        def invoke_decision(
+                            current_snapshot: DomSnapshot = current,
+                        ) -> ModelDecision:
+                            return decider(
+                                current_snapshot.observation,
+                                spec,
+                                spec.budget.max_actions - progress.actions,
+                            )
+
+                        try:
+                            decision = run_with_deadline(
+                                invoke_decision,
+                                min(spec.budget.action_timeout_seconds, remaining),
+                            )
+                        except ModelCallError as error:
+                            status = (
+                                "BLOCKED"
+                                if error.code
+                                in {"TRANSPORT_ERROR", "UPSTREAM_UNAVAILABLE", "NO_PROVIDER"}
+                                else "FAILED"
+                            )
+                            stop_reason = error.code
+                            break
+                        except RecoveryFailure as failure:
+                            status = (
+                                "BUDGET_EXCEEDED"
+                                if failure.code == "MODEL_TIMEOUT"
+                                else "FAILED"
+                            )
+                            stop_reason = failure.code
+                            break
+                        if not isinstance(decision, ModelDecision):
+                            status, stop_reason = "FAILED", "MODEL_RESPONSE_SCHEMA"
+                            break
+                        model = model or decision.model
+                        prompt_tokens = (
+                            (prompt_tokens or 0) + decision.prompt_tokens
+                            if decision.prompt_tokens is not None
+                            else prompt_tokens
+                        )
+                        completion_tokens = (
+                            (completion_tokens or 0) + decision.completion_tokens
+                            if decision.completion_tokens is not None
+                            else completion_tokens
+                        )
+                        if _model_decision_size(decision) > spec.budget.max_output_tokens * 4:
+                            status, stop_reason = "BUDGET_EXCEEDED", "model_output_budget"
+                            break
+                        proposal = decision.proposal
+                        try:
+                            _validate_action(proposal, current)
+                            progress.record(
+                                current.observation.page_version,
+                                json.dumps(
+                                    proposal.model_dump(
+                                        mode="json", exclude={"action_id", "observation_id"}
+                                    ),
+                                    sort_keys=True,
+                                    separators=(",", ":"),
+                                ),
+                            )
+                        except (BrowserPolicyError, RecoveryFailure) as error:
+                            code = getattr(error, "code", "ACTION_REJECTED")
+                            receipts.append(
+                                ActionReceipt(
+                                    action_id=proposal.action_id,
+                                    observation_id=proposal.observation_id,
+                                    result="REJECTED",
+                                    error_code=code,
+                                    before_observation_id=current.observation.observation_id,
+                                    stop_reason=code,
+                                )
+                            )
+                            status = "BUDGET_EXCEEDED" if code == "ACTION_BUDGET" else "FAILED"
+                            stop_reason = code
+                            break
+                        if proposal.action_type == "finish":
+                            try:
+                                fields = _decision_fields(decision.fields)
+                            except BrowserPolicyError:
+                                status, stop_reason = "FAILED", "ANSWER_REJECTED"
+                                receipts.append(
+                                    ActionReceipt(
+                                        action_id=proposal.action_id,
+                                        observation_id=proposal.observation_id,
+                                        result="REJECTED",
+                                        error_code="ANSWER_REJECTED",
+                                        before_observation_id=current.observation.observation_id,
+                                        stop_reason="ANSWER_REJECTED",
+                                    )
+                                )
+                                break
+                            trusted = fixture_fields(spec.purchase_order)
+                            if trusted is None:
+                                status = "NOT_FOUND" if not any(fields.values()) else "INCOMPLETE"
+                                stop_reason = (
+                                    "fixture_not_found"
+                                    if status == "NOT_FOUND"
+                                    else "fields_mismatch"
+                                )
+                            elif fields == trusted:
+                                status, stop_reason = "SUCCEEDED", None
+                            else:
+                                status, stop_reason = "INCOMPLETE", "fields_mismatch"
+                            receipt = _apply_action(page, proposal, current, spec)
+                            receipts.append(receipt.model_copy(update={"stop_reason": stop_reason}))
+                            break
+                        receipt = _apply_action(page, proposal, current, spec)
+                        receipts.append(receipt)
+                        if receipt.result != "APPLIED":
+                            status, stop_reason = "FAILED", receipt.error_code or "ACTION_REJECTED"
+                            break
+                        try:
+                            wait_for_ready(
+                                page,
+                                timeout_ms=spec.budget.action_timeout_seconds * 1000,
+                                scenario=spec.scenario,
+                            )
+                            fresh = _snapshot(page, spec, spec.mode)
+                        except RecoveryFailure as failure:
+                            status, stop_reason = "FAILED", failure.code
+                            break
+                        observations.append(fresh.observation)
+                        receipts[-1] = receipts[-1].model_copy(
+                            update={"after_observation_id": fresh.observation.observation_id}
+                        )
+                        current = fresh
+                        terminal = _terminal_page_state(page)
+                        if terminal is not None:
+                            status, stop_reason = terminal
+                            break
+                    else:
+                        status, stop_reason = "BUDGET_EXCEEDED", "action_budget"
+        except Exception as error:
+            status, stop_reason = "FAILED", type(error).__name__.upper()
+        finally:
+            security_violations = tuple(policy.violations + browser_events)
+            context.close()
+            browser.close()
+    if security_violations:
+        status, fields, stop_reason = "FAILED", {}, "browser_security_violation"
+    result = TaskResult(
+        case_id=spec.case_id,
+        status=status,
+        fields=fields if status == "SUCCEEDED" else {},
+        evidence_refs=tuple(item.observation_id for item in observations),
+        observation_complete=status == "SUCCEEDED",
+        actions=tuple(receipts),
+        stop_reason=stop_reason,
+    )
+    return DomRun(
+        result=result,
+        observations=tuple(observations),
+        security_violations=security_violations,
+        model_calls=model_calls,
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
+
+
 def run_security_probe(base_url: str, scenario: str) -> tuple[str, ...]:
     """Exercise one fixture hazard and return recorded security events."""
 
@@ -533,7 +818,9 @@ __all__ = [
     "BrowserUnavailable",
     "DomRun",
     "DomSnapshot",
+    "ModelDecision",
     "run_aria_task",
     "run_dom_task",
+    "run_model_dom_task",
     "run_security_probe",
 ]
