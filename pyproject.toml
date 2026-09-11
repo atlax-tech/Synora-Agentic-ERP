@@ -33,6 +33,9 @@ retrieval-lab = [
     "socksio==1.0.0",
     "torch==2.13.0",
 ]
+web-gui-lab = [
+    "playwright==1.55.0",
+]
 
 [tool.uv.workspace]
 members = ["services/agent_runtime"]
