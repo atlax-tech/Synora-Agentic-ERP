@@ -41,7 +41,7 @@ Phase 11 交付了一个只绑定 loopback 的 `LAB_ONLY / SYNTHETIC DATA` 采�
 | P11.14 | 已完成：最终独立对抗复核为 `PASS` | 最终复核记录（本报告第 8 节） |
 | P11.15 | 已完成：PLAN、source-index、manifest 已按授权同步，最终 drift 为 0 | Harness 收口提交及第 6 节最终门禁 |
 
-阶段内提交均为小步原子提交；未修改 ERP/Frappe 核心、业务 Runtime、`.env*`、README 或 `.harness`，没有推送或改写历史。旧的大格式证据提交已显式 revert；当前同时保留修复前 ERP 回归、修复后 ERP artifact `6392dc5-r3`、当前 synthetic artifact 和视觉 probe；失败证据没有被覆盖。
+阶段内业务实现提交均为小步原子提交；未修改 ERP/Frappe 核心、业务 Runtime、`.env*` 或 README；最终收口只按授权更新 `.harness` 的三条来源指纹和对应管理哈希，没有推送或改写历史。旧的大格式证据提交已显式 revert；当前同时保留修复前 ERP 回归、修复后 ERP artifact `6392dc5-r3`、当前 synthetic artifact 和视觉 probe；失败证据没有被覆盖。
 
 ## 3. 真实多模态诊断和冻结选择
 
