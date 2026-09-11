@@ -639,6 +639,45 @@ def run_model_dom_task(base_url: str, spec: TaskSpec, decider: StructuredDecider
                             break
                         proposal = decision.proposal
                         try:
+                            action_remaining = spec.budget.wall_time_seconds - (
+                                monotonic() - started
+                            )
+                            if action_remaining <= 0:
+                                status, stop_reason = "BUDGET_EXCEEDED", "wall_time_budget"
+                                break
+                            wait_for_ready(
+                                page,
+                                timeout_ms=min(
+                                    spec.budget.action_timeout_seconds * 1000,
+                                    action_remaining * 1000,
+                                ),
+                                scenario=spec.scenario,
+                            )
+                            action_snapshot = _snapshot(page, spec, spec.mode)
+                        except RecoveryFailure as failure:
+                            status, stop_reason = "FAILED", failure.code
+                            break
+                        except BrowserPolicyError:
+                            status, stop_reason = "FAILED", "OBSERVATION_FAILED"
+                            break
+                        if (
+                            action_snapshot.observation.page_version
+                            != current.observation.page_version
+                        ):
+                            observations.append(action_snapshot.observation)
+                            receipts.append(
+                                ActionReceipt(
+                                    action_id=proposal.action_id,
+                                    observation_id=proposal.observation_id,
+                                    result="REJECTED",
+                                    error_code="STALE_OBSERVATION",
+                                    before_observation_id=current.observation.observation_id,
+                                    stop_reason="STALE_OBSERVATION",
+                                )
+                            )
+                            status, stop_reason = "FAILED", "STALE_OBSERVATION"
+                            break
+                        try:
                             _validate_action(proposal, current)
                             progress.record(
                                 current.observation.page_version,

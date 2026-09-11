@@ -211,6 +211,54 @@ def test_model_dom_task_executes_model_selected_actions_and_records_usage() -> N
     assert all(receipt.after_observation_id is not None for receipt in run.result.actions[:2])
 
 
+def test_model_dom_task_rejects_page_change_before_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import labs.web_gui.browser as browser_module
+
+    original = browser_module._snapshot
+    calls = 0
+
+    def changed(page: object, spec: TaskSpec, mode: str = "dom") -> object:
+        nonlocal calls
+        calls += 1
+        snapshot = original(page, spec, mode)
+        if calls == 2:
+            snapshot = snapshot.__class__(
+                observation=snapshot.observation.model_copy(
+                    update={"page_version": snapshot.observation.page_version + ":changed"}
+                ),
+                targets=snapshot.targets,
+            )
+        return snapshot
+
+    monkeypatch.setattr(browser_module, "_snapshot", changed)
+
+    client = LiveTextModel(
+        environ={"ASSIST_MODEL": "text-test"},
+        provider_factory=lambda: DeterministicProvider(
+            scripted_responses=[
+                ProviderResponse(text=_wire("click", target_ref="order:PUR-ORD-0001"))
+            ]
+        ),
+    )
+
+    def decider(observation: Observation, spec: TaskSpec, remaining: int) -> ModelDecision:
+        return decision_from_model(client, spec, observation, remaining)
+
+    with _lab_server() as base_url:
+        run = run_model_dom_task(
+            base_url,
+            TaskSpec(case_id="model-dom-stale-page", purchase_order="PUR-ORD-0001", mode="dom"),
+            decider,
+        )
+
+    assert run.result.status == "FAILED"
+    assert run.result.stop_reason == "STALE_OBSERVATION"
+    assert run.result.actions[0].error_code == "STALE_OBSERVATION"
+    assert len(run.observations) == 2
+
+
 def test_model_dom_task_rejects_unobserved_target() -> None:
     client = LiveTextModel(
         environ={"ASSIST_MODEL": "text-test"},
