@@ -20,6 +20,7 @@ from labs.web_gui.erp_readonly import (
     ErpReadResult,
     read_erp_api,
 )
+from labs.web_gui.erp_browser import compare_erp_readonly, read_erp_web
 from labs.web_gui.fixtures import FIXTURE_ORDERS, create_app
 from labs.web_gui.gui import VisualDecision, VisualRun, run_visual_task
 from labs.web_gui.security import BrowserSecurityPolicy
@@ -39,8 +40,10 @@ __all__ = [
     "TaskSpec",
     "VisualDecision",
     "VisualRun",
+    "compare_erp_readonly",
     "create_app",
     "read_erp_api",
+    "read_erp_web",
     "run_aria_task",
     "run_dom_task",
     "run_security_probe",
