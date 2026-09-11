@@ -218,7 +218,11 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
             page.goto(
                 f"{origin}/?scenario={spec.scenario}",
                 wait_until="domcontentloaded",
-                timeout=int(spec.budget.action_timeout_seconds * 1000),
+                timeout=remaining_timeout_ms(
+                    started,
+                    wall_time_seconds=spec.budget.wall_time_seconds,
+                    action_timeout_seconds=spec.budget.action_timeout_seconds,
+                ),
             )
             terminal = _terminal_page_state(page)
             if terminal is not None:
@@ -430,17 +434,45 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     break
                 try:
                     if proposal.action_type == "click":
+                        remaining_timeout_ms(
+                            started,
+                            wall_time_seconds=spec.budget.wall_time_seconds,
+                            action_timeout_seconds=spec.budget.action_timeout_seconds,
+                        )
                         page.mouse.click(proposal.x or 0, proposal.y or 0)
                         page.wait_for_load_state(
                             "domcontentloaded",
-                            timeout=int(spec.budget.action_timeout_seconds * 1000),
+                            timeout=remaining_timeout_ms(
+                                started,
+                                wall_time_seconds=spec.budget.wall_time_seconds,
+                                action_timeout_seconds=spec.budget.action_timeout_seconds,
+                            ),
                         )
                     elif proposal.action_type == "scroll":
+                        remaining_timeout_ms(
+                            started,
+                            wall_time_seconds=spec.budget.wall_time_seconds,
+                            action_timeout_seconds=spec.budget.action_timeout_seconds,
+                        )
                         page.mouse.wheel(0, 500)
                     elif proposal.action_type == "wait":
                         page.wait_for_timeout(
-                            min(100, int(spec.budget.action_timeout_seconds * 1000))
+                            min(
+                                100,
+                                remaining_timeout_ms(
+                                    started,
+                                    wall_time_seconds=spec.budget.wall_time_seconds,
+                                    action_timeout_seconds=spec.budget.action_timeout_seconds,
+                                ),
+                            )
                         )
+                except RecoveryFailure as error:
+                    receipts.append(
+                        _rejected_receipt(proposal, observation, error.code, error.code)
+                    )
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = error.code
+                    break
                 except Exception as error:
                     receipts.append(
                         ActionReceipt(

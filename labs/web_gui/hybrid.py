@@ -261,7 +261,11 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
             page.goto(
                 f"{origin}/?scenario={spec.scenario}",
                 wait_until="domcontentloaded",
-                timeout=int(spec.budget.action_timeout_seconds * 1000),
+                timeout=remaining_timeout_ms(
+                    started,
+                    wall_time_seconds=spec.budget.wall_time_seconds,
+                    action_timeout_seconds=spec.budget.action_timeout_seconds,
+                ),
             )
             terminal = _terminal_page_state(page)
             if terminal is not None:
@@ -481,26 +485,65 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     break
                 try:
                     if proposal.action_type == "search":
-                        timeout_ms = int(spec.budget.action_timeout_seconds * 1000)
+                        timeout_ms = remaining_timeout_ms(
+                            started,
+                            wall_time_seconds=spec.budget.wall_time_seconds,
+                            action_timeout_seconds=spec.budget.action_timeout_seconds,
+                        )
                         _locator_for(page, "search-input").fill(
                             proposal.text or "", timeout=timeout_ms
                         )
-                        _locator_for(page, "search-submit").click(timeout=timeout_ms)
+                        _locator_for(page, "search-submit").click(
+                            timeout=remaining_timeout_ms(
+                                started,
+                                wall_time_seconds=spec.budget.wall_time_seconds,
+                                action_timeout_seconds=spec.budget.action_timeout_seconds,
+                            )
+                        )
                     elif proposal.action_type == "click":
                         locator = _locator_for(page, proposal.target_ref or "")
                         if locator.count() != 1:
                             raise BrowserPolicyError("hybrid target is not unique")
-                        locator.click(timeout=int(spec.budget.action_timeout_seconds * 1000))
+                        locator.click(
+                            timeout=remaining_timeout_ms(
+                                started,
+                                wall_time_seconds=spec.budget.wall_time_seconds,
+                                action_timeout_seconds=spec.budget.action_timeout_seconds,
+                            )
+                        )
                     elif proposal.action_type == "scroll":
+                        remaining_timeout_ms(
+                            started,
+                            wall_time_seconds=spec.budget.wall_time_seconds,
+                            action_timeout_seconds=spec.budget.action_timeout_seconds,
+                        )
                         page.mouse.wheel(0, 500)
                     elif proposal.action_type == "wait":
                         page.wait_for_timeout(
-                            min(100, int(spec.budget.action_timeout_seconds * 1000))
+                            min(
+                                100,
+                                remaining_timeout_ms(
+                                    started,
+                                    wall_time_seconds=spec.budget.wall_time_seconds,
+                                    action_timeout_seconds=spec.budget.action_timeout_seconds,
+                                ),
+                            )
                         )
                     page.wait_for_load_state(
                         "domcontentloaded",
-                        timeout=int(spec.budget.action_timeout_seconds * 1000),
+                        timeout=remaining_timeout_ms(
+                            started,
+                            wall_time_seconds=spec.budget.wall_time_seconds,
+                            action_timeout_seconds=spec.budget.action_timeout_seconds,
+                        ),
                     )
+                except RecoveryFailure as error:
+                    receipts.append(
+                        _rejected_receipt(proposal, frame.observation, error.code, error.code)
+                    )
+                    status = "BUDGET_EXCEEDED"
+                    stop_reason = error.code
+                    break
                 except BrowserPolicyError as error:
                     code = "STALE_OBSERVATION" if "stale" in str(error) else "ACTION_REJECTED"
                     receipts.append(

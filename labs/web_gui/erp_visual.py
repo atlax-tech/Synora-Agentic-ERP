@@ -299,13 +299,21 @@ def run_erp_visual_task(
                     f"{_origin(config.base_url)}/desk/purchase-order/"
                     f"{quote(config.purchase_order, safe='-_.')}",
                     wait_until="domcontentloaded",
-                    timeout=int(config.timeout_seconds * 1000),
+                    timeout=remaining_timeout_ms(
+                        started,
+                        wall_time_seconds=task.budget.wall_time_seconds,
+                        action_timeout_seconds=task.budget.action_timeout_seconds,
+                    ),
                 )
                 if "/login" in page.url:
                     status, reason = "AUTH_REQUIRED", "AUTH_REQUIRED"
                 else:
                     body_text = page.locator("body").inner_text(
-                        timeout=int(config.timeout_seconds * 1000)
+                        timeout=remaining_timeout_ms(
+                            started,
+                            wall_time_seconds=task.budget.wall_time_seconds,
+                            action_timeout_seconds=task.budget.action_timeout_seconds,
+                        )
                     )
                     if len(body_text.encode("utf-8")) > MAX_RESPONSE_BYTES:
                         status, reason = "FAILED", "ERP_RESPONSE_TOO_LARGE"
@@ -313,10 +321,20 @@ def run_erp_visual_task(
                         status, reason = "PERMISSION_DENIED", "PERMISSION_DENIED"
                     else:
                         page.locator('[data-fieldname="supplier"] .control-value').wait_for(
-                            state="visible", timeout=int(config.timeout_seconds * 1000)
+                            state="visible",
+                            timeout=remaining_timeout_ms(
+                                started,
+                                wall_time_seconds=task.budget.wall_time_seconds,
+                                action_timeout_seconds=task.budget.action_timeout_seconds,
+                            ),
                         )
                         page.locator(".page-head .indicator-pill").wait_for(
-                            state="visible", timeout=int(config.timeout_seconds * 1000)
+                            state="visible",
+                            timeout=remaining_timeout_ms(
+                                started,
+                                wall_time_seconds=task.budget.wall_time_seconds,
+                                action_timeout_seconds=task.budget.action_timeout_seconds,
+                            ),
                         )
                         try:
                             capture = capture_redacted_page(
@@ -502,13 +520,29 @@ def run_erp_visual_task(
                                     page.mouse.click(proposal.x or 0, proposal.y or 0)
                                     page.wait_for_load_state(
                                         "domcontentloaded",
-                                        timeout=int(task.budget.action_timeout_seconds * 1000),
+                                        timeout=remaining_timeout_ms(
+                                            started,
+                                            wall_time_seconds=task.budget.wall_time_seconds,
+                                            action_timeout_seconds=task.budget.action_timeout_seconds,
+                                        ),
                                     )
                                 elif proposal.action_type == "scroll":
+                                    remaining_timeout_ms(
+                                        started,
+                                        wall_time_seconds=task.budget.wall_time_seconds,
+                                        action_timeout_seconds=task.budget.action_timeout_seconds,
+                                    )
                                     page.mouse.wheel(0, 500)
                                 else:
                                     page.wait_for_timeout(
-                                        min(100, int(task.budget.action_timeout_seconds * 1000))
+                                        min(
+                                            100,
+                                            remaining_timeout_ms(
+                                                started,
+                                                wall_time_seconds=task.budget.wall_time_seconds,
+                                                action_timeout_seconds=task.budget.action_timeout_seconds,
+                                            ),
+                                        )
                                     )
                             except RecoveryFailure as error:
                                 receipts.append(
@@ -618,6 +652,8 @@ def run_erp_visual_task(
                                 break
                         else:
                             status, reason = "BUDGET_EXCEEDED", "action_budget"
+        except RecoveryFailure as error:
+            status, reason = "BUDGET_EXCEEDED", error.code
         except Exception as error:
             status, reason = "FAILED", type(error).__name__.upper()
         finally:

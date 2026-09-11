@@ -26,7 +26,13 @@ from labs.web_gui.contracts import (
 )
 from labs.web_gui.fixtures import fixture_fields
 from labs.web_gui.model import ModelCallError, ModelDecision
-from labs.web_gui.recovery import ProgressGuard, RecoveryFailure, run_with_deadline, wait_for_ready
+from labs.web_gui.recovery import (
+    ProgressGuard,
+    RecoveryFailure,
+    remaining_timeout_ms,
+    run_with_deadline,
+    wait_for_ready,
+)
 from labs.web_gui.security import BrowserSecurityPolicy
 
 
@@ -85,15 +91,26 @@ def _digest(value: object) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _snapshot(page: Any, spec: TaskSpec, mode: str = "dom") -> DomSnapshot:
+def _operation_timeout_ms(spec: TaskSpec, started: float | None) -> int:
+    if started is None:
+        return int(spec.budget.action_timeout_seconds * 1000)
+    return remaining_timeout_ms(
+        started,
+        wall_time_seconds=spec.budget.wall_time_seconds,
+        action_timeout_seconds=spec.budget.action_timeout_seconds,
+    )
+
+
+def _snapshot(
+    page: Any, spec: TaskSpec, mode: str = "dom", *, started: float | None = None
+) -> DomSnapshot:
     if spec.data_source != "synthetic":
         raise BrowserPolicyError(
             "generic DOM/ARIA runner accepts synthetic data only; use the ERP readonly adapter"
         )
     body = page.locator("body")
     version = body.get_attribute("data-page-version") or "unknown"
-    timeout = spec.budget.action_timeout_seconds * 1000
-    text = body.inner_text(timeout=timeout)
+    text = body.inner_text(timeout=_operation_timeout_ms(spec, started))
     if len(text) > 50_000:
         raise BrowserPolicyError("observation is too large")
     # The fixture's release version is stable across list/detail routes.  Add
@@ -103,7 +120,7 @@ def _snapshot(page: Any, spec: TaskSpec, mode: str = "dom") -> DomSnapshot:
     targets: set[str] = set()
     if mode == "aria":
         try:
-            aria = body.aria_snapshot(timeout=timeout)
+            aria = body.aria_snapshot(timeout=_operation_timeout_ms(spec, started))
         except Exception as error:
             raise BrowserPolicyError("accessibility observation failed") from error
         if not isinstance(aria, str) or len(aria) > 50_000:
@@ -203,32 +220,37 @@ def _locator_for(page: Any, target_ref: str, mode: str = "dom") -> Any:
 
 
 def _apply_action(
-    page: Any, proposal: ActionProposal, snapshot: DomSnapshot, spec: TaskSpec
+    page: Any,
+    proposal: ActionProposal,
+    snapshot: DomSnapshot,
+    spec: TaskSpec,
+    *,
+    started: float | None = None,
 ) -> ActionReceipt:
     before = snapshot.observation
     try:
         _validate_action(proposal, snapshot)
         if proposal.action_type == "search":
             locator = _locator_for(page, "search-input", snapshot.observation.mode)
-            locator.fill(proposal.text or "", timeout=spec.budget.action_timeout_seconds * 1000)
+            locator.fill(proposal.text or "", timeout=_operation_timeout_ms(spec, started))
             _locator_for(page, "search-submit", snapshot.observation.mode).click(
-                timeout=spec.budget.action_timeout_seconds * 1000
+                timeout=_operation_timeout_ms(spec, started)
             )
             page.wait_for_load_state(
-                "domcontentloaded", timeout=spec.budget.action_timeout_seconds * 1000
+                "domcontentloaded", timeout=_operation_timeout_ms(spec, started)
             )
         elif proposal.action_type == "click":
             locator = _locator_for(page, proposal.target_ref or "", snapshot.observation.mode)
             if locator.count() != 1:
                 raise BrowserPolicyError("observed target is not unique")
-            locator.click(timeout=spec.budget.action_timeout_seconds * 1000)
+            locator.click(timeout=_operation_timeout_ms(spec, started))
             page.wait_for_load_state(
-                "domcontentloaded", timeout=spec.budget.action_timeout_seconds * 1000
+                "domcontentloaded", timeout=_operation_timeout_ms(spec, started)
             )
         elif proposal.action_type == "scroll":
             page.mouse.wheel(0, 500)
         elif proposal.action_type == "wait":
-            page.wait_for_timeout(min(100, int(spec.budget.action_timeout_seconds * 1000)))
+            page.wait_for_timeout(min(100, _operation_timeout_ms(spec, started)))
         elif proposal.action_type == "open":
             raise BrowserPolicyError("open is only valid as the initial session action")
         elif proposal.action_type == "finish":
@@ -239,6 +261,15 @@ def _apply_action(
                 before_observation_id=before.observation_id,
                 stop_reason="agent_finished",
             )
+    except RecoveryFailure as error:
+        return ActionReceipt(
+            action_id=proposal.action_id,
+            observation_id=proposal.observation_id,
+            result="FAILED",
+            error_code=error.code,
+            before_observation_id=before.observation_id,
+            stop_reason=error.code,
+        )
     except BrowserPolicyError as error:
         code = "STALE_OBSERVATION" if "stale" in str(error) else "ACTION_REJECTED"
         return ActionReceipt(
@@ -266,9 +297,11 @@ def _apply_action(
     )
 
 
-def _fields(page: Any) -> dict[str, str | None]:
+def _fields(page: Any, *, timeout_ms: int | None = None) -> dict[str, str | None]:
     return {
-        field: page.locator(f'[data-field="{field}"]').inner_text()
+        field: page.locator(f'[data-field="{field}"]').inner_text(
+            **({"timeout": timeout_ms} if timeout_ms is not None else {})
+        )
         if page.locator(f'[data-field="{field}"]').count() == 1
         else None
         for field in ("purchase_order", "supplier", "status", "currency")
@@ -323,9 +356,9 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
             page.goto(
                 f"{origin}/?scenario={spec.scenario}",
                 wait_until="domcontentloaded",
-                timeout=int(spec.budget.action_timeout_seconds * 1000),
+                timeout=_operation_timeout_ms(spec, started),
             )
-            snapshot = _snapshot(page, spec, spec.mode)
+            snapshot = _snapshot(page, spec, spec.mode, started=started)
             observations.append(snapshot.observation)
             terminal = _terminal_page_state(page)
             if terminal is not None:
@@ -342,7 +375,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
             try:
                 wait_for_ready(
                     page,
-                    timeout_ms=spec.budget.action_timeout_seconds * 1000,
+                    timeout_ms=_operation_timeout_ms(spec, started),
                     scenario=spec.scenario,
                 )
             except RecoveryFailure as failure:
@@ -363,7 +396,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                 target_ref="search-input",
                 text=spec.purchase_order,
             )
-            search_receipt = _apply_action(page, search, snapshot, spec)
+            search_receipt = _apply_action(page, search, snapshot, spec, started=started)
             receipts.append(search_receipt)
             if search_receipt.result != "APPLIED":
                 security_violations = tuple(policy.violations + browser_events)
@@ -378,7 +411,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
             try:
                 wait_for_ready(
                     page,
-                    timeout_ms=spec.budget.action_timeout_seconds * 1000,
+                    timeout_ms=_operation_timeout_ms(spec, started),
                     scenario=spec.scenario,
                 )
             except RecoveryFailure as failure:
@@ -391,7 +424,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                     stop_reason=failure.code,
                 )
                 return DomRun(result, tuple(observations), security_violations)
-            snapshot = _snapshot(page, spec, spec.mode)
+            snapshot = _snapshot(page, spec, spec.mode, started=started)
             observations.append(snapshot.observation)
             receipts[-1] = receipts[-1].model_copy(
                 update={"after_observation_id": snapshot.observation.observation_id}
@@ -417,7 +450,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                     observation_id=snapshot.observation.observation_id,
                     target_ref=target,
                 )
-                click_receipt = _apply_action(page, click, snapshot, spec)
+                click_receipt = _apply_action(page, click, snapshot, spec, started=started)
                 receipts.append(click_receipt)
                 if click_receipt.result != "APPLIED":
                     security_violations = tuple(policy.violations + browser_events)
@@ -429,7 +462,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                         stop_reason=click_receipt.error_code,
                     )
                     return DomRun(result, tuple(observations), security_violations)
-                snapshot = _snapshot(page, spec, spec.mode)
+                snapshot = _snapshot(page, spec, spec.mode, started=started)
                 observations.append(snapshot.observation)
                 receipts[-1] = receipts[-1].model_copy(
                     update={"after_observation_id": snapshot.observation.observation_id}
@@ -446,7 +479,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                         stop_reason=stop_reason,
                     )
                     return DomRun(result, tuple(observations), security_violations)
-                values = _fields(page)
+                values = _fields(page, timeout_ms=_operation_timeout_ms(spec, started))
                 status = "SUCCEEDED" if all(values.values()) else "INCOMPLETE"
             elapsed = int((monotonic() - started) * 1000)
             if elapsed > spec.budget.wall_time_seconds * 1000:
@@ -457,7 +490,11 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
             result = TaskResult(
                 case_id=spec.case_id,
                 status=status,
-                fields=_fields(page) if status == "SUCCEEDED" else {},
+                fields=(
+                    _fields(page, timeout_ms=_operation_timeout_ms(spec, started))
+                    if status == "SUCCEEDED"
+                    else {}
+                ),
                 evidence_refs=tuple(observation.observation_id for observation in observations),
                 observation_complete=status == "SUCCEEDED",
                 actions=tuple(receipts),
@@ -560,9 +597,9 @@ def run_model_dom_task(base_url: str, spec: TaskSpec, decider: StructuredDecider
             page.goto(
                 f"{origin}/?scenario={spec.scenario}",
                 wait_until="domcontentloaded",
-                timeout=int(spec.budget.action_timeout_seconds * 1000),
+                timeout=_operation_timeout_ms(spec, started),
             )
-            current = _snapshot(page, spec, spec.mode)
+            current = _snapshot(page, spec, spec.mode, started=started)
             observations.append(current.observation)
             terminal = _terminal_page_state(page)
             if terminal is not None:
@@ -571,7 +608,7 @@ def run_model_dom_task(base_url: str, spec: TaskSpec, decider: StructuredDecider
                 try:
                     wait_for_ready(
                         page,
-                        timeout_ms=spec.budget.action_timeout_seconds * 1000,
+                        timeout_ms=_operation_timeout_ms(spec, started),
                         scenario=spec.scenario,
                     )
                 except RecoveryFailure as failure:
@@ -653,7 +690,7 @@ def run_model_dom_task(base_url: str, spec: TaskSpec, decider: StructuredDecider
                                 ),
                                 scenario=spec.scenario,
                             )
-                            action_snapshot = _snapshot(page, spec, spec.mode)
+                            action_snapshot = _snapshot(page, spec, spec.mode, started=started)
                         except RecoveryFailure as failure:
                             status, stop_reason = "FAILED", failure.code
                             break
@@ -732,10 +769,10 @@ def run_model_dom_task(base_url: str, spec: TaskSpec, decider: StructuredDecider
                                 status, stop_reason = "SUCCEEDED", None
                             else:
                                 status, stop_reason = "INCOMPLETE", "fields_mismatch"
-                            receipt = _apply_action(page, proposal, current, spec)
+                            receipt = _apply_action(page, proposal, current, spec, started=started)
                             receipts.append(receipt.model_copy(update={"stop_reason": stop_reason}))
                             break
-                        receipt = _apply_action(page, proposal, current, spec)
+                        receipt = _apply_action(page, proposal, current, spec, started=started)
                         receipts.append(receipt)
                         if receipt.result != "APPLIED":
                             status, stop_reason = "FAILED", receipt.error_code or "ACTION_REJECTED"
@@ -743,10 +780,10 @@ def run_model_dom_task(base_url: str, spec: TaskSpec, decider: StructuredDecider
                         try:
                             wait_for_ready(
                                 page,
-                                timeout_ms=spec.budget.action_timeout_seconds * 1000,
+                                timeout_ms=_operation_timeout_ms(spec, started),
                                 scenario=spec.scenario,
                             )
-                            fresh = _snapshot(page, spec, spec.mode)
+                            fresh = _snapshot(page, spec, spec.mode, started=started)
                         except RecoveryFailure as failure:
                             status, stop_reason = "FAILED", failure.code
                             break
