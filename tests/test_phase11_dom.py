@@ -20,6 +20,7 @@ from labs.web_gui.browser import (
 )
 from labs.web_gui.contracts import ActionProposal, Observation, TaskSpec
 from labs.web_gui.fixtures import create_app
+from labs.web_gui.gui import VisualDecision, run_visual_task
 from labs.web_gui.security import BrowserSecurityPolicy
 
 
@@ -153,3 +154,70 @@ def test_browser_security_probe_rejects_write_action() -> None:
         pytest.skip("web-gui-lab is not installed")
 
     assert violations == ("WRITE_ACTION_REJECTED",)
+
+
+def test_visual_task_uses_only_screenshots_and_validates_final_fields() -> None:
+    seen: list[tuple[type[object], str]] = []
+    calls = 0
+
+    def decider(image: bytes, observation: object, spec: TaskSpec) -> VisualDecision:
+        nonlocal calls
+        calls += 1
+        assert isinstance(image, bytes)
+        assert not hasattr(observation, "text")
+        seen.append((type(image), spec.purchase_order))
+        if calls == 1:
+            return VisualDecision(
+                proposal=ActionProposal(
+                    action_type="click",
+                    observation_id=observation.observation_id,  # type: ignore[attr-defined]
+                    x=700,
+                    y=300,
+                )
+            )
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="finish",
+                observation_id=observation.observation_id,  # type: ignore[attr-defined]
+            ),
+            fields={
+                "purchase_order": "PUR-ORD-0001",
+                "supplier": "Supplier A",
+                "status": "To Receive and Bill",
+                "currency": "CNY",
+            },
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(case_id="p11-vision-001", purchase_order="PUR-ORD-0001", mode="vision"),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "SUCCEEDED"
+    assert len(run.screenshots) == 2
+    assert all(kind is bytes for kind, _ in seen)
+
+
+def test_visual_action_rejects_out_of_viewport_coordinates() -> None:
+    from labs.web_gui.gui import _validate_visual_action
+
+    observation = Observation(
+        page_version="screenshot:test",
+        source="synthetic",
+        mode="vision",
+        viewport_width=100,
+        viewport_height=100,
+    )
+    proposal = ActionProposal(
+        action_type="click",
+        observation_id=observation.observation_id,
+        x=100,
+        y=50,
+    )
+    with pytest.raises(BrowserPolicyError, match="outside"):
+        _validate_visual_action(proposal, observation)

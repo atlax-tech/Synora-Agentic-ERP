@@ -14,6 +14,7 @@ from labs.web_gui.contracts import (
     TaskSpec,
 )
 from labs.web_gui.fixtures import FIXTURE_ORDERS, create_app
+from labs.web_gui.gui import VisualDecision, VisualRun, run_visual_task
 from labs.web_gui.security import BrowserSecurityPolicy
 
 __all__ = [
@@ -25,8 +26,11 @@ __all__ = [
     "ObservationMode",
     "TaskResult",
     "TaskSpec",
+    "VisualDecision",
+    "VisualRun",
     "create_app",
     "run_aria_task",
     "run_dom_task",
     "run_security_probe",
+    "run_visual_task",
 ]

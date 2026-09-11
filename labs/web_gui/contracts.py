@@ -92,7 +92,10 @@ class ActionProposal(StrictModel):
 
     @model_validator(mode="after")
     def validate_target_shape(self) -> ActionProposal:
-        if self.action_type in {"click", "search"} and not (self.target_ref or self.text):
+        coordinate_click = self.action_type == "click" and self.x is not None and self.y is not None
+        if self.action_type in {"click", "search"} and not (
+            self.target_ref or self.text or coordinate_click
+        ):
             raise ValueError("click and search actions require an observed target")
         if self.action_type == "click" and self.x is not None and self.y is None:
             raise ValueError("coordinate clicks require both x and y")
