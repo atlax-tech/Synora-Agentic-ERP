@@ -1,6 +1,6 @@
 # Phase 11 风险登记（最终审查前）
 
-概率和影响按 `docs/PLAN.md` §4.6 取 1–4；分数为 likelihood × impact。当前实现基线 `10cb0e1`，真实图片和 ERP live 证据均已刷新；Review 与 Harness 同步仍是出口门禁。
+概率和影响按 `docs/PLAN.md` §4.6 取 1–4；分数为 likelihood × impact。当前实现基线 `98ee158`，真实图片和 ERP live 证据均已刷新；Review 与 Harness 同步仍是出口门禁。
 
 | ID | 风险 | L×I | 级别 | 状态 | owner | 下一门禁与复验 |
 | --- | --- | ---: | --- | --- | --- | --- |
@@ -16,6 +16,6 @@
 | R11-PYTHON | 默认 uv 主机可能选择 3.13，项目要求 3.14 | 2×2=4 | P3 | `MITIGATED` | 工程维护者 | 所有验收命令显式 `--python 3.14` |
 | R11-HARNESS | pyproject/uv.lock source fingerprint 尚未同步 | 3×3=9 | P2 | `OPEN / GATE` | Harness 维护者 | Review PASS 后按已授权范围同步两个 source-index 条目和 manifest SHA，再跑 drift |
 | R11-USAGE | provider usage/价格不总是返回或无法核验 | 3×2=6 | P2 | `MITIGATED` | 实验维护者 | 缺失保持 `null`；不生成货币成本 |
-| R11-REVIEW | 最终独立审查第一轮为 CHANGES_REQUIRED | 2×3=6 | P2 | `OPEN / FINAL_RECHECK` | 阶段执行者 | 五项代码/证据意见已修复；最终复查 PASS 后同步权威状态 |
+| R11-REVIEW | 最终独立审查发现的墙钟预算、当前 probe 引用和测试计数问题已修复 | 2×3=6 | P2 | `OPEN / FINAL_RECHECK` | 阶段执行者 | 五项代码/证据意见已修复；最终复查 PASS 后同步权威状态 |
 
 当前计数：P0=`0`；未关闭 P1=`0`；开放 P2 为模型质量限制、Harness 指纹和最终 Review；DOM 竞态与 ERP 浏览器资源边界已修复并由专项测试复验，均有 owner、下一门禁和复验条件；P3 环境项已通过显式解释器规避。阶段暂为 `READY_FOR_FINAL_REVIEW`，不进入 Phase 12。
