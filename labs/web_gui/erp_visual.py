@@ -29,6 +29,19 @@ class ErpVisualRun:
     redaction: RedactedCapture | None = None
 
 
+def _rejected_receipt(
+    proposal: Any, observation: Observation, error_code: str, reason: str
+) -> ActionReceipt:
+    return ActionReceipt(
+        action_id=proposal.action_id,
+        observation_id=proposal.observation_id,
+        result="REJECTED",
+        error_code=error_code,
+        before_observation_id=observation.observation_id,
+        stop_reason=reason,
+    )
+
+
 def _task(config: ErpReadConfig) -> TaskSpec:
     return TaskSpec(
         case_id=f"p11-erp-visual-{config.purchase_order}",
@@ -169,16 +182,33 @@ def run_erp_visual_task(config: ErpReadConfig, decider: VisualDecider) -> ErpVis
                             if model_calls >= task.budget.max_model_calls:
                                 status, reason = "BUDGET_EXCEEDED", "model_call_budget"
                                 break
-                            decision = decider(screenshots[-1], observation, task)
+                            decision: VisualDecision | None = None
+                            try:
+                                decision = decider(screenshots[-1], observation, task)
+                            except Exception:
+                                status, reason = "FAILED", "model_call_failed"
+                                break
                             model_calls += 1
                             if not isinstance(decision, VisualDecision):
-                                raise BrowserPolicyError(
-                                    "visual decider returned an invalid decision"
-                                )
-                            _validate_visual_action(decision.proposal, observation)
+                                status, reason = "FAILED", "invalid_model_decision"
+                                break
                             proposal = decision.proposal
+                            try:
+                                _validate_visual_action(proposal, observation)
+                                if proposal.action_type == "finish":
+                                    fields = _fields_from_decision(decision)
+                            except BrowserPolicyError:
+                                receipts.append(
+                                    _rejected_receipt(
+                                        proposal,
+                                        observation,
+                                        "ACTION_REJECTED",
+                                        "action_rejected",
+                                    )
+                                )
+                                status, reason = "FAILED", "action_rejected"
+                                break
                             if proposal.action_type == "finish":
-                                fields = _fields_from_decision(decision)
                                 status = (
                                     "SUCCEEDED"
                                     if all(fields.values())

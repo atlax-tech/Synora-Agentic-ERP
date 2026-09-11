@@ -156,6 +156,19 @@ def _model_output_size(decision: HybridDecision) -> int:
     return len(json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")))
 
 
+def _rejected_receipt(
+    proposal: ActionProposal, observation: Observation, error_code: str, reason: str
+) -> ActionReceipt:
+    return ActionReceipt(
+        action_id=proposal.action_id,
+        observation_id=proposal.observation_id,
+        result="REJECTED",
+        error_code=error_code,
+        before_observation_id=observation.observation_id,
+        stop_reason=reason,
+    )
+
+
 def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> HybridRun:
     """Run a hybrid task where every decision sees one synchronized frame."""
 
@@ -215,10 +228,17 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     stop_reason = "model_call_budget"
                     break
                 model_started = monotonic()
-                decision = decider(frame, spec)
+                try:
+                    decision = decider(frame, spec)
+                except Exception:
+                    status = "FAILED"
+                    stop_reason = "model_call_failed"
+                    break
                 model_elapsed = monotonic() - model_started
                 if not isinstance(decision, HybridDecision):
-                    raise BrowserPolicyError("hybrid decider returned an invalid decision")
+                    status = "FAILED"
+                    stop_reason = "invalid_model_decision"
+                    break
                 model_calls += 1
                 if model_elapsed > spec.budget.action_timeout_seconds:
                     status = "BUDGET_EXCEEDED"
@@ -232,9 +252,9 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "model_output_budget"
                     break
-                _validate_hybrid_action(decision, frame)
                 proposal = decision.proposal
                 try:
+                    _validate_hybrid_action(decision, frame)
                     progress.record(
                         frame.observation.page_version,
                         json.dumps(
@@ -245,13 +265,28 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                             separators=(",", ":"),
                         ),
                     )
-                except RecoveryFailure as failure:
-                    status = "BUDGET_EXCEEDED" if failure.code == "ACTION_BUDGET" else "FAILED"
-                    stop_reason = failure.code
+                except (BrowserPolicyError, RecoveryFailure) as failure:
+                    code = getattr(failure, "code", "ACTION_REJECTED")
+                    receipts.append(_rejected_receipt(proposal, frame.observation, code, code))
+                    status = "BUDGET_EXCEEDED" if code == "ACTION_BUDGET" else "FAILED"
+                    stop_reason = code
                     break
                 if proposal.action_type == "finish":
-                    fields = _safe_fields(decision.fields)
-                    visual_fields = _safe_fields(decision.visual_fields)
+                    try:
+                        fields = _safe_fields(decision.fields)
+                        visual_fields = _safe_fields(decision.visual_fields)
+                    except BrowserPolicyError:
+                        receipts.append(
+                            _rejected_receipt(
+                                proposal,
+                                frame.observation,
+                                "ANSWER_REJECTED",
+                                "answer_rejected",
+                            )
+                        )
+                        status = "FAILED"
+                        stop_reason = "answer_rejected"
+                        break
                     structural_fields = _safe_fields(_fields(page))
                     trusted = fixture_fields(spec.purchase_order)
                     if trusted is None:

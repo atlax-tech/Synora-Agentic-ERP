@@ -118,6 +118,19 @@ def _model_output_size(decision: VisualDecision) -> int:
     return len(json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")))
 
 
+def _rejected_receipt(
+    proposal: ActionProposal, observation: Observation, error_code: str, reason: str
+) -> ActionReceipt:
+    return ActionReceipt(
+        action_id=proposal.action_id,
+        observation_id=proposal.observation_id,
+        result="REJECTED",
+        error_code=error_code,
+        before_observation_id=observation.observation_id,
+        stop_reason=reason,
+    )
+
+
 def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> VisualRun:
     """Run a screenshot-only task with a bounded, injected visual decider."""
 
@@ -177,10 +190,17 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     stop_reason = "model_call_budget"
                     break
                 model_started = monotonic()
-                decision = decider(screenshot, observation, spec)
+                try:
+                    decision = decider(screenshot, observation, spec)
+                except Exception:
+                    status = "FAILED"
+                    stop_reason = "model_call_failed"
+                    break
                 model_elapsed = monotonic() - model_started
                 if not isinstance(decision, VisualDecision):
-                    raise BrowserPolicyError("visual decider returned an invalid decision")
+                    status = "FAILED"
+                    stop_reason = "invalid_model_decision"
+                    break
                 model_calls += 1
                 if model_elapsed > spec.budget.action_timeout_seconds:
                     status = "BUDGET_EXCEEDED"
@@ -194,9 +214,9 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                     status = "BUDGET_EXCEEDED"
                     stop_reason = "model_output_budget"
                     break
-                _validate_visual_action(decision.proposal, observation)
                 proposal = decision.proposal
                 try:
+                    _validate_visual_action(proposal, observation)
                     progress.record(
                         observation.page_version,
                         json.dumps(
@@ -207,12 +227,24 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
                             separators=(",", ":"),
                         ),
                     )
-                except RecoveryFailure as failure:
-                    status = "BUDGET_EXCEEDED" if failure.code == "ACTION_BUDGET" else "FAILED"
-                    stop_reason = failure.code
+                except (BrowserPolicyError, RecoveryFailure) as failure:
+                    code = getattr(failure, "code", "ACTION_REJECTED")
+                    receipts.append(_rejected_receipt(proposal, observation, code, code))
+                    status = "BUDGET_EXCEEDED" if code == "ACTION_BUDGET" else "FAILED"
+                    stop_reason = code
                     break
                 if proposal.action_type == "finish":
-                    fields = _fields_from_decision(decision)
+                    try:
+                        fields = _fields_from_decision(decision)
+                    except BrowserPolicyError:
+                        receipts.append(
+                            _rejected_receipt(
+                                proposal, observation, "ANSWER_REJECTED", "answer_rejected"
+                            )
+                        )
+                        status = "FAILED"
+                        stop_reason = "answer_rejected"
+                        break
                     trusted = fixture_fields(spec.purchase_order)
                     if trusted is None:
                         status = "NOT_FOUND"

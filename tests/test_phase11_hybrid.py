@@ -208,7 +208,7 @@ def test_hybrid_success_receipt_links_after_observation() -> None:
                     target_ref="order:PUR-ORD-0001",
                 )
             )
-        fields = {
+        fields: dict[str, str | None] = {
             "purchase_order": "PUR-ORD-0001",
             "supplier": "Supplier A",
             "status": "To Receive and Bill",
@@ -238,6 +238,36 @@ def test_hybrid_success_receipt_links_after_observation() -> None:
 
     assert run.result.status == "SUCCEEDED"
     assert all(receipt.after_observation_id is not None for receipt in run.result.actions[:2])
+
+
+def test_hybrid_task_records_stale_action_as_structured_rejection() -> None:
+    def decider(_frame: HybridFrame, _spec: TaskSpec) -> HybridDecision:
+        return HybridDecision(
+            proposal=ActionProposal(
+                action_type="wait",
+                observation_id=Observation(
+                    page_version="hybrid:stale", source="synthetic", mode="hybrid"
+                ).observation_id,
+            )
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_hybrid_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-hybrid-stale-action",
+                    purchase_order="PUR-ORD-0001",
+                    mode="hybrid",
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "FAILED"
+    assert run.result.stop_reason == "ACTION_REJECTED"
+    assert run.result.actions[0].result == "REJECTED"
 
 
 def test_hybrid_rejects_coordinate_or_unknown_actions() -> None:

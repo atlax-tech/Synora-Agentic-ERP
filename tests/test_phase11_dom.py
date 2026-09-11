@@ -518,3 +518,31 @@ def test_visual_task_enforces_model_deadline_and_output_budget() -> None:
     assert timed.result.stop_reason == "model_timeout"
     assert limited.result.status == "BUDGET_EXCEEDED"
     assert limited.result.stop_reason == "model_output_budget"
+
+
+def test_visual_task_records_stale_action_as_structured_rejection() -> None:
+    def decider(_image: bytes, _observation: object, _spec: TaskSpec) -> VisualDecision:
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="click",
+                observation_id=UUID("00000000-0000-0000-0000-000000000001"),
+                x=1,
+                y=1,
+            )
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-stale-action", purchase_order="PUR-ORD-0001", mode="vision"
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "FAILED"
+    assert run.result.stop_reason == "ACTION_REJECTED"
+    assert run.result.actions[0].result == "REJECTED"
