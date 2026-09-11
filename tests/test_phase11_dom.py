@@ -347,6 +347,151 @@ def test_visual_task_uses_only_screenshots_and_validates_final_fields() -> None:
     assert run.result.actions[0].after_observation_id is not None
 
 
+def test_visual_task_waits_for_ready_before_model_observation() -> None:
+    calls = 0
+
+    def decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return VisualDecision(
+                proposal=ActionProposal(
+                    action_type="click",
+                    observation_id=observation.observation_id,  # type: ignore[attr-defined]
+                    x=700,
+                    y=300,
+                )
+            )
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="finish",
+                observation_id=observation.observation_id,  # type: ignore[attr-defined]
+            ),
+            fields={
+                "purchase_order": "PUR-ORD-0001",
+                "supplier": "Supplier A",
+                "status": "To Receive and Bill",
+                "currency": "CNY",
+            },
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-async-ready",
+                    purchase_order="PUR-ORD-0001",
+                    mode="vision",
+                    scenario="async",
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "SUCCEEDED"
+    assert calls == 2
+
+
+def test_visual_task_never_sends_terminal_initial_page_to_model() -> None:
+    called = False
+
+    def decider(_image: bytes, _observation: object, _spec: TaskSpec) -> VisualDecision:
+        nonlocal called
+        called = True
+        raise AssertionError("terminal page must not reach the visual model")
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-permission",
+                    purchase_order="PUR-ORD-0001",
+                    mode="vision",
+                    scenario="permission",
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "PERMISSION_DENIED"
+    assert run.result.stop_reason == "PERMISSION_DENIED"
+    assert called is False
+    assert run.observations == ()
+    assert run.screenshots == ()
+
+
+def test_visual_task_stops_before_capturing_expired_session_page() -> None:
+    calls = 0
+
+    def decider(_image: bytes, observation: object, _spec: TaskSpec) -> VisualDecision:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise AssertionError("expired session page must not reach the visual model")
+        return VisualDecision(
+            proposal=ActionProposal(
+                action_type="click",
+                observation_id=observation.observation_id,  # type: ignore[attr-defined]
+                x=700,
+                y=340,
+            )
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-auth-expired",
+                    purchase_order="PUR-ORD-0001",
+                    mode="vision",
+                    scenario="auth_expired",
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "AUTH_REQUIRED"
+    assert run.result.stop_reason == "AUTH_REQUIRED"
+    assert calls == 1
+    assert len(run.screenshots) >= 1
+    assert all("Sign in again" not in item.content for item in run.observations)
+
+
+def test_visual_task_stops_when_page_never_becomes_ready() -> None:
+    called = False
+
+    def decider(_image: bytes, _observation: object, _spec: TaskSpec) -> VisualDecision:
+        nonlocal called
+        called = True
+        raise AssertionError("unready page must not reach the visual model")
+
+    try:
+        with _server() as base_url:
+            run = run_visual_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-vision-page-timeout",
+                    purchase_order="PUR-ORD-0001",
+                    mode="vision",
+                    scenario="timeout",
+                    budget=TrialBudget(action_timeout_seconds=0.05, wall_time_seconds=1.0),
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "FAILED"
+    assert run.result.stop_reason == "PAGE_NOT_READY"
+    assert called is False
+
+
 def test_generic_visual_runner_rejects_real_source_before_decider() -> None:
     called = False
 

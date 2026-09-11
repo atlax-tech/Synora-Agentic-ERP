@@ -32,6 +32,7 @@ from labs.web_gui.recovery import (
     RecoveryFailure,
     remaining_timeout_ms,
     run_with_deadline,
+    wait_for_ready,
 )
 from labs.web_gui.security import BrowserSecurityPolicy
 
@@ -256,28 +257,45 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
         page.on("download", on_download)
         page.on("dialog", on_dialog)
         try:
+            frame: HybridFrame | None = None
             page.goto(
                 f"{origin}/?scenario={spec.scenario}",
                 wait_until="domcontentloaded",
                 timeout=int(spec.budget.action_timeout_seconds * 1000),
             )
-            try:
-                frame = _hybrid_frame(
-                    page,
-                    spec,
-                    timeout_ms=remaining_timeout_ms(
-                        started,
-                        wall_time_seconds=spec.budget.wall_time_seconds,
-                        action_timeout_seconds=spec.budget.action_timeout_seconds,
-                    ),
-                )
-            except RecoveryFailure as failure:
-                frame = None
-                status = "BUDGET_EXCEEDED"
-                stop_reason = failure.code
+            terminal = _terminal_page_state(page)
+            if terminal is not None:
+                status, stop_reason = terminal
             else:
-                assert frame is not None
-                frames.append(frame)
+                try:
+                    wait_for_ready(
+                        page,
+                        timeout_ms=remaining_timeout_ms(
+                            started,
+                            wall_time_seconds=spec.budget.wall_time_seconds,
+                            action_timeout_seconds=spec.budget.action_timeout_seconds,
+                        ),
+                        scenario=spec.scenario,
+                    )
+                    frame = _hybrid_frame(
+                        page,
+                        spec,
+                        timeout_ms=remaining_timeout_ms(
+                            started,
+                            wall_time_seconds=spec.budget.wall_time_seconds,
+                            action_timeout_seconds=spec.budget.action_timeout_seconds,
+                        ),
+                    )
+                except RecoveryFailure as failure:
+                    status = (
+                        "BUDGET_EXCEEDED"
+                        if failure.code in {"OBSERVATION_TIMEOUT", "WALL_TIME_BUDGET"}
+                        else "FAILED"
+                    )
+                    stop_reason = failure.code
+                else:
+                    assert frame is not None
+                    frames.append(frame)
             for _ in range(spec.budget.max_actions):
                 if frame is None:
                     break
@@ -509,6 +527,44 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                     )
                     status = "FAILED"
                     stop_reason = "hybrid_action_failed"
+                    break
+                terminal = _terminal_page_state(page)
+                if terminal is not None:
+                    receipts.append(
+                        ActionReceipt(
+                            action_id=proposal.action_id,
+                            observation_id=proposal.observation_id,
+                            result="APPLIED",
+                            before_observation_id=frame.observation.observation_id,
+                        )
+                    )
+                    status, stop_reason = terminal
+                    break
+                try:
+                    wait_for_ready(
+                        page,
+                        timeout_ms=remaining_timeout_ms(
+                            started,
+                            wall_time_seconds=spec.budget.wall_time_seconds,
+                            action_timeout_seconds=spec.budget.action_timeout_seconds,
+                        ),
+                        scenario=spec.scenario,
+                    )
+                except RecoveryFailure as failure:
+                    receipts.append(
+                        _rejected_receipt(
+                            proposal,
+                            frame.observation,
+                            failure.code,
+                            failure.code,
+                        )
+                    )
+                    status = (
+                        "BUDGET_EXCEEDED"
+                        if failure.code in {"OBSERVATION_TIMEOUT", "WALL_TIME_BUDGET"}
+                        else "FAILED"
+                    )
+                    stop_reason = failure.code
                     break
                 before_frame = frame
                 try:

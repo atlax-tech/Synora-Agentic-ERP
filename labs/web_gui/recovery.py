@@ -73,6 +73,12 @@ def wait_for_ready(page: Any, *, timeout_ms: float, scenario: str) -> None:
 
     if scenario not in {"async", "timeout"}:
         return
+    # Detail pages keep the scenario query but do not expose the list's
+    # asynchronous loading marker.  Only wait when the current page actually
+    # advertises that it is still loading; otherwise a completed navigation
+    # must remain immediately observable.
+    if page.locator('[data-state="loading"]').count() == 0:
+        return
     try:
         page.wait_for_selector('[data-state="ready"]', state="attached", timeout=timeout_ms)
     except Exception as error:

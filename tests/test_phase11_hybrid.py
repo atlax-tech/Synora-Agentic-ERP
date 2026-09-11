@@ -106,6 +106,159 @@ def test_hybrid_task_keeps_dom_aria_and_screenshot_in_one_frame() -> None:
     assert all(frame.observation.page_version.startswith("hybrid:") for frame in run.frames)
 
 
+def test_hybrid_task_waits_for_ready_before_first_frame() -> None:
+    calls = 0
+
+    def decider(frame: HybridFrame, spec: TaskSpec) -> HybridDecision:
+        nonlocal calls
+        calls += 1
+        if calls <= 2:
+            assert "Data ready" in frame.dom_text
+        if calls == 1:
+            return HybridDecision(
+                proposal=ActionProposal(
+                    action_type="search",
+                    observation_id=frame.observation.observation_id,
+                    target_ref="search-input",
+                    text=spec.purchase_order,
+                )
+            )
+        if calls == 2:
+            return HybridDecision(
+                proposal=ActionProposal(
+                    action_type="click",
+                    observation_id=frame.observation.observation_id,
+                    target_ref="order:PUR-ORD-0001",
+                )
+            )
+        fields: dict[str, str | None] = {
+            "purchase_order": "PUR-ORD-0001",
+            "supplier": "Supplier A",
+            "status": "To Receive and Bill",
+            "currency": "CNY",
+        }
+        return HybridDecision(
+            proposal=ActionProposal(
+                action_type="finish", observation_id=frame.observation.observation_id
+            ),
+            fields=fields,
+            visual_fields=fields,
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_hybrid_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-hybrid-async-ready",
+                    purchase_order="PUR-ORD-0001",
+                    mode="hybrid",
+                    scenario="async",
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "SUCCEEDED"
+    assert calls == 3
+
+
+def test_hybrid_task_never_sends_terminal_initial_page_to_model() -> None:
+    called = False
+
+    def decider(_frame: HybridFrame, _spec: TaskSpec) -> HybridDecision:
+        nonlocal called
+        called = True
+        raise AssertionError("terminal page must not reach the hybrid model")
+
+    try:
+        with _server() as base_url:
+            run = run_hybrid_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-hybrid-permission",
+                    purchase_order="PUR-ORD-0001",
+                    mode="hybrid",
+                    scenario="permission",
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "PERMISSION_DENIED"
+    assert run.result.stop_reason == "PERMISSION_DENIED"
+    assert called is False
+    assert run.frames == ()
+
+
+def test_hybrid_task_stops_before_capturing_expired_session_frame() -> None:
+    calls = 0
+
+    def decider(frame: HybridFrame, _spec: TaskSpec) -> HybridDecision:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise AssertionError("expired session frame must not reach the hybrid model")
+        return HybridDecision(
+            proposal=ActionProposal(
+                action_type="click",
+                observation_id=frame.observation.observation_id,
+                target_ref="order:PUR-ORD-0001",
+            )
+        )
+
+    try:
+        with _server() as base_url:
+            run = run_hybrid_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-hybrid-auth-expired",
+                    purchase_order="PUR-ORD-0001",
+                    mode="hybrid",
+                    scenario="auth_expired",
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "AUTH_REQUIRED"
+    assert run.result.stop_reason == "AUTH_REQUIRED"
+    assert calls == 1
+    assert all("Sign in again" not in frame.dom_text for frame in run.frames)
+
+
+def test_hybrid_task_stops_when_page_never_becomes_ready() -> None:
+    called = False
+
+    def decider(_frame: HybridFrame, _spec: TaskSpec) -> HybridDecision:
+        nonlocal called
+        called = True
+        raise AssertionError("unready page must not reach the hybrid model")
+
+    try:
+        with _server() as base_url:
+            run = run_hybrid_task(
+                base_url,
+                TaskSpec(
+                    case_id="p11-hybrid-page-timeout",
+                    purchase_order="PUR-ORD-0001",
+                    mode="hybrid",
+                    scenario="timeout",
+                    budget=TrialBudget(action_timeout_seconds=0.05, wall_time_seconds=1.0),
+                ),
+                decider,
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "FAILED"
+    assert run.result.stop_reason == "PAGE_NOT_READY"
+    assert called is False
+
+
 def test_hybrid_model_prompt_keeps_structured_observation_within_bound() -> None:
     try:
         with _server() as base_url:
