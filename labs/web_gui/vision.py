@@ -57,7 +57,9 @@ except ModuleNotFoundError:  # The workspace sidecar is not installed for CLI us
 
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MAX_IMAGES = 2
-MAX_PROMPT_CHARS = 2_000
+# Hybrid observations carry bounded DOM and ARIA text alongside the screenshot.
+# Keep a finite request ceiling while leaving room for the action contract.
+MAX_PROMPT_CHARS = 10_000
 MAX_RESPONSE_BYTES = 2_000_000
 MAX_OUTPUT_TOKENS = 1_024
 VISION_TIMEOUT_SECONDS = 60.0

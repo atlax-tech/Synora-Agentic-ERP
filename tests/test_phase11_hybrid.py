@@ -19,7 +19,9 @@ from labs.web_gui.hybrid import (
     _validate_hybrid_action,
     run_hybrid_task,
 )
+from labs.web_gui.model import structured_prompt
 from labs.web_gui.recovery import RecoveryFailure
+from labs.web_gui.vision import MAX_PROMPT_CHARS
 
 
 @contextmanager
@@ -102,6 +104,31 @@ def test_hybrid_task_keeps_dom_aria_and_screenshot_in_one_frame() -> None:
     assert run.result.status == "SUCCEEDED"
     assert len(run.frames) == 3
     assert all(frame.observation.page_version.startswith("hybrid:") for frame in run.frames)
+
+
+def test_hybrid_model_prompt_keeps_structured_observation_within_bound() -> None:
+    try:
+        with _server() as base_url:
+            from labs.web_gui.browser import _playwright_sync
+
+            with _playwright_sync()() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                context = browser.new_context(service_workers="block", accept_downloads=False)
+                page = context.new_page()
+                page.goto(f"{base_url}/", wait_until="domcontentloaded", timeout=10_000)
+                spec = TaskSpec(
+                    case_id="p11-hybrid-prompt-bound",
+                    purchase_order="PUR-ORD-0001",
+                    mode="hybrid",
+                )
+                frame = _hybrid_frame(page, spec, timeout_ms=10_000)
+                prompt = structured_prompt(spec, frame.observation, spec.budget.max_actions)
+                context.close()
+                browser.close()
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert len(prompt) < MAX_PROMPT_CHARS
 
 
 def test_hybrid_observation_timeout_is_bounded() -> None:
