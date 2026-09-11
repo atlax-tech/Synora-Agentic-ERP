@@ -1,6 +1,6 @@
 # Phase 11 阶段报告（当前草稿）
 
-状态：`PENDING_FINAL_REVIEW / BLOCKED / VISION_PROVIDER_UNAVAILABLE / LIVE_GUI_MISMATCH / HARNESS_DRIFT`。
+状态：`PENDING_REVIEW_RECHECK / BLOCKED / VISION_PROVIDER_UNAVAILABLE / LIVE_GUI_MISMATCH / HARNESS_DRIFT`。
 
 本报告只描述已运行的实验和固定开发 ERP 只读证据，不把实验页面、test double、模型单次成功或开发站点结果描述为生产部署、客户采用或业务写入授权。上一份 `phase11-stage-report-draft-4708b5e.md` 是历史快照，本报告绑定当前实现和最新证据。
 
@@ -18,23 +18,23 @@ Phase 11 交付了一个隔离的 `LAB_ONLY / SYNTHETIC DATA` 采购读取实验
 2. [labs/web_gui/browser.py](../../labs/web_gui/browser.py)、[labs/web_gui/gui.py](../../labs/web_gui/gui.py)、[labs/web_gui/hybrid.py](../../labs/web_gui/hybrid.py)：结构观察、截图坐标、同步 Hybrid 和有界恢复。
 3. [labs/web_gui/model.py](../../labs/web_gui/model.py)、[labs/web_gui/vision.py](../../labs/web_gui/vision.py)、[labs/web_gui/erp_readonly.py](../../labs/web_gui/erp_readonly.py)、[labs/web_gui/erp_browser.py](../../labs/web_gui/erp_browser.py)、[labs/web_gui/erp_visual.py](../../labs/web_gui/erp_visual.py)：模型适配、真实 ERP API/Web/脱敏 GUI 对照。
 
-实现代码冻结 HEAD：`c986c27`。最新确定性 ERP 证据提交：`df71466`；live ERP/API/Web/GUI 尝试提交：`490de9b`；当前报告、卡片和 Harness 同步完成后另列最终文档 HEAD，避免自引用。
+实现代码冻结 HEAD（待本轮文档与 Harness 提交后重新记录）：`15a476e`。最新确定性 ERP 证据提交：`df71466`；live ERP/API/Web/GUI 尝试提交：`490de9b`；live 汇总校正提交：`8d90f2e`。最终文档 HEAD 将单独列出，避免自引用。
 
 ## 3. 步骤完成度
 
 | 步骤 | 当前结果 | 主要代码/证据 |
 | --- | --- | --- |
 | P11.0–P11.1 | 执行边界、预算、loopback fixture 页面/API 已完成 | `35627ba`、`ba2ff55`、execution contract |
-| P11.2 | deterministic DOM/ARIA 与 live 模型决策入口已完成；DOM 有真实成功轨迹 | `3c68460`、`925b96a`、`c986c27`、live DOM artifact |
+| P11.2 | deterministic DOM/ARIA 与 live 模型决策入口已完成；DOM 有真实成功轨迹；输出预算已接线 | `3c68460`、`925b96a`、`585f275`、live DOM artifact |
 | P11.3 | ARIA role/name 观察、临时引用和回归已完成；一次真实 ARIA 在修复后因模型超时安全停止 | `96e52c9`、`d444e97`、ARIA failure/repair artifacts |
 | P11.4 | BrowserContext origin/路由/方法、弹窗、下载、Service Worker、危险动作边界已完成 | `09d4ad8` 及 Phase11 安全回归 |
 | P11.5 | 图片协议解析、响应大小/JSON/usage 和真实探测已完成；四 role 未通过内容门禁 | `8a4568f`、`748f99f`、vision probe |
-| P11.6–P11.7 | live 截图和 Hybrid 决策接线已完成；真实视觉成功轨迹缺失 | `d227631`、`6c23440`、GUI/Hybrid runner |
+| P11.6–P11.7 | live 截图和 Hybrid 决策接线已完成；观察操作受墙钟预算约束；真实视觉成功轨迹缺失 | `d227631`、`6c23440`、`a6ab919`、GUI/Hybrid runner |
 | P11.8–P11.10 | 异步、恢复、会话、弹窗、页面变化失败/修复证据已完成 | `3582958`、`1a1ded8`、page-change artifacts |
 | P11.11 | deterministic ERP API/Web 三次稳定；live Web 一次与 API 匹配 | `3f5d55a`、`df71466`、live ERP artifact |
-| P11.12 | 脱敏 GUI runner 可运行并完成一次真实 provider 调用，但字段 mismatch；三方成功未完成 | `7656119`、`490de9b`、visual boundary |
-| P11.13 | deterministic 45 trial/33 fault 已冻结；live 引擎和元数据已接线，完整 live 矩阵受视觉门禁阻塞 | `3674be8`、`dc09d6f` |
-| P11.14–P11.15 | 全量回归完成；新周期独立 Review、权威状态和 Harness 指纹同步待完成 | 本报告及后续收口提交 |
+| P11.12 | 脱敏 GUI runner 可运行并完成一次真实 provider 调用，但字段 mismatch；GUI 成功现绑定 API-after；三方成功未完成 | `7656119`、`490de9b`、`8aca94b`、visual boundary |
+| P11.13 | deterministic 45 trial/33 fault 已冻结；live 引擎和元数据已接线，完整 live 矩阵受视觉门禁阻塞；汇总漏项已校正 | `3674be8`、`dc09d6f`、`8d90f2e` |
+| P11.14–P11.15 | 全量回归完成；首轮 Review 的四项修复已完成，复查、权威状态和 Harness 指纹同步待完成 | 本报告及后续收口提交 |
 
 ## 4. 运行证据
 
@@ -70,45 +70,49 @@ v2 将列表行属性由 `data-order-name` 改为 `data-order-id`。原始失败
 
 - 动作仅允许预定义打开、当前观察目标点击、限定搜索、滚动、有界等待和结束；模型不能指定任意 URL、JavaScript、剪贴板、文件、上传、下载、ERP 写入或任意 HTTP。
 - BrowserContext 禁用 Service Worker，拒绝外域、非目标文档、弹窗和下载；每个动作绑定 Observation ID/page version，视觉坐标绑定 CSS 视口。
-- 每 trial 上限为 12 actions、8 model calls、180 秒、1024 output tokens；图片最多 2 张 PNG、每张 ≤2 MiB，响应 ≤2,000,000 bytes。没有 usage 或价格证据时保持 `null`。
+- 每 trial 上限为 12 actions、8 model calls、180 秒、1024 output tokens；预算会传入文本/视觉 provider，图片最多 2 张 PNG、每张 ≤2 MiB，响应 ≤2,000,000 bytes。没有 usage 或价格证据时保持 `null`。
 - 真实 ERP 只读使用正常 typed Gateway、独立会话和精确 allowlist；API-before/after 未发现业务状态变化。任何 provider 字段 mismatch、模型超时、会话失效或权限状态均 fail closed。
 
 ## 6. 出口门禁
 
 | 检查 | 结果 |
 | --- | --- |
-| `make format-check` | 退出码 0，428 files already formatted |
+| `make format-check` | 退出码 0，430 files already formatted |
 | `make lint` | 退出码 0 |
-| `make type` | 退出码 0，132 source files |
-| `make unit` | 退出码 0，936 passed，55 warnings |
+| `make type` | 退出码 0，133 source files |
+| `make unit` | 退出码 0，948 passed，55 warnings |
 | `make integration` | 退出码 0，Frappe app-test 248 tests OK |
 | `uv run --python 3.14 --group web-gui-lab mypy labs/web_gui` | 退出码 0，17 files |
-| `uv run --python 3.14 --group web-gui-lab pytest tests/test_phase11_*.py` | 退出码 0，80 passed |
-| `validate_harness_structure.py` | 退出码 0，valid，references 804，broken 0 |
+| `uv run --python 3.14 --group web-gui-lab pytest tests/test_phase11_*.py` | 退出码 0，92 passed |
+| `validate_harness_structure.py` | 退出码 0，valid，references 830，broken 0 |
 | `validate_manifest.py` | 退出码 0，valid |
-| `check_references.py` | 退出码 0，checked 804，broken 0 |
+| `check_references.py` | 退出码 0，checked 830，broken 0 |
 | `detect_drift.py` | 退出码 1；仅 `pyproject.toml`、`uv.lock` fingerprint drift |
 | `git diff --check` | 退出码 0 |
 
 Ponytail 只读审计未发现本轮新增可安全删除的复杂度；全仓仅 1 条已有 `ponytail:` 标记且带升级触发器。没有为追求分数删除安全、错误处理、可访问性或数据保护。
 
-## 7. 当前阻断、风险和采用结论
+## 7. 首轮审查与修复复验
+
+首轮独立对抗 Review 结论为 `CHANGES_REQUIRED`，指出四项问题：模型输出预算未接线、live 汇总和报告证据不一致、观察操作缺少有限墙钟 timeout、GUI 成功未绑定 API-after。对应修复提交为 `585f275`、`8d90f2e`、`a6ab919` 和 `8aca94b`；新增的定向测试与全量门禁已通过。当前仍等待同一授权周期的唯一一次复查，不能把首轮结果写成 PASS。
+
+## 8. 当前阻断、风险和采用结论
 
 1. `R11-VISION`：四个已配置图片 role 未通过真实内容探测，且一次真实 GUI 返回事实错误字段。没有可冻结的视觉模型，因此 P11.5、P11.12 的视觉成功门禁未关闭。
-2. `R11-REVIEW`：本报告等待本授权周期的新独立对抗 Review；上一周期第二轮 `CHANGES_REQUIRED` 只作为历史输入，不能冒充当前 PASS。
+2. `R11-REVIEW`：四项修复已完成，本报告等待本授权周期的 Review 复查；首轮 `CHANGES_REQUIRED` 只作为修复依据，不能冒充当前 PASS。
 3. `R11-HARNESS`：structure、manifest、references 已通过，但 pyproject/uv.lock 指纹需按已批准范围同步后再复跑 drift。
 4. `R11-TEXT-LATENCY`：DOM 有一次 live 成功，ARIA 修复后一次因模型超时停止；当前样本不足以宣称稳定 p95 或生产收益。
 
 typed API 保持业务默认。DOM/ARIA 可作为 `LAB_ONLY CANDIDATE`，前提是页面结构、可访问名称和模型延迟适用；Hybrid 仍需同版本结构/截图并在冲突时停止；截图 GUI 保持 `BLOCKED / EXPERIMENT ONLY`，直到真实图片模型读对两张合成图并完成同一真实 ERP 单据的 API/Web/GUI 对照。Phase 11 不授予业务 Runtime 或 ERP 写入权限，不进入 Phase 12。
 
-## 8. 新周期剩余工作
+## 9. 新周期剩余工作
 
 1. 在当前实现和本报告上启动一次独立对抗 Review；如需修复，先补回归和受影响门禁，最多一轮复查。
 2. Review PASS 后，按已批准范围只同步 `.harness/source-index.json` 中 pyproject/uv.lock 两个来源指纹及 `.harness/manifest.json` 管理哈希；不修改 README 或其它 Harness 内容。
 3. 复跑 structure、manifest、references、drift、全量静态/测试门禁，更新最终文档 HEAD 和哈希。
 4. 只有图片探测和真实 GUI 三方对照也通过时，才可能将阶段状态改为 `COMPLETED / PASS / READY FOR NEXT PHASE`；当前证据不满足，保留 `BLOCKED`。
 
-## 9. 手工验证
+## 10. 手工验证
 
 ```bash
 uv run --python 3.14 --group web-gui-lab python -m labs.web_gui --help
@@ -119,6 +123,6 @@ uv run --python 3.14 --group web-gui-lab python -m labs.web_gui benchmark --suit
 
 真实 provider/ERP 验收需在受保护 shell 中先 `source env/dev/.env`，再显式使用 `--engine live`；只检查状态、字段、调用摘要、版本和 policy events，不打印环境变量、prompt、截图正文或原始响应。
 
-## 10. 学习记录边界
+## 11. 学习记录边界
 
 本阶段按用户指令不生成学习笔记、不自动安排问答、不触发 Assignment、不调用 c2c/codex-with-chatgpt。阶段结束后只有用户明确触发答疑，才按学习笔记规则记录问题和回答。

@@ -1,14 +1,15 @@
 # Phase 11 Adoption Card
 
-状态：`PENDING_FINAL_REVIEW / BLOCKED / VISION_PROVIDER_UNAVAILABLE / LIVE_GUI_MISMATCH / HARNESS_DRIFT`。
+状态：`PENDING_REVIEW_RECHECK / BLOCKED / VISION_PROVIDER_UNAVAILABLE / LIVE_GUI_MISMATCH / HARNESS_DRIFT`。
 
-实现代码冻结 HEAD：`c986c27`。本卡只描述实验和固定开发 ERP 只读证据，不授予业务 Runtime 或 ERP 写入权限。
+实现代码冻结 HEAD（待最终文档提交后重新记录）：`15a476e`。本卡只描述实验和固定开发 ERP 只读证据，不授予业务 Runtime 或 ERP 写入权限。
 
 主要证据：
 
 - Synthetic deterministic：[phase11-benchmark-synthetic.json](phase11-benchmark-synthetic.json)，SHA-256 `1956c43950d3a22a407827cc7f8f1991eb64a9324b49a14bb4bd4c72b80487f6`，45 条业务 trial、33 条故障记录。
 - 真实 ERP deterministic API/Web：[phase11-benchmark-erp-readonly-deterministic-20260911.json](phase11-benchmark-erp-readonly-deterministic-20260911.json)，SHA-256 `b8a12b8cf958053583f0f2c1f52de18e5ed151747154f5621fbf7a3be1805f24`，3/3 `MATCHED`。
 - 真实 ERP live API/Web/GUI：[phase11-benchmark-erp-readonly-live-d444e97.json](phase11-benchmark-erp-readonly-live-d444e97.json)，SHA-256 `1973dbe929dc2eefc989cf7a79e074f212df98c2067e7ce793d05cba553e08bf`，API/Web `MATCHED`，GUI `INCOMPLETE / visual_fields_mismatch`。
+- live 汇总校正：[phase11-benchmark-erp-readonly-live-reconciled-8fd20d8.json](phase11-benchmark-erp-readonly-live-reconciled-8fd20d8.json)，SHA-256 `4c305afa040d884b786eee0f0c26e27b129516b870d1ab3c57c458ea457cbf6c`，逐 trial 汇总保留 `INCOMPLETE=1`。
 - 图片探测：[phase11-vision-probe-925b96a.json](phase11-vision-probe-925b96a.json)，SHA-256 `273cc7971d7191260cd393f08de87b45a20d76c619de06c98674628598dd12fb`；四个已配置 role 均未通过两张合成图的可读性验证，状态 `VISION_PROVIDER_UNAVAILABLE`。
 
 ## 方法决策
@@ -41,7 +42,7 @@
 ## 当前风险和门禁
 
 - 图片 provider 能力和 live GUI mismatch 是阶段必做阻断；不得用 DOM/API 答案或 recorded response 填补。
-- 新周期独立 Review 尚待启动；上一周期 `CHANGES_REQUIRED` 保留为历史背景，不能当作当前 PASS。
+- 首轮独立 Review 的四项修复已完成，当前等待同一授权周期的唯一一次复查；首轮 `CHANGES_REQUIRED` 保留为修复依据，不能当作当前 PASS。
 - `.harness` structure/manifest/references 已通过，pyproject/uv.lock 指纹同步和 drift 复跑待最终审查后执行。
 
 本卡保持 `BLOCKED`，typed API 继续作为业务默认；Phase 11 结束后停止，不进入 Phase 12。
