@@ -13,7 +13,11 @@ from urllib.parse import quote
 
 from labs.web_gui.browser import BrowserPolicyError, BrowserUnavailable, _origin, _playwright_sync
 from labs.web_gui.contracts import ActionReceipt, Observation, TaskResult, TaskSpec
-from labs.web_gui.erp_browser import _RealPolicy, _response_body_too_large
+from labs.web_gui.erp_browser import (
+    MAX_STATIC_RESPONSE_BYTES,
+    _RealPolicy,
+    _response_body_too_large,
+)
 from labs.web_gui.erp_readonly import (
     ERP_LOGIN_PATH,
     MAX_RESPONSE_BYTES,
@@ -240,19 +244,22 @@ def run_erp_visual_task(
             if not policy.check(request.method, request.url):
                 route.abort(error_code="blockedbyclient")
                 return
-            if path.startswith("/api/") or path == f"/desk/purchase-order/{config.purchase_order}":
-                try:
-                    response = route.fetch()
-                    body = response.body()
-                    if _response_body_too_large(body, response.headers):
+            try:
+                response = route.fetch()
+                body = response.body()
+                limit = (
+                    MAX_STATIC_RESPONSE_BYTES
+                    if any(path.startswith(prefix) for prefix in policy._static_prefixes)
+                    else MAX_RESPONSE_BYTES
+                )
+                if _response_body_too_large(body, response.headers, limit=limit):
+                    if "RESPONSE_TOO_LARGE" not in response_events:
                         response_events.append("RESPONSE_TOO_LARGE")
-                        route.abort(error_code="blockedbyclient")
-                        return
-                    route.fulfill(response=response)
-                except Exception:
                     route.abort(error_code="blockedbyclient")
-                return
-            route.continue_()
+                    return
+                route.fulfill(response=response)
+            except Exception:
+                route.abort(error_code="blockedbyclient")
 
         context.route("**/*", route_handler)
         page = context.new_page()
