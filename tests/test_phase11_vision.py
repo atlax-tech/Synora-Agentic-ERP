@@ -71,6 +71,7 @@ def test_probe_uses_existing_role_and_never_returns_key() -> None:
     assert result.observation.currency == "CNY"
     assert result.prompt_tokens == 10
     assert seen[0]["model"] == "vision-test"
+    assert seen[0]["messages"][0]["content"][1]["image_url"]["detail"] == "high"
     assert base64.b64encode(PNG).decode() in json.dumps(seen[0])
     assert "secret-key" not in repr(result)
 
@@ -126,6 +127,27 @@ def test_probe_reads_standard_responses_nested_output() -> None:
     assert result.status == "PASS"
     assert result.prompt_tokens == 4
     assert result.completion_tokens == 7
+
+
+def test_probe_accepts_a_strict_json_code_fence_only() -> None:
+    result = parse_vision_observation(
+        "```json\n"
+        + json.dumps(
+            {
+                "purchase_order": "PUR-ORD-0001",
+                "supplier": "Supplier A",
+                "status": "To Receive and Bill",
+                "currency": "CNY",
+                "complete": True,
+            }
+        )
+        + "\n```",
+        PNG,
+    )
+    assert result.purchase_order == "PUR-ORD-0001"
+
+    with pytest.raises(VisionProbeError, match="RESPONSE_SCHEMA"):
+        parse_vision_observation("prefix ```json\n{}\n```", PNG)
 
 
 def test_probe_without_config_is_an_explicit_block() -> None:

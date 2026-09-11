@@ -84,7 +84,7 @@ def _probe_vision() -> dict[str, object]:
                 images: list[bytes] = []
                 for purchase_order in ("PUR-ORD-0001", "PUR-ORD-0002"):
                     page.goto(
-                        f"{base_url}/?q={purchase_order}",
+                        f"{base_url}/purchase-orders/{purchase_order}",
                         wait_until="domcontentloaded",
                         timeout=10_000,
                     )

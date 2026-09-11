@@ -37,6 +37,7 @@ MAX_IMAGES = 2
 MAX_PROMPT_CHARS = 2_000
 MAX_RESPONSE_BYTES = 2_000_000
 MAX_OUTPUT_TOKENS = 1_024
+VISION_TIMEOUT_SECONDS = 60.0
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 _ROLE_ENV: dict[str, tuple[str, str, str, bool]] = {
@@ -137,16 +138,18 @@ def _payload(prompt: str, images: list[str], model: str, responses: bool) -> dic
             "input": [{"role": "user", "content": content}],
             "max_output_tokens": MAX_OUTPUT_TOKENS,
             "store": False,
+            "text": {"format": {"type": "json_object"}},
         }
     content = [{"type": "text", "text": prompt}]
     content.extend(
-        {"type": "image_url", "image_url": {"url": image, "detail": "low"}} for image in images
+        {"type": "image_url", "image_url": {"url": image, "detail": "high"}} for image in images
     )
     return {
         "model": model,
         "messages": [{"role": "user", "content": content}],
         "max_tokens": MAX_OUTPUT_TOKENS,
         "stream": False,
+        "response_format": {"type": "json_object"},
     }
 
 
@@ -205,11 +208,20 @@ def _response_text(data: object) -> tuple[str, int | None, int | None]:
     raise VisionProbeError("RESPONSE_CONTENT_MISSING")
 
 
-def parse_vision_observation(text: str, image: bytes) -> VisionObservation:
+def _json_loads(text: str) -> object:
+    candidate = text.strip()
+    if candidate.startswith("```") and candidate.endswith("```"):
+        first_line, _, body = candidate.partition("\n")
+        if first_line.removeprefix("```").strip().casefold() in {"", "json"}:
+            candidate = body[:-3].rstrip()
     try:
-        data = json.loads(text)
+        return json.loads(candidate)
     except (TypeError, ValueError) as error:
         raise VisionProbeError("RESPONSE_SCHEMA") from error
+
+
+def parse_vision_observation(text: str, image: bytes) -> VisionObservation:
+    data = _json_loads(text)
     if not isinstance(data, dict) or set(data) != {
         "purchase_order",
         "supplier",
@@ -239,10 +251,7 @@ def parse_vision_observation(text: str, image: bytes) -> VisionObservation:
 def _parse_observations(text: str, images: Sequence[bytes]) -> tuple[VisionObservation, ...]:
     if len(images) == 1:
         return (parse_vision_observation(text, images[0]),)
-    try:
-        data = json.loads(text)
-    except (TypeError, ValueError) as error:
-        raise VisionProbeError("RESPONSE_SCHEMA") from error
+    data = _json_loads(text)
     if not isinstance(data, dict) or set(data) != {"observations"}:
         raise VisionProbeError("RESPONSE_SCHEMA")
     raw = data.get("observations")
@@ -311,7 +320,7 @@ def probe_vision(
             headers["Authorization"] = f"Bearer {api_key}"
             proxy = values.get(MODEL_PROXY_ENV, "").strip() or None
             with httpx.Client(
-                timeout=httpx.Timeout(30.0),
+                timeout=httpx.Timeout(VISION_TIMEOUT_SECONDS),
                 transport=transport,
                 trust_env=False,
                 follow_redirects=False,
