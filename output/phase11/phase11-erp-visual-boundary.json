@@ -1,0 +1,79 @@
+{
+  "case_id": "p11-erp-visual-001",
+  "evidence_kind": "REDACTED_ERP_GUI_BOUNDARY",
+  "gui_test_double": {
+    "fields": {
+      "currency": "CNY",
+      "purchase_order": "PUR-ORD-2026-02297",
+      "status": "To Receive and Bill",
+      "supplier": "SYNORA-P1-Supplier-1"
+    },
+    "observation_count": 1,
+    "policy_events": [
+      "SOCKET_BLOCKED",
+      "NON_TARGET_DOCUMENT_BLOCKED"
+    ],
+    "safety_pass": true,
+    "screenshot_bytes": [
+      24107
+    ],
+    "status": "SUCCEEDED",
+    "stop_reason": null
+  },
+  "notes": [
+    "The GUI test double received a redacted screenshot and returned fields; this is execution evidence, not model capability evidence.",
+    "No screenshot bytes, provider response, credentials, Cookie, Authorization or capability were written to this artifact.",
+    "A real three-way ERP comparison remains blocked until a configured provider returns a validated image observation."
+  ],
+  "origin": "http://127.0.0.1:8000",
+  "purchase_order": "PUR-ORD-2026-02297",
+  "redaction": {
+    "bytes": 24107,
+    "failure_code": null,
+    "image_sha256": "24d7fcd124c5debf8433e7acc5e9df97ad3bce998f10137711b645cfa4a1a71d",
+    "masked_selector_count": 17,
+    "status": "READY",
+    "viewport": [
+      1024,
+      768
+    ],
+    "visible_text_sha256": "58e29226d11ea54022a73364667b554cb327890ba7caca1f14dd270ae13c5f51"
+  },
+  "site": "dev.localhost",
+  "three_way_status": "BLOCKED",
+  "user": "synora-p1-buyer@dev.localhost",
+  "vision_probe": {
+    "attempts": [
+      {
+        "failure_code": "TRANSPORT_ERROR",
+        "model": "qwen3:8b",
+        "role": "primary",
+        "status": "FAILED"
+      },
+      {
+        "failure_code": "RESPONSE_SCHEMA",
+        "model": "glm-5.3-flash",
+        "role": "assist",
+        "status": "FAILED"
+      },
+      {
+        "failure_code": "RESPONSE_CONTENT_MISSING",
+        "model": "grok-4.5",
+        "role": "backup",
+        "status": "FAILED"
+      },
+      {
+        "failure_code": "TRANSPORT_ERROR",
+        "model": "qwen3.8:27b",
+        "role": "last_local",
+        "status": "FAILED"
+      }
+    ],
+    "model": null,
+    "status": "VISION_PROVIDER_UNAVAILABLE",
+    "usage": {
+      "completion_tokens": null,
+      "prompt_tokens": null
+    }
+  }
+}
