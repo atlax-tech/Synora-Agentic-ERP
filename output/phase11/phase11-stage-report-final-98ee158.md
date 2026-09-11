@@ -109,7 +109,7 @@ v2 把列表行属性从 `data-order-name` 改为 `data-order-id`。修复前 ar
 | `python3 .agents/skills/harness-build/scripts/validate_harness_structure.py .` | 0 | valid；887 references，broken 0；read-only |
 | `python3 .agents/skills/harness-check/scripts/validate_manifest.py .` | 0 | valid；warnings 0 |
 | `python3 .agents/skills/harness-check/scripts/check_references.py .` | 0 | 887 checked，broken 0，scan 未截断 |
-| `python3 .agents/skills/harness-check/scripts/score_harness_health.py .` | 0 | read-only 79/100，grade C；分数受 host evidence 和 drift 影响，不作业务通过依据 |
+| `python3 .agents/skills/harness-check/scripts/score_harness_health.py .` | 0 | read-only 87/100，grade B；语义维度仍按 Harness 规则限分，不作业务通过依据 |
 | `git diff --check` | 0 | whitespace clean |
 | `python3 .agents/skills/harness-check/scripts/detect_drift.py .` | 0 | Harness 同步后无剩余 drift |
 
