@@ -187,9 +187,9 @@ def _locator_for(page: Any, target_ref: str, mode: str = "dom") -> Any:
 def _apply_action(
     page: Any, proposal: ActionProposal, snapshot: DomSnapshot, spec: TaskSpec
 ) -> ActionReceipt:
-    _validate_action(proposal, snapshot)
     before = snapshot.observation
     try:
+        _validate_action(proposal, snapshot)
         if proposal.action_type == "search":
             locator = _locator_for(page, "search-input", snapshot.observation.mode)
             locator.fill(proposal.text or "", timeout=spec.budget.action_timeout_seconds * 1000)
@@ -210,7 +210,7 @@ def _apply_action(
         elif proposal.action_type == "scroll":
             page.mouse.wheel(0, 500)
         elif proposal.action_type == "wait":
-            page.wait_for_timeout(100)
+            page.wait_for_timeout(min(100, int(spec.budget.action_timeout_seconds * 1000)))
         elif proposal.action_type == "open":
             raise BrowserPolicyError("open is only valid as the initial session action")
         elif proposal.action_type == "finish":
@@ -221,8 +221,16 @@ def _apply_action(
                 before_observation_id=before.observation_id,
                 stop_reason="agent_finished",
             )
-    except BrowserPolicyError:
-        raise
+    except BrowserPolicyError as error:
+        code = "STALE_OBSERVATION" if "stale" in str(error) else "ACTION_REJECTED"
+        return ActionReceipt(
+            action_id=proposal.action_id,
+            observation_id=proposal.observation_id,
+            result="REJECTED",
+            error_code=code,
+            before_observation_id=before.observation_id,
+            stop_reason=code,
+        )
     except Exception as error:
         return ActionReceipt(
             action_id=proposal.action_id,
@@ -297,7 +305,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
             page.goto(
                 f"{origin}/?scenario={spec.scenario}",
                 wait_until="domcontentloaded",
-                timeout=10_000,
+                timeout=int(spec.budget.action_timeout_seconds * 1000),
             )
             snapshot = _snapshot(page, spec, spec.mode)
             observations.append(snapshot.observation)
@@ -337,7 +345,18 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                 target_ref="search-input",
                 text=spec.purchase_order,
             )
-            receipts.append(_apply_action(page, search, snapshot, spec))
+            search_receipt = _apply_action(page, search, snapshot, spec)
+            receipts.append(search_receipt)
+            if search_receipt.result != "APPLIED":
+                security_violations = tuple(policy.violations + browser_events)
+                result = TaskResult(
+                    case_id=spec.case_id,
+                    status="FAILED",
+                    evidence_refs=tuple(item.observation_id for item in observations),
+                    actions=tuple(receipts),
+                    stop_reason=search_receipt.error_code,
+                )
+                return DomRun(result, tuple(observations), security_violations)
             try:
                 wait_for_ready(
                     page,
@@ -356,6 +375,9 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                 return DomRun(result, tuple(observations), security_violations)
             snapshot = _snapshot(page, spec, spec.mode)
             observations.append(snapshot.observation)
+            receipts[-1] = receipts[-1].model_copy(
+                update={"after_observation_id": snapshot.observation.observation_id}
+            )
             terminal = _terminal_page_state(page)
             if terminal is not None:
                 status, stop_reason = terminal
@@ -377,9 +399,23 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                     observation_id=snapshot.observation.observation_id,
                     target_ref=target,
                 )
-                receipts.append(_apply_action(page, click, snapshot, spec))
+                click_receipt = _apply_action(page, click, snapshot, spec)
+                receipts.append(click_receipt)
+                if click_receipt.result != "APPLIED":
+                    security_violations = tuple(policy.violations + browser_events)
+                    result = TaskResult(
+                        case_id=spec.case_id,
+                        status="FAILED",
+                        evidence_refs=tuple(item.observation_id for item in observations),
+                        actions=tuple(receipts),
+                        stop_reason=click_receipt.error_code,
+                    )
+                    return DomRun(result, tuple(observations), security_violations)
                 snapshot = _snapshot(page, spec, spec.mode)
                 observations.append(snapshot.observation)
+                receipts[-1] = receipts[-1].model_copy(
+                    update={"after_observation_id": snapshot.observation.observation_id}
+                )
                 terminal = _terminal_page_state(page)
                 if terminal is not None:
                     status, stop_reason = terminal

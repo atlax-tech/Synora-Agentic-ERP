@@ -78,8 +78,9 @@ def _hybrid_frame(page: Any, spec: TaskSpec) -> HybridFrame:
         targets.add("search-submit")
     if page.locator('[data-action="back"]').count() == 1:
         targets.add("back")
-    for name in page.locator("[data-order-name]").evaluate_all(
-        "elements => elements.map(element => element.getAttribute('data-order-name'))"
+    for name in page.locator("[data-order-name], [data-order-id]").evaluate_all(
+        "elements => elements.map(element => "
+        "element.getAttribute('data-order-name') || element.getAttribute('data-order-id'))"
     ):
         if isinstance(name, str) and name:
             targets.add(f"order:{name}")
@@ -226,7 +227,7 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
         page.on("dialog", on_dialog)
         try:
             page.goto(
-                f"{origin}/",
+                f"{origin}/?scenario={spec.scenario}",
                 wait_until="domcontentloaded",
                 timeout=int(spec.budget.action_timeout_seconds * 1000),
             )
@@ -395,8 +396,19 @@ def run_hybrid_task(base_url: str, spec: TaskSpec, decider: HybridDecider) -> Hy
                         "domcontentloaded",
                         timeout=int(spec.budget.action_timeout_seconds * 1000),
                     )
-                except BrowserPolicyError:
-                    raise
+                except BrowserPolicyError as error:
+                    code = "STALE_OBSERVATION" if "stale" in str(error) else "ACTION_REJECTED"
+                    receipts.append(
+                        _rejected_receipt(
+                            proposal,
+                            frame.observation,
+                            code,
+                            code,
+                        )
+                    )
+                    status = "FAILED"
+                    stop_reason = code
+                    break
                 except Exception as error:
                     receipts.append(
                         ActionReceipt(

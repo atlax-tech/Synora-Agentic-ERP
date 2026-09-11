@@ -16,6 +16,7 @@ from labs.web_gui.browser import (
     BrowserPolicyError,
     BrowserUnavailable,
     DomSnapshot,
+    _apply_action,
     _validate_action,
     run_dom_task,
     run_security_probe,
@@ -230,6 +231,30 @@ def test_dom_policy_rejects_stale_or_unknown_targets() -> None:
             target_ref="order:PUR-ORD-0001",
             script="window.location='https://evil.example'",  # type: ignore[call-arg]
         )
+
+
+def test_dom_apply_action_records_policy_rejection() -> None:
+    snapshot = DomSnapshot(
+        observation=Observation(
+            page_version="synthetic-v1",
+            source="synthetic",
+            mode="dom",
+        ),
+        targets=frozenset(),
+    )
+    proposal = ActionProposal(
+        action_type="click",
+        observation_id=snapshot.observation.observation_id,
+        target_ref="order:PUR-ORD-0001",
+    )
+    receipt = _apply_action(
+        None,
+        proposal,
+        snapshot,
+        TaskSpec(case_id="p11-dom-reject", purchase_order="PUR-ORD-0001"),
+    )
+    assert receipt.result == "REJECTED"
+    assert receipt.error_code == "ACTION_REJECTED"
 
 
 def test_browser_security_policy_allows_only_loopback_read_routes() -> None:
