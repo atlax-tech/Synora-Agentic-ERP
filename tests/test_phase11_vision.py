@@ -438,3 +438,13 @@ def test_two_image_probe_requires_each_observation_and_oracle_match() -> None:
     )
     assert mismatch.status == "VISION_PROVIDER_UNAVAILABLE"
     assert mismatch.attempts[0].failure_code == "RESPONSE_CONTENT_MISMATCH"
+    assert mismatch.attempts[0].response_fields == (
+        "complete",
+        "currency",
+        "purchase_order",
+        "status",
+        "supplier",
+    )
+    assert mismatch.attempts[0].observation_count == 2
+    assert mismatch.attempts[0].declared_complete is True
+    assert mismatch.attempts[0].mismatch_fields == ("supplier",)

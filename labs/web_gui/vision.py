@@ -100,6 +100,10 @@ class VisionAttempt:
     elapsed_ms: int | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    response_fields: tuple[str, ...] = ()
+    observation_count: int | None = None
+    declared_complete: bool | None = None
+    mismatch_fields: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -236,6 +240,10 @@ def _attempt(
     response_bytes: int | None = None,
     prompt_tokens: int | None = None,
     completion_tokens: int | None = None,
+    response_fields: tuple[str, ...] = (),
+    observation_count: int | None = None,
+    declared_complete: bool | None = None,
+    mismatch_fields: tuple[str, ...] = (),
     status: str = "FAILED",
 ) -> VisionAttempt:
     return VisionAttempt(
@@ -252,6 +260,10 @@ def _attempt(
         elapsed_ms=max(0, int((monotonic() - started) * 1000)),
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
+        response_fields=response_fields,
+        observation_count=observation_count,
+        declared_complete=declared_complete,
+        mismatch_fields=mismatch_fields,
     )
 
 
@@ -576,6 +588,53 @@ def _parse_observations(text: str, images: Sequence[bytes]) -> tuple[VisionObser
     )
 
 
+_OBSERVATION_FIELDS = frozenset({"purchase_order", "supplier", "status", "currency", "complete"})
+
+
+def _response_observation_metadata(
+    text: str,
+    image_count: int,
+    expected: Sequence[Mapping[str, str]] | None,
+) -> tuple[tuple[str, ...], int | None, bool | None, tuple[str, ...]]:
+    """Return field names and validation flags without retaining response values."""
+
+    try:
+        data = _json_loads(text)
+    except VisionProbeError:
+        return (), None, None, ()
+    if image_count == 1:
+        raw_items: object = [data] if isinstance(data, dict) else None
+    else:
+        raw_items = data.get("observations") if isinstance(data, dict) else None
+    if not isinstance(raw_items, list):
+        return (), None, None, ()
+    fields = frozenset(
+        key
+        for item in raw_items
+        if isinstance(item, dict)
+        for key in item
+        if key in _OBSERVATION_FIELDS
+    )
+    complete_values = [item.get("complete") for item in raw_items if isinstance(item, dict)]
+    declared_complete = (
+        all(value is True for value in complete_values)
+        if complete_values and len(complete_values) == len(raw_items)
+        else None
+    )
+    if any(value is False for value in complete_values):
+        declared_complete = False
+    mismatch: set[str] = set()
+    if expected is not None and len(raw_items) == len(expected):
+        for item, expected_fields in zip(raw_items, expected, strict=True):
+            if not isinstance(item, dict):
+                mismatch.update(expected_fields)
+                continue
+            for field in ("purchase_order", "supplier", "status", "currency"):
+                if item.get(field) != expected_fields.get(field):
+                    mismatch.add(field)
+    return tuple(sorted(fields)), len(raw_items), declared_complete, tuple(sorted(mismatch))
+
+
 def _validate_expected(
     observations: Sequence[VisionObservation],
     expected: Sequence[Mapping[str, str]] | None,
@@ -637,6 +696,12 @@ def probe_vision(
             continue
         base_url, api_key, model, responses = config
         attempt: VisionAttempt | None = None
+        response_metadata: tuple[tuple[str, ...], int | None, bool | None, tuple[str, ...]] = (
+            (),
+            None,
+            None,
+            (),
+        )
         try:
             proxy = values.get(MODEL_PROXY_ENV, "").strip() or None
             text, attempt = _request_text(
@@ -649,6 +714,9 @@ def probe_vision(
                 responses=responses,
                 proxy=proxy,
                 transport=transport,
+            )
+            response_metadata = _response_observation_metadata(
+                text, len(images), expected_observations
             )
             observations = _parse_observations(text, images)
             _validate_expected(observations, expected_observations)
@@ -668,6 +736,10 @@ def probe_vision(
                     status="FAILED",
                     failure_code=error.code,
                     failure_stage=_parse_failure_stage(error.code),
+                    response_fields=response_metadata[0],
+                    observation_count=response_metadata[1],
+                    declared_complete=response_metadata[2],
+                    mismatch_fields=response_metadata[3],
                 )
             else:
                 diagnostic = replace(
@@ -675,10 +747,24 @@ def probe_vision(
                     status="FAILED",
                     failure_code=error.code,
                     failure_stage=diagnostic.failure_stage or _parse_failure_stage(error.code),
+                    response_fields=response_metadata[0] or diagnostic.response_fields,
+                    observation_count=response_metadata[1] or diagnostic.observation_count,
+                    declared_complete=(
+                        response_metadata[2]
+                        if response_metadata[2] is not None
+                        else diagnostic.declared_complete
+                    ),
+                    mismatch_fields=response_metadata[3] or diagnostic.mismatch_fields,
                 )
             attempts.append(diagnostic)
             continue
         assert attempt is not None
+        attempt = replace(
+            attempt,
+            response_fields=response_metadata[0],
+            observation_count=response_metadata[1],
+            declared_complete=response_metadata[2],
+        )
         attempts.append(attempt)
         return VisionProbeResult(
             status="PASS",
