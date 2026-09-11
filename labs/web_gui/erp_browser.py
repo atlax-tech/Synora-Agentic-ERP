@@ -195,6 +195,11 @@ async def read_erp_web(
                 await dialog.dismiss()
 
             def on_response(response: Any) -> None:
+                path = urlsplit(response.url).path
+                if not (
+                    path.startswith("/api/") or path == f"{ERP_SITE_PATH}/{config.purchase_order}"
+                ):
+                    return
                 try:
                     content_length = int(response.headers.get("content-length", "0"))
                 except TypeError, ValueError:

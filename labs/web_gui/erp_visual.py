@@ -161,6 +161,12 @@ def run_erp_visual_task(
             dialog.dismiss()
 
         def on_response(response: Any) -> None:
+            response_path = str(response.url).split(policy.origin, 1)[-1].split("?", 1)[0]
+            if not (
+                response_path.startswith("/api/")
+                or response_path == f"/desk/purchase-order/{config.purchase_order}"
+            ):
+                return
             try:
                 content_length = int(response.headers.get("content-length", "0"))
             except TypeError, ValueError:
