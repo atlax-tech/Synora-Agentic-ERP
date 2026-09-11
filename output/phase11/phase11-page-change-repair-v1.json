@@ -1,0 +1,28 @@
+{
+  "case_id": "p11-page-change-001",
+  "scenario": "changed",
+  "page_version": "synthetic-procurement-v2",
+  "method": "dom",
+  "before_failure_artifact": {
+    "path": "output/phase11/phase11-page-change-failure-v1.json",
+    "sha256": "36f19889d8d2a663f72241d75cde5f26605b822ec971cfc2bd7503fb2c212553",
+    "status": "FAILURE_BEFORE_FIX",
+    "observed_status": "NOT_FOUND"
+  },
+  "after_retest": {
+    "status": "SUCCEEDED",
+    "fields": {
+      "currency": "CNY",
+      "purchase_order": "PUR-ORD-0001",
+      "status": "To Receive and Bill",
+      "supplier": "Supplier A"
+    },
+    "security_violations": []
+  },
+  "root_cause": "v2 renamed the row attribute from data-order-name to data-order-id",
+  "fix": "the DOM observer accepts the two confirmed row attributes and still requires a unique observed target",
+  "fix_commit": "f69354c",
+  "regression": "v1 normal, missing-target, and security cases remain covered by tests",
+  "status": "FIXED_AND_RETESTED",
+  "preserved": true
+}
