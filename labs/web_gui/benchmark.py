@@ -56,6 +56,7 @@ from labs.web_gui.model import LiveTextModel, LiveVisionModel, ModelDecision, de
 
 SYNTHETIC_INPUT_VERSION = "phase11-synthetic-v1"
 METHODS = ("api", "dom", "aria", "vision", "hybrid")
+_VISUAL_STATUSES = ("SUCCEEDED", "INCOMPLETE", "BLOCKED", "FAILED", "BUDGET_EXCEEDED")
 
 
 @dataclass(frozen=True)
@@ -625,7 +626,7 @@ def run_erp_benchmark(
         },
         "visual_status_counts": {
             status: sum(item["status"] == status for item in visual_runs)
-            for status in ("SUCCEEDED", "BLOCKED", "FAILED", "BUDGET_EXCEEDED")
+            for status in _VISUAL_STATUSES
         },
         "visual_runs": visual_runs,
         "notes": [

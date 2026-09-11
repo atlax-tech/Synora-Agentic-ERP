@@ -7,6 +7,7 @@ from typing import cast
 import pytest
 
 from labs.web_gui.benchmark import (
+    _VISUAL_STATUSES,
     CASES,
     METHODS,
     _run_method,
@@ -106,3 +107,16 @@ def test_benchmark_artifacts_are_allowlisted_and_atomic(tmp_path: Path) -> None:
         assert json.loads(target.read_text()) == {"status": "ok"}
     finally:
         target.unlink(missing_ok=True)
+
+
+def test_visual_status_inventory_includes_incomplete_runs() -> None:
+    statuses = ["SUCCEEDED", "INCOMPLETE", "INCOMPLETE", "BLOCKED"]
+    counts = {status: sum(item == status for item in statuses) for status in _VISUAL_STATUSES}
+
+    assert counts == {
+        "SUCCEEDED": 1,
+        "INCOMPLETE": 2,
+        "BLOCKED": 1,
+        "FAILED": 0,
+        "BUDGET_EXCEEDED": 0,
+    }
