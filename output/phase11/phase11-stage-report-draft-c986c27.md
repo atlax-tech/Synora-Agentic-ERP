@@ -84,9 +84,9 @@ v2 将列表行属性由 `data-order-name` 改为 `data-order-id`。原始失败
 | `make integration` | 退出码 0，Frappe app-test 248 tests OK |
 | `uv run --python 3.14 --group web-gui-lab mypy labs/web_gui` | 退出码 0，17 files |
 | `uv run --python 3.14 --group web-gui-lab pytest tests/test_phase11_*.py` | 退出码 0，92 passed |
-| `validate_harness_structure.py` | 退出码 0，valid，references 830，broken 0 |
+| `validate_harness_structure.py` | 退出码 0，valid，references 831，broken 0 |
 | `validate_manifest.py` | 退出码 0，valid |
-| `check_references.py` | 退出码 0，checked 830，broken 0 |
+| `check_references.py` | 退出码 0，checked 831，broken 0 |
 | `detect_drift.py` | 退出码 1；仅 `pyproject.toml`、`uv.lock` fingerprint drift |
 | `git diff --check` | 退出码 0 |
 
