@@ -1,0 +1,18 @@
+{
+  "case_id": "p11-normal-open-dom",
+  "code_head": "925b96a",
+  "completion_tokens": 1118,
+  "engine": "live",
+  "fields": {
+    "currency": "CNY",
+    "purchase_order": "PUR-ORD-0001",
+    "status": "To Receive and Bill",
+    "supplier": "Supplier A"
+  },
+  "latency_ms": 12356,
+  "model": "glm-5.3-flash",
+  "model_calls": 2,
+  "observed_status": "SUCCEEDED",
+  "prompt_tokens": 621,
+  "text_role": "assist"
+}
