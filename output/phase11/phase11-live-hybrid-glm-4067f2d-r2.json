@@ -1,0 +1,103 @@
+{
+  "action_receipts": [
+    {
+      "action_id": "bc04f95c-3cfa-41dd-8cbf-e9af66813d32",
+      "after_observation_id": "ff3a6da5-2598-4be8-992f-36a0d09f858b",
+      "before_observation_id": "be4736d4-484d-43cb-8a66-54a7e8138a8c",
+      "error_code": null,
+      "observation_id": "be4736d4-484d-43cb-8a66-54a7e8138a8c",
+      "result": "APPLIED",
+      "stop_reason": null
+    },
+    {
+      "action_id": "59a6004d-b111-4fff-aaba-8ae504411fbb",
+      "after_observation_id": null,
+      "before_observation_id": "ff3a6da5-2598-4be8-992f-36a0d09f858b",
+      "error_code": null,
+      "observation_id": "ff3a6da5-2598-4be8-992f-36a0d09f858b",
+      "result": "APPLIED",
+      "stop_reason": null
+    }
+  ],
+  "case_id": "p11-live-hybrid-success-current-r2",
+  "code_head": "4067f2d",
+  "completion_tokens": 1018,
+  "decisions": [
+    {
+      "action_type": "click",
+      "fields": null,
+      "observation_id": "be4736d4-484d-43cb-8a66-54a7e8138a8c",
+      "page_version": "hybrid:8652d09832adf982bbef19455b19e8ef08a6ec1a6ef99a39fda9a497c33860d2",
+      "target_ref": "order:PUR-ORD-0001",
+      "text": null,
+      "visual_fields": null,
+      "x": null,
+      "y": null
+    },
+    {
+      "action_type": "finish",
+      "fields": {
+        "currency": "CNY",
+        "purchase_order": "PUR-ORD-0001",
+        "status": "To Receive and Bill",
+        "supplier": "Supplier A"
+      },
+      "observation_id": "ff3a6da5-2598-4be8-992f-36a0d09f858b",
+      "page_version": "hybrid:10be889d366f112e41b33f7f6a440c437d371d273bf8ee87b17f372b9462fe4f",
+      "target_ref": null,
+      "text": null,
+      "visual_fields": {
+        "currency": "CNY",
+        "purchase_order": "PUR-ORD-0001",
+        "status": "To Receive and Bill",
+        "supplier": "Supplier A"
+      },
+      "x": null,
+      "y": null
+    }
+  ],
+  "engine": "live",
+  "expected_fields": {
+    "currency": "CNY",
+    "purchase_order": "PUR-ORD-0001",
+    "status": "To Receive and Bill",
+    "supplier": "Supplier A"
+  },
+  "fields": {
+    "currency": "CNY",
+    "purchase_order": "PUR-ORD-0001",
+    "status": "To Receive and Bill",
+    "supplier": "Supplier A"
+  },
+  "frames": [
+    {
+      "observation_id": "be4736d4-484d-43cb-8a66-54a7e8138a8c",
+      "page_version": "hybrid:8652d09832adf982bbef19455b19e8ef08a6ec1a6ef99a39fda9a497c33860d2",
+      "screenshot_sha256": "b1ea87324f00d0a823deecbd5114919baa325d7e2442008d1710abb053610922",
+      "target_count": 4,
+      "viewport": [
+        1024,
+        768
+      ]
+    },
+    {
+      "observation_id": "ff3a6da5-2598-4be8-992f-36a0d09f858b",
+      "page_version": "hybrid:10be889d366f112e41b33f7f6a440c437d371d273bf8ee87b17f372b9462fe4f",
+      "screenshot_sha256": "27049210760d1b0bd88fc94f2c58a72fa8eab823b7ef77eeccde3b746f5cbd5e",
+      "target_count": 3,
+      "viewport": [
+        1024,
+        768
+      ]
+    }
+  ],
+  "mode": "hybrid",
+  "model": "glm-5.3-flash",
+  "model_calls": 2,
+  "observation_complete": true,
+  "prompt_tokens": 3994,
+  "role": "assist",
+  "security_violations": [],
+  "status": "SUCCEEDED",
+  "stop_reason": null
+}
