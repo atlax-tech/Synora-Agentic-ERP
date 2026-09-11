@@ -1,0 +1,18 @@
+{
+  "case_id": "p11-normal-open-aria",
+  "code_head": "d444e97",
+  "engine": "live",
+  "fields": {},
+  "latency_ms": 15842,
+  "model": "glm-5.3-flash",
+  "model_calls": 2,
+  "observed_status": "BUDGET_EXCEEDED",
+  "preserved": true,
+  "repair": "include temporary target references after collecting them in the ARIA observation",
+  "stop_reason": "MODEL_TIMEOUT",
+  "text_role": "assist",
+  "usage": {
+    "completion_tokens": 465,
+    "prompt_tokens": 657
+  }
+}
