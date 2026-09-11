@@ -108,6 +108,13 @@ def test_redaction_returns_bounded_png_digest() -> None:
     assert result.visible_text_sha256 is not None
 
 
+def test_redaction_keeps_compatibility_with_fake_without_evaluator() -> None:
+    result = capture_redacted_page(_Page(), "PUR-ORD-0001")
+
+    assert result.status == "READY"
+    assert result.failure_code is None
+
+
 @pytest.mark.parametrize("timeout_on", ["inner_text", "screenshot"])
 def test_redaction_observation_timeout_is_explicit(timeout_on: str) -> None:
     result = capture_redacted_page(_Page(timeout_on=timeout_on), "PUR-ORD-0001", timeout_ms=5)

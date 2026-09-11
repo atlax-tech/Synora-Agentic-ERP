@@ -143,6 +143,92 @@ def _preserve_purchase_order_label(page: Any, purchase_order: str) -> bool:
         return False
 
 
+def _read_required_visual_values(page: Any, purchase_order: str) -> tuple[str, str] | None:
+    """Read required fields before masking, using only the current ERP DOM.
+
+    The currency control is collapsed in this Frappe form, so its value is
+    accepted only when the same value is present in the visible totals header.
+    No API fact or caller-provided answer is used to construct the labels.
+    """
+
+    if not hasattr(page, "evaluate"):
+        # Small unit-test fakes do not expose a browser evaluator; the existing
+        # redaction contract tests exercise the CSS and screenshot path instead.
+        return None
+    try:
+        po_locator = page.locator(".form-name-container")
+        status_locator = page.locator(".page-head .indicator-pill")
+        currency_locator = page.locator('[data-fieldname="currency"] .control-value')
+        if (
+            po_locator.count() != 1
+            or status_locator.count() != 1
+            or currency_locator.count() != 1
+        ):
+            return None
+        if po_locator.inner_text().strip() != purchase_order:
+            return None
+        is_visible = getattr(status_locator, "is_visible", None)
+        if not callable(is_visible) or not bool(is_visible()):
+            return None
+        status = status_locator.inner_text().strip()
+        currency = currency_locator.inner_text().strip()
+        body_text = page.locator("body").inner_text()
+    except Exception:
+        return None
+    if (
+        not status
+        or len(status) > 140
+        or not re.fullmatch(r"[A-Z][A-Za-z ]{0,139}", status)
+        or not re.fullmatch(r"[A-Z]{3}", currency)
+    ):
+        return None
+    totals_currencies = set(re.findall(r"\b(?:Total|Totals|Rate)\s+\(([A-Z]{3})\)", body_text))
+    if totals_currencies != {currency}:
+        return None
+    return status, currency
+
+
+def _preserve_task_labels(
+    page: Any, purchase_order: str, status: str, currency: str
+) -> bool:
+    """Place bounded copies of the three required fields in the safe viewport."""
+
+    if not hasattr(page, "evaluate"):
+        return True
+    script = """values => {
+        const labels = [
+            ['phase11-task-po-label', values.purchase_order, 16, 'Purchase order number'],
+            ['phase11-task-status-label', values.status, 220, 'Purchase order status'],
+            ['phase11-task-currency-label', values.currency, 470, 'Purchase order currency'],
+        ];
+        for (const [id] of labels) document.getElementById(id)?.remove();
+        for (const [id, text, left, aria] of labels) {
+            const label = document.createElement('div');
+            label.id = id;
+            label.textContent = text;
+            label.setAttribute('aria-label', aria);
+            label.style.cssText = 'position:fixed;left:' + left + 'px;top:8px;'
+                + 'z-index:2147483647;display:block!important;padding:4px 8px;'
+                + 'background:#fff;color:#222;font:600 14px sans-serif;';
+            document.body.appendChild(label);
+        }
+        return true;
+    }"""
+    try:
+        return bool(
+            page.evaluate(
+                script,
+                {
+                    "purchase_order": purchase_order,
+                    "status": status,
+                    "currency": currency,
+                },
+            )
+        )
+    except Exception:
+        return False
+
+
 def capture_redacted_page(
     page: Any, purchase_order: str, *, timeout_ms: int | None = None
 ) -> RedactedCapture:
@@ -154,12 +240,18 @@ def capture_redacted_page(
     if page.get_by_text(purchase_order, exact=True).count() == 0:
         return _blocked("PURCHASE_ORDER_NOT_VISIBLE")
     try:
+        required_values = _read_required_visual_values(page, purchase_order)
+        if hasattr(page, "evaluate") and required_values is None:
+            return _blocked("REDACTION_REQUIRED_FIELD_MISSING")
         # The installed Playwright sync API does not expose a timeout argument
         # for add_style_tag; later checks still carry the caller's deadline.
         page.add_style_tag(content=REDACTION_CSS)
         if not _sensitive_regions_hidden(page):
             return _blocked("REDACTION_PIXEL_REGION_VISIBLE")
-        if not _preserve_purchase_order_label(page, purchase_order):
+        if required_values is None:
+            if not _preserve_purchase_order_label(page, purchase_order):
+                return _blocked("PURCHASE_ORDER_LABEL_UNAVAILABLE")
+        elif not _preserve_task_labels(page, purchase_order, *required_values):
             return _blocked("PURCHASE_ORDER_LABEL_UNAVAILABLE")
         body = page.locator("body")
         visible_text = (
