@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 from labs.web_gui.erp_readonly import (
     ERP_LOGIN_PATH,
     ERP_SITE_PATH,
+    MAX_RESPONSE_BYTES,
     READ_FIELDS,
     ErpComparison,
     ErpFact,
@@ -176,6 +177,7 @@ async def read_erp_web(
             popup_seen = False
             download_seen = False
             dialog_seen = False
+            response_events: list[str] = []
 
             async def on_popup(_page: Any) -> None:
                 nonlocal popup_seen
@@ -190,13 +192,23 @@ async def read_erp_web(
                 dialog_seen = True
                 await dialog.dismiss()
 
+            def on_response(response: Any) -> None:
+                try:
+                    content_length = int(response.headers.get("content-length", "0"))
+                except TypeError, ValueError:
+                    content_length = 0
+                if content_length > MAX_RESPONSE_BYTES:
+                    response_events.append("RESPONSE_TOO_LARGE")
+
             page = await context.new_page()
             page.on("popup", on_popup)
             page.on("download", on_download)
             page.on("dialog", on_dialog)
+            page.on("response", on_response)
             login = await context.request.post(
                 f"{origin}{ERP_LOGIN_PATH}",
                 form={"usr": config.user, "pwd": password},
+                max_redirects=0,
             )
             if login.status in {401, 403}:
                 await browser.close()
@@ -237,6 +249,16 @@ async def read_erp_web(
             body_text = await page.locator("body").inner_text(
                 timeout=int(config.timeout_seconds * 1000)
             )
+            if len(body_text.encode("utf-8")) > MAX_RESPONSE_BYTES:
+                return _result(
+                    "web",
+                    "FAILED",
+                    safety_pass=False,
+                    failure_code="ERP_RESPONSE_TOO_LARGE",
+                    started=started,
+                    request_paths=tuple(request_paths),
+                    policy_events=tuple(policy.violations + policy.blocked + response_events),
+                )
             if "Not Permitted" in body_text or "PermissionError" in body_text:
                 await browser.close()
                 return _result(
@@ -272,7 +294,13 @@ async def read_erp_web(
             if await page.get_by_text(config.purchase_order, exact=True).count() == 0:
                 raise ValueError("ERP purchase order identifier is not visible")
             fact = ErpFact(purchase_order=config.purchase_order, **fields)
-            hazards = popup_seen or download_seen or dialog_seen or bool(policy.violations)
+            hazards = (
+                popup_seen
+                or download_seen
+                or dialog_seen
+                or bool(policy.violations)
+                or bool(response_events)
+            )
             await browser.close()
             if hazards:
                 return _result(
@@ -283,7 +311,7 @@ async def read_erp_web(
                     failure_code="ERP_BROWSER_POLICY_VIOLATION",
                     started=started,
                     request_paths=tuple(request_paths),
-                    policy_events=tuple(policy.violations + policy.blocked),
+                    policy_events=tuple(policy.violations + policy.blocked + response_events),
                 )
             return _result(
                 "web",
@@ -292,7 +320,7 @@ async def read_erp_web(
                 safety_pass=True,
                 started=started,
                 request_paths=tuple(request_paths),
-                policy_events=tuple(policy.blocked),
+                policy_events=tuple(policy.blocked + response_events),
             )
     except PlaywrightTimeoutError:
         return _result(

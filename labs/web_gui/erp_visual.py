@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any
@@ -12,8 +12,14 @@ from typing import Any
 from labs.web_gui.browser import BrowserPolicyError, BrowserUnavailable, _origin, _playwright_sync
 from labs.web_gui.contracts import ActionReceipt, Observation, TaskResult, TaskSpec
 from labs.web_gui.erp_browser import _RealPolicy
-from labs.web_gui.erp_readonly import ErpReadConfig
-from labs.web_gui.gui import VisualDecision, _fields_from_decision, _validate_visual_action
+from labs.web_gui.erp_readonly import MAX_RESPONSE_BYTES, ErpReadConfig
+from labs.web_gui.gui import (
+    VisualDecision,
+    _fields_from_decision,
+    _model_output_size,
+    _validate_visual_action,
+)
+from labs.web_gui.recovery import ProgressGuard, RecoveryFailure
 from labs.web_gui.redaction import RedactedCapture, capture_redacted_page
 
 VisualDecider = Callable[[bytes, Observation, TaskSpec], VisualDecision]
@@ -99,7 +105,12 @@ def _result(
     )
 
 
-def run_erp_visual_task(config: ErpReadConfig, decider: VisualDecider) -> ErpVisualRun:
+def run_erp_visual_task(
+    config: ErpReadConfig,
+    decider: VisualDecider,
+    *,
+    trusted_fields: Mapping[str, str] | None = None,
+) -> ErpVisualRun:
     """Run a bounded coordinate loop; the decider receives no DOM or API data."""
 
     if not os.environ.get("SYNORA_P2P_USER_PWD"):
@@ -120,6 +131,8 @@ def run_erp_visual_task(config: ErpReadConfig, decider: VisualDecider) -> ErpVis
     reason: str | None = "visual_decider_stopped"
     fields: dict[str, str | None] = {}
     model_calls = 0
+    progress = ProgressGuard(max_actions=task.budget.max_actions)
+    unchanged_reobservations = 0
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         context = browser.new_context(
@@ -139,12 +152,31 @@ def run_erp_visual_task(config: ErpReadConfig, decider: VisualDecider) -> ErpVis
             events.append("POPUP_BLOCKED")
             popup.close()
 
-        page.on("popup", on_popup)
+        def on_download(_download: Any) -> None:
+            events.append("DOWNLOAD_BLOCKED")
+
+        def on_dialog(dialog: Any) -> None:
+            events.append("DIALOG_DISMISSED")
+            dialog.dismiss()
+
+        def on_response(response: Any) -> None:
+            try:
+                content_length = int(response.headers.get("content-length", "0"))
+            except TypeError, ValueError:
+                content_length = 0
+            if content_length > MAX_RESPONSE_BYTES:
+                events.append("RESPONSE_TOO_LARGE")
+
+        context.on("page", on_popup)
+        page.on("download", on_download)
+        page.on("dialog", on_dialog)
+        page.on("response", on_response)
 
         try:
             login = context.request.post(
                 f"{_origin(config.base_url)}/api/method/login",
                 form={"usr": config.user, "pwd": os.environ["SYNORA_P2P_USER_PWD"]},
+                max_redirects=0,
             )
             if login.status in {401, 403}:
                 status, reason = "AUTH_REQUIRED", "ERP_LOGIN_REJECTED"
@@ -158,23 +190,31 @@ def run_erp_visual_task(config: ErpReadConfig, decider: VisualDecider) -> ErpVis
                 )
                 if "/login" in page.url:
                     status, reason = "AUTH_REQUIRED", "AUTH_REQUIRED"
-                elif "Not Permitted" in page.locator("body").inner_text():
-                    status, reason = "PERMISSION_DENIED", "PERMISSION_DENIED"
                 else:
-                    page.locator('[data-fieldname="supplier"] .control-value').wait_for(
-                        state="visible", timeout=int(config.timeout_seconds * 1000)
+                    body_text = page.locator("body").inner_text(
+                        timeout=int(config.timeout_seconds * 1000)
                     )
-                    page.locator(".page-head .indicator-pill").wait_for(
-                        state="visible", timeout=int(config.timeout_seconds * 1000)
-                    )
-                    capture = capture_redacted_page(page, config.purchase_order)
-                    if capture.status != "READY":
-                        status, reason = "BLOCKED", capture.failure_code
+                    if len(body_text.encode("utf-8")) > MAX_RESPONSE_BYTES:
+                        status, reason = "FAILED", "ERP_RESPONSE_TOO_LARGE"
+                    elif "Not Permitted" in body_text:
+                        status, reason = "PERMISSION_DENIED", "PERMISSION_DENIED"
+                    else:
+                        page.locator('[data-fieldname="supplier"] .control-value').wait_for(
+                            state="visible", timeout=int(config.timeout_seconds * 1000)
+                        )
+                        page.locator(".page-head .indicator-pill").wait_for(
+                            state="visible", timeout=int(config.timeout_seconds * 1000)
+                        )
+                        capture = capture_redacted_page(page, config.purchase_order)
+                    if capture is None or capture.status != "READY":
+                        status, reason = (
+                            "BLOCKED",
+                            capture.failure_code if capture else "REDACTION_FAILED",
+                        )
                     else:
                         observation = _observation(capture)
                         observations.append(observation)
                         screenshots.append(capture.image or b"")
-                        safe_box = page.locator(".form-layout").bounding_box()
                         for _ in range(task.budget.max_actions):
                             if monotonic() - started > task.budget.wall_time_seconds:
                                 status, reason = "BUDGET_EXCEEDED", "wall_time_budget"
@@ -183,41 +223,65 @@ def run_erp_visual_task(config: ErpReadConfig, decider: VisualDecider) -> ErpVis
                                 status, reason = "BUDGET_EXCEEDED", "model_call_budget"
                                 break
                             decision: VisualDecision | None = None
+                            model_started = monotonic()
                             try:
                                 decision = decider(screenshots[-1], observation, task)
                             except Exception:
                                 status, reason = "FAILED", "model_call_failed"
                                 break
+                            model_elapsed = monotonic() - model_started
                             model_calls += 1
                             if not isinstance(decision, VisualDecision):
                                 status, reason = "FAILED", "invalid_model_decision"
+                                break
+                            if model_elapsed > task.budget.action_timeout_seconds:
+                                status, reason = "BUDGET_EXCEEDED", "model_timeout"
+                                break
+                            if monotonic() - started > task.budget.wall_time_seconds:
+                                status, reason = "BUDGET_EXCEEDED", "wall_time_budget"
+                                break
+                            if _model_output_size(decision) > task.budget.max_output_tokens * 4:
+                                status, reason = "BUDGET_EXCEEDED", "model_output_budget"
                                 break
                             proposal = decision.proposal
                             try:
                                 _validate_visual_action(proposal, observation)
                                 if proposal.action_type == "finish":
                                     fields = _fields_from_decision(decision)
-                            except BrowserPolicyError:
+                                progress.record(
+                                    observation.page_version,
+                                    json.dumps(
+                                        proposal.model_dump(
+                                            mode="json", exclude={"action_id", "observation_id"}
+                                        ),
+                                        sort_keys=True,
+                                        separators=(",", ":"),
+                                    ),
+                                )
+                            except (BrowserPolicyError, RecoveryFailure) as error:
+                                code = (
+                                    error.code
+                                    if isinstance(error, RecoveryFailure)
+                                    else "ACTION_REJECTED"
+                                )
                                 receipts.append(
                                     _rejected_receipt(
                                         proposal,
                                         observation,
-                                        "ACTION_REJECTED",
-                                        "action_rejected",
+                                        code,
+                                        code,
                                     )
                                 )
-                                status, reason = "FAILED", "action_rejected"
+                                status = "BUDGET_EXCEEDED" if code == "ACTION_BUDGET" else "FAILED"
+                                reason = code
                                 break
                             if proposal.action_type == "finish":
-                                status = (
-                                    "SUCCEEDED"
-                                    if all(fields.values())
-                                    and fields.get("purchase_order") == config.purchase_order
-                                    else "INCOMPLETE"
-                                )
-                                reason = (
-                                    None if status == "SUCCEEDED" else "visual_fields_incomplete"
-                                )
+                                if trusted_fields is None:
+                                    status, reason = "INCOMPLETE", "trusted_erp_fact_unavailable"
+                                elif fields != dict(trusted_fields):
+                                    status, reason = "INCOMPLETE", "visual_fields_mismatch"
+                                else:
+                                    status, reason = "SUCCEEDED", None
                                 receipts.append(
                                     ActionReceipt(
                                         action_id=proposal.action_id,
@@ -228,43 +292,110 @@ def run_erp_visual_task(config: ErpReadConfig, decider: VisualDecider) -> ErpVis
                                     )
                                 )
                                 break
-                            if proposal.action_type == "click":
-                                if safe_box is None or not (
-                                    safe_box[0] <= (proposal.x or 0) <= safe_box[0] + safe_box[2]
-                                    and safe_box[1]
-                                    <= (proposal.y or 0)
-                                    <= safe_box[1] + safe_box[3]
-                                ):
-                                    raise BrowserPolicyError(
-                                        "visual click is outside the redacted task region"
+                            try:
+                                if proposal.action_type == "click":
+                                    fresh_capture = capture_redacted_page(
+                                        page, config.purchase_order
                                     )
-                                page.mouse.click(proposal.x or 0, proposal.y or 0)
-                                page.wait_for_load_state(
-                                    "domcontentloaded",
-                                    timeout=int(task.budget.action_timeout_seconds * 1000),
+                                    if (
+                                        fresh_capture.status != "READY"
+                                        or fresh_capture.image_sha256
+                                        != observation.screenshot_sha256
+                                    ):
+                                        if fresh_capture.status == "READY":
+                                            fresh_observation = _observation(fresh_capture)
+                                            observations.append(fresh_observation)
+                                            screenshots.append(fresh_capture.image or b"")
+                                        raise BrowserPolicyError("STALE_SCREENSHOT")
+                                    safe_box = page.locator(".form-layout").bounding_box()
+                                    if safe_box is None or not (
+                                        safe_box[0]
+                                        <= (proposal.x or 0)
+                                        <= safe_box[0] + safe_box[2]
+                                        and safe_box[1]
+                                        <= (proposal.y or 0)
+                                        <= safe_box[1] + safe_box[3]
+                                    ):
+                                        raise BrowserPolicyError(
+                                            "visual click is outside the redacted task region"
+                                        )
+                                    page.mouse.click(proposal.x or 0, proposal.y or 0)
+                                    page.wait_for_load_state(
+                                        "domcontentloaded",
+                                        timeout=int(task.budget.action_timeout_seconds * 1000),
+                                    )
+                                elif proposal.action_type == "scroll":
+                                    page.mouse.wheel(0, 500)
+                                else:
+                                    page.wait_for_timeout(100)
+                            except BrowserPolicyError as error:
+                                code = (
+                                    "STALE_SCREENSHOT"
+                                    if str(error) == "STALE_SCREENSHOT"
+                                    else "ACTION_REJECTED"
                                 )
-                            elif proposal.action_type == "scroll":
-                                page.mouse.wheel(0, 500)
-                            else:
-                                page.wait_for_timeout(100)
-                            receipts.append(
-                                ActionReceipt(
-                                    action_id=proposal.action_id,
-                                    observation_id=proposal.observation_id,
-                                    result="APPLIED",
-                                    before_observation_id=observation.observation_id,
+                                receipts.append(
+                                    _rejected_receipt(proposal, observation, code, code)
                                 )
-                            )
+                                status, reason = "FAILED", code
+                                break
+                            except Exception as error:
+                                receipts.append(
+                                    ActionReceipt(
+                                        action_id=proposal.action_id,
+                                        observation_id=proposal.observation_id,
+                                        result="FAILED",
+                                        error_code=type(error).__name__.upper(),
+                                        before_observation_id=observation.observation_id,
+                                        stop_reason="visual_action_failed",
+                                    )
+                                )
+                                status, reason = "FAILED", "visual_action_failed"
+                                break
                             if "/login" in page.url:
+                                receipts.append(
+                                    ActionReceipt(
+                                        action_id=proposal.action_id,
+                                        observation_id=proposal.observation_id,
+                                        result="APPLIED",
+                                        before_observation_id=observation.observation_id,
+                                    )
+                                )
                                 status, reason = "AUTH_REQUIRED", "AUTH_REQUIRED"
                                 break
+                            before_observation = observation
                             capture = capture_redacted_page(page, config.purchase_order)
                             if capture.status != "READY":
+                                receipts.append(
+                                    ActionReceipt(
+                                        action_id=proposal.action_id,
+                                        observation_id=proposal.observation_id,
+                                        result="APPLIED",
+                                        before_observation_id=before_observation.observation_id,
+                                    )
+                                )
                                 status, reason = "BLOCKED", capture.failure_code
                                 break
                             observation = _observation(capture)
                             observations.append(observation)
                             screenshots.append(capture.image or b"")
+                            unchanged_reobservations = (
+                                unchanged_reobservations + 1
+                                if observation.page_version == before_observation.page_version
+                                else 0
+                            )
+                            receipts.append(
+                                ActionReceipt(
+                                    action_id=proposal.action_id,
+                                    observation_id=proposal.observation_id,
+                                    result="APPLIED",
+                                    before_observation_id=before_observation.observation_id,
+                                    after_observation_id=observation.observation_id,
+                                )
+                            )
+                            if unchanged_reobservations > task.budget.max_reobservations:
+                                status, reason = "FAILED", "NO_PROGRESS"
+                                break
                         else:
                             status, reason = "BUDGET_EXCEEDED", "action_budget"
         except Exception as error:

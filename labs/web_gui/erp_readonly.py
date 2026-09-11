@@ -271,6 +271,7 @@ async def read_erp_api(
             base_url=f"{origin}/",
             timeout=httpx.Timeout(config.timeout_seconds),
             trust_env=False,
+            follow_redirects=False,
             transport=transport,
             headers={"Accept": "application/json"},
         ) as session:
@@ -284,6 +285,15 @@ async def read_erp_api(
                     "AUTH_REQUIRED",
                     safety_pass=True,
                     failure_code="ERP_LOGIN_REJECTED",
+                    started=started,
+                    request_paths=paths,
+                )
+            if len(login.content) > MAX_RESPONSE_BYTES:
+                return _result(
+                    "api",
+                    "FAILED",
+                    safety_pass=True,
+                    failure_code="ERP_RESPONSE_TOO_LARGE",
                     started=started,
                     request_paths=paths,
                 )
@@ -306,6 +316,15 @@ async def read_erp_api(
                     "purpose": "ANALYSIS",
                 },
             )
+            if len(issue.content) > MAX_RESPONSE_BYTES:
+                return _result(
+                    "api",
+                    "FAILED",
+                    safety_pass=True,
+                    failure_code="ERP_RESPONSE_TOO_LARGE",
+                    started=started,
+                    request_paths=paths,
+                )
             issue_body = (
                 issue.json()
                 if issue.headers.get("content-type", "").startswith("application/json")
