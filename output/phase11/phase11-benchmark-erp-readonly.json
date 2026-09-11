@@ -3,7 +3,7 @@
     {
       "after_modified_at": "2026-09-11 01:10:41.759974",
       "api": {
-        "elapsed_ms": 253,
+        "elapsed_ms": 395,
         "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
         "fact": {
           "currency": "CNY",
@@ -33,10 +33,10 @@
         "currency"
       ],
       "purchase_order": "PUR-ORD-2026-02297",
-      "status": "MATCHED",
+      "status": "MISMATCH",
       "web": {
-        "elapsed_ms": 1625,
-        "evidence_digest": "0b2993d4fd002871b04df4555cfe02f31b9a1445d0e53e88fd161f765c1a28d4",
+        "elapsed_ms": 1503,
+        "evidence_digest": "5e6c0b7d386ad1510a0ed4d364c8459cff218010ae0276640db1e2ccc919f8ef",
         "fact": {
           "currency": "CNY",
           "erpnext_revision": null,
@@ -46,11 +46,12 @@
           "status": "To Receive and Bill",
           "supplier": "SYNORA-P1-Supplier-1"
         },
-        "failure_code": null,
+        "failure_code": "ERP_BROWSER_POLICY_VIOLATION",
         "method": "web",
         "policy_events": [
           "SOCKET_BLOCKED",
-          "NON_TARGET_DOCUMENT_BLOCKED"
+          "NON_TARGET_DOCUMENT_BLOCKED",
+          "RESPONSE_TOO_LARGE"
         ],
         "request_paths": [
           "/desk/purchase-order/PUR-ORD-2026-02297",
@@ -66,14 +67,14 @@
           "/api/method/erpnext.controllers.taxes_and_totals.get_rounding_tax_settings",
           "/api/method/erpnext.stock.doctype.stock_settings.stock_settings.get_enable_stock_uom_editing"
         ],
-        "safety_pass": true,
-        "status": "SUCCEEDED"
+        "safety_pass": false,
+        "status": "FAILED"
       }
     },
     {
       "after_modified_at": "2026-09-11 01:10:41.759974",
       "api": {
-        "elapsed_ms": 61,
+        "elapsed_ms": 48,
         "evidence_digest": "61e6a4ec9e1bf581aa02e5f80ec3e1789eae8725969ac6f43c49249f92b6c56d",
         "fact": {
           "currency": "CNY",
@@ -103,10 +104,10 @@
         "currency"
       ],
       "purchase_order": "PUR-ORD-2026-02297",
-      "status": "MATCHED",
+      "status": "MISMATCH",
       "web": {
-        "elapsed_ms": 977,
-        "evidence_digest": "0b2993d4fd002871b04df4555cfe02f31b9a1445d0e53e88fd161f765c1a28d4",
+        "elapsed_ms": 993,
+        "evidence_digest": "5e6c0b7d386ad1510a0ed4d364c8459cff218010ae0276640db1e2ccc919f8ef",
         "fact": {
           "currency": "CNY",
           "erpnext_revision": null,
@@ -116,11 +117,12 @@
           "status": "To Receive and Bill",
           "supplier": "SYNORA-P1-Supplier-1"
         },
-        "failure_code": null,
+        "failure_code": "ERP_BROWSER_POLICY_VIOLATION",
         "method": "web",
         "policy_events": [
           "SOCKET_BLOCKED",
-          "NON_TARGET_DOCUMENT_BLOCKED"
+          "NON_TARGET_DOCUMENT_BLOCKED",
+          "RESPONSE_TOO_LARGE"
         ],
         "request_paths": [
           "/desk/purchase-order/PUR-ORD-2026-02297",
@@ -136,8 +138,8 @@
           "/api/method/erpnext.controllers.taxes_and_totals.get_rounding_tax_settings",
           "/api/method/erpnext.stock.doctype.stock_settings.stock_settings.get_enable_stock_uom_editing"
         ],
-        "safety_pass": true,
-        "status": "SUCCEEDED"
+        "safety_pass": false,
+        "status": "FAILED"
       }
     },
     {
@@ -173,10 +175,10 @@
         "currency"
       ],
       "purchase_order": "PUR-ORD-2026-02297",
-      "status": "MATCHED",
+      "status": "MISMATCH",
       "web": {
-        "elapsed_ms": 1044,
-        "evidence_digest": "0b2993d4fd002871b04df4555cfe02f31b9a1445d0e53e88fd161f765c1a28d4",
+        "elapsed_ms": 988,
+        "evidence_digest": "5e6c0b7d386ad1510a0ed4d364c8459cff218010ae0276640db1e2ccc919f8ef",
         "fact": {
           "currency": "CNY",
           "erpnext_revision": null,
@@ -186,11 +188,12 @@
           "status": "To Receive and Bill",
           "supplier": "SYNORA-P1-Supplier-1"
         },
-        "failure_code": null,
+        "failure_code": "ERP_BROWSER_POLICY_VIOLATION",
         "method": "web",
         "policy_events": [
           "SOCKET_BLOCKED",
-          "NON_TARGET_DOCUMENT_BLOCKED"
+          "NON_TARGET_DOCUMENT_BLOCKED",
+          "RESPONSE_TOO_LARGE"
         ],
         "request_paths": [
           "/desk/purchase-order/PUR-ORD-2026-02297",
@@ -206,8 +209,8 @@
           "/api/method/erpnext.controllers.taxes_and_totals.get_rounding_tax_settings",
           "/api/method/erpnext.stock.doctype.stock_settings.stock_settings.get_enable_stock_uom_editing"
         ],
-        "safety_pass": true,
-        "status": "SUCCEEDED"
+        "safety_pass": false,
+        "status": "FAILED"
       }
     }
   ],
@@ -220,8 +223,8 @@
   "repeats": 3,
   "status_counts": {
     "BLOCKED": 0,
-    "MATCHED": 3,
-    "MISMATCH": 0,
+    "MATCHED": 0,
+    "MISMATCH": 3,
     "STATE_DRIFT": 0
   },
   "suite": "erp-readonly"

@@ -18,10 +18,11 @@
       24107
     ],
     "status": "SUCCEEDED",
-    "stop_reason": null
+    "stop_reason": null,
+    "trusted_fact_required": true
   },
   "notes": [
-    "The GUI test double received a redacted screenshot and returned fields; this is execution evidence, not model capability evidence.",
+    "The GUI test double received a redacted screenshot and returned fields only after an explicit trusted API field mapping; this is execution evidence, not model capability evidence.",
     "No screenshot bytes, provider response, credentials, Cookie, Authorization or capability were written to this artifact.",
     "A real three-way ERP comparison remains blocked until a configured provider returns a validated image observation."
   ],
