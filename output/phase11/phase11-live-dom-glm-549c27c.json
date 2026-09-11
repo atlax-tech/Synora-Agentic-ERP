@@ -1,0 +1,31 @@
+{
+  "action_receipts": [],
+  "case_id": "p11-live-dom-success",
+  "code_head": "549c27c",
+  "completion_tokens": null,
+  "decisions": [],
+  "engine": "live",
+  "expected_fields": {
+    "currency": "CNY",
+    "purchase_order": "PUR-ORD-0001",
+    "status": "To Receive and Bill",
+    "supplier": "Supplier A"
+  },
+  "fields": {},
+  "mode": "dom",
+  "model": null,
+  "model_calls": 1,
+  "observation_complete": false,
+  "observations": [
+    {
+      "content_sha256": "b883eb5686e634f41b2b275edd8ebc8ba53da342e6508c1782838aeb2db7e452",
+      "observation_id": "a9912787-2707-448e-b0fd-3a11c0db2b71",
+      "page_version": "synthetic-procurement-v1"
+    }
+  ],
+  "prompt_tokens": null,
+  "role": "assist",
+  "security_violations": [],
+  "status": "FAILED",
+  "stop_reason": "TRANSPORT_ERROR"
+}
