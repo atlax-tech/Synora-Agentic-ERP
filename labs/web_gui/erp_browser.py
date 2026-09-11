@@ -31,6 +31,8 @@ from labs.web_gui.erp_readonly import (
 from labs.web_gui.model import LiveTextModel, ModelCallError, ModelDecision, decision_from_model
 from labs.web_gui.recovery import RecoveryFailure
 
+MAX_STATIC_RESPONSE_BYTES = 4_000_000
+
 
 @dataclass(frozen=True)
 class _RealPolicy:
@@ -131,15 +133,20 @@ class _RealPolicy:
             self.blocked.append(code)
 
 
-def _response_body_too_large(body: bytes, headers: Mapping[str, str] | None = None) -> bool:
+def _response_body_too_large(
+    body: bytes,
+    headers: Mapping[str, str] | None = None,
+    *,
+    limit: int = MAX_RESPONSE_BYTES,
+) -> bool:
     """Apply the response limit even when the server omits Content-Length."""
 
-    if len(body) > MAX_RESPONSE_BYTES:
+    if len(body) > limit:
         return True
     if headers is None:
         return False
     try:
-        return int(headers.get("content-length", "0")) > MAX_RESPONSE_BYTES
+        return int(headers.get("content-length", "0")) > limit
     except TypeError, ValueError:
         return False
 
@@ -162,7 +169,12 @@ async def _handle_allowed_route(
     try:
         response = await route.fetch()
         body = await response.body()
-        if _response_body_too_large(body, response.headers):
+        limit = (
+            MAX_STATIC_RESPONSE_BYTES
+            if any(path.startswith(prefix) for prefix in policy._static_prefixes)
+            else MAX_RESPONSE_BYTES
+        )
+        if _response_body_too_large(body, response.headers, limit=limit):
             if "RESPONSE_TOO_LARGE" not in response_events:
                 response_events.append("RESPONSE_TOO_LARGE")
             await route.abort()

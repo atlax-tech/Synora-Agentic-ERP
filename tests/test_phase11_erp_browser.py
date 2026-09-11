@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from labs.web_gui.erp_browser import (
+    MAX_STATIC_RESPONSE_BYTES,
     _close_unexpected_page,
     _handle_allowed_route,
     _RealPolicy,
@@ -83,7 +84,7 @@ class _FakeRoute:
 def test_allowed_static_resource_is_subject_to_response_limit() -> None:
     route = _FakeRoute(
         "http://127.0.0.1:8000/assets/frappe/css/app.css",
-        b"x" * (2_000_000 + 1),
+        b"x" * (MAX_STATIC_RESPONSE_BYTES + 1),
     )
     events: list[str] = []
     policy = _RealPolicy("http://127.0.0.1:8000", "PUR-ORD-2026-02297")
@@ -93,6 +94,21 @@ def test_allowed_static_resource_is_subject_to_response_limit() -> None:
     assert route.aborted is True
     assert route.fulfilled is False
     assert events == ["RESPONSE_TOO_LARGE"]
+
+
+def test_required_large_static_bundle_stays_bounded_and_loadable() -> None:
+    route = _FakeRoute(
+        "http://127.0.0.1:8000/assets/frappe/dist/js/desk.bundle.TEST.js",
+        b"x" * 2_500_000,
+    )
+    events: list[str] = []
+    policy = _RealPolicy("http://127.0.0.1:8000", "PUR-ORD-2026-02297")
+
+    asyncio.run(_handle_allowed_route(route, policy, [], events))
+
+    assert route.fulfilled is True
+    assert route.aborted is False
+    assert events == []
 
 
 class _FakePage:
