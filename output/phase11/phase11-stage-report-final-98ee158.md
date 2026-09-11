@@ -99,7 +99,7 @@ v2 把列表行属性从 `data-order-name` 改为 `data-order-id`。修复前 ar
 
 | 命令 | 退出码 | 实际结果 |
 | --- | ---: | --- |
-| `make format-check` | 0 | 431 files already formatted |
+| `make format-check` | 0 | 432 files already formatted |
 | `make lint` | 0 | All checks passed |
 | `make type` | 0 | 133 个项目源码/测试路径无错误 |
 | `make unit` | 0 | 974 passed；55 个既有弃用警告 |
