@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any
@@ -66,35 +67,55 @@ def _digest(value: object) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _snapshot(page: Any, spec: TaskSpec) -> DomSnapshot:
+def _snapshot(page: Any, spec: TaskSpec, mode: str = "dom") -> DomSnapshot:
     body = page.locator("body")
     version = body.get_attribute("data-page-version") or "unknown"
-    text = body.inner_text(timeout=spec.budget.action_timeout_seconds * 1000)
+    timeout = spec.budget.action_timeout_seconds * 1000
+    text = body.inner_text(timeout=timeout)
     if len(text) > 50_000:
         raise BrowserPolicyError("observation is too large")
     targets: set[str] = set()
-    if page.locator("#order-search").count() == 1:
-        targets.add("search-input")
-    if page.locator('[data-action="search"]').count() == 1:
-        targets.add("search-submit")
-    if page.locator('[data-action="back"]').count() == 1:
-        targets.add("back")
-    for name in page.locator("[data-order-name]").evaluate_all(
-        "elements => elements.map(element => element.getAttribute('data-order-name'))"
-    ):
-        if isinstance(name, str) and name:
-            targets.add(f"order:{name}")
-    content = json.dumps(
-        {"text": text, "targets": sorted(targets)},
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    if mode == "aria":
+        try:
+            aria = body.aria_snapshot(timeout=timeout)
+        except Exception as error:
+            raise BrowserPolicyError("accessibility observation failed") from error
+        if not isinstance(aria, str) or len(aria) > 50_000:
+            raise BrowserPolicyError("accessibility observation is too large")
+        content = aria
+        if page.get_by_role("textbox", name="Purchase order number").count() == 1:
+            targets.add("search-input")
+        if page.get_by_role("button", name="Search").count() == 1:
+            targets.add("search-submit")
+        if page.get_by_role("link", name="Back to search").count() == 1:
+            targets.add("back")
+        for label in page.get_by_role("link").all_inner_texts():
+            match = re.fullmatch(r"View (PUR-[A-Z0-9-]+) details", label.strip())
+            if match:
+                targets.add(f"order:{match.group(1)}")
+    else:
+        if page.locator("#order-search").count() == 1:
+            targets.add("search-input")
+        if page.locator('[data-action="search"]').count() == 1:
+            targets.add("search-submit")
+        if page.locator('[data-action="back"]').count() == 1:
+            targets.add("back")
+        for name in page.locator("[data-order-name]").evaluate_all(
+            "elements => elements.map(element => element.getAttribute('data-order-name'))"
+        ):
+            if isinstance(name, str) and name:
+                targets.add(f"order:{name}")
+        content = json.dumps(
+            {"text": text, "targets": sorted(targets)},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
     return DomSnapshot(
         observation=Observation(
             page_version=version,
             source=spec.data_source,
-            mode="dom",
+            mode=mode,  # type: ignore[arg-type]
             content=content,
         ),
         targets=frozenset(targets),
@@ -119,7 +140,17 @@ def _validate_action(proposal: ActionProposal, snapshot: DomSnapshot) -> None:
     raise BrowserPolicyError("action type is not allowed")
 
 
-def _locator_for(page: Any, target_ref: str) -> Any:
+def _locator_for(page: Any, target_ref: str, mode: str = "dom") -> Any:
+    if mode == "aria":
+        if target_ref == "search-input":
+            return page.get_by_role("textbox", name="Purchase order number")
+        if target_ref == "search-submit":
+            return page.get_by_role("button", name="Search")
+        if target_ref == "back":
+            return page.get_by_role("link", name="Back to search")
+        if target_ref.startswith("order:"):
+            name = target_ref.removeprefix("order:")
+            return page.get_by_role("link", name=f"View {name} details")
     if target_ref == "search-input":
         return page.locator("#order-search")
     if target_ref == "search-submit":
@@ -139,16 +170,16 @@ def _apply_action(
     before = snapshot.observation
     try:
         if proposal.action_type == "search":
-            locator = _locator_for(page, "search-input")
+            locator = _locator_for(page, "search-input", snapshot.observation.mode)
             locator.fill(proposal.text or "", timeout=spec.budget.action_timeout_seconds * 1000)
-            page.locator('[data-action="search"]').click(
+            _locator_for(page, "search-submit", snapshot.observation.mode).click(
                 timeout=spec.budget.action_timeout_seconds * 1000
             )
             page.wait_for_load_state(
                 "domcontentloaded", timeout=spec.budget.action_timeout_seconds * 1000
             )
         elif proposal.action_type == "click":
-            locator = _locator_for(page, proposal.target_ref or "")
+            locator = _locator_for(page, proposal.target_ref or "", snapshot.observation.mode)
             if locator.count() != 1:
                 raise BrowserPolicyError("observed target is not unique")
             locator.click(timeout=spec.budget.action_timeout_seconds * 1000)
@@ -200,8 +231,8 @@ def _fields(page: Any) -> dict[str, str | None]:
 def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
     """Run one deterministic DOM task in a fresh Playwright browser context."""
 
-    if spec.mode != "dom":
-        raise ValueError("run_dom_task requires a DOM TaskSpec")
+    if spec.mode not in {"dom", "aria"}:
+        raise ValueError("run_dom_task requires a DOM or ARIA TaskSpec")
     origin = _origin(base_url)
     started = monotonic()
     sync_playwright = _playwright_sync()
@@ -213,7 +244,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
         page = context.new_page()
         try:
             page.goto(f"{origin}/", wait_until="domcontentloaded", timeout=10_000)
-            snapshot = _snapshot(page, spec)
+            snapshot = _snapshot(page, spec, spec.mode)
             observations.append(snapshot.observation)
             if len(receipts) >= spec.budget.max_actions:
                 raise BrowserPolicyError("action budget exceeded")
@@ -224,7 +255,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                 text=spec.purchase_order,
             )
             receipts.append(_apply_action(page, search, snapshot, spec))
-            snapshot = _snapshot(page, spec)
+            snapshot = _snapshot(page, spec, spec.mode)
             observations.append(snapshot.observation)
             target = f"order:{spec.purchase_order}"
             if target not in snapshot.targets:
@@ -236,7 +267,7 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
                     target_ref=target,
                 )
                 receipts.append(_apply_action(page, click, snapshot, spec))
-                snapshot = _snapshot(page, spec)
+                snapshot = _snapshot(page, spec, spec.mode)
                 observations.append(snapshot.observation)
                 values = _fields(page)
                 status = "SUCCEEDED" if all(values.values()) else "INCOMPLETE"
@@ -258,4 +289,19 @@ def run_dom_task(base_url: str, spec: TaskSpec) -> DomRun:
     return DomRun(result=result, observations=tuple(observations))
 
 
-__all__ = ["BrowserPolicyError", "BrowserUnavailable", "DomRun", "DomSnapshot", "run_dom_task"]
+def run_aria_task(base_url: str, spec: TaskSpec) -> DomRun:
+    """Run one read task using the browser accessibility snapshot."""
+
+    if spec.mode != "aria":
+        raise ValueError("run_aria_task requires an ARIA TaskSpec")
+    return run_dom_task(base_url, spec)
+
+
+__all__ = [
+    "BrowserPolicyError",
+    "BrowserUnavailable",
+    "DomRun",
+    "DomSnapshot",
+    "run_aria_task",
+    "run_dom_task",
+]

@@ -77,6 +77,22 @@ def test_dom_task_reports_missing_order() -> None:
     assert run.result.fields == {}
 
 
+def test_aria_task_uses_accessible_roles_and_reads_one_order() -> None:
+    try:
+        with _server() as base_url:
+            run = run_dom_task(
+                base_url,
+                TaskSpec(case_id="p11-aria-001", purchase_order="PUR-ORD-0002", mode="aria"),
+            )
+    except BrowserUnavailable:
+        pytest.skip("web-gui-lab is not installed")
+
+    assert run.result.status == "SUCCEEDED"
+    assert run.result.fields["currency"] == "USD"
+    assert "textbox" in run.observations[0].content
+    assert "search-input" not in run.observations[0].content
+
+
 def test_dom_policy_rejects_stale_or_unknown_targets() -> None:
     proposal = ActionProposal(
         action_type="click",

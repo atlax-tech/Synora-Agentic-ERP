@@ -104,7 +104,8 @@ def _list_rows(orders: tuple[FixtureOrder, ...]) -> str:
         f"<td>{html.escape(order.supplier)}</td>"
         f"<td>{html.escape(order.status)}</td>"
         f'<td><a data-order-link href="/purchase-orders/'
-        f'{html.escape(order.purchase_order, quote=True)}">View details</a></td></tr>'
+        f'{html.escape(order.purchase_order, quote=True)}">View '
+        f"{html.escape(order.purchase_order)} details</a></td></tr>"
         for order in orders
     )
     return f"""<table><caption>Purchase orders</caption><thead><tr>
