@@ -126,6 +126,19 @@ class _RealPolicy:
             self.blocked.append(code)
 
 
+def _response_body_too_large(body: bytes, headers: Mapping[str, str] | None = None) -> bool:
+    """Apply the response limit even when the server omits Content-Length."""
+
+    if len(body) > MAX_RESPONSE_BYTES:
+        return True
+    if headers is None:
+        return False
+    try:
+        return int(headers.get("content-length", "0")) > MAX_RESPONSE_BYTES
+    except TypeError, ValueError:
+        return False
+
+
 async def read_erp_web(
     config: ErpReadConfig,
     *,
@@ -170,8 +183,20 @@ async def read_erp_web(
                     request_paths.append(path)
                 if not policy.check(request.method, request.url):
                     await route.abort()
-                else:
-                    await route.continue_()
+                    return
+                if path.startswith("/api/") or path == f"{ERP_SITE_PATH}/{config.purchase_order}":
+                    try:
+                        response = await route.fetch()
+                        body = await response.body()
+                        if _response_body_too_large(body, response.headers):
+                            response_events.append("RESPONSE_TOO_LARGE")
+                            await route.abort()
+                            return
+                        await route.fulfill(response=response)
+                    except Exception:
+                        await route.abort()
+                    return
+                await route.continue_()
 
             await context.route("**/*", route_handler)
             popup_seen = False
@@ -194,29 +219,28 @@ async def read_erp_web(
                 dialog_seen = True
                 await dialog.dismiss()
 
-            def on_response(response: Any) -> None:
-                path = urlsplit(response.url).path
-                if not (
-                    path.startswith("/api/") or path == f"{ERP_SITE_PATH}/{config.purchase_order}"
-                ):
-                    return
-                try:
-                    content_length = int(response.headers.get("content-length", "0"))
-                except TypeError, ValueError:
-                    content_length = 0
-                if content_length > MAX_RESPONSE_BYTES:
-                    response_events.append("RESPONSE_TOO_LARGE")
-
             page = await context.new_page()
             page.on("popup", on_popup)
             page.on("download", on_download)
             page.on("dialog", on_dialog)
-            page.on("response", on_response)
             login = await context.request.post(
                 f"{origin}{ERP_LOGIN_PATH}",
                 form={"usr": config.user, "pwd": password},
                 max_redirects=0,
+                timeout=int(config.timeout_seconds * 1000),
             )
+            login_body = await login.body()
+            if _response_body_too_large(login_body, login.headers):
+                await browser.close()
+                return _result(
+                    "web",
+                    "FAILED",
+                    safety_pass=False,
+                    failure_code="ERP_RESPONSE_TOO_LARGE",
+                    started=started,
+                    request_paths=(ERP_LOGIN_PATH,),
+                    policy_events=("RESPONSE_TOO_LARGE",),
+                )
             if login.status in {401, 403}:
                 await browser.close()
                 return _result(

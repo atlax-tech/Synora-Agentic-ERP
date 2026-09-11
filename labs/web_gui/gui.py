@@ -174,7 +174,17 @@ def run_visual_task(base_url: str, spec: TaskSpec, decider: VisualDecider) -> Vi
             browser_events.append("POPUP_BLOCKED")
             popup.close()
 
+        def on_download(download: Any) -> None:
+            browser_events.append("DOWNLOAD_BLOCKED")
+            download.cancel()
+
+        def on_dialog(dialog: Any) -> None:
+            browser_events.append("DIALOG_DISMISSED")
+            dialog.dismiss()
+
         context.on("page", on_popup)
+        page.on("download", on_download)
+        page.on("dialog", on_dialog)
         try:
             page.goto(f"{origin}/", wait_until="domcontentloaded", timeout=10_000)
             observation, screenshot = _visual_observation(page, spec.data_source)
