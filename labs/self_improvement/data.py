@@ -214,6 +214,15 @@ def build_synthetic_manifest(code_version: str, seed: int = 12) -> DatasetManife
     )
 
 
+def model_input_text(case: DatasetCase) -> str:
+    """Project a case into provider-visible text without its scoring label."""
+    marker = f"Scenario={case.kind}. "
+    projected = case.input_text.replace(marker, "")
+    if case.expected_action in projected or case.expected_status in projected:
+        raise ValueError("model input contains a scoring-side label")
+    return projected
+
+
 def validate_grouped_splits(cases: Iterable[DatasetCase]) -> None:
     groups: dict[str, set[SplitName]] = {}
     ids: set[str] = set()

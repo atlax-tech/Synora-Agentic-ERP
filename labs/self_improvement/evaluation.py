@@ -13,6 +13,7 @@ from typing import Literal, Protocol
 from agent_runtime.providers import ProviderError, ProviderMessage
 
 from .contracts import DatasetCase, DatasetManifest, ExperimentRecord, digest_json
+from .data import model_input_text
 from .replay import Policy, ReplayResult, ReplayState, deterministic_policy, run_replay
 
 MAX_INPUT_CHARS = 4_000
@@ -221,7 +222,7 @@ def run_live_baseline(
     """Run one bounded model decision and pass it through the local verifier."""
     prompt = json.dumps(
         {
-            "task": case.input_text,
+            "task": model_input_text(case),
             "rules": [
                 "Use one bounded read-only action.",
                 'Return JSON: {"action": "..."}.',
@@ -317,7 +318,7 @@ def run_live_baselines(
             for case in values:
                 prompt = json.dumps(
                     {
-                        "task": case.input_text,
+                        "task": model_input_text(case),
                         "rules": [
                             "Use one bounded read-only action.",
                             '{"action": "..."} is the only output shape.',

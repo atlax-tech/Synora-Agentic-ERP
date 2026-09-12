@@ -9,6 +9,7 @@ from labs.self_improvement.contracts import DatasetCase, ReviewedCase, digest_by
 from labs.self_improvement.data import (
     audit_historical_failures,
     build_synthetic_manifest,
+    model_input_text,
     validate_grouped_splits,
 )
 
@@ -43,6 +44,15 @@ def test_synthetic_manifest_has_grouped_72_24_24_split() -> None:
     assert manifest.group_counts == {"train": 36, "dev": 12, "test": 12}
     validate_grouped_splits(manifest.cases)
     assert len({case.group_id for case in manifest.cases}) == 60
+
+
+def test_model_input_projection_excludes_scenario_and_scoring_labels() -> None:
+    manifest = build_synthetic_manifest("test-code")
+    for case in manifest.cases:
+        projected = model_input_text(case)
+        assert "Scenario=" not in projected
+        assert case.expected_action not in projected
+        assert case.expected_status not in projected
 
 
 def test_cross_split_group_is_rejected() -> None:
