@@ -1,7 +1,7 @@
 {
   "action_version": "phase12-actions-v1",
   "artifact_id": "phase12-train-sft-seed-29",
-  "code_version": "2e10b56",
+  "code_version": "41bcf93",
   "config": {
     "epochs": 100,
     "learning_rate": 0.01
@@ -12,13 +12,13 @@
   "initial_weight_sha256": "50365dba6b7402a847a44376b15979bff5a85e0fafd12db0458db3ef68944be1",
   "method": "sft",
   "metrics": {
-    "dev_examples": 36.0,
-    "final_dev_loss": 0.1300159990787506,
-    "train_examples": 108.0
+    "dev_examples": 48.0,
+    "final_dev_loss": 0.13240975141525269,
+    "train_examples": 144.0
   },
   "reference_weight_sha256": null,
   "schema_version": "1",
   "seed": 29,
   "weight_path": "output/phase12/weights-sft-29.json",
-  "weight_sha256": "354214e30b25b71c4d3c529d74487a288b46708cd03eef5e37360941ab18714e"
+  "weight_sha256": "501ce8f33658a9d9c56772d627e07387c13f472ea7305c16b8d74763c8d9a64a"
 }
