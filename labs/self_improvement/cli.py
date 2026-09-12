@@ -381,12 +381,8 @@ def _validate_evidence(
     versions = {record.code_version for record in records}
     if len(versions) != 1:
         raise ValueError("selection evidence must use one experiment code version")
-    comparison_methods = {expected_method}
-    if expected_method != "baseline":
-        comparison_methods.add("baseline")
     expected_ids = {
-        f"phase12-exp-replay-{method.lower()}-{repeat}-{case.case_id}"
-        for method in comparison_methods
+        f"phase12-exp-replay-{expected_method.lower()}-{repeat}-{case.case_id}"
         for repeat in range(1, 4)
         for case in manifest.cases
         if case.split == split
@@ -410,12 +406,7 @@ def _validate_evidence(
         ):
             raise ValueError("selection evidence uses a different dataset")
         if record.method != expected_method or record.candidate_id != candidate_id:
-            if not (
-                expected_method != "baseline"
-                and record.method == "baseline"
-                and record.candidate_id is None
-            ):
-                raise ValueError("selection evidence does not match the selected version")
+            raise ValueError("selection evidence does not match the selected version")
         if record.status not in {"SUCCEEDED", "REJECTED"}:
             raise ValueError("selection evidence cannot use unknown or incomplete records")
         if candidate_id is not None and record.method == expected_method:

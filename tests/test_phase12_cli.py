@@ -60,22 +60,6 @@ def test_cli_candidate_selection_and_rollback(tmp_path: Path) -> None:
         )
         == 0
     )
-    assert (
-        main(
-            [
-                "--root",
-                str(tmp_path),
-                "evaluate",
-                "--method",
-                "baseline",
-                "--split",
-                "dev",
-                "--repeats",
-                "3",
-            ]
-        )
-        == 0
-    )
     candidate_evidence = [
         json.loads(line)["experiment_id"]
         for line in (
@@ -84,13 +68,7 @@ def test_cli_candidate_selection_and_rollback(tmp_path: Path) -> None:
         .read_text(encoding="utf-8")
         .splitlines()
     ]
-    baseline_evidence = [
-        json.loads(line)["experiment_id"]
-        for line in (tmp_path / "output" / "phase12" / "evaluation-replay-baseline-dev.jsonl")
-        .read_text(encoding="utf-8")
-        .splitlines()
-    ]
-    evidence_ids = [*candidate_evidence, *baseline_evidence]
+    evidence_ids = candidate_evidence
     assert (
         main(
             [
