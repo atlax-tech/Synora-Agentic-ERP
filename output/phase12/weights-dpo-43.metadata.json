@@ -1,0 +1,26 @@
+{
+  "action_version": "phase12-actions-v1",
+  "artifact_id": "phase12-train-dpo-seed-43",
+  "checkpoint_metrics": [],
+  "code_version": "17c6c9c",
+  "config": {
+    "beta": 0.1,
+    "epochs": 100,
+    "learning_rate": 0.001
+  },
+  "dataset_digest": "a4278cc7ef8df0a8129e0449b8ffc00c386f2ea3b033a9e239203fb14c9626fe",
+  "dataset_id": "phase12-synthetic-v2",
+  "feature_version": "phase12-features-v2",
+  "initial_weight_sha256": "8c1c1f39fa182fbba71f2e0e22a250b05d1a0fd9b1fa31877403b561019931a9",
+  "method": "dpo",
+  "metrics": {
+    "dev_preference_pairs": 20.0,
+    "final_dpo_loss": 0.40845125913619995,
+    "preference_pairs": 60.0
+  },
+  "reference_weight_sha256": "8c1c1f39fa182fbba71f2e0e22a250b05d1a0fd9b1fa31877403b561019931a9",
+  "schema_version": "1",
+  "seed": 43,
+  "weight_path": "output/phase12/weights-dpo-43.json",
+  "weight_sha256": "6dc18a8ee47ed8da11b02c293b91200a3556508df928ac882d3178b4ae4d4b4f"
+}
