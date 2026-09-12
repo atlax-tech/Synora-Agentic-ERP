@@ -288,7 +288,10 @@ def evaluate_replay_cases(
     method: str = "baseline",
     dataset_id: str = "phase12-synthetic-v1",
     dataset_digest: str | None = None,
+    repeat: int = 1,
 ) -> tuple[ExperimentRecord, ...]:
+    if repeat < 1 or repeat > 20:
+        raise ValueError("repeat must be between one and twenty")
     values = tuple(cases)
     bound_digest = dataset_digest or digest_json(
         {"cases": [case.model_dump(mode="json") for case in values]}
@@ -298,14 +301,14 @@ def evaluate_replay_cases(
         result: ReplayResult = run_replay(case, policy)
         records.append(
             ExperimentRecord(
-                experiment_id=f"phase12-exp-replay-{method.lower()}-{case.case_id}",
+                experiment_id=f"phase12-exp-replay-{method.lower()}-{repeat}-{case.case_id}",
                 code_version=code_version,
                 dataset_id=dataset_id,
                 dataset_digest=bound_digest,
                 split=case.split,
                 method=method,
                 model=model,
-                repeat=1,
+                repeat=repeat,
                 status="SUCCEEDED" if result.verifier_passed else "REJECTED",
                 output_action=result.action_sequence[-1] if result.action_sequence else None,
                 verifier_passed=result.verifier_passed,
