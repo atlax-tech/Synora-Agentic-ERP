@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-from agent_runtime.providers import ProviderResponse
+import asyncio
+import time
+
+import pytest
+from agent_runtime.providers import ProviderError, ProviderResponse
 
 from labs.self_improvement.data import build_synthetic_manifest
 from labs.self_improvement.evaluation import (
     CallBudget,
+    _call_provider,
     aggregate,
     evaluate_replay_cases,
     run_live_baseline,
@@ -20,6 +25,24 @@ class FakeProvider:
         del messages, kwargs
         self.calls += 1
         return ProviderResponse(text=self.text, prompt_tokens=4, completion_tokens=2)
+
+
+class FailingProvider:
+    def __init__(self, failure_code: str) -> None:
+        self.failure_code = failure_code
+        self.calls = 0
+
+    async def complete(self, messages: list[object], **kwargs: object) -> ProviderResponse:
+        del messages, kwargs
+        self.calls += 1
+        raise ProviderError("blocked", failure_code=self.failure_code)
+
+
+class SlowProvider:
+    async def complete(self, messages: list[object], **kwargs: object) -> ProviderResponse:
+        del messages, kwargs
+        await asyncio.sleep(0.01)
+        return ProviderResponse(text='{"action":"FINISH"}')
 
 
 def test_replay_evaluation_aggregates_verifier_and_safety() -> None:
@@ -53,6 +76,7 @@ def test_live_baseline_does_not_call_after_budget_exhaustion() -> None:
     record = run_live_baseline(case, provider, budget, code_version="eval-test", model="fake")
     assert record.status == "UNKNOWN"
     assert record.failure_code == "MODEL_CALL_BUDGET"
+    assert record.calls == 0
     assert provider.calls == 0
 
 
@@ -67,3 +91,29 @@ def test_live_invalid_json_is_recorded_without_retry() -> None:
     assert record.failure_code == "MODEL_RESPONSE_SCHEMA"
     assert budget.used == 1
     assert provider.calls == 1
+
+
+def test_three_blocking_failures_stop_the_batch() -> None:
+    case = next(
+        case for case in build_synthetic_manifest("eval-test").cases if case.kind == "MISSING_INPUT"
+    )
+    provider = FailingProvider("CONNECTION_ERROR")
+    budget = CallBudget(maximum=10)
+    for _ in range(3):
+        run_live_baseline(case, provider, budget, code_version="eval-test", model="fake")
+    stopped = run_live_baseline(case, provider, budget, code_version="eval-test", model="fake")
+    assert stopped.failure_code == "MODEL_BATCH_BLOCKED"
+    assert stopped.calls == 0
+    assert provider.calls == 3
+    assert budget.used == 3
+
+
+def test_provider_call_wall_clock_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    import labs.self_improvement.evaluation as evaluation
+
+    monkeypatch.setattr(evaluation, "MAX_CALL_SECONDS", 0.001)
+    start = time.perf_counter()
+    call = asyncio.run(_call_provider(SlowProvider(), '{"task":"x"}', CallBudget(maximum=1)))
+    assert call.failure_code == "MODEL_CALL_TIMEOUT"
+    assert call.attempted
+    assert time.perf_counter() - start < 1.0

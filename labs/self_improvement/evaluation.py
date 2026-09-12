@@ -17,7 +17,19 @@ from .replay import Policy, ReplayResult, ReplayState, deterministic_policy, run
 
 MAX_INPUT_CHARS = 4_000
 MAX_OUTPUT_TOKENS = 512
+MAX_OUTPUT_CHARS = MAX_OUTPUT_TOKENS * 4
+MAX_CALL_SECONDS = 60.0
 MAX_MODEL_CALLS = 1_200
+_BATCH_BLOCKING_FAILURES = frozenset(
+    {
+        "AUTHENTICATION_ERROR",
+        "AUTH_FAILED",
+        "CONNECTION_ERROR",
+        "NETWORK_ERROR",
+        "PROTOCOL_ERROR",
+        "PROVIDER_UNAVAILABLE",
+    }
+)
 
 
 class BudgetExceeded(RuntimeError):
@@ -28,14 +40,27 @@ class BudgetExceeded(RuntimeError):
 class CallBudget:
     maximum: int = MAX_MODEL_CALLS
     used: int = 0
+    consecutive_blocking_failures: int = 0
+    blocked: bool = False
 
     def reserve(self) -> int:
         if self.maximum < 0 or self.maximum > MAX_MODEL_CALLS:
             raise ValueError("budget maximum is outside the Phase 12 limit")
+        if self.blocked:
+            raise BudgetExceeded("MODEL_BATCH_BLOCKED")
         if self.used >= self.maximum:
             raise BudgetExceeded("MODEL_CALL_BUDGET")
         self.used += 1
         return self.used
+
+    def note(self, failure_code: str | None) -> None:
+        """Stop a batch after three consecutive connection/auth/protocol failures."""
+        if failure_code in _BATCH_BLOCKING_FAILURES:
+            self.consecutive_blocking_failures += 1
+            if self.consecutive_blocking_failures >= 3:
+                self.blocked = True
+            return
+        self.consecutive_blocking_failures = 0
 
 
 @dataclass(frozen=True)
@@ -46,6 +71,7 @@ class LiveCall:
     prompt_tokens: int | None
     completion_tokens: int | None
     elapsed_ms: float
+    attempted: bool = False
 
 
 @dataclass(frozen=True)
@@ -79,7 +105,7 @@ class LiveProvider(Protocol):
 
 
 def _parse_action(text: str) -> str:
-    if len(text) > MAX_INPUT_CHARS:
+    if len(text) > MAX_OUTPUT_CHARS:
         raise ValueError("MODEL_RESPONSE_TOO_LARGE")
     try:
         payload = json.loads(text)
@@ -102,52 +128,80 @@ async def _call_provider(
         return LiveCall(None, "REJECTED", "INPUT_TOO_LARGE", None, None, 0.0)
     try:
         budget.reserve()
-    except BudgetExceeded:
-        return LiveCall(None, "UNKNOWN", "MODEL_CALL_BUDGET", None, None, 0.0)
+    except BudgetExceeded as error:
+        return LiveCall(None, "UNKNOWN", str(error), None, None, 0.0)
     start = time.perf_counter()
     try:
-        response = await provider.complete(
-            [ProviderMessage(role="user", content=prompt)],
-            tools=[],
-            max_tokens=MAX_OUTPUT_TOKENS,
+        response = await asyncio.wait_for(
+            provider.complete(
+                [ProviderMessage(role="user", content=prompt)],
+                tools=[],
+                max_tokens=MAX_OUTPUT_TOKENS,
+            ),
+            timeout=MAX_CALL_SECONDS,
         )
     except ProviderError as error:
-        return LiveCall(
+        call = LiveCall(
             None,
             "UNKNOWN",
             error.failure_code,
             error.prompt_tokens or None,
             error.completion_tokens or None,
             (time.perf_counter() - start) * 1000,
+            True,
         )
-    except (TimeoutError, OSError) as error:
-        return LiveCall(
+        budget.note(call.failure_code)
+        return call
+    except TimeoutError:
+        call = LiveCall(
+            None,
+            "UNKNOWN",
+            "MODEL_CALL_TIMEOUT",
+            None,
+            None,
+            (time.perf_counter() - start) * 1000,
+            True,
+        )
+        budget.note(call.failure_code)
+        return call
+    except OSError as error:
+        call = LiveCall(
             None,
             "UNKNOWN",
             type(error).__name__.upper(),
             None,
             None,
             (time.perf_counter() - start) * 1000,
+            True,
         )
+        budget.note(call.failure_code)
+        return call
     elapsed = (time.perf_counter() - start) * 1000
     text = getattr(response, "text", None)
     if not isinstance(text, str) or not text:
-        return LiveCall(None, "UNKNOWN", "MODEL_RESPONSE_EMPTY", None, None, elapsed)
+        call = LiveCall(None, "UNKNOWN", "MODEL_RESPONSE_EMPTY", None, None, elapsed, True)
+        budget.note(call.failure_code)
+        return call
     try:
         action = _parse_action(text)
     except ValueError as error:
-        return LiveCall(None, "FAILED", str(error), None, None, elapsed)
+        call = LiveCall(None, "FAILED", str(error), None, None, elapsed, True)
+        budget.note(call.failure_code)
+        return call
     prompt_tokens = getattr(response, "prompt_tokens", 0)
     completion_tokens = getattr(response, "completion_tokens", 0)
     known_usage = isinstance(prompt_tokens, int) and isinstance(completion_tokens, int)
-    return LiveCall(
+    call = LiveCall(
         action,
         "SUCCEEDED",
         None,
         prompt_tokens if known_usage and prompt_tokens > 0 else None,
         completion_tokens if known_usage and completion_tokens > 0 else None,
         elapsed,
+        True,
     )
+    budget.note(None)
+    return call
 
 
 def run_live_baseline(
@@ -158,6 +212,8 @@ def run_live_baseline(
     code_version: str,
     model: str,
     repeat: int = 1,
+    dataset_id: str = "phase12-synthetic-v1",
+    dataset_digest: str | None = None,
 ) -> ExperimentRecord:
     """Run one bounded model decision and pass it through the local verifier."""
     prompt = json.dumps(
@@ -178,12 +234,13 @@ def run_live_baseline(
         separators=(",", ":"),
     )
     call = asyncio.run(_call_provider(provider, prompt, budget))
+    bound_digest = dataset_digest or digest_json(case.model_dump(mode="json"))
     if call.action is None:
         return ExperimentRecord(
             experiment_id=f"phase12-exp-live-{case.case_id}-{repeat}",
             code_version=code_version,
-            dataset_id="phase12-synthetic-v1",
-            dataset_digest=digest_json(case.model_dump(mode="json")),
+            dataset_id=dataset_id,
+            dataset_digest=bound_digest,
             split=case.split,
             method="baseline",
             model=model,
@@ -196,15 +253,15 @@ def run_live_baseline(
             prompt_tokens=call.prompt_tokens,
             completion_tokens=call.completion_tokens,
             elapsed_ms=call.elapsed_ms,
-            calls=1,
+            calls=int(call.attempted),
         )
     result = run_replay(case, lambda _state: call.action or "FINISH")
     status: Literal["SUCCEEDED", "REJECTED"] = "SUCCEEDED" if result.verifier_passed else "REJECTED"
     return ExperimentRecord(
         experiment_id=f"phase12-exp-live-{case.case_id}-{repeat}",
         code_version=code_version,
-        dataset_id="phase12-synthetic-v1",
-        dataset_digest=digest_json(case.model_dump(mode="json")),
+        dataset_id=dataset_id,
+        dataset_digest=bound_digest,
         split=case.split,
         method="baseline",
         model=model,
@@ -218,7 +275,7 @@ def run_live_baseline(
         prompt_tokens=call.prompt_tokens,
         completion_tokens=call.completion_tokens,
         elapsed_ms=call.elapsed_ms,
-        calls=1,
+        calls=int(call.attempted),
     )
 
 
@@ -229,6 +286,7 @@ def evaluate_replay_cases(
     code_version: str,
     model: str = "deterministic-replay",
     method: str = "baseline",
+    dataset_id: str = "phase12-synthetic-v1",
     dataset_digest: str | None = None,
 ) -> tuple[ExperimentRecord, ...]:
     values = tuple(cases)
@@ -242,7 +300,7 @@ def evaluate_replay_cases(
             ExperimentRecord(
                 experiment_id=f"phase12-exp-replay-{method.lower()}-{case.case_id}",
                 code_version=code_version,
-                dataset_id="phase12-synthetic-v1",
+                dataset_id=dataset_id,
                 dataset_digest=bound_digest,
                 split=case.split,
                 method=method,
