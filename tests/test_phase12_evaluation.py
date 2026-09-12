@@ -188,7 +188,7 @@ def test_new_batch_can_reserve_the_same_case_after_a_prior_batch(tmp_path: Path)
             reservation_key="batch-a:repeat:1:case:case-a",
         )
     )
-    ReservationLedger(path).mark_recorded_matching(("repeat:1:case:case-a",))
+    ReservationLedger(path).mark_recorded_matching(("batch-a:repeat:1:case:case-a",))
     second = CallBudget(
         maximum=3,
         ledger=ReservationLedger(path),
@@ -204,6 +204,24 @@ def test_new_batch_can_reserve_the_same_case_after_a_prior_batch(tmp_path: Path)
     )
     assert call.attempted
     assert provider.calls == 2
+
+
+def test_recorded_matching_never_consumes_a_different_batch(tmp_path: Path) -> None:
+    path = tmp_path / "reservations.jsonl"
+    ledger = ReservationLedger(path)
+    first = CallBudget(maximum=4, ledger=ledger, batch_id="batch-a")
+    second = CallBudget(maximum=4, ledger=ledger, batch_id="batch-b")
+    first.reserve("batch-a:repeat:1:case:case-a")
+    ledger.finish("batch-a:repeat:1:case:case-a", "UNKNOWN")
+    second.reserve("batch-b:repeat:1:case:case-a")
+    ledger.finish("batch-b:repeat:1:case:case-a", "UNKNOWN")
+
+    ledger.mark_recorded_matching(("batch-a:repeat:1:case:case-a",))
+
+    assert ledger.states() == (
+        ("batch-a:repeat:1:case:case-a", "RECORDED"),
+        ("batch-b:repeat:1:case:case-a", "UNKNOWN"),
+    )
 
 
 def test_provider_call_wall_clock_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:

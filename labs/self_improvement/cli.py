@@ -219,24 +219,30 @@ def _existing_calls(root: Path) -> int:
     return total
 
 
-def _reservation_key_for_record(record: ExperimentRecord) -> str:
-    stem = record.experiment_id.removeprefix("phase12-exp-live-")
-    case_id, _ = stem.rsplit("-", 1)
-    return f"repeat:{record.repeat}:case:{case_id}"
+def _reservation_key_for_record(record: ExperimentRecord) -> str | None:
+    """Return the exact persisted reservation key for a live record.
+
+    Legacy records created before reservation keys were persisted are deliberately
+    excluded: deriving a suffix would risk consuming another batch's reservation.
+    """
+    if not record.experiment_id.startswith("phase12-exp-live-"):
+        return None
+    return record.reservation_key
 
 
-def _live_record_suffixes(root: Path) -> tuple[str, ...]:
+def _live_record_keys(root: Path) -> tuple[str, ...]:
     output = root / PHASE12_RELATIVE_ROOT
     if not output.exists():
         return ()
-    suffixes: list[str] = []
+    keys: list[str] = []
     for path in output.glob("*.jsonl"):
         if path.name == RESERVATION_LEDGER_NAME:
             continue
         for record in read_records(root, str(path.relative_to(root))):
-            if record.experiment_id.startswith("phase12-exp-live-") and record.calls > 0:
-                suffixes.append(_reservation_key_for_record(record))
-    return tuple(suffixes)
+            key = _reservation_key_for_record(record)
+            if key is not None and record.calls > 0:
+                keys.append(key)
+    return tuple(keys)
 
 
 def _validate_lab_version(root: Path, version_id: str) -> None:
@@ -328,7 +334,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             raise RuntimeError(f"live provider unavailable: {error.failure_code}") from error
         batch_id = args.batch_id or f"cli-{code_version()}-{time.time_ns()}"
         ledger = ReservationLedger(args.root / PHASE12_RELATIVE_ROOT / RESERVATION_LEDGER_NAME)
-        ledger.mark_recorded_matching(_live_record_suffixes(args.root))
+        ledger.mark_recorded_matching(_live_record_keys(args.root))
         budget = CallBudget(
             maximum=1_200,
             used=_existing_calls(args.root),
@@ -352,7 +358,13 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
     if args.engine == "live":
         ledger = ReservationLedger(args.root / PHASE12_RELATIVE_ROOT / RESERVATION_LEDGER_NAME)
         ledger.mark_recorded_matching(
-            tuple(_reservation_key_for_record(record) for record in records if record.calls > 0)
+            tuple(
+                key
+                for record in records
+                if record.calls > 0
+                for key in (_reservation_key_for_record(record),)
+                if key is not None
+            )
         )
     return {
         "path": str(path),

@@ -183,13 +183,17 @@ class ReservationLedger:
             self._append(previous[0], reservation_key, "RECORDED")
             self._states[reservation_key] = (previous[0], "RECORDED")
 
-    def mark_recorded_matching(self, suffixes: Iterable[str]) -> None:
-        wanted = tuple(suffixes)
+    def mark_recorded_matching(self, keys: Iterable[str]) -> None:
+        """Mark only the exact reservation keys represented by materialized records.
+
+        Reservation keys include the batch id.  Matching by a suffix could mark a
+        different batch's call when two runs used the same repeat and case id.
+        """
+        wanted = frozenset(keys)
         keys = tuple(
             key
             for key, (_, state) in self._states.items()
-            if state in {"COMPLETED", "FAILED", "UNKNOWN"}
-            and any(key.endswith(suffix) for suffix in wanted)
+            if state in {"COMPLETED", "FAILED", "UNKNOWN"} and key in wanted
         )
         self.mark_recorded(keys)
 
@@ -424,7 +428,16 @@ def run_live_baseline(
     )
     reservation_key = f"{budget.batch_id}:repeat:{repeat}:case:{case.case_id}"
     call = asyncio.run(_call_provider(provider, prompt, budget, reservation_key=reservation_key))
-    return _live_record(case, call, code_version, model, repeat, dataset_id, dataset_digest)
+    return _live_record(
+        case,
+        call,
+        code_version,
+        model,
+        repeat,
+        dataset_id,
+        dataset_digest,
+        reservation_key=reservation_key,
+    )
 
 
 def _live_record(
@@ -435,6 +448,8 @@ def _live_record(
     repeat: int,
     dataset_id: str,
     dataset_digest: str | None,
+    *,
+    reservation_key: str | None = None,
 ) -> ExperimentRecord:
     """Build one immutable result after the provider call has completed."""
     bound_digest = dataset_digest or digest_json(case.model_dump(mode="json"))
@@ -446,6 +461,7 @@ def _live_record(
             dataset_digest=bound_digest,
             split=case.split,
             method="baseline",
+            reservation_key=reservation_key,
             model=model,
             repeat=repeat,
             status=call.status,  # type: ignore[arg-type]
@@ -467,6 +483,7 @@ def _live_record(
         dataset_digest=bound_digest,
         split=case.split,
         method="baseline",
+        reservation_key=reservation_key,
         model=model,
         repeat=repeat,
         status=status,
@@ -528,6 +545,7 @@ def run_live_baselines(
                         repeat,
                         dataset_id,
                         dataset_digest,
+                        reservation_key=reservation_key,
                     )
                 )
         return tuple(records)

@@ -164,6 +164,9 @@ class ExperimentRecord(StrictModel):
     candidate_id: str | None = Field(
         default=None, pattern=r"^phase12-(prompt|skill)-[a-z0-9-]{3,80}$"
     )
+    reservation_key: str | None = Field(
+        default=None, min_length=1, max_length=240, pattern=r"^[^\r\n]+$"
+    )
     model: str = Field(min_length=1, max_length=160)
     repeat: int = Field(ge=1, le=20)
     status: Literal["SUCCEEDED", "FAILED", "UNKNOWN", "REJECTED"]
