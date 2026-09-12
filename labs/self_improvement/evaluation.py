@@ -180,11 +180,12 @@ class ReservationLedger:
 
     def mark_recorded_matching(self, suffixes: Iterable[str]) -> None:
         wanted = tuple(suffixes)
-        self.mark_recorded(
+        keys = tuple(
             key
             for key, (_, state) in self._states.items()
             if state != "RECORDED" and any(key.endswith(suffix) for suffix in wanted)
         )
+        self.mark_recorded(keys)
 
 
 @dataclass

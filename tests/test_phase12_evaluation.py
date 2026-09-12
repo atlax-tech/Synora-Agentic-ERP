@@ -181,7 +181,7 @@ def test_new_batch_can_reserve_the_same_case_after_a_prior_batch(tmp_path: Path)
             reservation_key="batch-a:repeat:1:case:case-a",
         )
     )
-    ReservationLedger(path).mark_recorded(("batch-a:repeat:1:case:case-a",))
+    ReservationLedger(path).mark_recorded_matching(("repeat:1:case:case-a",))
     second = CallBudget(
         maximum=3,
         ledger=ReservationLedger(path),
