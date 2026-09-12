@@ -197,6 +197,7 @@ class TrainingArtifact(StrictModel):
     config: dict[str, int | float | str]
     initial_weight_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     weight_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reference_weight_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     metrics: dict[str, float]
     weight_path: str = Field(min_length=1, max_length=240)
 

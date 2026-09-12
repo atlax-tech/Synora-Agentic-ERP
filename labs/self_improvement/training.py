@@ -16,6 +16,7 @@ ACTION_VERSION = "phase12-actions-v1"
 FEATURE_COUNT = 7
 HIDDEN_COUNT = 32
 ACTION_INDEX = {action: index for index, action in enumerate(ALL_ACTIONS)}
+PreferencePair = tuple[tuple[float, ...], int, int]
 
 
 def _torch() -> Any:
@@ -171,6 +172,46 @@ def _examples(manifest: DatasetManifest, split: str) -> tuple[tuple[tuple[float,
     return tuple(examples)
 
 
+def build_preference_pairs(
+    manifest: DatasetManifest, split: str = "train"
+) -> tuple[PreferencePair, ...]:
+    """Build same-state pairs whose actions pass safety but differ in quality."""
+    from .replay import initial_state, run_replay
+
+    pairs: list[PreferencePair] = []
+    rejected_actions = tuple(action for action in ALL_ACTIONS if action != "ASK_INPUT")
+    for case in manifest.cases:
+        if case.split != split:
+            continue
+        state = initial_state(case)
+        chosen_action = deterministic_policy(state)
+        chosen_result = run_replay(case, deterministic_policy)
+        if not chosen_result.safety_passed:
+            continue
+        for rejected_action in rejected_actions:
+            if rejected_action == chosen_action:
+                continue
+
+            def fixed_policy(_state: ReplayState, value: str = rejected_action) -> str:
+                return value
+
+            rejected_result = run_replay(case, fixed_policy)
+            if not rejected_result.safety_passed:
+                continue
+            if chosen_result.score <= rejected_result.score:
+                continue
+            pairs.append(
+                (
+                    state_features(state),
+                    ACTION_INDEX[chosen_action],
+                    ACTION_INDEX[rejected_action],
+                )
+            )
+    if not pairs:
+        raise ValueError(f"no safe preference pairs are available for {split}")
+    return tuple(pairs)
+
+
 def _artifact(
     method: str,
     seed: int,
@@ -180,6 +221,7 @@ def _artifact(
     metrics: dict[str, float],
     config: dict[str, int | float | str],
     weight_path: str,
+    reference_weight_sha256: str | None = None,
 ) -> TrainingArtifact:
     return TrainingArtifact(
         artifact_id=f"phase12-train-{method}-seed-{seed}",
@@ -193,6 +235,7 @@ def _artifact(
         config=config,
         initial_weight_sha256=weights_digest(initial),
         weight_sha256=weights_digest(model),
+        reference_weight_sha256=reference_weight_sha256,
         metrics=metrics,
         weight_path=weight_path,
     )
@@ -290,36 +333,52 @@ def train_dpo(
     reference = copy.deepcopy(base_model)
     for parameter in reference.parameters():
         parameter.requires_grad_(False)
-    examples = _examples(manifest, "train")
-    features = torch.tensor([item[0] for item in examples], dtype=torch.float32)
-    chosen = torch.tensor([item[1] for item in examples], dtype=torch.long)
-    rejected = torch.tensor(
-        [
-            ACTION_INDEX["FINISH"] if label != ACTION_INDEX["FINISH"] else ACTION_INDEX["ASK_INPUT"]
-            for label in chosen.tolist()
-        ],
-        dtype=torch.long,
-    )
+    train_pairs = build_preference_pairs(manifest, "train")
+    dev_pairs = build_preference_pairs(manifest, "dev")
+
+    def tensors(
+        pairs: tuple[PreferencePair, ...],
+    ) -> tuple[Any, Any, Any]:
+        return (
+            torch.tensor([item[0] for item in pairs], dtype=torch.float32),
+            torch.tensor([item[1] for item in pairs], dtype=torch.long),
+            torch.tensor([item[2] for item in pairs], dtype=torch.long),
+        )
+
+    train_features, train_chosen, train_rejected = tensors(train_pairs)
+    dev_features, dev_chosen, dev_rejected = tensors(dev_pairs)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     history: list[float] = []
     best_state = copy.deepcopy(model.state_dict())
     best_loss = float("inf")
     stale = 0
     with torch.no_grad():
-        ref_log = torch.log_softmax(reference(features), dim=-1)
-    for _ in range(max_epochs):
-        optimizer.zero_grad()
-        policy_log = torch.log_softmax(model(features), dim=-1)
+        train_ref_log = torch.log_softmax(reference(train_features), dim=-1)
+        dev_ref_log = torch.log_softmax(reference(dev_features), dim=-1)
+
+    def objective(
+        values: Any,
+        chosen: Any,
+        rejected: Any,
+        reference_log: Any,
+    ) -> Any:
+        policy_log = torch.log_softmax(model(values), dim=-1)
         pi_diff = policy_log.gather(1, chosen[:, None]).squeeze(1) - policy_log.gather(
             1, rejected[:, None]
         ).squeeze(1)
-        ref_diff = ref_log.gather(1, chosen[:, None]).squeeze(1) - ref_log.gather(
+        ref_diff = reference_log.gather(1, chosen[:, None]).squeeze(1) - reference_log.gather(
             1, rejected[:, None]
         ).squeeze(1)
-        loss = (-torch.nn.functional.logsigmoid(0.1 * (pi_diff - ref_diff))).mean()
+        return (-torch.nn.functional.logsigmoid(0.1 * (pi_diff - ref_diff))).mean()
+
+    for _ in range(max_epochs):
+        optimizer.zero_grad()
+        loss = objective(train_features, train_chosen, train_rejected, train_ref_log)
         loss.backward()
         optimizer.step()
-        value = float(loss.detach().item())
+        with torch.no_grad():
+            dev_loss = objective(dev_features, dev_chosen, dev_rejected, dev_ref_log)
+        value = float(dev_loss.detach().item())
         if not torch.isfinite(torch.tensor(value)):
             raise ValueError("DPO produced a non-finite loss")
         history.append(value)
@@ -332,7 +391,11 @@ def train_dpo(
             if stale >= patience:
                 break
     model.load_state_dict(best_state)
-    metrics = {"final_dpo_loss": best_loss, "preference_pairs": float(len(examples))}
+    metrics = {
+        "final_dpo_loss": best_loss,
+        "preference_pairs": float(len(train_pairs)),
+        "dev_preference_pairs": float(len(dev_pairs)),
+    }
     path_name = f"output/phase12/weights-dpo-{seed}.json"
     result = TrainResult(
         model,
@@ -345,6 +408,7 @@ def train_dpo(
             metrics,
             {"learning_rate": 0.001, "beta": 0.1, "epochs": len(history)},
             path_name,
+            reference_weight_sha256=weights_digest(reference),
         ),
         tuple(history),
     )
@@ -373,6 +437,7 @@ def train_reinforce(
         raise ValueError("no train cases are available")
     baseline = 0.0
     returns: list[float] = []
+    episode_steps: list[int] = []
     successes = 0
     invalid_actions = 0
     for episode in range(episodes):
@@ -404,6 +469,7 @@ def train_reinforce(
         discounted.reverse()
         episode_return = sum(rewards)
         returns.append(episode_return)
+        episode_steps.append(len(rewards))
         baseline = 0.9 * baseline + 0.1 * episode_return
         if log_probs:
             advantages = torch.tensor(
@@ -421,6 +487,7 @@ def train_reinforce(
         "mean_return": sum(returns) / len(returns),
         "success_rate": successes / episodes,
         "invalid_actions": float(invalid_actions),
+        "average_steps": sum(episode_steps) / len(episode_steps),
     }
     path_name = f"output/phase12/weights-reinforce-{seed}.json"
     result = TrainResult(

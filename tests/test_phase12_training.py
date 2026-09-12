@@ -9,6 +9,7 @@ from labs.self_improvement.replay import initial_state
 from labs.self_improvement.training import (
     ACTION_INDEX,
     FEATURE_COUNT,
+    build_preference_pairs,
     load_weights,
     save_weights,
     state_features,
@@ -46,6 +47,15 @@ def test_dpo_keeps_action_space_and_reference_start() -> None:
     assert dpo.artifact.initial_weight_sha256 == weights_digest(sft.model)
     assert set(ACTION_INDEX) >= {"ASK_INPUT", "FINISH", "purchase_order.open"}
     assert dpo.artifact.weight_sha256 != dpo.artifact.initial_weight_sha256
+    assert dpo.artifact.reference_weight_sha256 == weights_digest(sft.model)
+
+
+def test_preference_pairs_are_same_state_and_safety_gated() -> None:
+    manifest = build_synthetic_manifest("training-test")
+    pairs = build_preference_pairs(manifest, "dev")
+    assert pairs
+    assert all(len(features) == FEATURE_COUNT for features, _, _ in pairs)
+    assert all(chosen != rejected for _, chosen, rejected in pairs)
 
 
 def test_corrupt_or_nonfinite_json_weights_are_rejected(tmp_path: Path) -> None:
