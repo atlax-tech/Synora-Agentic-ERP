@@ -32,6 +32,7 @@ def test_cli_prepare_evaluate_train_and_verify(
 def test_cli_candidate_selection_and_rollback(tmp_path: Path) -> None:
     _write_historical_failure(tmp_path)
     assert main(["--root", str(tmp_path), "audit-data"]) == 0
+    assert main(["--root", str(tmp_path), "prepare-data"]) == 0
     assert main(["--root", str(tmp_path), "make-candidates"]) == 0
     candidate_dir = tmp_path / "output" / "phase12" / "candidates"
     candidate_id = json.loads(next(candidate_dir.glob("phase12-prompt-*.json")).read_text())[
@@ -42,11 +43,30 @@ def test_cli_candidate_selection_and_rollback(tmp_path: Path) -> None:
             [
                 "--root",
                 str(tmp_path),
+                "evaluate",
+                "--method",
+                "prompt-candidate",
+                "--split",
+                "dev",
+            ]
+        )
+        == 0
+    )
+    evidence_id = json.loads(
+        (tmp_path / "output" / "phase12" / "evaluation-replay-prompt-candidate-dev.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()[0]
+    )["experiment_id"]
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
                 "select-lab",
                 "--candidate-id",
                 candidate_id,
                 "--evidence",
-                "exp-1",
+                evidence_id,
                 "--reason",
                 "dev",
             ]
@@ -64,7 +84,7 @@ def test_cli_candidate_selection_and_rollback(tmp_path: Path) -> None:
                 "--selection-id",
                 selection_id,
                 "--evidence",
-                "exp-2",
+                evidence_id,
                 "--reason",
                 "regression",
             ]
@@ -181,6 +201,52 @@ def test_cli_selection_rejects_parent_version_mismatch(tmp_path: Path) -> None:
                 "phase12-exp-unknown",
                 "--reason",
                 "mismatch",
+            ]
+        )
+        == 2
+    )
+
+
+def test_cli_selection_rejects_unrelated_evidence(tmp_path: Path) -> None:
+    _write_historical_failure(tmp_path)
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
+    assert main(["--root", str(tmp_path), "prepare-data"]) == 0
+    assert main(["--root", str(tmp_path), "make-candidates"]) == 0
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "evaluate",
+                "--method",
+                "baseline",
+                "--split",
+                "dev",
+            ]
+        )
+        == 0
+    )
+    candidate_path = next(
+        (tmp_path / "output" / "phase12" / "candidates").glob("phase12-prompt-*.json")
+    )
+    candidate_id = json.loads(candidate_path.read_text(encoding="utf-8"))["candidate_id"]
+    evidence_id = json.loads(
+        (tmp_path / "output" / "phase12" / "evaluation-replay-baseline-dev.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()[0]
+    )["experiment_id"]
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "select-lab",
+                "--candidate-id",
+                candidate_id,
+                "--evidence",
+                evidence_id,
+                "--reason",
+                "wrong method",
             ]
         )
         == 2

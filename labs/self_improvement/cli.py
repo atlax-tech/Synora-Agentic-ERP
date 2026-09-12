@@ -235,17 +235,52 @@ def _validate_lab_version(root: Path, version_id: str) -> None:
     raise ValueError("unknown lab version")
 
 
-def _validate_evidence(root: Path, evidence_ids: tuple[str, ...]) -> None:
-    paths = sorted((root / PHASE12_RELATIVE_ROOT).glob("*.jsonl"))
-    if not paths:
-        return
-    known: set[str] = set()
+def _evidence_records(root: Path, evidence_ids: tuple[str, ...]) -> tuple[ExperimentRecord, ...]:
+    if len(set(evidence_ids)) != len(evidence_ids):
+        raise ValueError("selection evidence ids must be unique")
+    paths = sorted(
+        path
+        for path in (root / PHASE12_RELATIVE_ROOT).glob("*.jsonl")
+        if path.name != RESERVATION_LEDGER_NAME
+    )
+    records_by_id: dict[str, ExperimentRecord] = {}
     for path in paths:
         relative = str(path.relative_to(root))
-        known.update(record.experiment_id for record in read_records(root, relative))
-    missing = sorted(set(evidence_ids) - known)
+        for record in read_records(root, relative):
+            if record.experiment_id in records_by_id:
+                raise ValueError("duplicate experiment evidence id")
+            records_by_id[record.experiment_id] = record
+    missing = sorted(set(evidence_ids) - set(records_by_id))
     if missing:
         raise FileNotFoundError(f"evaluation evidence is missing: {', '.join(missing)}")
+    return tuple(records_by_id[evidence_id] for evidence_id in evidence_ids)
+
+
+def _validate_evidence(
+    root: Path,
+    evidence_ids: tuple[str, ...],
+    *,
+    candidate_id: str | None,
+    expected_method: str,
+    split: str = "dev",
+) -> None:
+    records = _evidence_records(root, evidence_ids)
+    manifest = _manifest(root)
+    versions = {record.code_version for record in records}
+    if len(versions) != 1:
+        raise ValueError("selection evidence must use one experiment code version")
+    for record in records:
+        if record.split != split:
+            raise ValueError("selection evidence must use the dev split")
+        if (
+            record.dataset_id != manifest.dataset_id
+            or record.dataset_digest != manifest.dataset_digest
+        ):
+            raise ValueError("selection evidence uses a different dataset")
+        if record.method != expected_method or record.candidate_id != candidate_id:
+            raise ValueError("selection evidence does not match the selected version")
+        if record.status not in {"SUCCEEDED", "REJECTED"}:
+            raise ValueError("selection evidence cannot use unknown or incomplete records")
 
 
 def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
@@ -388,6 +423,26 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
         for version_id, expected_digest in selection.version_digests.items():
             if version_content_digest(output, version_id) != expected_digest:
                 raise ValueError(f"selection version digest mismatch: {version_id}")
+        evidence_version = (
+            selection.selected_id if selection.action == "SELECT" else selection.previous_id
+        )
+        evidence_candidate = (
+            candidates_by_id.get(evidence_version)
+            if evidence_version.startswith("phase12-")
+            else None
+        )
+        _validate_evidence(
+            args.root,
+            selection.evidence_ids,
+            candidate_id=evidence_version if evidence_candidate is not None else None,
+            expected_method=(
+                "prompt-candidate"
+                if evidence_candidate is not None and evidence_candidate.kind == "PROMPT"
+                else "skill-candidate"
+                if evidence_candidate is not None
+                else "baseline"
+            ),
+        )
     active = read_active_version(output)
     if active is not None:
         active_selection = read_selection(output, active.selection_id)
@@ -527,7 +582,14 @@ def main(argv: list[str] | None = None) -> int:
             _validate_lab_version(args.root, args.previous_id)
             if candidate.parent_id != args.previous_id:
                 raise ValueError("candidate parent does not match the selected previous version")
-            _validate_evidence(args.root, tuple(args.evidence))
+            _validate_evidence(
+                args.root,
+                tuple(args.evidence),
+                candidate_id=candidate.candidate_id,
+                expected_method=(
+                    "prompt-candidate" if candidate.kind == "PROMPT" else "skill-candidate"
+                ),
+            )
             selection = build_selection(
                 args.previous_id,
                 candidate.candidate_id,
@@ -548,7 +610,25 @@ def main(argv: list[str] | None = None) -> int:
                 activate_selection(args.root / PHASE12_RELATIVE_ROOT, selection)
             )
         elif args.command == "rollback-lab":
-            _validate_evidence(args.root, tuple(args.evidence))
+            current = read_selection(args.root / PHASE12_RELATIVE_ROOT, args.selection_id)
+            evidence_version = current.selected_id
+            evidence_candidate = (
+                read_candidate(args.root / PHASE12_RELATIVE_ROOT, evidence_version)
+                if evidence_version.startswith("phase12-")
+                else None
+            )
+            _validate_evidence(
+                args.root,
+                tuple(args.evidence),
+                candidate_id=evidence_version if evidence_candidate is not None else None,
+                expected_method=(
+                    "prompt-candidate"
+                    if evidence_candidate is not None and evidence_candidate.kind == "PROMPT"
+                    else "skill-candidate"
+                    if evidence_candidate is not None
+                    else "baseline"
+                ),
+            )
             selection, path = rollback_selection(
                 args.root / PHASE12_RELATIVE_ROOT, args.selection_id, args.evidence, args.reason
             )
