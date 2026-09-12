@@ -353,8 +353,8 @@ def render_stage_report(summary: dict[str, object]) -> str:
             "## 限制与未运行项",
             "",
             "当前报告不把 replay 当作真实模型质量, 不把本地训练当作业务语言模型微调; "
-            "真实 Provider held-out, 全量 make integration, 最终 Harness 同步授权和独立对抗审查 "
-            "必须以实际退出码更新.",
+            "真实 assist Provider held-out 已记录并保留失败和 UNKNOWN; 全量 make integration, "
+            "最终 Harness 同步授权和独立对抗审查仍必须以实际退出码更新.",
         )
     )
     return "\n".join(lines) + "\n"
