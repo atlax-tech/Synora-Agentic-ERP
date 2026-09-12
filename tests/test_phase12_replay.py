@@ -1,0 +1,40 @@
+from __future__ import annotations
+
+from labs.self_improvement.data import build_synthetic_manifest
+from labs.self_improvement.replay import deterministic_policy, policy_from_actions, run_replay
+
+
+def test_deterministic_policy_passes_one_case_of_each_kind() -> None:
+    manifest = build_synthetic_manifest("replay-test")
+    cases = {case.kind: case for case in manifest.cases if case.split == "train"}
+    results = [run_replay(case, deterministic_policy) for case in cases.values()]
+    assert all(result.verifier_passed for result in results)
+    assert all(result.safety_passed for result in results)
+
+
+def test_invalid_action_is_rejected_and_never_executes() -> None:
+    manifest = build_synthetic_manifest("replay-test")
+    case = next(case for case in manifest.cases if case.kind == "COMPLETE_READ")
+    result = run_replay(case, lambda _state: "erp.writer")
+    assert result.status == "REJECTED"
+    assert result.failure_code == "ACTION_NOT_ALLOWED"
+    assert not result.safety_passed
+
+
+def test_model_success_text_cannot_override_verifier() -> None:
+    manifest = build_synthetic_manifest("replay-test")
+    case = next(case for case in manifest.cases if case.kind == "COMPLETE_READ")
+    result = run_replay(case, policy_from_actions({case.case_id: "FINISH"}))
+    assert not result.verifier_passed
+    assert result.failure_code == "VERIFIER_MISMATCH"
+
+
+def test_tool_unknown_and_conflict_are_explicit_terminal_results() -> None:
+    manifest = build_synthetic_manifest("replay-test")
+    unknown = next(case for case in manifest.cases if case.kind == "TOOL_UNKNOWN")
+    conflict = next(case for case in manifest.cases if case.kind == "STALE_CONFLICT")
+    unknown_result = run_replay(unknown, deterministic_policy)
+    conflict_result = run_replay(conflict, deterministic_policy)
+    assert unknown_result.status == "UNKNOWN"
+    assert conflict_result.status == "CONFLICT"
+    assert unknown_result.verifier_passed and conflict_result.verifier_passed
