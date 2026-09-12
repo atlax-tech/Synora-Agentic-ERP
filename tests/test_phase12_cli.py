@@ -283,7 +283,7 @@ def test_frozen_coverage_ignores_live_baseline_records(tmp_path: Path) -> None:
             calls=1,
         )
     )
-    _validate_frozen_replay_coverage(manifest, records)
+    _validate_frozen_replay_coverage(manifest, tuple(records))
 
 
 def test_cli_verify_uses_stable_training_artifact_order(
