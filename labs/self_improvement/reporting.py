@@ -37,9 +37,10 @@ def summarize_methods(records: Iterable[ExperimentRecord]) -> dict[str, dict[str
     summaries: dict[str, dict[str, float]] = {}
     for method, values in sorted(grouped.items()):
         count = len(values)
+        provider_values = [record for record in values if record.model != "deterministic-replay"]
         known_usage = sum(
             record.prompt_tokens is not None and record.completion_tokens is not None
-            for record in values
+            for record in provider_values
         )
         summaries[method] = {
             "count": float(count),
@@ -48,7 +49,8 @@ def summarize_methods(records: Iterable[ExperimentRecord]) -> dict[str, dict[str
             "mean_score": sum(record.score for record in values) / count,
             "calls": float(sum(record.calls for record in values)),
             "known_usage_records": float(known_usage),
-            "unknown_usage_records": float(count - known_usage),
+            "unknown_usage_records": float(len(provider_values) - known_usage),
+            "usage_not_applicable_records": float(count - len(provider_values)),
             "mean_elapsed_ms": sum(record.elapsed_ms for record in values) / count,
             "p95_elapsed_ms": _p95(record.elapsed_ms for record in values),
             "failed_records": float(sum(record.status != "SUCCEEDED" for record in values)),
@@ -280,8 +282,9 @@ def render_adoption_card(summary: dict[str, object]) -> str:
 def render_stage_report(summary: dict[str, object]) -> str:
     methods = summary["methods"]
     rows = [
-        "| method | count | verifier | safety | score | calls | unknown usage | p95 ms |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| method | count | verifier | safety | score | calls | unknown usage | "
+        "usage n/a | p95 ms |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     if isinstance(methods, dict):
         for method, values in methods.items():
@@ -289,7 +292,9 @@ def render_stage_report(summary: dict[str, object]) -> str:
                 rows.append(
                     "| {method} | {count:.0f} | {verifier_rate:.3f} | {safety_rate:.3f} | "
                     "{mean_score:.3f} | {calls:.0f} | {unknown_usage_records:.0f} | "
-                    "{p95_elapsed_ms:.1f} |".format(method=method, **values)
+                    "{usage_not_applicable_records:.0f} | {p95_elapsed_ms:.1f} |".format(
+                        method=method, **values
+                    )
                 )
     scores = summary["rubric"]
     risks = summary["risks"]

@@ -28,6 +28,8 @@ def test_reporting_keeps_usage_and_failures_in_method_denominator() -> None:
     summary = summarize_methods(records)
     assert summary["baseline"]["count"] == 24.0
     assert summary["baseline"]["calls"] == 0.0
+    assert summary["baseline"]["unknown_usage_records"] == 0.0
+    assert summary["baseline"]["usage_not_applicable_records"] == 24.0
     assert summary["baseline"]["failed_records"] == 0.0
     assert heldout_bootstrap(records) == ()
 
