@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from labs.self_improvement.cli import main
+from labs.self_improvement.artifacts import read_records
+from labs.self_improvement.cli import _manifest, _validate_frozen_replay_coverage, main
 
 
 def _write_historical_failure(root: Path) -> None:
@@ -177,6 +178,33 @@ def test_cli_candidate_method_and_repeats_are_bounded(tmp_path: Path) -> None:
         )
         == 2
     )
+
+
+def test_cli_report_rejects_trimmed_frozen_evidence(tmp_path: Path) -> None:
+    assert main(["--root", str(tmp_path), "prepare-data"]) == 0
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "evaluate",
+                "--method",
+                "baseline",
+                "--split",
+                "dev",
+                "--repeats",
+                "3",
+            ]
+        )
+        == 0
+    )
+    evidence = tmp_path / "output" / "phase12" / "evaluation-replay-baseline-dev.jsonl"
+    evidence.write_text("\n".join(evidence.read_text().splitlines()[:-1]) + "\n", encoding="utf-8")
+    manifest = _manifest(tmp_path)
+    records = read_records(tmp_path, "output/phase12/evaluation-replay-baseline-dev.jsonl")
+    with pytest.raises(ValueError, match="coverage mismatch"):
+        _validate_frozen_replay_coverage(manifest, records)
 
 
 def test_cli_selection_rejects_parent_version_mismatch(tmp_path: Path) -> None:

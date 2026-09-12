@@ -774,6 +774,8 @@ def grouped_bootstrap(
     groups = sorted(set(a_by_group).intersection(b_by_group))
     if not groups:
         raise ValueError("paired bootstrap needs groups present in both methods")
+    if any(len(a_by_group[group]) != len(b_by_group[group]) for group in groups):
+        raise ValueError("paired bootstrap requires equal repeats per group")
     deltas = [
         sum(a_by_group[group]) / len(a_by_group[group])
         - sum(b_by_group[group]) / len(b_by_group[group])

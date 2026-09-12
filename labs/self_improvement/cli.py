@@ -249,6 +249,69 @@ def _live_record_keys(root: Path) -> tuple[str, ...]:
     return tuple(keys)
 
 
+_FROZEN_REPLAY_COVERAGE: tuple[tuple[str, str], ...] = (
+    ("baseline", "dev"),
+    ("baseline", "test"),
+    ("reflection", "dev"),
+    ("best-of-3", "dev"),
+    ("prompt-candidate", "dev"),
+    ("prompt-candidate", "test"),
+    ("skill-candidate", "dev"),
+    ("skill-candidate", "test"),
+)
+
+
+def _validate_frozen_replay_coverage(
+    manifest: DatasetManifest, records: tuple[ExperimentRecord, ...]
+) -> None:
+    """Require the pre-registered case/repeat matrix for the canonical evidence."""
+    for method, split in _FROZEN_REPLAY_COVERAGE:
+        case_ids = tuple(case.case_id for case in manifest.cases if case.split == split)
+        expected = {
+            f"phase12-exp-replay-{method.lower()}-{repeat}-{case_id}"
+            for repeat in range(1, 4)
+            for case_id in case_ids
+        }
+        actual = {
+            record.experiment_id
+            for record in records
+            if record.method == method and record.split == split
+        }
+        if actual != expected:
+            missing = sorted(expected - actual)
+            extra = sorted(actual - expected)
+            details = []
+            if missing:
+                details.append(f"missing {len(missing)}")
+            if extra:
+                details.append(f"unexpected {len(extra)}")
+            raise ValueError(
+                f"frozen replay coverage mismatch for {method}/{split}: " + ", ".join(details)
+            )
+
+
+def _canonical_report_suffix(output: Path) -> str | None:
+    """Validate the optional canonical report set and return its shared suffix."""
+    groups = {
+        "stage": sorted(output.glob("phase12-stage-report-draft-*.md")),
+        "adoption": sorted(output.glob("phase12-adoption-card-*.md")),
+        "summary": sorted(output.glob("phase12-summary-*.json")),
+    }
+    existing = [path for paths in groups.values() for path in paths]
+    if not existing:
+        return None
+    if any(len(paths) != 1 for paths in groups.values()):
+        raise ValueError("canonical report set must contain exactly one file of each kind")
+    suffixes = {
+        groups["stage"][0].stem.removeprefix("phase12-stage-report-draft-"),
+        groups["adoption"][0].stem.removeprefix("phase12-adoption-card-"),
+        groups["summary"][0].stem.removeprefix("phase12-summary-"),
+    }
+    if len(suffixes) != 1:
+        raise ValueError("canonical report files must share one code suffix")
+    return next(iter(suffixes))
+
+
 def _validate_lab_version(root: Path, version_id: str) -> None:
     if version_id in {"native-agent/A", "skill-registry/v1"}:
         return
@@ -450,6 +513,9 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
             ):
                 raise ValueError("candidate experiment digest binding mismatch")
     verify_records(all_records, manifest)
+    canonical_suffix = _canonical_report_suffix(output)
+    if canonical_suffix is not None:
+        _validate_frozen_replay_coverage(manifest, tuple(all_records))
     ledger_path = output / RESERVATION_LEDGER_NAME
     if ledger_path.exists():
         ledger = ReservationLedger(ledger_path)
@@ -544,6 +610,7 @@ def _cmd_report(args: argparse.Namespace) -> dict[str, object]:
             continue
         records.extend(read_records(args.root, str(path.relative_to(args.root))))
     verify_records(records, manifest)
+    _validate_frozen_replay_coverage(manifest, tuple(records))
     training_artifacts = [
         TrainingArtifact.model_validate_json(path.read_text(encoding="utf-8"))
         for path in sorted(output.glob("weights-*.metadata.json"))

@@ -33,3 +33,10 @@ def test_grouped_bootstrap_reports_inconclusive_when_delta_is_zero() -> None:
 def test_grouped_bootstrap_rejects_empty_or_tiny_samples() -> None:
     with pytest.raises(ValueError, match="at least 100"):
         grouped_bootstrap((), (), method_a="a", method_b="b", samples=10)
+
+
+def test_grouped_bootstrap_rejects_unequal_paired_repeats() -> None:
+    manifest = build_synthetic_manifest("heldout-test")
+    records = held_out_replay(manifest, {"a": deterministic_policy}, code_version="heldout-test")
+    with pytest.raises(ValueError, match="equal repeats"):
+        grouped_bootstrap(records, records[:-1], method_a="a", method_b="b")
