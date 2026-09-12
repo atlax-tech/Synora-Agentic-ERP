@@ -11,6 +11,12 @@ import pytest
 from labs.self_improvement.cli import main
 
 
+def _write_historical_failure(root: Path) -> None:
+    source = root / "output" / "phase11" / "phase11-live-dom-glm-2bb2aa2.json"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text('{"failure_code":"ACTION_REJECTED"}\n', encoding="utf-8")
+
+
 def test_cli_prepare_evaluate_train_and_verify(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -24,6 +30,8 @@ def test_cli_prepare_evaluate_train_and_verify(
 
 
 def test_cli_candidate_selection_and_rollback(tmp_path: Path) -> None:
+    _write_historical_failure(tmp_path)
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
     assert main(["--root", str(tmp_path), "make-candidates"]) == 0
     candidate_dir = tmp_path / "output" / "phase12" / "candidates"
     candidate_id = json.loads(next(candidate_dir.glob("phase12-prompt-*.json")).read_text())[
@@ -63,6 +71,16 @@ def test_cli_candidate_selection_and_rollback(tmp_path: Path) -> None:
         )
         == 0
     )
+
+
+def test_cli_candidate_generation_requires_reviewed_failures(tmp_path: Path) -> None:
+    assert main(["--root", str(tmp_path), "make-candidates"]) == 2
+    _write_historical_failure(tmp_path)
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
+    assert main(["--root", str(tmp_path), "make-candidates"]) == 0
+    candidate_dir = tmp_path / "output" / "phase12" / "candidates"
+    payload = json.loads(next(candidate_dir.glob("phase12-prompt-*.json")).read_text())
+    assert payload["source_case_ids"][0].startswith("phase12-historical-")
 
 
 def test_cli_default_evaluate_does_not_require_provider(tmp_path: Path) -> None:

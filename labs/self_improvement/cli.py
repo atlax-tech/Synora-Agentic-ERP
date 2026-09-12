@@ -10,6 +10,7 @@ from pathlib import Path
 from .artifacts import (
     PHASE12_RELATIVE_ROOT,
     code_version,
+    read_json,
     read_manifest,
     read_records,
     verify_manifest,
@@ -28,7 +29,13 @@ from .candidates import (
     write_candidate,
     write_selection,
 )
-from .contracts import DatasetCase, DatasetManifest, ExperimentRecord, TrainingArtifact
+from .contracts import (
+    DatasetCase,
+    DatasetManifest,
+    ExperimentRecord,
+    ReviewedCase,
+    TrainingArtifact,
+)
 from .data import audit_historical_failures, build_synthetic_manifest
 from .evaluation import (
     CallBudget,
@@ -63,6 +70,21 @@ def _write_audit(root: Path) -> dict[str, object]:
     }
     path = write_json_once(root, f"{PHASE12_RELATIVE_ROOT}/audited-failures.json", payload)
     return {"path": str(path), "records": len(records)}
+
+
+def _candidate_sources(root: Path) -> tuple[str, ...]:
+    payload = read_json(root, f"{PHASE12_RELATIVE_ROOT}/audited-failures.json")
+    if not isinstance(payload, dict) or not isinstance(payload.get("records"), list):
+        raise ValueError("audited failure artifact has an invalid shape")
+    reviewed = tuple(ReviewedCase.model_validate(item) for item in payload["records"])
+    sources = tuple(
+        record.case_id
+        for record in reviewed
+        if record.review_status in {"ACCEPTED", "BACKGROUND_ONLY"}
+    )
+    if not sources:
+        raise RuntimeError("no reviewed historical failure is available for candidates")
+    return sources[:10]
 
 
 def _replay_record(
@@ -333,8 +355,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("audit-data")
     sub.add_parser("prepare-data")
-    candidates = sub.add_parser("make-candidates")
-    candidates.add_argument("--source", default="phase12-synthetic")
+    sub.add_parser("make-candidates")
     evaluate = sub.add_parser("evaluate")
     evaluate.add_argument("--engine", choices=("replay", "live"), default="replay")
     evaluate.add_argument("--split", choices=("train", "dev", "test"), default="dev")
@@ -374,7 +395,7 @@ def main(argv: list[str] | None = None) -> int:
                 "dataset": manifest.model_dump(mode="json"),
             }
         elif args.command == "make-candidates":
-            source = (args.source,)
+            source = _candidate_sources(args.root)
             prompt = make_prompt_candidate(
                 source, "Verify the highest-impact unresolved read-only fact before finishing."
             )
