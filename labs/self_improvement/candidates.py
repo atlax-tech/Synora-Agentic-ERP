@@ -3,14 +3,23 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from agent_runtime.agent.prompting import PROMPT_REGISTRY
 from agent_runtime.skills.registry import SkillRegistry
 
-from .contracts import CandidateVersion, LabSelection, digest_bytes, digest_json, safe_output_path
-from .replay import READ_ACTIONS
+from .contracts import (
+    ActiveLabVersion,
+    CandidateVersion,
+    LabSelection,
+    digest_bytes,
+    digest_json,
+    safe_output_path,
+)
+from .replay import READ_ACTIONS, Policy, candidate_policy, deterministic_policy
 
 _FORBIDDEN_CANDIDATE_MARKERS = (
     "boundary",
@@ -23,6 +32,7 @@ _FORBIDDEN_CANDIDATE_MARKERS = (
     "shell",
     "tool allowlist",
 )
+_ACTIVE_VERSION_NAME = "active-version.json"
 
 
 def lab_boundary_digest() -> str:
@@ -147,6 +157,83 @@ def read_selection(root: Path, selection_id: str) -> LabSelection:
     return selection
 
 
+def read_active_version(root: Path) -> ActiveLabVersion | None:
+    path = safe_output_path(root, _ACTIVE_VERSION_NAME)
+    if not path.exists():
+        return None
+    if not path.is_file() or path.is_symlink():
+        raise ValueError("active lab version must be a regular file")
+    return ActiveLabVersion.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def _atomic_write_active(path: Path, payload: ActiveLabVersion) -> None:
+    if path.exists() and path.is_symlink():
+        raise ValueError("active lab version cannot be a symlink")
+    temporary: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=".active-version-",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = handle.name
+            handle.write(
+                json.dumps(
+                    payload.model_dump(mode="json"), ensure_ascii=True, sort_keys=True, indent=2
+                )
+                + "\n"
+            )
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None and os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def activate_selection(root: Path, selection: LabSelection) -> Path:
+    """Atomically move the lab pointer to a selected version after digest checks."""
+    expected_digest = selection.version_digests.get(selection.selected_id)
+    previous_digest = selection.version_digests.get(selection.previous_id)
+    if expected_digest is None or previous_digest is None:
+        raise ValueError("selection must include both version digests")
+    if version_content_digest(root, selection.selected_id) != expected_digest:
+        raise ValueError("selected version content digest mismatch")
+    if version_content_digest(root, selection.previous_id) != previous_digest:
+        raise ValueError("previous version content digest mismatch")
+    current = read_active_version(root)
+    if current is not None:
+        if current.version_id != selection.previous_id or current.content_sha256 != previous_digest:
+            raise ValueError("active lab version is stale")
+    payload = ActiveLabVersion(
+        version_id=selection.selected_id,
+        content_sha256=expected_digest,
+        selection_id=selection.selection_id,
+        action=selection.action,
+    )
+    path = safe_output_path(root, _ACTIVE_VERSION_NAME)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write_active(path, payload)
+    return path
+
+
+def load_active_policy(root: Path) -> Policy:
+    """Load the explicitly selected lab version for replay only."""
+    active = read_active_version(root)
+    if active is None:
+        raise FileNotFoundError("active lab version is not selected")
+    if version_content_digest(root, active.version_id) != active.content_sha256:
+        raise ValueError("active lab version content digest mismatch")
+    if active.version_id.startswith("phase12-"):
+        return candidate_policy(read_candidate(root, active.version_id).content)
+    if active.version_id in {"native-agent/A", "skill-registry/v1"}:
+        return deterministic_policy
+    raise ValueError("unknown active lab version")
+
+
 def version_content_digest(root: Path, version_id: str) -> str:
     """Return the current content digest for a lab version identifier."""
     if version_id == "native-agent/A":
@@ -225,4 +312,6 @@ def rollback_selection(
         action="ROLLBACK",
         version_digests=rollback_digests,
     )
-    return rollback, write_selection(root, rollback)
+    path = write_selection(root, rollback)
+    activate_selection(root, rollback)
+    return rollback, path

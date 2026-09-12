@@ -229,6 +229,10 @@ class LabSelection(StrictModel):
     @model_validator(mode="after")
     def validate_version_digests(self) -> LabSelection:
         allowed = {self.previous_id, self.selected_id}
+        if self.previous_id == self.selected_id:
+            raise ValueError("selection must move between two different versions")
+        if set(self.version_digests) != allowed:
+            raise ValueError("selection must include both version digests")
         if not set(self.version_digests).issubset(allowed):
             raise ValueError("selection contains a digest for an unrelated version")
         if any(
@@ -237,6 +241,14 @@ class LabSelection(StrictModel):
         ):
             raise ValueError("selection version digest is invalid")
         return self
+
+
+class ActiveLabVersion(StrictModel):
+    schema_version: Literal["1"] = "1"
+    version_id: str = Field(min_length=1, max_length=120)
+    content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    selection_id: str = Field(pattern=r"^phase12-selection-[a-z0-9-]{3,100}$")
+    action: SelectionAction
 
 
 def safe_output_path(root: Path, relative: str) -> Path:

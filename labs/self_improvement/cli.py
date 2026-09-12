@@ -21,9 +21,11 @@ from .artifacts import (
     write_records,
 )
 from .candidates import (
+    activate_selection,
     build_selection,
     make_prompt_candidate,
     make_skill_candidate,
+    read_active_version,
     read_candidate,
     read_selection,
     rollback_selection,
@@ -386,6 +388,15 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
         for version_id, expected_digest in selection.version_digests.items():
             if version_content_digest(output, version_id) != expected_digest:
                 raise ValueError(f"selection version digest mismatch: {version_id}")
+    active = read_active_version(output)
+    if active is not None:
+        active_selection = read_selection(output, active.selection_id)
+        if active_selection.selected_id != active.version_id:
+            raise ValueError("active lab version is not backed by its selection")
+        if active_selection.version_digests.get(active.version_id) != active.content_sha256:
+            raise ValueError("active lab version digest is not backed by its selection")
+        if version_content_digest(output, active.version_id) != active.content_sha256:
+            raise ValueError("active lab version content digest mismatch")
     weight_count = 0
     for path in output.glob("weights-*.json"):
         if path.name.endswith(".metadata.json"):
@@ -533,6 +544,9 @@ def main(argv: list[str] | None = None) -> int:
                 "path": str(write_selection(args.root / PHASE12_RELATIVE_ROOT, selection)),
                 "selection": selection.model_dump(mode="json"),
             }
+            result["active_path"] = str(
+                activate_selection(args.root / PHASE12_RELATIVE_ROOT, selection)
+            )
         elif args.command == "rollback-lab":
             _validate_evidence(args.root, tuple(args.evidence))
             selection, path = rollback_selection(

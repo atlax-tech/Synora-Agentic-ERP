@@ -47,7 +47,13 @@ def test_stale_boundary_and_duplicate_write_are_rejected(tmp_path: Path) -> None
 def test_selection_requires_evidence_and_is_immutable(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         build_selection("native-agent/A", "candidate", (), "no evidence")
-    selection = build_selection("native-agent/A", "candidate", ("phase12-exp-1",), "dev improved")
+    selection = build_selection(
+        "native-agent/A",
+        "candidate",
+        ("phase12-exp-1",),
+        "dev improved",
+        version_digests={"native-agent/A": "0" * 64, "candidate": "1" * 64},
+    )
     write_selection(tmp_path, selection)
     with pytest.raises(FileExistsError):
         write_selection(tmp_path, selection)

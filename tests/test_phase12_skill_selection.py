@@ -6,8 +6,11 @@ from pathlib import Path
 import pytest
 
 from labs.self_improvement.candidates import (
+    activate_selection,
     build_selection,
+    load_active_policy,
     make_skill_candidate,
+    read_active_version,
     read_selection,
     rollback_selection,
     version_content_digest,
@@ -41,18 +44,52 @@ def test_skill_candidate_rejects_path_or_capability_expansion(content: str) -> N
 
 
 def test_lab_selection_round_trips_and_rolls_back_to_parent(tmp_path: Path) -> None:
-    selected = build_selection("native-agent/A", "phase12-prompt-demo", ("exp-1",), "dev result")
+    candidate = make_skill_candidate(
+        ("source",), "Preserve unknowns and request missing read-only evidence."
+    )
+    write_candidate(tmp_path, candidate)
+    selected = build_selection(
+        "skill-registry/v1",
+        candidate.candidate_id,
+        ("exp-1",),
+        "dev result",
+        version_digests={
+            "skill-registry/v1": version_content_digest(tmp_path, "skill-registry/v1"),
+            candidate.candidate_id: candidate.content_sha256,
+        },
+    )
     write_selection(tmp_path, selected)
+    activate_selection(tmp_path, selected)
+    active = read_active_version(tmp_path)
+    assert active is not None
+    assert active.version_id == candidate.candidate_id
     assert read_selection(tmp_path, selected.selection_id) == selected
     rollback, path = rollback_selection(tmp_path, selected.selection_id, ("exp-2",), "regression")
     assert path.is_file()
     assert rollback.action == "ROLLBACK"
-    assert rollback.previous_id == "phase12-prompt-demo"
-    assert rollback.selected_id == "native-agent/A"
+    assert rollback.previous_id == candidate.candidate_id
+    assert rollback.selected_id == "skill-registry/v1"
+    active = read_active_version(tmp_path)
+    assert active is not None
+    assert active.version_id == "skill-registry/v1"
+    assert load_active_policy(tmp_path) is not None
 
 
 def test_rollback_receipt_cannot_be_rolled_back_again(tmp_path: Path) -> None:
-    selected = build_selection("native-agent/A", "phase12-prompt-demo", ("exp-1",), "dev result")
+    candidate = make_skill_candidate(
+        ("source",), "Preserve unknowns and request missing read-only evidence."
+    )
+    write_candidate(tmp_path, candidate)
+    selected = build_selection(
+        "skill-registry/v1",
+        candidate.candidate_id,
+        ("exp-1",),
+        "dev result",
+        version_digests={
+            "skill-registry/v1": version_content_digest(tmp_path, "skill-registry/v1"),
+            candidate.candidate_id: candidate.content_sha256,
+        },
+    )
     write_selection(tmp_path, selected)
     rollback, _ = rollback_selection(tmp_path, selected.selection_id, ("exp-2",), "regression")
     with pytest.raises(ValueError, match="rollback receipt"):
