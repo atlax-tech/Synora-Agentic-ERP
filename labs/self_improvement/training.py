@@ -417,6 +417,7 @@ def train_dpo(
 
 def train_reinforce(
     manifest: DatasetManifest,
+    base_model: Any,
     *,
     seed: int = 17,
     episodes: int = 300,
@@ -429,7 +430,7 @@ def train_reinforce(
     from .rl import ProcurementEnv, safe_reward_config
 
     torch.manual_seed(seed)
-    model = _new_model(seed)
+    model = copy.deepcopy(base_model)
     initial = copy.deepcopy(model)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     cases = tuple(case for case in manifest.cases if case.split == "train")

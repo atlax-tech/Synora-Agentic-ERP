@@ -254,7 +254,8 @@ def _cmd_train(args: argparse.Namespace) -> dict[str, object]:
         source = args.root / PHASE12_RELATIVE_ROOT / f"weights-sft-{args.seed}.json"
         result = train_dpo(load_weights(source), manifest, seed=args.seed, weight_path=path)
     else:
-        result = train_reinforce(manifest, seed=args.seed, weight_path=path)
+        source = args.root / PHASE12_RELATIVE_ROOT / f"weights-sft-{args.seed}.json"
+        result = train_reinforce(manifest, load_weights(source), seed=args.seed, weight_path=path)
     metadata = result.artifact.model_dump(mode="json")
     metadata_path = write_json_once(
         args.root,
