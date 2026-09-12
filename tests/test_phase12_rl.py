@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from labs.self_improvement.contracts import DatasetCase
 from labs.self_improvement.data import build_synthetic_manifest
 from labs.self_improvement.replay import deterministic_policy
 from labs.self_improvement.rl import (
@@ -12,7 +13,7 @@ from labs.self_improvement.rl import (
 )
 
 
-def _case(kind: str):
+def _case(kind: str) -> DatasetCase:
     manifest = build_synthetic_manifest("rl-test")
     return next(case for case in manifest.cases if case.split == "train" and case.kind == kind)
 

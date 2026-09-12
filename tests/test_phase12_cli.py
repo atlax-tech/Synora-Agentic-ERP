@@ -6,10 +6,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from labs.self_improvement.cli import main
 
 
-def test_cli_prepare_evaluate_train_and_verify(tmp_path: Path, capsys) -> None:
+def test_cli_prepare_evaluate_train_and_verify(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     assert main(["--root", str(tmp_path), "prepare-data"]) == 0
     assert main(["--root", str(tmp_path), "audit-data"]) == 0
     assert main(["--root", str(tmp_path), "evaluate", "--split", "dev"]) == 0

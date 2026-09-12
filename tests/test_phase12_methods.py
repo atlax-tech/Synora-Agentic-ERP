@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from labs.self_improvement.contracts import DatasetCase
 from labs.self_improvement.data import build_synthetic_manifest
 from labs.self_improvement.evaluation import best_of_n_replay, reflection_replay, rerank_candidates
 from labs.self_improvement.replay import deterministic_policy, policy_from_actions
 
 
-def _case(kind: str):
+def _case(kind: str) -> DatasetCase:
     manifest = build_synthetic_manifest("methods-test")
     return next(case for case in manifest.cases if case.split == "dev" and case.kind == kind)
 
