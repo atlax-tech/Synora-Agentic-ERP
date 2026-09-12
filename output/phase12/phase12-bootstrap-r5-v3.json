@@ -1,0 +1,28 @@
+{
+  "code_version": "17c6c9c",
+  "comparisons": [
+    {
+      "conclusion": "INCONCLUSIVE",
+      "delta": -0.013888888888888893,
+      "groups": 12,
+      "lower_95": -0.08333333333333336,
+      "method_a": "prompt-candidate",
+      "method_b": "baseline",
+      "samples": 2000,
+      "upper_95": 0.05555555555555555
+    },
+    {
+      "conclusion": "INCONCLUSIVE",
+      "delta": -0.06944444444444446,
+      "groups": 12,
+      "lower_95": -0.2638888888888889,
+      "method_a": "skill-candidate",
+      "method_b": "baseline",
+      "samples": 2000,
+      "upper_95": 0.06944444444444443
+    }
+  ],
+  "dataset_digest": "a4278cc7ef8df0a8129e0449b8ffc00c386f2ea3b033a9e239203fb14c9626fe",
+  "plan_id": "phase12-plan-r5-v3",
+  "schema_version": "1"
+}
