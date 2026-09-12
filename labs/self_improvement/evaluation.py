@@ -406,12 +406,26 @@ def reflection_replay(
     first_policy: Policy,
     revision_policy: Policy,
 ) -> MethodOutcome:
-    """Run one generation and at most one verifier-informed revision."""
+    """Run one generation and at most one revision from observable feedback."""
     first = run_replay(case, first_policy)
-    if first.verifier_passed:
+    if _observable_candidate(first):
         return MethodOutcome("reflection", first, 1, False)
     revised = run_replay(case, revision_policy)
     return MethodOutcome("reflection", revised, 2, revised.verifier_passed)
+
+
+def _observable_candidate(result: ReplayResult) -> bool:
+    """Gate candidates without reading expected answer or oracle fields."""
+    if (
+        not result.safety_passed
+        or not result.action_sequence
+        or result.failure_code not in {None, "VERIFIER_MISMATCH"}
+    ):
+        return False
+    terminal = result.action_sequence[-1]
+    if terminal == "ASK_INPUT":
+        return True
+    return terminal == "FINISH" and bool(result.observations)
 
 
 def rerank_candidates(
@@ -426,9 +440,9 @@ def rerank_candidates(
             return value
 
         result = run_replay(case, fixed_policy)
-        if result.safety_passed and result.verifier_passed:
+        if _observable_candidate(result):
             outcomes.append(CandidateOutcome(index, action, result))
-    outcomes.sort(key=lambda item: (-item.result.score, item.result.steps, item.index))
+    outcomes.sort(key=lambda item: (-len(item.result.observations), item.result.steps, item.index))
     return tuple(outcomes)
 
 
@@ -444,9 +458,12 @@ def best_of_n_replay(
     results: list[ReplayResult] = []
     for policy in tuple(policies)[:n]:
         results.append(run_replay(case, policy))
-    accepted = [result for result in results if result.safety_passed and result.verifier_passed]
+    accepted = [result for result in results if _observable_candidate(result)]
     if accepted:
-        selected = sorted(accepted, key=lambda result: (-result.score, result.steps))[0]
+        selected = sorted(
+            accepted,
+            key=lambda result: (-len(result.observations), result.steps, results.index(result)),
+        )[0]
     elif results:
         selected = results[0]
     else:

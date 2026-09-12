@@ -12,6 +12,7 @@ from labs.self_improvement.evaluation import (
     _call_provider,
     aggregate,
     evaluate_replay_cases,
+    rerank_candidates,
     run_live_baseline,
     run_live_baselines,
 )
@@ -138,3 +139,12 @@ def test_live_batch_reuses_one_event_loop_for_provider_client() -> None:
     assert len(records) == 4
     assert provider.calls == 4
     assert all(record.calls == 1 for record in records)
+
+
+def test_reranker_uses_observable_gates_before_oracle_scoring() -> None:
+    case = next(
+        case for case in build_synthetic_manifest("eval-test").cases if case.kind == "COMPLETE_READ"
+    )
+    outcomes = rerank_candidates(case, ("ASK_INPUT", "FINISH"))
+    assert [outcome.action for outcome in outcomes] == ["ASK_INPUT"]
+    assert not outcomes[0].result.verifier_passed
