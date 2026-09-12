@@ -1,0 +1,25 @@
+{
+  "action_version": "phase12-actions-v1",
+  "artifact_id": "phase12-train-sft-seed-43",
+  "checkpoint_metrics": [],
+  "code_version": "17c6c9c",
+  "config": {
+    "epochs": 100,
+    "learning_rate": 0.01
+  },
+  "dataset_digest": "a4278cc7ef8df0a8129e0449b8ffc00c386f2ea3b033a9e239203fb14c9626fe",
+  "dataset_id": "phase12-synthetic-v2",
+  "feature_version": "phase12-features-v2",
+  "initial_weight_sha256": "a1bae2dd562b19bd4f4b301583c4ebb5534a64b53cd3bef6da2b94884a64b23f",
+  "method": "sft",
+  "metrics": {
+    "dev_examples": 36.0,
+    "final_dev_loss": 0.09323398768901825,
+    "train_examples": 108.0
+  },
+  "reference_weight_sha256": null,
+  "schema_version": "1",
+  "seed": 43,
+  "weight_path": "output/phase12/weights-sft-43.json",
+  "weight_sha256": "8c1c1f39fa182fbba71f2e0e22a250b05d1a0fd9b1fa31877403b561019931a9"
+}
