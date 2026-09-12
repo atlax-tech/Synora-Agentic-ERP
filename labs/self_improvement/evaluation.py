@@ -234,6 +234,19 @@ def run_live_baseline(
         separators=(",", ":"),
     )
     call = asyncio.run(_call_provider(provider, prompt, budget))
+    return _live_record(case, call, code_version, model, repeat, dataset_id, dataset_digest)
+
+
+def _live_record(
+    case: DatasetCase,
+    call: LiveCall,
+    code_version: str,
+    model: str,
+    repeat: int,
+    dataset_id: str,
+    dataset_digest: str | None,
+) -> ExperimentRecord:
+    """Build one immutable result after the provider call has completed."""
     bound_digest = dataset_digest or digest_json(case.model_dump(mode="json"))
     if call.action is None:
         return ExperimentRecord(
@@ -277,6 +290,60 @@ def run_live_baseline(
         elapsed_ms=call.elapsed_ms,
         calls=int(call.attempted),
     )
+
+
+def run_live_baselines(
+    cases: Iterable[DatasetCase],
+    provider: LiveProvider,
+    budget: CallBudget,
+    *,
+    code_version: str,
+    model: str,
+    repeats: int = 1,
+    dataset_id: str = "phase12-synthetic-v1",
+    dataset_digest: str | None = None,
+) -> tuple[ExperimentRecord, ...]:
+    """Run a batch on one event loop so async providers retain their client state."""
+    if repeats < 1 or repeats > 3:
+        raise ValueError("live repeats must be between one and three")
+    values = tuple(cases)
+
+    async def execute() -> tuple[ExperimentRecord, ...]:
+        records: list[ExperimentRecord] = []
+        for repeat in range(1, repeats + 1):
+            for case in values:
+                prompt = json.dumps(
+                    {
+                        "task": case.input_text,
+                        "rules": [
+                            "Use one bounded read-only action.",
+                            '{"action": "..."} is the only output shape.',
+                            "Preserve unknowns.",
+                        ],
+                        "allowed_actions": [
+                            "purchase_order.open",
+                            "ASK_INPUT",
+                            "FINISH",
+                        ],
+                    },
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                )
+                call = await _call_provider(provider, prompt, budget)
+                records.append(
+                    _live_record(
+                        case,
+                        call,
+                        code_version,
+                        model,
+                        repeat,
+                        dataset_id,
+                        dataset_digest,
+                    )
+                )
+        return tuple(records)
+
+    return asyncio.run(execute())
 
 
 def evaluate_replay_cases(

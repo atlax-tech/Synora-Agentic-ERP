@@ -35,7 +35,7 @@ from .evaluation import (
     best_of_n_replay,
     evaluate_replay_cases,
     reflection_replay,
-    run_live_baseline,
+    run_live_baselines,
 )
 from .replay import ReplayResult, deterministic_policy
 from .reporting import write_reports
@@ -192,19 +192,15 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             raise RuntimeError(f"live provider unavailable: {error.failure_code}") from error
         budget = CallBudget(maximum=1_200, used=_existing_calls(args.root))
         cases = tuple(case for case in manifest.cases if case.split == args.split)
-        records = tuple(
-            run_live_baseline(
-                case,
-                provider,
-                budget,
-                code_version=code_version(),
-                model=getattr(provider, "model", "assist"),
-                repeat=repeat,
-                dataset_id=manifest.dataset_id,
-                dataset_digest=manifest.dataset_digest,
-            )
-            for repeat in range(1, args.repeats + 1)
-            for case in cases
+        records = run_live_baselines(
+            cases,
+            provider,
+            budget,
+            code_version=code_version(),
+            model=getattr(provider, "model", "assist"),
+            repeats=args.repeats,
+            dataset_id=manifest.dataset_id,
+            dataset_digest=manifest.dataset_digest,
         )
     path = write_records(
         args.root, f"evaluation-{args.engine}-{args.method}-{args.split}.jsonl", records

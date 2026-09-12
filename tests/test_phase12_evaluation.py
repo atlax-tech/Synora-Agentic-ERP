@@ -13,6 +13,7 @@ from labs.self_improvement.evaluation import (
     aggregate,
     evaluate_replay_cases,
     run_live_baseline,
+    run_live_baselines,
 )
 
 
@@ -117,3 +118,23 @@ def test_provider_call_wall_clock_is_bounded(monkeypatch: pytest.MonkeyPatch) ->
     assert call.failure_code == "MODEL_CALL_TIMEOUT"
     assert call.attempted
     assert time.perf_counter() - start < 1.0
+
+
+def test_live_batch_reuses_one_event_loop_for_provider_client() -> None:
+    manifest = build_synthetic_manifest("eval-test")
+    cases = tuple(case for case in manifest.cases if case.kind == "MISSING_INPUT")[:2]
+    provider = FakeProvider('{"action":"ASK_INPUT"}')
+    budget = CallBudget(maximum=10)
+    records = run_live_baselines(
+        cases,
+        provider,
+        budget,
+        code_version="eval-test",
+        model="fake",
+        repeats=2,
+        dataset_id=manifest.dataset_id,
+        dataset_digest=manifest.dataset_digest,
+    )
+    assert len(records) == 4
+    assert provider.calls == 4
+    assert all(record.calls == 1 for record in records)
