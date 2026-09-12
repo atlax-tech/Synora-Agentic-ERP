@@ -82,12 +82,13 @@ def test_report_artifacts_are_immutable_and_explicitly_lab_only(tmp_path: Path) 
     )
     write_records(tmp_path, "heldout.jsonl", records)
     summary = build_summary(manifest, records, (), code_version="report-test")
-    assert summary["status"] == "DRAFT / LAB_ONLY"
+    assert summary["status"] == "BLOCKED / LAB_ONLY"
     paths = write_reports(tmp_path, manifest, records, (), code_version="report-test")
     assert all(Path(path).is_file() for path in paths.values())
     report_text = Path(paths["report"]).read_text(encoding="utf-8")
     card_text = Path(paths["adoption_card"]).read_text(encoding="utf-8")
-    assert "DRAFT / LAB_ONLY" in report_text
+    assert "BLOCKED / LAB_ONLY" in report_text
+    assert "CHANGES_REQUIRED" in report_text
     assert "真实 assist Provider held-out 已记录一轮 24 条" in report_text
     assert "证据记录代码版本" in report_text
     assert "LAB_ONLY" in card_text

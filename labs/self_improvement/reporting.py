@@ -13,6 +13,8 @@ from .contracts import DatasetManifest, ExperimentRecord, TrainingArtifact
 from .evaluation import BootstrapSummary, grouped_bootstrap
 from .rl import intentionally_bad_reward_config, run_action_sequence, safe_reward_config
 
+_STAGE_STATUS = "BLOCKED / LAB_ONLY"
+
 
 def _report_method(record: ExperimentRecord) -> str:
     """Keep live provider evidence separate from deterministic replay trials."""
@@ -206,7 +208,7 @@ def build_summary(
     scores = rubric_scores()
     return {
         "schema_version": "1",
-        "status": "DRAFT / LAB_ONLY",
+        "status": _STAGE_STATUS,
         "code_version": code_version,
         "dataset_id": manifest.dataset_id,
         "dataset_digest": manifest.dataset_digest,
@@ -237,7 +239,7 @@ def render_adoption_card(summary: dict[str, object]) -> str:
     lines = [
         "# Phase 12 Adoption Card",
         "",
-        "状态: `LAB_ONLY / DRAFT`. 本卡为离线实验, 不授予业务 Runtime 或工具权限.",
+        f"状态: `{summary['status']}`. 本卡为离线实验, 不授予业务 Runtime 或工具权限.",
         "",
         "## Problem",
         "",
@@ -304,7 +306,8 @@ def render_stage_report(summary: dict[str, object]) -> str:
     lines = [
         "# Phase 12 阶段报告",
         "",
-        "状态: `DRAFT / LAB_ONLY`. 独立对抗审查和 Harness 文件级同步尚未闭合, 不能写阶段 PASS.",
+        f"状态: `{summary['status']}`. 第二轮独立对抗审查结果为 `CHANGES_REQUIRED`; "
+        "按两轮上限标记为 BLOCKED, Harness 文件级同步也未闭合, 不能写阶段 PASS.",
         "",
         "## 业务问题与数据流",
         "",
