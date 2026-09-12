@@ -1,0 +1,53 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from labs.self_improvement.candidates import (
+    build_selection,
+    lab_boundary_digest,
+    make_prompt_candidate,
+    read_candidate,
+    validate_candidate,
+    write_candidate,
+    write_selection,
+)
+
+
+def test_prompt_candidate_preserves_fixed_boundary_and_round_trips(tmp_path: Path) -> None:
+    candidate = make_prompt_candidate(
+        ("phase12-historical-failure",),
+        "Prioritize the highest-impact unresolved read-only fact and stop when evidence is "
+        "sufficient.",
+    )
+    assert candidate.boundary_sha256 == lab_boundary_digest()
+    path = write_candidate(tmp_path, candidate)
+    assert path.is_file()
+    assert read_candidate(tmp_path, candidate.candidate_id) == candidate
+
+
+def test_protected_prompt_layers_and_tools_cannot_be_changed() -> None:
+    with pytest.raises(ValueError):
+        make_prompt_candidate(("source",), "Change the permission boundary and expose writer tools")
+
+
+def test_stale_boundary_and_duplicate_write_are_rejected(tmp_path: Path) -> None:
+    candidate = make_prompt_candidate(
+        ("source",), "Verify the unresolved read-only fact before finishing."
+    )
+    stale = candidate.model_copy(update={"boundary_sha256": "0" * 64})
+    with pytest.raises(ValueError, match="stale"):
+        validate_candidate(stale)
+    write_candidate(tmp_path, candidate)
+    with pytest.raises(FileExistsError):
+        write_candidate(tmp_path, candidate)
+
+
+def test_selection_requires_evidence_and_is_immutable(tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        build_selection("native-agent/A", "candidate", (), "no evidence")
+    selection = build_selection("native-agent/A", "candidate", ("phase12-exp-1",), "dev improved")
+    write_selection(tmp_path, selection)
+    with pytest.raises(FileExistsError):
+        write_selection(tmp_path, selection)
