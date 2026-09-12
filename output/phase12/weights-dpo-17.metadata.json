@@ -1,0 +1,25 @@
+{
+  "action_version": "phase12-actions-v1",
+  "artifact_id": "phase12-train-dpo-seed-17",
+  "code_version": "9ba2092",
+  "config": {
+    "beta": 0.1,
+    "epochs": 100,
+    "learning_rate": 0.001
+  },
+  "dataset_digest": "5abe51454c4408e2235209323c6dd8d9d0ffec5b9235f6ac1cb3d933beeb19eb",
+  "dataset_id": "phase12-synthetic-v1",
+  "feature_version": "phase12-features-v1",
+  "initial_weight_sha256": "11f402273ce1e86c1a2c879f8328c4b7b1302c988d2ea59fbcde3eb0d533d1a2",
+  "method": "dpo",
+  "metrics": {
+    "dev_preference_pairs": 20.0,
+    "final_dpo_loss": 0.40642958879470825,
+    "preference_pairs": 60.0
+  },
+  "reference_weight_sha256": "11f402273ce1e86c1a2c879f8328c4b7b1302c988d2ea59fbcde3eb0d533d1a2",
+  "schema_version": "1",
+  "seed": 17,
+  "weight_path": "output/phase12/weights-dpo-17.json",
+  "weight_sha256": "8b48cdd8e77560f5e03f83585abcf4f54427fa1b5c8a5388d433b3e7c88f7c78"
+}
