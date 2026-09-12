@@ -429,7 +429,7 @@ def run_live_baseline(
     code_version: str,
     model: str,
     repeat: int = 1,
-    dataset_id: str = "phase12-synthetic-v1",
+    dataset_id: str = "phase12-synthetic-v2",
     dataset_digest: str | None = None,
 ) -> ExperimentRecord:
     """Run one bounded model decision and pass it through the local verifier."""
@@ -527,7 +527,7 @@ def run_live_baselines(
     code_version: str,
     model: str,
     repeats: int = 1,
-    dataset_id: str = "phase12-synthetic-v1",
+    dataset_id: str = "phase12-synthetic-v2",
     dataset_digest: str | None = None,
 ) -> tuple[ExperimentRecord, ...]:
     """Run a batch on one event loop so async providers retain their client state."""
@@ -580,7 +580,7 @@ def evaluate_replay_cases(
     code_version: str,
     model: str = "deterministic-replay",
     method: str = "baseline",
-    dataset_id: str = "phase12-synthetic-v1",
+    dataset_id: str = "phase12-synthetic-v2",
     dataset_digest: str | None = None,
     repeat: int = 1,
     candidate_id: str | None = None,

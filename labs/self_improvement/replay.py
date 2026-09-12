@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 from .contracts import CaseKind, DatasetCase
@@ -40,6 +40,7 @@ class ReplayState:
     needs_input: bool
     untrusted_content: bool
     remaining_steps: int
+    context_facts: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -73,8 +74,9 @@ def initial_state(case: DatasetCase, max_steps: int = 8) -> ReplayState:
         False,
         False,
         False,
-        False,
+        "content_status=untrusted" in case.observable_facts,
         max_steps,
+        case.observable_facts,
     )
 
 
@@ -82,107 +84,48 @@ def _state_update(
     state: ReplayState, action: ActionName, kind: CaseKind
 ) -> tuple[ReplayState, str | None]:
     """Apply one bounded read action without exposing the oracle to a policy."""
+    next_steps = state.remaining_steps - 1
     if action == "purchase_order.open":
         if action in state.observations:
-            return (
-                ReplayState(
-                    state.observations,
-                    state.failed_tools,
-                    True,
-                    state.conflict,
-                    state.needs_input,
-                    state.untrusted_content,
-                    state.remaining_steps - 1,
-                ),
-                "NO_PROGRESS",
-            )
+            return replace(state, no_progress=True, remaining_steps=next_steps), "NO_PROGRESS"
         if kind == "TOOL_UNKNOWN":
-            return (
-                ReplayState(
-                    state.observations,
-                    (*state.failed_tools, action),
-                    state.no_progress,
-                    state.conflict,
-                    state.needs_input,
-                    state.untrusted_content,
-                    state.remaining_steps - 1,
-                ),
-                "TOOL_UNKNOWN",
-            )
+            return replace(
+                state, failed_tools=(*state.failed_tools, action), remaining_steps=next_steps
+            ), "TOOL_UNKNOWN"
         if kind == "MISSING_INPUT":
-            return (
-                ReplayState(
-                    (*state.observations, f"{action}:MISSING_INPUT"),
-                    state.failed_tools,
-                    state.no_progress,
-                    state.conflict,
-                    True,
-                    state.untrusted_content,
-                    state.remaining_steps - 1,
-                ),
-                None,
-            )
+            return replace(
+                state,
+                observations=(*state.observations, f"{action}:MISSING_INPUT"),
+                needs_input=True,
+                remaining_steps=next_steps,
+            ), None
         if kind == "DUPLICATE_NO_PROGRESS":
-            return (
-                ReplayState(
-                    (*state.observations, action),
-                    state.failed_tools,
-                    True,
-                    state.conflict,
-                    state.needs_input,
-                    state.untrusted_content,
-                    state.remaining_steps - 1,
-                ),
-                "NO_PROGRESS",
-            )
+            return replace(
+                state,
+                observations=(*state.observations, action),
+                no_progress=True,
+                remaining_steps=next_steps,
+            ), "NO_PROGRESS"
         if kind == "UNTRUSTED_INJECTION":
-            return (
-                ReplayState(
-                    (*state.observations, f"{action}:UNTRUSTED_CONTENT"),
-                    state.failed_tools,
-                    state.no_progress,
-                    state.conflict,
-                    state.needs_input,
-                    True,
-                    state.remaining_steps - 1,
-                ),
-                None,
-            )
+            return replace(
+                state,
+                observations=(*state.observations, f"{action}:UNTRUSTED_CONTENT"),
+                untrusted_content=True,
+                remaining_steps=next_steps,
+            ), None
         if kind == "STALE_CONFLICT":
-            return (
-                ReplayState(
-                    (*state.observations, "purchase_order.open:CONFLICT"),
-                    state.failed_tools,
-                    state.no_progress,
-                    True,
-                    state.needs_input,
-                    state.untrusted_content,
-                    state.remaining_steps - 1,
-                ),
-                "CONFLICT",
-            )
+            return replace(
+                state,
+                observations=(*state.observations, "purchase_order.open:CONFLICT"),
+                conflict=True,
+                remaining_steps=next_steps,
+            ), "CONFLICT"
         return (
-            ReplayState(
-                (*state.observations, action),
-                state.failed_tools,
-                state.no_progress,
-                state.conflict,
-                state.needs_input,
-                state.untrusted_content,
-                state.remaining_steps - 1,
-            ),
+            replace(state, observations=(*state.observations, action), remaining_steps=next_steps),
             None,
         )
     return (
-        ReplayState(
-            (*state.observations, action),
-            state.failed_tools,
-            state.no_progress,
-            state.conflict,
-            state.needs_input,
-            state.untrusted_content,
-            state.remaining_steps - 1,
-        ),
+        replace(state, observations=(*state.observations, action), remaining_steps=next_steps),
         None,
     )
 
@@ -298,6 +241,11 @@ def run_replay(case: DatasetCase, policy: Policy, *, max_steps: int = 8) -> Repl
 
 
 def deterministic_policy(state: ReplayState) -> ActionName:
+    facts = frozenset(state.context_facts)
+    if "content_status=untrusted" in facts:
+        return "FINISH"
+    if "required_field=warehouse" in facts or "history=already_checked" in facts:
+        return "ASK_INPUT"
     if state.needs_input:
         return "ASK_INPUT"
     if state.untrusted_content:

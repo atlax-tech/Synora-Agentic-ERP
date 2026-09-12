@@ -91,6 +91,9 @@ class DatasetCase(StrictModel):
     source_kind: SourceKind
     source_case_id: str | None = Field(default=None, max_length=120)
     input_text: str = Field(min_length=1, max_length=4_000)
+    observable_facts: Annotated[tuple[str, ...], BeforeValidator(_tuple_from_json)] = Field(
+        default_factory=tuple, max_length=16
+    )
     expected_action: str = Field(min_length=1, max_length=80)
     expected_status: str = Field(min_length=1, max_length=80)
     oracle: dict[str, str] = Field(default_factory=dict)
@@ -99,6 +102,16 @@ class DatasetCase(StrictModel):
     def validate_oracle(self) -> DatasetCase:
         if any(len(key) > 80 or len(value) > 200 for key, value in self.oracle.items()):
             raise ValueError("oracle fields are bounded")
+        if any(not fact or len(fact) > 200 for fact in self.observable_facts):
+            raise ValueError("observable facts are bounded and non-empty")
+        if len(set(self.observable_facts)) != len(self.observable_facts):
+            raise ValueError("observable facts must be unique")
+        if any(
+            marker in fact.casefold()
+            for fact in self.observable_facts
+            for marker in ("expected_action=", "expected_status=", "oracle=", "case_kind=")
+        ):
+            raise ValueError("observable facts cannot contain scoring labels")
         if self.source_kind == "HISTORICAL_FAILURE" and not self.source_case_id:
             raise ValueError("historical cases require a source case")
         return self

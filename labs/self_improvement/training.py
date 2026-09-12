@@ -14,9 +14,9 @@ from .artifacts import code_version as current_code_version
 from .contracts import DatasetManifest, TrainingArtifact, digest_json
 from .replay import ALL_ACTIONS, ReplayState, deterministic_policy
 
-FEATURE_VERSION = "phase12-features-v1"
+FEATURE_VERSION = "phase12-features-v2"
 ACTION_VERSION = "phase12-actions-v1"
-FEATURE_COUNT = 7
+FEATURE_COUNT = 13
 HIDDEN_COUNT = 32
 ACTION_INDEX = {action: index for index, action in enumerate(ALL_ACTIONS)}
 PreferencePair = tuple[tuple[float, ...], int, int]
@@ -33,6 +33,10 @@ def _torch() -> Any:
 
 def state_features(state: ReplayState) -> tuple[float, ...]:
     """Project only observable state into a fixed feature vector."""
+    facts = frozenset(state.context_facts)
+    warehouse_present = any(
+        fact.startswith("warehouse=") and fact != "warehouse=unspecified" for fact in facts
+    )
     return (
         min(len(state.observations), 8) / 8.0,
         min(len(state.failed_tools), 8) / 8.0,
@@ -41,6 +45,12 @@ def state_features(state: ReplayState) -> tuple[float, ...]:
         float(state.needs_input),
         float(state.untrusted_content),
         min(max(state.remaining_steps, 0), 8) / 8.0,
+        float(warehouse_present),
+        float("required_field=warehouse" in facts),
+        float("history=already_checked" in facts),
+        float("source_status=unreachable" in facts),
+        float("evidence_status=conflicting" in facts),
+        float("content_status=untrusted" in facts),
     )
 
 

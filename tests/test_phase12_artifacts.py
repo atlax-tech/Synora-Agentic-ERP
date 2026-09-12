@@ -21,7 +21,7 @@ from labs.self_improvement.replay import deterministic_policy
 def test_manifest_and_records_round_trip_under_phase12_root(tmp_path: Path) -> None:
     manifest = build_synthetic_manifest("artifact-test")
     path = write_manifest(tmp_path, manifest)
-    assert path == tmp_path / PHASE12_RELATIVE_ROOT / "dataset-phase12-synthetic-v1.json"
+    assert path == tmp_path / PHASE12_RELATIVE_ROOT / "dataset-phase12-synthetic-v2.json"
     verify_manifest(read_manifest(tmp_path, str(path.relative_to(tmp_path))))
     records = evaluate_replay_cases(
         manifest.cases[:2],

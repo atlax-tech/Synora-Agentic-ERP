@@ -62,7 +62,7 @@ def _root(value: str) -> Path:
 
 
 def _manifest(root: Path) -> DatasetManifest:
-    return read_manifest(root, f"{PHASE12_RELATIVE_ROOT}/dataset-phase12-synthetic-v1.json")
+    return read_manifest(root, f"{PHASE12_RELATIVE_ROOT}/dataset-phase12-synthetic-v2.json")
 
 
 def _json_print(value: object) -> None:

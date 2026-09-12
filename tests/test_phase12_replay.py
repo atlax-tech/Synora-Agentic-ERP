@@ -53,10 +53,11 @@ def test_initial_policy_observation_does_not_include_case_oracle_labels() -> Non
     missing = next(case for case in manifest.cases if case.kind == "MISSING_INPUT")
     assert not hasattr(initial_state(complete), "case_id")
     assert initial_state(complete).observations == ()
+    assert initial_state(complete).context_facts
     assert initial_state(complete).no_progress is False
     assert initial_state(complete).needs_input is False
     assert initial_state(complete).untrusted_content is False
-    assert state_features(initial_state(complete)) == state_features(initial_state(missing))
+    assert state_features(initial_state(complete)) != state_features(initial_state(missing))
     changed_oracle = complete.model_copy(
         update={"oracle": {"scenario": "UNTRUSTED_INJECTION"}, "expected_status": "REFUSED"}
     )

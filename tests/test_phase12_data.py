@@ -48,11 +48,16 @@ def test_synthetic_manifest_has_grouped_72_24_24_split() -> None:
 
 def test_model_input_projection_excludes_scenario_and_scoring_labels() -> None:
     manifest = build_synthetic_manifest("test-code")
+    projected_values = set()
     for case in manifest.cases:
         projected = model_input_text(case)
         assert "Scenario=" not in projected
+        assert case.kind not in projected
         assert case.expected_action not in projected
         assert case.expected_status not in projected
+        assert "Observable facts:" in projected
+        projected_values.add(projected)
+    assert len(projected_values) == len(manifest.cases)
 
 
 def test_cross_split_group_is_rejected() -> None:
@@ -79,6 +84,22 @@ def test_cross_split_group_is_rejected() -> None:
         ),
     ]
     with pytest.raises(ValueError, match="cross splits"):
+        validate_grouped_splits(cases)
+
+
+def test_cross_split_near_duplicate_is_rejected() -> None:
+    base = dict(
+        kind="COMPLETE_READ",
+        source_kind="SYNTHETIC",
+        input_text="Review the stainless valve gasket request for the north warehouse.",
+        expected_action="FINISH",
+        expected_status="SUCCEEDED",
+    )
+    cases = [
+        DatasetCase(case_id="phase12-near-one", group_id="phase12-near-a", split="train", **base),
+        DatasetCase(case_id="phase12-near-two", group_id="phase12-near-b", split="test", **base),
+    ]
+    with pytest.raises(ValueError, match="near-duplicate"):
         validate_grouped_splits(cases)
 
 
