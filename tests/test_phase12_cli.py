@@ -262,9 +262,7 @@ def test_cli_freeze_experiment_preregisters_dev_and_test_methods(tmp_path: Path)
     assert main(["--root", str(tmp_path), "prepare-data"]) == 0
     assert main(["--root", str(tmp_path), "make-candidates"]) == 0
     assert main(["--root", str(tmp_path), "freeze-experiment"]) == 0
-    payload = json.loads(
-        (tmp_path / "output/phase12/phase12-experiment-manifest.json").read_text()
-    )
+    payload = json.loads((tmp_path / "output/phase12/phase12-experiment-manifest.json").read_text())
     assert set(payload["dev_methods"]) == {
         "baseline",
         "reflection",
