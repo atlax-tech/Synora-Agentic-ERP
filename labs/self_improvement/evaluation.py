@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -11,7 +12,7 @@ from typing import Literal, Protocol
 
 from agent_runtime.providers import ProviderError, ProviderMessage
 
-from .contracts import DatasetCase, ExperimentRecord, digest_json
+from .contracts import DatasetCase, DatasetManifest, ExperimentRecord, digest_json
 from .replay import Policy, ReplayResult, ReplayState, deterministic_policy, run_replay
 
 MAX_INPUT_CHARS = 4_000
@@ -60,6 +61,17 @@ class MethodOutcome:
     result: ReplayResult
     calls: int
     improved: bool
+
+
+@dataclass(frozen=True)
+class BootstrapSummary:
+    method_a: str
+    method_b: str
+    groups: int
+    delta: float
+    lower_95: float
+    upper_95: float
+    conclusion: Literal["IMPROVED", "INCONCLUSIVE", "REGRESSED"]
 
 
 class LiveProvider(Protocol):
@@ -187,9 +199,7 @@ def run_live_baseline(
             calls=1,
         )
     result = run_replay(case, lambda _state: call.action or "FINISH")
-    status: Literal["SUCCEEDED", "REJECTED"] = (
-        "SUCCEEDED" if result.verifier_passed else "REJECTED"
-    )
+    status: Literal["SUCCEEDED", "REJECTED"] = "SUCCEEDED" if result.verifier_passed else "REJECTED"
     return ExperimentRecord(
         experiment_id=f"phase12-exp-live-{case.case_id}-{repeat}",
         code_version=code_version,
@@ -219,16 +229,21 @@ def evaluate_replay_cases(
     code_version: str,
     model: str = "deterministic-replay",
     method: str = "baseline",
+    dataset_digest: str | None = None,
 ) -> tuple[ExperimentRecord, ...]:
+    values = tuple(cases)
+    bound_digest = dataset_digest or digest_json(
+        {"cases": [case.model_dump(mode="json") for case in values]}
+    )
     records: list[ExperimentRecord] = []
-    for case in cases:
+    for case in values:
         result: ReplayResult = run_replay(case, policy)
         records.append(
             ExperimentRecord(
                 experiment_id=f"phase12-exp-replay-{method.lower()}-{case.case_id}",
                 code_version=code_version,
                 dataset_id="phase12-synthetic-v1",
-                dataset_digest=digest_json(case.model_dump(mode="json")),
+                dataset_digest=bound_digest,
                 split=case.split,
                 method=method,
                 model=model,
@@ -278,6 +293,7 @@ def rerank_candidates(
     """Apply hard safety/verifier gates before an evidence-only stable sort."""
     outcomes: list[CandidateOutcome] = []
     for index, action in enumerate(actions):
+
         def fixed_policy(_state: ReplayState, value: str = action) -> str:
             return value
 
@@ -308,3 +324,94 @@ def best_of_n_replay(
     else:
         selected = run_replay(case, lambda _state: "FINISH")
     return MethodOutcome("best_of_n", selected, len(results), selected.verifier_passed)
+
+
+def held_out_replay(
+    manifest: DatasetManifest,
+    methods: dict[str, Policy],
+    *,
+    repeats: int = 1,
+    code_version: str,
+) -> tuple[ExperimentRecord, ...]:
+    """Evaluate frozen methods on test cases without exposing their oracle."""
+    if repeats < 1 or repeats > 3:
+        raise ValueError("held-out repeats must be between one and three")
+    cases = tuple(case for case in manifest.cases if case.split == "test")
+    records: list[ExperimentRecord] = []
+    for method, policy in methods.items():
+        for repeat in range(1, repeats + 1):
+            for case in cases:
+                result = run_replay(case, policy)
+                records.append(
+                    ExperimentRecord(
+                        experiment_id=f"phase12-exp-heldout-{method}-{repeat}-{case.case_id}",
+                        code_version=code_version,
+                        dataset_id=manifest.dataset_id,
+                        dataset_digest=manifest.dataset_digest,
+                        split="test",
+                        method=method,
+                        model="deterministic-replay",
+                        repeat=repeat,
+                        status="SUCCEEDED" if result.verifier_passed else "REJECTED",
+                        output_action=result.action_sequence[-1]
+                        if result.action_sequence
+                        else None,
+                        verifier_passed=result.verifier_passed,
+                        safety_passed=result.safety_passed,
+                        score=result.score,
+                        failure_code=None if result.verifier_passed else result.failure_code,
+                        elapsed_ms=0.0,
+                        calls=0,
+                    )
+                )
+    return tuple(records)
+
+
+def grouped_bootstrap(
+    records_a: Iterable[ExperimentRecord],
+    records_b: Iterable[ExperimentRecord],
+    *,
+    method_a: str,
+    method_b: str,
+    seed: int = 12,
+    samples: int = 2_000,
+) -> BootstrapSummary:
+    """Compute a paired group bootstrap over verifier rates."""
+    if samples < 100:
+        raise ValueError("bootstrap needs at least 100 samples")
+    a_by_group: dict[str, list[bool]] = {}
+    b_by_group: dict[str, list[bool]] = {}
+
+    def record_group(record: ExperimentRecord) -> str:
+        parts = record.experiment_id.split("-")
+        marker = max(index for index, part in enumerate(parts) if part == "phase12")
+        return "-".join(parts[marker:-1])
+
+    for record in records_a:
+        group = record_group(record)
+        a_by_group.setdefault(group, []).append(record.verifier_passed)
+    for record in records_b:
+        group = record_group(record)
+        b_by_group.setdefault(group, []).append(record.verifier_passed)
+    groups = sorted(set(a_by_group).intersection(b_by_group))
+    if not groups:
+        raise ValueError("paired bootstrap needs groups present in both methods")
+    deltas = [
+        sum(a_by_group[group]) / len(a_by_group[group])
+        - sum(b_by_group[group]) / len(b_by_group[group])
+        for group in groups
+    ]
+    rng = random.Random(seed)
+    draws = [sum(rng.choice(deltas) for _ in groups) / len(groups) for _ in range(samples)]
+    draws.sort()
+    lower = draws[int(samples * 0.025)]
+    upper = draws[min(samples - 1, int(samples * 0.975))]
+    delta = sum(deltas) / len(deltas)
+    conclusion: Literal["IMPROVED", "INCONCLUSIVE", "REGRESSED"]
+    if lower > 0:
+        conclusion = "IMPROVED"
+    elif upper < 0:
+        conclusion = "REGRESSED"
+    else:
+        conclusion = "INCONCLUSIVE"
+    return BootstrapSummary(method_a, method_b, len(groups), delta, lower, upper, conclusion)

@@ -7,9 +7,9 @@ import json
 import math
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 CaseKind = Literal[
     "COMPLETE_READ",
@@ -51,6 +51,10 @@ def finite(value: float) -> float:
     if not math.isfinite(value):
         raise ValueError("numeric value must be finite")
     return value
+
+
+def _tuple_from_json(value: object) -> object:
+    return tuple(value) if isinstance(value, list) else value
 
 
 class ReviewedCase(StrictModel):
@@ -110,7 +114,7 @@ class DatasetManifest(StrictModel):
     group_counts: dict[SplitName, int]
     case_digests: dict[str, str]
     dataset_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    cases: tuple[DatasetCase, ...]
+    cases: Annotated[tuple[DatasetCase, ...], BeforeValidator(_tuple_from_json)]
 
     @model_validator(mode="after")
     def validate_manifest(self) -> DatasetManifest:
@@ -128,7 +132,9 @@ class CandidateVersion(StrictModel):
     candidate_id: str = Field(pattern=r"^phase12-(prompt|skill)-[a-z0-9-]{3,80}$")
     kind: CandidateKind
     parent_id: str = Field(min_length=1, max_length=120)
-    source_case_ids: tuple[str, ...] = Field(min_length=1, max_length=10)
+    source_case_ids: Annotated[tuple[str, ...], BeforeValidator(_tuple_from_json)] = Field(
+        min_length=1, max_length=10
+    )
     content: str = Field(min_length=1, max_length=4_000)
     content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     boundary_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -209,7 +215,9 @@ class LabSelection(StrictModel):
     previous_id: str = Field(min_length=1, max_length=120)
     selected_id: str = Field(min_length=1, max_length=120)
     action: SelectionAction
-    evidence_ids: tuple[str, ...] = Field(min_length=1, max_length=20)
+    evidence_ids: Annotated[tuple[str, ...], BeforeValidator(_tuple_from_json)] = Field(
+        min_length=1, max_length=20
+    )
     reason: str = Field(min_length=1, max_length=500)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
