@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 
 from .contracts import DatasetCase
 from .replay import ALL_ACTIONS, ReplayState, _state_update, initial_state
@@ -14,7 +15,20 @@ class RewardConfig:
     success_reward: float = 1.0
     error_reward: float = -1.0
     no_progress_penalty: float = -0.1
-    duplicate_bonus: float = 0.25
+    duplicate_bonus: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not all(
+            isfinite(value)
+            for value in (
+                self.step_penalty,
+                self.success_reward,
+                self.error_reward,
+                self.no_progress_penalty,
+                self.duplicate_bonus,
+            )
+        ):
+            raise ValueError("reward values must be finite")
 
 
 @dataclass(frozen=True)
@@ -126,7 +140,13 @@ def run_action_sequence(
 
 
 def safe_reward_config() -> RewardConfig:
-    return RewardConfig()
+    return RewardConfig(
+        step_penalty=-0.02,
+        success_reward=1.0,
+        error_reward=-1.0,
+        no_progress_penalty=-0.1,
+        duplicate_bonus=0.0,
+    )
 
 
 def intentionally_bad_reward_config() -> RewardConfig:

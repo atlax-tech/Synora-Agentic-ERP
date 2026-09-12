@@ -51,6 +51,12 @@ def test_bad_reward_can_prefer_repeated_calls_but_safe_reward_penalizes_them() -
         t.reward for t in run_action_sequence(case, repeated, reward=safe_reward_config())
     )
     assert bad_total > safe_total
+    assert safe_reward_config().duplicate_bonus == 0.0
     assert (
         run_action_sequence(case, repeated, reward=safe_reward_config())[-1].status != "SUCCEEDED"
     )
+
+
+def test_nonfinite_reward_is_rejected() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        safe_reward_config().__class__(duplicate_bonus=float("nan"))
