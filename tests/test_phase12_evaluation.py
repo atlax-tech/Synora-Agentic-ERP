@@ -82,6 +82,13 @@ def test_live_baseline_does_not_call_after_budget_exhaustion() -> None:
     assert provider.calls == 0
 
 
+def test_budget_rejects_invalid_initial_state() -> None:
+    with pytest.raises(ValueError, match="maximum"):
+        CallBudget(maximum=1_201)
+    with pytest.raises(ValueError, match="used"):
+        CallBudget(maximum=1, used=2)
+
+
 def test_live_invalid_json_is_recorded_without_retry() -> None:
     case = next(
         case for case in build_synthetic_manifest("eval-test").cases if case.kind == "MISSING_INPUT"

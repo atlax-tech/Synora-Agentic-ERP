@@ -47,9 +47,15 @@ class CallBudget:
     consecutive_blocking_failures: int = 0
     blocked: bool = False
 
-    def reserve(self) -> int:
+    def __post_init__(self) -> None:
         if self.maximum < 0 or self.maximum > MAX_MODEL_CALLS:
             raise ValueError("budget maximum is outside the Phase 12 limit")
+        if self.used < 0 or self.used > self.maximum:
+            raise ValueError("budget used count is outside the configured limit")
+        if self.consecutive_blocking_failures < 0:
+            raise ValueError("blocking failure count cannot be negative")
+
+    def reserve(self) -> int:
         if self.blocked:
             raise BudgetExceeded("MODEL_BATCH_BLOCKED")
         if self.used >= self.maximum:
