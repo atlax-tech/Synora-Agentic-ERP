@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -471,11 +472,14 @@ def train_reinforce(
     if not cases:
         raise ValueError("no train cases are available")
     baseline = 0.0
+    started = time.perf_counter()
     returns: list[float] = []
     episode_steps: list[int] = []
     successes = 0
     invalid_actions = 0
     for episode in range(episodes):
+        if time.perf_counter() - started > 120.0:
+            raise TimeoutError("REINFORCE seed exceeded 120 second budget")
         case = cases[episode % len(cases)]
         environment = ProcurementEnv(case, reward=safe_reward_config())
         log_probs: list[Any] = []
@@ -505,10 +509,10 @@ def train_reinforce(
         episode_return = sum(rewards)
         returns.append(episode_return)
         episode_steps.append(len(rewards))
-        baseline = 0.9 * baseline + 0.1 * episode_return
+        previous_baseline = baseline
         if log_probs:
             advantages = torch.tensor(
-                [value - baseline for value in discounted], dtype=torch.float32
+                [value - previous_baseline for value in discounted], dtype=torch.float32
             )
             loss = -(torch.stack(log_probs) * advantages).sum()
             if not bool(torch.isfinite(loss)):
@@ -516,6 +520,7 @@ def train_reinforce(
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+        baseline = 0.9 * baseline + 0.1 * episode_return
         successes += int(safe and final_status == case.expected_status)
     metrics = {
         "episodes": float(episodes),
