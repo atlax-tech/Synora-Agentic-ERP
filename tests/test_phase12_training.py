@@ -81,6 +81,7 @@ def test_corrupt_or_nonfinite_json_weights_are_rejected(tmp_path: Path) -> None:
     path = tmp_path / "weights.json"
     save_weights(path, result.model)
     assert len(path.read_text(encoding="utf-8").splitlines()) > 2
+    assert len(path.read_text(encoding="utf-8").splitlines()) < 400
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["schema_version"] = "2"
     path.write_text(json.dumps(payload), encoding="utf-8")

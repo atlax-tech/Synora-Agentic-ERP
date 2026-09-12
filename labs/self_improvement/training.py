@@ -108,14 +108,42 @@ def weights_digest(model: Any) -> str:
     return digest_json(weights_payload(model))
 
 
+def _render_weight_json(value: object, level: int = 0) -> list[str]:
+    """Render finite weight arrays readably without one scalar per diff line."""
+    indent = "  " * level
+    if isinstance(value, dict):
+        items = tuple(value.items())
+        lines = ["{"]
+        for index, (key, child) in enumerate(items):
+            rendered = _render_weight_json(child, level + 1)
+            lines.append(f"{'  ' * (level + 1)}{json.dumps(key)}: {rendered[0].lstrip()}")
+            lines.extend(rendered[1:])
+            if index < len(items) - 1:
+                lines[-1] += ","
+        lines.append(f"{indent}}}")
+        return lines
+    if isinstance(value, list):
+        if not any(isinstance(item, (dict, list)) for item in value):
+            return [json.dumps(value, ensure_ascii=True, separators=(",", ": "))]
+        lines = ["["]
+        for index, item in enumerate(value):
+            rendered = _render_weight_json(item, level + 1)
+            lines.append(f"{'  ' * (level + 1)}{rendered[0].lstrip()}")
+            lines.extend(rendered[1:])
+            if index < len(value) - 1:
+                lines[-1] += ","
+        lines.append(f"{indent}]")
+        return lines
+    return [json.dumps(value, ensure_ascii=True)]
+
+
 def save_weights(path: Path, model: Any) -> None:
     """Write finite JSON weights once; never execute or overwrite artifacts."""
     payload = weights_payload(model)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() or path.is_symlink():
         raise FileExistsError(path)
-    encoded = json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2)
-    path.write_text(encoded + "\n", encoding="utf-8")
+    path.write_text("\n".join(_render_weight_json(payload)) + "\n", encoding="utf-8")
 
 
 def load_weights(path: Path) -> Any:
