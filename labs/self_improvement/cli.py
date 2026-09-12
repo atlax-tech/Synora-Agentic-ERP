@@ -124,6 +124,7 @@ def _replay_record(
         dataset_id=dataset.dataset_id,
         dataset_digest=dataset.dataset_digest,
         split=case.split,
+        case_id=case.case_id,
         group_id=case.group_id,
         method=method,
         model="deterministic-replay",

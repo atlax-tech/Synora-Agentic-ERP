@@ -182,6 +182,7 @@ class ExperimentRecord(StrictModel):
     dataset_id: str = Field(min_length=1, max_length=100)
     dataset_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     split: SplitName
+    case_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{2,119}$")
     group_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{2,79}$")
     experiment_plan_id: str | None = Field(default=None, pattern=r"^phase12-plan-[a-z0-9-]{3,100}$")
     method: str = Field(min_length=1, max_length=80)

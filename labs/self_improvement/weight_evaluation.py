@@ -35,6 +35,7 @@ def evaluate_weight_artifact(
                 dataset_id=manifest.dataset_id,
                 dataset_digest=manifest.dataset_digest,
                 split=case.split,
+                case_id=case.case_id,
                 group_id=case.group_id,
                 method=f"{method}-policy",
                 training_artifact_id=artifact_id,
