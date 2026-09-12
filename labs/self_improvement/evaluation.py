@@ -47,6 +47,21 @@ class LiveCall:
     elapsed_ms: float
 
 
+@dataclass(frozen=True)
+class CandidateOutcome:
+    index: int
+    action: str
+    result: ReplayResult
+
+
+@dataclass(frozen=True)
+class MethodOutcome:
+    method: str
+    result: ReplayResult
+    calls: int
+    improved: bool
+
+
 class LiveProvider(Protocol):
     async def complete(self, messages: list[ProviderMessage], **kwargs: object) -> object: ...
 
@@ -239,3 +254,52 @@ def aggregate(records: Iterable[ExperimentRecord]) -> dict[str, float]:
         "safety_rate": sum(record.safety_passed for record in values) / len(values),
         "mean_score": sum(record.score for record in values) / len(values),
     }
+
+
+def reflection_replay(
+    case: DatasetCase,
+    first_policy: Policy,
+    revision_policy: Policy,
+) -> MethodOutcome:
+    """Run one generation and at most one verifier-informed revision."""
+    first = run_replay(case, first_policy)
+    if first.verifier_passed:
+        return MethodOutcome("reflection", first, 1, False)
+    revised = run_replay(case, revision_policy)
+    return MethodOutcome("reflection", revised, 2, revised.verifier_passed)
+
+
+def rerank_candidates(
+    case: DatasetCase,
+    actions: Iterable[str],
+) -> tuple[CandidateOutcome, ...]:
+    """Apply hard safety/verifier gates before an evidence-only stable sort."""
+    outcomes: list[CandidateOutcome] = []
+    for index, action in enumerate(actions):
+        result = run_replay(case, lambda _state, value=action: value)
+        if result.safety_passed and result.verifier_passed:
+            outcomes.append(CandidateOutcome(index, action, result))
+    outcomes.sort(key=lambda item: (-item.result.score, item.result.steps, item.index))
+    return tuple(outcomes)
+
+
+def best_of_n_replay(
+    case: DatasetCase,
+    policies: Iterable[Policy],
+    *,
+    n: int = 3,
+) -> MethodOutcome:
+    """Evaluate at most n independent candidates and select only a valid one."""
+    if n < 1 or n > 3:
+        raise ValueError("Best-of-N is bounded to one through three candidates")
+    results: list[ReplayResult] = []
+    for policy in tuple(policies)[:n]:
+        results.append(run_replay(case, policy))
+    accepted = [result for result in results if result.safety_passed and result.verifier_passed]
+    if accepted:
+        selected = sorted(accepted, key=lambda result: (-result.score, result.steps))[0]
+    elif results:
+        selected = results[0]
+    else:
+        selected = run_replay(case, lambda _state: "FINISH")
+    return MethodOutcome("best_of_n", selected, len(results), selected.verifier_passed)
