@@ -1,0 +1,33 @@
+{
+  "schema_version": "1",
+  "status": "REVIEW_INCOMPLETE",
+  "plan_id": "phase12-plan-r5-v3",
+  "implementation_revision": "4026fe4",
+  "head": "07c6612",
+  "read_only": true,
+  "provider_calls": 0,
+  "attempts": [
+    {
+      "agent_id": "01a0965d-efd3-76b1-8a0e-ad7f3b8e990e",
+      "outcome": "SHUTDOWN_WITHOUT_CONCLUSION",
+      "basis": "Repeated bounded waits produced no conclusion; the instance was closed after an interruptive request."
+    },
+    {
+      "agent_id": "01a09668-2304-7830-bcc8-0929277f48cf",
+      "outcome": "REVIEW_INCOMPLETE",
+      "basis": "The instance returned REVIEW_INCOMPLETE after the interruptive request."
+    }
+  ],
+  "findings": [],
+  "verified": [
+    "No files were modified by the review attempts.",
+    "No Provider was called by the review attempts.",
+    "verify-artifacts was observed as PASS with 51 JSONL files and 2,064 records.",
+    "The active evidence reports 816 live calls and 288/288 live test coverage."
+  ],
+  "unverified": [
+    "The independent reviewer did not complete the requested plan-versus-evidence adversarial check.",
+    "The reviewer did not independently bind the full make and Harness outputs to the current implementation revisions."
+  ],
+  "recommendation": "BLOCKED: do not write COMPLETED/PASS/READY FOR NEXT PHASE, update PLAN/SPEC/ROADMAP, or create Harness sync until a separately authorized independent review returns PASS."
+}
