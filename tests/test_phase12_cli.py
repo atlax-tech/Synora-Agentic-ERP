@@ -93,6 +93,17 @@ def test_cli_verify_rejects_tampered_audit_artifact(tmp_path: Path) -> None:
     assert main(["--root", str(tmp_path), "verify-artifacts"]) == 2
 
 
+def test_cli_verify_rejects_candidate_with_unaudited_source(tmp_path: Path) -> None:
+    _write_historical_failure(tmp_path)
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
+    assert main(["--root", str(tmp_path), "make-candidates"]) == 0
+    candidate_path = next((tmp_path / "output" / "phase12" / "candidates").glob("*.json"))
+    payload = json.loads(candidate_path.read_text(encoding="utf-8"))
+    payload["source_case_ids"] = ["phase12-historical-unaudited"]
+    candidate_path.write_text(json.dumps(payload), encoding="utf-8")
+    assert main(["--root", str(tmp_path), "verify-artifacts"]) == 2
+
+
 def test_cli_default_evaluate_does_not_require_provider(tmp_path: Path) -> None:
     assert main(["--root", str(tmp_path), "prepare-data"]) == 0
     assert main(["--root", str(tmp_path), "evaluate", "--engine", "replay", "--split", "test"]) == 0

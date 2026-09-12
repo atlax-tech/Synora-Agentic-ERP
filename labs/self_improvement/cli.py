@@ -268,7 +268,7 @@ def _cmd_train(args: argparse.Namespace) -> dict[str, object]:
 def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
     manifest = _manifest(args.root)
     verify_manifest(manifest)
-    _read_verified_audit(args.root)
+    reviewed_ids = {record.case_id for record in _read_verified_audit(args.root)}
     output = args.root / PHASE12_RELATIVE_ROOT
     record_files = sorted(output.glob("*.jsonl"))
     record_count = 0
@@ -287,6 +287,11 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
         candidate = read_candidate(output, path.stem)
         if candidate.candidate_id != path.stem:
             raise ValueError("candidate filename does not match its ID")
+        unknown_sources = sorted(set(candidate.source_case_ids) - reviewed_ids)
+        if unknown_sources:
+            raise ValueError(
+                "candidate references unaudited historical failures: " + ", ".join(unknown_sources)
+            )
     selection_dir = output / "selections"
     selection_paths = sorted(selection_dir.glob("*.json")) if selection_dir.exists() else []
     candidate_ids = {path.stem for path in candidate_paths}
