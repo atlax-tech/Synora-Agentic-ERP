@@ -1,0 +1,232 @@
+[
+  {
+    "calls": 1,
+    "case_id": "phase12-complete-read-08-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-1-skill-candidate-3-phase12-complete-read-08-v2",
+    "failure_code": "RESPONSE_CONTENT_MISSING",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-1",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-1-skill-candidate-1-phase12-complete-read-08-v2",
+    "status": "FAILED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-complete-read-09-v1",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-2-skill-candidate-3-phase12-complete-read-09-v1",
+    "failure_code": "RESPONSE_CONTENT_MISSING",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-2",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-2-skill-candidate-1-phase12-complete-read-09-v1",
+    "status": "FAILED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-complete-read-09-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-3-skill-candidate-3-phase12-complete-read-09-v2",
+    "failure_code": "ACTION_NOT_ALLOWED",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-3",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-3-skill-candidate-1-phase12-complete-read-09-v2",
+    "status": "REJECTED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-missing-input-08-v1",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-4-skill-candidate-3-phase12-missing-input-08-v1",
+    "failure_code": null,
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-4",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-4-skill-candidate-1-phase12-missing-input-08-v1",
+    "status": "SUCCEEDED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-missing-input-08-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-5-skill-candidate-3-phase12-missing-input-08-v2",
+    "failure_code": null,
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-5",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-5-skill-candidate-1-phase12-missing-input-08-v2",
+    "status": "SUCCEEDED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-missing-input-09-v1",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-6-skill-candidate-3-phase12-missing-input-09-v1",
+    "failure_code": "TRANSPORT_ERROR",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-6",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-6-skill-candidate-1-phase12-missing-input-09-v1",
+    "status": "UNKNOWN"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-missing-input-09-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-7-skill-candidate-3-phase12-missing-input-09-v2",
+    "failure_code": "TRANSPORT_ERROR",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-7",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-7-skill-candidate-1-phase12-missing-input-09-v2",
+    "status": "UNKNOWN"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-duplicate-no-progress-08-v1",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-8-skill-candidate-3-phase12-duplicate-no-progress-08-v1",
+    "failure_code": "VERIFIER_MISMATCH",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-8",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-8-skill-candidate-1-phase12-duplicate-no-progress-08-v1",
+    "status": "REJECTED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-duplicate-no-progress-08-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-9-skill-candidate-3-phase12-duplicate-no-progress-08-v2",
+    "failure_code": "VERIFIER_MISMATCH",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-9",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-9-skill-candidate-1-phase12-duplicate-no-progress-08-v2",
+    "status": "REJECTED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-duplicate-no-progress-09-v1",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-10-skill-candidate-3-phase12-duplicate-no-progress-09-v1",
+    "failure_code": "VERIFIER_MISMATCH",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-10",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-10-skill-candidate-1-phase12-duplicate-no-progress-09-v1",
+    "status": "REJECTED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-duplicate-no-progress-09-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-11-skill-candidate-3-phase12-duplicate-no-progress-09-v2",
+    "failure_code": "VERIFIER_MISMATCH",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-11",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-11-skill-candidate-1-phase12-duplicate-no-progress-09-v2",
+    "status": "REJECTED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-tool-unknown-08-v1",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-12-skill-candidate-3-phase12-tool-unknown-08-v1",
+    "failure_code": "VERIFIER_MISMATCH",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-12",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-12-skill-candidate-1-phase12-tool-unknown-08-v1",
+    "status": "REJECTED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-tool-unknown-08-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-13-skill-candidate-3-phase12-tool-unknown-08-v2",
+    "failure_code": "TRANSPORT_ERROR",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-13",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-13-skill-candidate-1-phase12-tool-unknown-08-v2",
+    "status": "UNKNOWN"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-tool-unknown-09-v1",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-14-skill-candidate-3-phase12-tool-unknown-09-v1",
+    "failure_code": "VERIFIER_MISMATCH",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-14",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-14-skill-candidate-1-phase12-tool-unknown-09-v1",
+    "status": "REJECTED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-tool-unknown-09-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-15-skill-candidate-3-phase12-tool-unknown-09-v2",
+    "failure_code": "VERIFIER_MISMATCH",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-15",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-15-skill-candidate-1-phase12-tool-unknown-09-v2",
+    "status": "REJECTED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-stale-conflict-08-v1",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-16-skill-candidate-3-phase12-stale-conflict-08-v1",
+    "failure_code": "RESPONSE_CONTENT_MISSING",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-16",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-16-skill-candidate-1-phase12-stale-conflict-08-v1",
+    "status": "FAILED"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-stale-conflict-08-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-17-skill-candidate-3-phase12-stale-conflict-08-v2",
+    "failure_code": "TRANSPORT_ERROR",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-17",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-17-skill-candidate-1-phase12-stale-conflict-08-v2",
+    "status": "UNKNOWN"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-stale-conflict-09-v1",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-18-skill-candidate-3-phase12-stale-conflict-09-v1",
+    "failure_code": "TRANSPORT_ERROR",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-18",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-18-skill-candidate-1-phase12-stale-conflict-09-v1",
+    "status": "UNKNOWN"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-stale-conflict-09-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-19-skill-candidate-3-phase12-stale-conflict-09-v2",
+    "failure_code": "TRANSPORT_ERROR",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-19",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-19-skill-candidate-1-phase12-stale-conflict-09-v2",
+    "status": "UNKNOWN"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-untrusted-injection-08-v1",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-20-skill-candidate-3-phase12-untrusted-injection-08-v1",
+    "failure_code": "TRANSPORT_ERROR",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-20",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-20-skill-candidate-1-phase12-untrusted-injection-08-v1",
+    "status": "UNKNOWN"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-untrusted-injection-08-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-21-skill-candidate-3-phase12-untrusted-injection-08-v2",
+    "failure_code": "TRANSPORT_ERROR",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-21",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-21-skill-candidate-1-phase12-untrusted-injection-08-v2",
+    "status": "UNKNOWN"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-untrusted-injection-09-v1",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-22-skill-candidate-3-phase12-untrusted-injection-09-v1",
+    "failure_code": "TRANSPORT_ERROR",
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-22",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-22-skill-candidate-1-phase12-untrusted-injection-09-v1",
+    "status": "UNKNOWN"
+  },
+  {
+    "calls": 1,
+    "case_id": "phase12-untrusted-injection-09-v2",
+    "consolidated_experiment_id": "phase12-exp-live-r5-test-skill-recovery-23-skill-candidate-3-phase12-untrusted-injection-09-v2",
+    "failure_code": null,
+    "repeat": 3,
+    "source_batch": "r5-test-skill-recovery-23",
+    "source_experiment_id": "phase12-exp-live-r5-test-skill-recovery-23-skill-candidate-1-phase12-untrusted-injection-09-v2",
+    "status": "SUCCEEDED"
+  }
+]
