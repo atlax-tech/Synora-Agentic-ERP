@@ -277,7 +277,11 @@ def _validate_frozen_replay_coverage(
         actual = {
             record.experiment_id
             for record in records
-            if record.method == method and record.split == split
+            if (
+                record.method == method
+                and record.split == split
+                and record.model == "deterministic-replay"
+            )
         }
         if actual != expected:
             missing = sorted(expected - actual)

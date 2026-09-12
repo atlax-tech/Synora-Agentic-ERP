@@ -15,6 +15,46 @@ from labs.self_improvement.cli import (
     _validate_frozen_replay_coverage,
     main,
 )
+from labs.self_improvement.contracts import DatasetManifest, ExperimentRecord
+
+
+def _complete_replay_matrix(manifest: DatasetManifest) -> list[ExperimentRecord]:
+    methods = (
+        ("baseline", "dev"),
+        ("baseline", "test"),
+        ("reflection", "dev"),
+        ("best-of-3", "dev"),
+        ("prompt-candidate", "dev"),
+        ("prompt-candidate", "test"),
+        ("skill-candidate", "dev"),
+        ("skill-candidate", "test"),
+    )
+    records: list[ExperimentRecord] = []
+    for method, split in methods:
+        for repeat in range(1, 4):
+            for case in manifest.cases:
+                if case.split != split:
+                    continue
+                records.append(
+                    ExperimentRecord(
+                        experiment_id=f"phase12-exp-replay-{method}-{repeat}-{case.case_id}",
+                        code_version="coverage-test",
+                        dataset_id=manifest.dataset_id,
+                        dataset_digest=manifest.dataset_digest,
+                        split=split,
+                        method=method,
+                        model="deterministic-replay",
+                        repeat=repeat,
+                        status="SUCCEEDED",
+                        output_action="FINISH",
+                        verifier_passed=True,
+                        safety_passed=True,
+                        score=1.0,
+                        elapsed_ms=0.0,
+                        calls=0,
+                    )
+                )
+    return records
 
 
 def _write_historical_failure(root: Path) -> None:
@@ -216,6 +256,32 @@ def test_cli_report_rejects_trimmed_frozen_evidence(tmp_path: Path) -> None:
     records = read_records(tmp_path, "output/phase12/evaluation-replay-baseline-dev.jsonl")
     with pytest.raises(ValueError, match="coverage mismatch"):
         _validate_frozen_replay_coverage(manifest, records)
+
+
+def test_frozen_coverage_ignores_live_baseline_records(tmp_path: Path) -> None:
+    assert main(["--root", str(tmp_path), "prepare-data"]) == 0
+    manifest = _manifest(tmp_path)
+    records = _complete_replay_matrix(manifest)
+    records.append(
+        ExperimentRecord(
+            experiment_id="phase12-exp-live-coverage-test",
+            code_version="coverage-test",
+            dataset_id=manifest.dataset_id,
+            dataset_digest=manifest.dataset_digest,
+            split="test",
+            method="baseline",
+            model="assist",
+            repeat=1,
+            status="UNKNOWN",
+            verifier_passed=False,
+            safety_passed=True,
+            score=-1.0,
+            failure_code="TIMEOUT",
+            elapsed_ms=1.0,
+            calls=1,
+        )
+    )
+    _validate_frozen_replay_coverage(manifest, records)
 
 
 def test_canonical_reports_must_have_one_shared_suffix(tmp_path: Path) -> None:
