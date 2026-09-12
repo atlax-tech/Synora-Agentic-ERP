@@ -48,13 +48,13 @@ uv run --frozen --python 3.14 python -m labs.self_improvement.cli --root . evalu
 uv run --frozen --python 3.14 python -m labs.self_improvement.cli --root . select-lab --candidate-id phase12-prompt-609c62e2b621bb14 --previous-id native-agent/A --evidence phase12-exp-replay-prompt-candidate-1-phase12-complete-read-06-v1 --reason 'dev candidate evidence'
 ```
 
-`select-lab` 会记录父/新版本内容 digest。运行后从命令输出取得新的 `selection_id`，再执行：
+`select-lab` 会记录父/新版本内容 digest，并原子更新 `output/phase12/active-version.json`。运行后从命令输出取得新的 `selection_id`，再执行：
 
 ```bash
 uv run --frozen --python 3.14 python -m labs.self_improvement.cli --root . rollback-lab --selection-id <selection_id> --evidence phase12-exp-replay-prompt-candidate-1-phase12-complete-read-06-v1 --reason 'restore native baseline'
 ```
 
-回滚会重新读取版本内容；内容变更、路径穿越或旧 receipt 重复写入都会返回 2。
+回滚会重新读取版本内容并把 active 指针恢复到父版本；内容变更、路径穿越、旧 receipt 重复写入或 evidence 不属于该候选的都会返回 2。
 
 ## 本地策略训练
 
@@ -94,7 +94,7 @@ set +a
 uv run --frozen --python 3.14 python -m labs.self_improvement.cli --root . evaluate --engine live --split test --method baseline --repeats 1
 ```
 
-请求发出前占用调用预算，失败不自动重试；连续三次连接、认证或协议/传输失败会阻塞批次。Provider 未报告 usage 时记录为未知。当前证据保留一轮 24 条 live 记录；一次三重复跑因 provider 长连接无响应而中断，没有把半批输出写成结果。
+请求发出前在 `output/phase12/live-reservations.jsonl` 原子占用调用预算，失败不自动重试；连续三次连接、认证或协议/传输失败会阻塞批次。Provider 未报告 usage 时记录为未知。相同 batch 的 reservation key 在重启后不会再次调用；网络恢复需显式传入新的 `--batch-id`。当前证据保留一轮 24 条 live 记录；一次三重复跑因 provider 长连接无响应而中断，没有把半批输出写成结果。
 
 ## 输出位置和安全边界
 

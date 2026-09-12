@@ -258,7 +258,9 @@ def render_adoption_card(summary: dict[str, object]) -> str:
         "",
         "## Decision",
         "",
-        "Prompt 候选和 Skill 候选必须以 held-out 证据决定; 无改善或区间跨 0 时保留基线. "
+        "每条 held-out 比较的结论描述 method_a 相对 method_b 的差异; "
+        "Prompt 候选区间跨 0 时保留基线, "
+        "Skill 候选由基线相对其的正差值证明候选退化, 因而拒绝候选. "
         "SFT, DPO, REINFORCE 仅保留为本地策略实验, 不能加载到业务主线.",
         "",
         "## Known Negative",
@@ -268,7 +270,8 @@ def render_adoption_card(summary: dict[str, object]) -> str:
         "",
         "## Rollback",
         "",
-        "候选选择和回滚只写不可变 LAB receipt; 回滚必须恢复父版本内容哈希, "
+        "候选选择和回滚写不可变 LAB receipt 并更新 active-version 指针; "
+        "回滚必须恢复父版本内容哈希, "
         "未获独立授权前不改变业务 Registry.",
         "",
         "## Limitations",
@@ -318,13 +321,15 @@ def render_stage_report(summary: dict[str, object]) -> str:
         "",
         *rows,
         "",
-        "失败, UNKNOWN, 未知 usage 和部分生成均保留在分母; 重复运行不是新增独立样本.",
+        "失败, UNKNOWN, 未知 usage 和部分生成均保留在分母; 重复运行不是新增独立样本. "
+        "Live 请求预留账本单独记录批次和终态.",
         "",
         "## Held-out 规则",
         "",
         f"按场景组 bootstrap 2,000 次: "
         f"`{json.dumps(summary['heldout_bootstrap'], ensure_ascii=True, sort_keys=True)}`. "
-        "区间下界大于 0 才能称固定实验有改善证据; 跨 0 为 `INCONCLUSIVE`, 退化为 `REJECTED`.",
+        "差值方向为 method_a 相对 method_b; 下界大于 0 才能称 method_a 有改善证据, "
+        "跨 0 为 `INCONCLUSIVE`, 上界小于 0 表示 method_a 退化.",
         "",
         "## 训练与奖励",
         "",
