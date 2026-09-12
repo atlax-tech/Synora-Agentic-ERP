@@ -1,0 +1,7 @@
+{
+  "action": "ROLLBACK",
+  "content_sha256": "1a676172e121c37910512c73b4a77cf3955cad7bca2c659f342d5b2c6e9dbda4",
+  "schema_version": "1",
+  "selection_id": "phase12-selection-968bee3f52ef7690",
+  "version_id": "native-agent/A"
+}
