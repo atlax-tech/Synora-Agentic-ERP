@@ -319,6 +319,34 @@ def deterministic_policy(state: ReplayState) -> ActionName:
     return "FINISH"
 
 
+def candidate_policy(content: str) -> Policy:
+    """Build a bounded policy from a lab candidate's decision guidance.
+
+    Candidate prose is interpreted as two narrow, observable preferences: guidance
+    that asks for missing evidence may ask before the first read, and guidance that
+    says to stop once evidence is sufficient may finish after an observation. All
+    safety/error handling remains in the deterministic policy and replay verifier.
+    """
+    lowered = content.casefold()
+    ask_before_read = any(
+        marker in lowered for marker in ("ask for", "request", "missing", "incomplete")
+    ) and any(marker in lowered for marker in ("before", "first", "preserve"))
+    finish_after_observation = any(marker in lowered for marker in ("finish", "stop", "sufficient"))
+
+    def choose(state: ReplayState) -> str:
+        if state.untrusted_content:
+            return "FINISH"
+        if state.needs_input or state.conflict or state.no_progress or state.failed_tools:
+            return "ASK_INPUT"
+        if ask_before_read and not state.observations:
+            return "ASK_INPUT"
+        if finish_after_observation and state.observations:
+            return "FINISH"
+        return deterministic_policy(state)
+
+    return choose
+
+
 def policy_from_actions(actions: Mapping[str, str]) -> Policy:
     def choose(state: ReplayState) -> str:
         return actions.get(state.case_id, "FINISH")

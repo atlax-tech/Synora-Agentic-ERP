@@ -46,7 +46,7 @@ from .evaluation import (
     reflection_replay,
     run_live_baselines,
 )
-from .replay import ReplayResult, deterministic_policy
+from .replay import ReplayResult, candidate_policy, deterministic_policy
 from .reporting import write_reports
 from .training import load_weights, train_dpo, train_reinforce, train_sft, weights_digest
 
@@ -136,6 +136,7 @@ def _replay_records(
     version: str,
     repeats: int = 1,
     candidate_id: str | None = None,
+    candidate_content: str | None = None,
 ) -> tuple[ExperimentRecord, ...]:
     if repeats < 1 or repeats > 3:
         raise ValueError("replay repeats must be between one and three")
@@ -144,9 +145,14 @@ def _replay_records(
     for repeat in range(1, repeats + 1):
         for case in cases:
             if method in {"baseline", "prompt-candidate", "skill-candidate"}:
+                policy = (
+                    candidate_policy(candidate_content)
+                    if candidate_content is not None
+                    else deterministic_policy
+                )
                 result = evaluate_replay_cases(
                     (case,),
-                    deterministic_policy,
+                    policy,
                     code_version=version,
                     method=method,
                     dataset_id=manifest.dataset_id,
@@ -236,8 +242,11 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
         raise ValueError("evaluation repeats must be between one and three")
     if args.engine == "replay":
         candidate_id = None
+        candidate_content = None
         if args.method in {"prompt-candidate", "skill-candidate"}:
-            candidate_id = _candidate_for_method(args.root, args.method).candidate_id
+            candidate = _candidate_for_method(args.root, args.method)
+            candidate_id = candidate.candidate_id
+            candidate_content = candidate.content
         records = _replay_records(
             manifest,
             args.split,
@@ -245,6 +254,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             code_version(),
             repeats=args.repeats,
             candidate_id=candidate_id,
+            candidate_content=candidate_content,
         )
     else:
         if args.method != "baseline":

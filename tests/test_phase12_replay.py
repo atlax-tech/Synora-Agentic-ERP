@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from labs.self_improvement.data import build_synthetic_manifest
 from labs.self_improvement.replay import (
+    candidate_policy,
     deterministic_policy,
     initial_state,
     policy_from_actions,
@@ -59,3 +60,12 @@ def test_initial_policy_observation_does_not_include_case_oracle_labels() -> Non
         update={"oracle": {"scenario": "UNTRUSTED_INJECTION"}, "expected_status": "REFUSED"}
     )
     assert state_features(initial_state(complete)) == state_features(initial_state(changed_oracle))
+
+
+def test_candidate_content_changes_only_the_bounded_decision_preference() -> None:
+    manifest = build_synthetic_manifest("replay-test")
+    case = next(case for case in manifest.cases if case.kind == "COMPLETE_READ")
+    ask_first = candidate_policy("Ask for missing evidence before the first read.")
+    finish_when_ready = candidate_policy("Finish when evidence is sufficient.")
+    assert ask_first(initial_state(case)) == "ASK_INPUT"
+    assert finish_when_ready(initial_state(case)) == "purchase_order.open"
