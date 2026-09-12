@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -79,10 +80,10 @@ def test_corrupt_or_nonfinite_json_weights_are_rejected(tmp_path: Path) -> None:
     result = train_sft(manifest, seed=17, max_epochs=2, patience=1)
     path = tmp_path / "weights.json"
     save_weights(path, result.model)
-    payload = path.read_text(encoding="utf-8").replace(
-        '"schema_version":"1"', '"schema_version":"2"'
-    )
-    path.write_text(payload, encoding="utf-8")
+    assert len(path.read_text(encoding="utf-8").splitlines()) > 2
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["schema_version"] = "2"
+    path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match="version"):
         load_weights(path)
 

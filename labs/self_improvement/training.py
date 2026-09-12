@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .contracts import DatasetManifest, TrainingArtifact, canonical_json, digest_json
+from .contracts import DatasetManifest, TrainingArtifact, digest_json
 from .replay import ALL_ACTIONS, ReplayState, deterministic_policy
 
 FEATURE_VERSION = "phase12-features-v1"
@@ -113,7 +113,7 @@ def save_weights(path: Path, model: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() or path.is_symlink():
         raise FileExistsError(path)
-    encoded = canonical_json(payload)
+    encoded = json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2)
     path.write_text(encoded + "\n", encoding="utf-8")
 
 
