@@ -242,12 +242,18 @@ class TrainingArtifact(StrictModel):
     weight_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     reference_weight_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     metrics: dict[str, float]
+    checkpoint_metrics: Annotated[
+        tuple[dict[str, float], ...], BeforeValidator(_tuple_from_json)
+    ] = Field(default_factory=tuple, max_length=20)
     weight_path: str = Field(min_length=1, max_length=240)
 
     @model_validator(mode="after")
     def validate_metrics(self) -> TrainingArtifact:
         for value in self.metrics.values():
             finite(value)
+        for checkpoint in self.checkpoint_metrics:
+            for value in checkpoint.values():
+                finite(value)
         if not self.weight_path.startswith("output/phase12/"):
             raise ValueError("training weights must remain in the Phase 12 output root")
         return self

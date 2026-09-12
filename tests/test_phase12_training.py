@@ -110,3 +110,11 @@ def test_save_weights_rejects_nonfinite_model_values(tmp_path: Path) -> None:
         next(result.model.parameters()).view(-1)[0] = float("nan")
     with pytest.raises(ValueError, match="finite"):
         save_weights(tmp_path / "nonfinite.json", result.model)
+
+
+def test_training_time_limit_is_bounded() -> None:
+    manifest = build_synthetic_manifest("training-test")
+    with pytest.raises(ValueError, match="120 seconds"):
+        train_sft(manifest, seed=17, time_limit_seconds=0.0)
+    with pytest.raises(ValueError, match="120 seconds"):
+        train_sft(manifest, seed=17, time_limit_seconds=120.1)

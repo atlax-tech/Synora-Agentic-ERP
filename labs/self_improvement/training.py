@@ -12,7 +12,7 @@ from typing import Any
 
 from .artifacts import code_version as current_code_version
 from .contracts import DatasetManifest, TrainingArtifact, digest_json
-from .replay import ALL_ACTIONS, ReplayState, deterministic_policy
+from .replay import ALL_ACTIONS, ReplayResult, ReplayState, deterministic_policy, run_replay
 
 FEATURE_VERSION = "phase12-features-v2"
 ACTION_VERSION = "phase12-actions-v1"
@@ -20,6 +20,7 @@ FEATURE_COUNT = 13
 HIDDEN_COUNT = 32
 ACTION_INDEX = {action: index for index, action in enumerate(ALL_ACTIONS)}
 PreferencePair = tuple[tuple[float, ...], int, int]
+MAX_TRAIN_SECONDS = 120.0
 
 
 def _torch() -> Any:
@@ -95,6 +96,55 @@ def _new_model(seed: int) -> Any:
     model = _policy_class()()
     model.to(dtype=torch.float32)
     return model
+
+
+def _validate_time_limit(value: float) -> float:
+    if not math.isfinite(value) or value <= 0.0 or value > MAX_TRAIN_SECONDS:
+        raise ValueError("training time limit must be between zero and 120 seconds")
+    return value
+
+
+def _check_finite_parameters(model: Any) -> None:
+    torch, _ = _torch()
+    for parameter in model.parameters():
+        if not bool(torch.isfinite(parameter.detach()).all()):
+            raise ValueError("training parameters must remain finite")
+
+
+def _check_finite_gradients(model: Any) -> None:
+    torch, _ = _torch()
+    for parameter in model.parameters():
+        if parameter.grad is not None and not bool(torch.isfinite(parameter.grad).all()):
+            raise ValueError("training gradients must remain finite")
+
+
+def policy_for_model(model: Any) -> Any:
+    """Return a no-gradient policy that only reads observable state features."""
+    torch, _ = _torch()
+
+    def choose(state: ReplayState) -> str:
+        values = torch.tensor([state_features(state)], dtype=torch.float32)
+        with torch.no_grad():
+            selected = int(torch.argmax(model(values), dim=-1).item())
+        return ALL_ACTIONS[selected]
+
+    return choose
+
+
+def evaluate_policy_model(
+    manifest: DatasetManifest, model: Any, split: str = "dev"
+) -> tuple[dict[str, float], tuple[ReplayResult, ...]]:
+    """Evaluate a policy checkpoint without gradients on a fixed split."""
+    policy = policy_for_model(model)
+    results = tuple(run_replay(case, policy) for case in manifest.cases if case.split == split)
+    if not results:
+        raise ValueError(f"no {split} cases are available")
+    metrics = {
+        "success_rate": sum(result.verifier_passed for result in results) / len(results),
+        "safety_rate": sum(result.safety_passed for result in results) / len(results),
+        "average_steps": sum(result.steps for result in results) / len(results),
+    }
+    return metrics, results
 
 
 def weights_payload(model: Any) -> dict[str, object]:
@@ -300,6 +350,7 @@ def _artifact(
     config: dict[str, int | float | str],
     weight_path: str,
     reference_weight_sha256: str | None = None,
+    checkpoint_metrics: tuple[dict[str, float], ...] = (),
 ) -> TrainingArtifact:
     return TrainingArtifact(
         artifact_id=f"phase12-train-{method}-seed-{seed}",
@@ -315,6 +366,7 @@ def _artifact(
         weight_sha256=weights_digest(model),
         reference_weight_sha256=reference_weight_sha256,
         metrics=metrics,
+        checkpoint_metrics=checkpoint_metrics,
         weight_path=weight_path,
     )
 
@@ -331,11 +383,13 @@ def train_sft(
     seed: int = 17,
     max_epochs: int = 100,
     patience: int = 10,
+    time_limit_seconds: float = MAX_TRAIN_SECONDS,
     weight_path: Path | None = None,
 ) -> TrainResult:
     """Train the fixed MLP on safe action labels with dev early stopping."""
     if max_epochs < 1 or patience < 1:
         raise ValueError("training bounds must be positive")
+    time_limit_seconds = _validate_time_limit(time_limit_seconds)
     torch, _ = _torch()
     model = _new_model(seed)
     initial = copy.deepcopy(model)
@@ -350,11 +404,18 @@ def train_sft(
     best_loss = float("inf")
     stale = 0
     history: list[float] = []
+    started = time.perf_counter()
     for _ in range(max_epochs):
+        if time.perf_counter() - started > time_limit_seconds:
+            raise TimeoutError("SFT seed exceeded 120 second budget")
         optimizer.zero_grad()
         loss = torch.nn.functional.cross_entropy(model(x_train), y_train)
+        if not bool(torch.isfinite(loss)):
+            raise ValueError("SFT produced a non-finite loss")
         loss.backward()
+        _check_finite_gradients(model)
         optimizer.step()
+        _check_finite_parameters(model)
         with torch.no_grad():
             dev_loss = float(torch.nn.functional.cross_entropy(model(x_dev), y_dev).item())
         if not torch.isfinite(torch.tensor(dev_loss)):
@@ -399,11 +460,13 @@ def train_dpo(
     seed: int = 17,
     max_epochs: int = 100,
     patience: int = 10,
+    time_limit_seconds: float = MAX_TRAIN_SECONDS,
     weight_path: Path | None = None,
 ) -> TrainResult:
     """Apply the standard pairwise DPO objective with a frozen reference."""
     if max_epochs < 1 or patience < 1:
         raise ValueError("training bounds must be positive")
+    time_limit_seconds = _validate_time_limit(time_limit_seconds)
     torch, _ = _torch()
     torch.manual_seed(seed)
     model = copy.deepcopy(base_model)
@@ -430,11 +493,14 @@ def train_dpo(
     best_state = copy.deepcopy(model.state_dict())
     best_loss = float("inf")
     stale = 0
+    started = time.perf_counter()
     with torch.no_grad():
         train_ref_log = torch.log_softmax(reference(train_features), dim=-1)
         dev_ref_log = torch.log_softmax(reference(dev_features), dim=-1)
 
     for _ in range(max_epochs):
+        if time.perf_counter() - started > time_limit_seconds:
+            raise TimeoutError("DPO seed exceeded 120 second budget")
         optimizer.zero_grad()
         loss = dpo_loss(
             model,
@@ -445,8 +511,12 @@ def train_dpo(
             beta=0.1,
             reference_log=train_ref_log,
         )
+        if not bool(torch.isfinite(loss)):
+            raise ValueError("DPO produced a non-finite loss")
         loss.backward()
+        _check_finite_gradients(model)
         optimizer.step()
+        _check_finite_parameters(model)
         with torch.no_grad():
             dev_loss = dpo_loss(
                 model,
@@ -468,6 +538,8 @@ def train_dpo(
             if stale >= patience:
                 break
     model.load_state_dict(best_state)
+    if weights_digest(reference) != weights_digest(base_model):
+        raise ValueError("DPO reference parameters changed")
     metrics = {
         "final_dpo_loss": best_loss,
         "preference_pairs": float(len(train_pairs)),
@@ -498,11 +570,13 @@ def train_reinforce(
     *,
     seed: int = 17,
     episodes: int = 300,
+    time_limit_seconds: float = MAX_TRAIN_SECONDS,
     weight_path: Path | None = None,
 ) -> TrainResult:
     """Run a bounded REINFORCE loop in the local procurement environment."""
     if episodes < 1 or episodes > 300:
         raise ValueError("REINFORCE episode bound must be between one and 300")
+    time_limit_seconds = _validate_time_limit(time_limit_seconds)
     torch, _ = _torch()
     from .rl import ProcurementEnv, safe_reward_config
 
@@ -519,8 +593,12 @@ def train_reinforce(
     episode_steps: list[int] = []
     successes = 0
     invalid_actions = 0
+    best_state: dict[str, Any] | None = None
+    best_key: tuple[bool, float, float, float] | None = None
+    checkpoint_metrics: list[dict[str, float]] = []
+    selected_episode = 0
     for episode in range(episodes):
-        if time.perf_counter() - started > 120.0:
+        if time.perf_counter() - started > time_limit_seconds:
             raise TimeoutError("REINFORCE seed exceeded 120 second budget")
         case = cases[episode % len(cases)]
         environment = ProcurementEnv(case, reward=safe_reward_config())
@@ -560,16 +638,50 @@ def train_reinforce(
             if not bool(torch.isfinite(loss)):
                 raise ValueError("REINFORCE produced a non-finite loss")
             optimizer.zero_grad()
+            _check_finite_gradients(model)
             loss.backward()
+            _check_finite_gradients(model)
             optimizer.step()
+            _check_finite_parameters(model)
         baseline = 0.9 * baseline + 0.1 * episode_return
         successes += int(safe and final_status == case.expected_status)
+        completed_episode = episode + 1
+        if completed_episode % 25 == 0 or completed_episode == episodes:
+            dev_metrics, _ = evaluate_policy_model(manifest, model, "dev")
+            checkpoint = {
+                "episode": float(completed_episode),
+                "dev_success_rate": dev_metrics["success_rate"],
+                "dev_safety_rate": dev_metrics["safety_rate"],
+                "dev_average_steps": dev_metrics["average_steps"],
+            }
+            checkpoint_metrics.append(checkpoint)
+            key = (
+                dev_metrics["safety_rate"] >= 1.0,
+                dev_metrics["success_rate"],
+                -dev_metrics["average_steps"],
+                -float(completed_episode),
+            )
+            if best_key is None or key > best_key:
+                best_key = key
+                best_state = copy.deepcopy(model.state_dict())
+                selected_episode = completed_episode
+    if best_state is None:
+        raise ValueError("REINFORCE produced no dev checkpoint")
+    model.load_state_dict(best_state)
+    selected_metrics = next(
+        item for item in checkpoint_metrics if item["episode"] == float(selected_episode)
+    )
     metrics = {
         "episodes": float(episodes),
         "mean_return": sum(returns) / len(returns),
         "success_rate": successes / episodes,
         "invalid_actions": float(invalid_actions),
         "average_steps": sum(episode_steps) / len(episode_steps),
+        "selected_episode": float(selected_episode),
+        "selected_dev_success_rate": selected_metrics["dev_success_rate"],
+        "selected_dev_safety_rate": selected_metrics["dev_safety_rate"],
+        "selected_dev_average_steps": selected_metrics["dev_average_steps"],
+        "dev_checkpoint_count": float(len(checkpoint_metrics)),
     }
     path_name = f"output/phase12/weights-reinforce-{seed}.json"
     result = TrainResult(
@@ -583,6 +695,7 @@ def train_reinforce(
             metrics,
             {"learning_rate": 0.001, "gamma": 0.95, "episodes": episodes},
             path_name,
+            checkpoint_metrics=tuple(checkpoint_metrics),
         ),
         tuple(returns),
     )

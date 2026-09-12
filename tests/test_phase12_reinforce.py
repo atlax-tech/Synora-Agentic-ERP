@@ -34,3 +34,14 @@ def test_reinforce_rejects_unbounded_episode_count() -> None:
     sft = train_sft(manifest, seed=17, max_epochs=1, patience=1)
     with pytest.raises(ValueError, match="episode bound"):
         train_reinforce(manifest, sft.model, episodes=301)
+
+
+def test_reinforce_records_periodic_dev_checkpoints_and_selection() -> None:
+    manifest = build_synthetic_manifest("reinforce-test")
+    sft = train_sft(manifest, seed=17, max_epochs=2, patience=1)
+    result = train_reinforce(manifest, sft.model, seed=17, episodes=26)
+    checkpoints = result.artifact.checkpoint_metrics
+    assert [int(item["episode"]) for item in checkpoints] == [25, 26]
+    selected = int(result.artifact.metrics["selected_episode"])
+    assert selected in {25, 26}
+    assert result.artifact.metrics["selected_dev_safety_rate"] >= 0.0
