@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 
 import pytest
 from agent_runtime.providers import ProviderError, ProviderMessage, ProviderResponse
@@ -9,6 +10,7 @@ from agent_runtime.providers import ProviderError, ProviderMessage, ProviderResp
 from labs.self_improvement.data import build_synthetic_manifest
 from labs.self_improvement.evaluation import (
     CallBudget,
+    ReservationLedger,
     _call_provider,
     aggregate,
     evaluate_replay_cases,
@@ -115,6 +117,52 @@ def test_three_blocking_failures_stop_the_batch() -> None:
     assert stopped.calls == 0
     assert provider.calls == 3
     assert budget.used == 3
+
+
+def test_reservation_ledger_survives_restart_and_blocks_reuse(tmp_path: Path) -> None:
+    ledger = ReservationLedger(tmp_path / "reservations.jsonl")
+    budget = CallBudget(maximum=2, ledger=ledger, batch_id="batch-a")
+    assert budget.reserve("repeat:1:case:case-a") == 1
+    restarted = CallBudget(
+        maximum=2,
+        ledger=ReservationLedger(tmp_path / "reservations.jsonl"),
+        batch_id="batch-a",
+    )
+    assert restarted.used == 1
+    provider = FakeProvider('{"action":"FINISH"}')
+    call = asyncio.run(
+        _call_provider(
+            provider,
+            '{"task":"x"}',
+            restarted,
+            reservation_key="repeat:1:case:case-a",
+        )
+    )
+    assert call.failure_code == "CALL_RESERVATION_EXISTS"
+    assert not call.attempted
+    assert provider.calls == 0
+
+
+def test_recorded_reservations_are_not_counted_twice_after_restart(tmp_path: Path) -> None:
+    ledger = ReservationLedger(tmp_path / "reservations.jsonl")
+    budget = CallBudget(maximum=2, ledger=ledger, batch_id="batch-a")
+    provider = FakeProvider('{"action":"FINISH"}')
+    call = asyncio.run(
+        _call_provider(
+            provider,
+            '{"task":"x"}',
+            budget,
+            reservation_key="repeat:1:case:case-a",
+        )
+    )
+    assert call.attempted
+    ledger.mark_recorded(("repeat:1:case:case-a",))
+    restarted = CallBudget(
+        maximum=2,
+        ledger=ReservationLedger(tmp_path / "reservations.jsonl"),
+        batch_id="batch-b",
+    )
+    assert restarted.used == 0
 
 
 def test_provider_call_wall_clock_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:

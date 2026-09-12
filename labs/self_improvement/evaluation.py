@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import random
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal, Protocol
 
 from agent_runtime.providers import ProviderError, ProviderMessage
@@ -28,6 +30,7 @@ MAX_OUTPUT_TOKENS = 512
 MAX_OUTPUT_CHARS = MAX_OUTPUT_TOKENS * 4
 MAX_CALL_SECONDS = 60.0
 MAX_MODEL_CALLS = 1_200
+RESERVATION_LEDGER_NAME = "live-reservations.jsonl"
 _BATCH_BLOCKING_FAILURES = frozenset(
     {
         "AUTHENTICATION_ERROR",
@@ -47,12 +50,135 @@ class BudgetExceeded(RuntimeError):
     """No provider call is made after the cumulative budget is exhausted."""
 
 
+_LEDGER_STATES = frozenset({"RESERVED", "COMPLETED", "FAILED", "UNKNOWN", "RECORDED"})
+
+
+@dataclass
+class ReservationLedger:
+    """Append-only provider reservation state shared by live processes."""
+
+    path: Path
+
+    def __post_init__(self) -> None:
+        if self.path.exists() and self.path.is_symlink():
+            raise ValueError("reservation ledger cannot be a symlink")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._states = self._read()
+
+    def _read(self) -> dict[str, tuple[str, str]]:
+        if not self.path.exists():
+            return {}
+        if not self.path.is_file() or self.path.is_symlink():
+            raise ValueError("reservation ledger must be a regular file")
+        states: dict[str, tuple[str, str]] = {}
+        for line in self.path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            if not isinstance(payload, dict) or set(payload) != {
+                "schema_version",
+                "batch_id",
+                "reservation_key",
+                "state",
+            }:
+                raise ValueError("reservation ledger entry is invalid")
+            if payload["schema_version"] != "1":
+                raise ValueError("reservation ledger schema is unsupported")
+            batch_id = payload["batch_id"]
+            key = payload["reservation_key"]
+            state = payload["state"]
+            if (
+                not isinstance(batch_id, str)
+                or not batch_id
+                or len(batch_id) > 120
+                or not isinstance(key, str)
+                or not key
+                or len(key) > 240
+                or not isinstance(state, str)
+                or state not in _LEDGER_STATES
+            ):
+                raise ValueError("reservation ledger values are invalid")
+            previous = states.get(key)
+            if previous is not None and previous[1] == "RECORDED":
+                raise ValueError("reservation ledger contains an event after RECORDED")
+            if previous is not None and previous[0] != batch_id:
+                raise ValueError("reservation key is bound to multiple batches")
+            if previous is not None and previous[1] != "RESERVED" and state == "RESERVED":
+                raise ValueError("reservation cannot return to RESERVED")
+            states[key] = (batch_id, state)
+        return states
+
+    @property
+    def reservation_count(self) -> int:
+        return len(self._states)
+
+    @property
+    def unmaterialized_count(self) -> int:
+        return sum(state != "RECORDED" for _, state in self._states.values())
+
+    @property
+    def keys(self) -> tuple[str, ...]:
+        return tuple(self._states)
+
+    def _append(self, batch_id: str, reservation_key: str, state: str) -> None:
+        payload = {
+            "schema_version": "1",
+            "batch_id": batch_id,
+            "reservation_key": reservation_key,
+            "state": state,
+        }
+        encoded = (json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n").encode("utf-8")
+        if self.path.is_symlink():
+            raise ValueError("reservation ledger cannot be a symlink")
+        descriptor = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            os.write(descriptor, encoded)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def reserve(self, batch_id: str, reservation_key: str) -> None:
+        if not batch_id or len(batch_id) > 120 or "\n" in batch_id:
+            raise ValueError("batch id is invalid")
+        if not reservation_key or len(reservation_key) > 240 or "\n" in reservation_key:
+            raise ValueError("reservation key is invalid")
+        if reservation_key in self._states:
+            raise BudgetExceeded("CALL_RESERVATION_EXISTS")
+        self._append(batch_id, reservation_key, "RESERVED")
+        self._states[reservation_key] = (batch_id, "RESERVED")
+
+    def finish(self, reservation_key: str, state: str) -> None:
+        if state not in {"COMPLETED", "FAILED", "UNKNOWN"}:
+            raise ValueError("reservation terminal state is invalid")
+        previous = self._states.get(reservation_key)
+        if previous is None:
+            raise ValueError("reservation key is unknown")
+        if previous[1] != "RESERVED":
+            raise ValueError("reservation is already finalized")
+        self._append(previous[0], reservation_key, state)
+        self._states[reservation_key] = (previous[0], state)
+
+    def mark_recorded(self, reservation_keys: Iterable[str]) -> None:
+        for reservation_key in reservation_keys:
+            previous = self._states.get(reservation_key)
+            if previous is None:
+                raise ValueError("reservation key is unknown")
+            if previous[1] == "RECORDED":
+                continue
+            if previous[1] not in {"COMPLETED", "FAILED", "UNKNOWN"}:
+                raise ValueError("reservation must be finalized before recording")
+            self._append(previous[0], reservation_key, "RECORDED")
+            self._states[reservation_key] = (previous[0], "RECORDED")
+
+
 @dataclass
 class CallBudget:
     maximum: int = MAX_MODEL_CALLS
     used: int = 0
     consecutive_blocking_failures: int = 0
     blocked: bool = False
+    ledger: ReservationLedger | None = None
+    batch_id: str = "phase12-default-batch"
 
     def __post_init__(self) -> None:
         if self.maximum < 0 or self.maximum > MAX_MODEL_CALLS:
@@ -61,14 +187,27 @@ class CallBudget:
             raise ValueError("budget used count is outside the configured limit")
         if self.consecutive_blocking_failures < 0:
             raise ValueError("blocking failure count cannot be negative")
+        if not self.batch_id or len(self.batch_id) > 120 or "\n" in self.batch_id:
+            raise ValueError("batch id is invalid")
+        if self.ledger is not None:
+            self.used += self.ledger.unmaterialized_count
+            if self.used > self.maximum:
+                raise ValueError("ledger reservations exceed the configured budget")
 
-    def reserve(self) -> int:
+    def reserve(self, reservation_key: str | None = None) -> int:
         if self.blocked:
             raise BudgetExceeded("MODEL_BATCH_BLOCKED")
         if self.used >= self.maximum:
             raise BudgetExceeded("MODEL_CALL_BUDGET")
+        key = reservation_key or f"{self.batch_id}:call-{self.used + 1}"
+        if self.ledger is not None:
+            self.ledger.reserve(self.batch_id, key)
         self.used += 1
         return self.used
+
+    def finish(self, reservation_key: str | None, state: str) -> None:
+        if self.ledger is not None and reservation_key is not None:
+            self.ledger.finish(reservation_key, state)
 
     def note(self, failure_code: str | None) -> None:
         """Stop a batch after three consecutive connection/auth/protocol failures."""
@@ -140,11 +279,14 @@ async def _call_provider(
     provider: LiveProvider,
     prompt: str,
     budget: CallBudget,
+    *,
+    reservation_key: str | None = None,
 ) -> LiveCall:
     if len(prompt) > MAX_INPUT_CHARS:
         return LiveCall(None, "REJECTED", "INPUT_TOO_LARGE", None, None, 0.0)
+    key = reservation_key or f"{budget.batch_id}:call-{budget.used + 1}"
     try:
-        budget.reserve()
+        budget.reserve(key)
     except BudgetExceeded as error:
         return LiveCall(None, "UNKNOWN", str(error), None, None, 0.0)
     start = time.perf_counter()
@@ -167,6 +309,7 @@ async def _call_provider(
             (time.perf_counter() - start) * 1000,
             True,
         )
+        budget.finish(key, "UNKNOWN")
         budget.note(call.failure_code)
         return call
     except TimeoutError:
@@ -179,30 +322,39 @@ async def _call_provider(
             (time.perf_counter() - start) * 1000,
             True,
         )
+        budget.finish(key, "UNKNOWN")
         budget.note(call.failure_code)
         return call
     except OSError as error:
+        failure_code = (
+            "CONNECTION_ERROR"
+            if isinstance(error, ConnectionError)
+            else type(error).__name__.upper()
+        )
         call = LiveCall(
             None,
             "UNKNOWN",
-            type(error).__name__.upper(),
+            failure_code,
             None,
             None,
             (time.perf_counter() - start) * 1000,
             True,
         )
+        budget.finish(key, "UNKNOWN")
         budget.note(call.failure_code)
         return call
     elapsed = (time.perf_counter() - start) * 1000
     text = getattr(response, "text", None)
     if not isinstance(text, str) or not text:
         call = LiveCall(None, "UNKNOWN", "MODEL_RESPONSE_EMPTY", None, None, elapsed, True)
+        budget.finish(key, "UNKNOWN")
         budget.note(call.failure_code)
         return call
     try:
         action = _parse_action(text)
     except ValueError as error:
         call = LiveCall(None, "FAILED", str(error), None, None, elapsed, True)
+        budget.finish(key, "FAILED")
         budget.note(call.failure_code)
         return call
     prompt_tokens = getattr(response, "prompt_tokens", 0)
@@ -217,6 +369,7 @@ async def _call_provider(
         elapsed,
         True,
     )
+    budget.finish(key, "COMPLETED")
     budget.note(None)
     return call
 
@@ -246,7 +399,8 @@ def run_live_baseline(
         ensure_ascii=True,
         separators=(",", ":"),
     )
-    call = asyncio.run(_call_provider(provider, prompt, budget))
+    reservation_key = f"repeat:{repeat}:case:{case.case_id}"
+    call = asyncio.run(_call_provider(provider, prompt, budget, reservation_key=reservation_key))
     return _live_record(case, call, code_version, model, repeat, dataset_id, dataset_digest)
 
 
@@ -338,7 +492,10 @@ def run_live_baselines(
                     ensure_ascii=True,
                     separators=(",", ":"),
                 )
-                call = await _call_provider(provider, prompt, budget)
+                reservation_key = f"repeat:{repeat}:case:{case.case_id}"
+                call = await _call_provider(
+                    provider, prompt, budget, reservation_key=reservation_key
+                )
                 records.append(
                     _live_record(
                         case,

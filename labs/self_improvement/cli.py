@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 from .artifacts import (
@@ -40,7 +41,9 @@ from .contracts import (
 )
 from .data import audit_historical_failures, build_synthetic_manifest
 from .evaluation import (
+    RESERVATION_LEDGER_NAME,
     CallBudget,
+    ReservationLedger,
     best_of_n_replay,
     evaluate_replay_cases,
     reflection_replay,
@@ -209,8 +212,16 @@ def _existing_calls(root: Path) -> int:
     if not output.exists():
         return 0
     for path in output.glob("*.jsonl"):
+        if path.name == RESERVATION_LEDGER_NAME:
+            continue
         total += sum(record.calls for record in read_records(root, str(path.relative_to(root))))
     return total
+
+
+def _reservation_key_for_record(record: ExperimentRecord) -> str:
+    stem = record.experiment_id.removeprefix("phase12-exp-live-")
+    case_id, _ = stem.rsplit("-", 1)
+    return f"repeat:{record.repeat}:case:{case_id}"
 
 
 def _validate_lab_version(root: Path, version_id: str) -> None:
@@ -265,7 +276,14 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             provider = provider_for_role("assist")
         except ProviderError as error:
             raise RuntimeError(f"live provider unavailable: {error.failure_code}") from error
-        budget = CallBudget(maximum=1_200, used=_existing_calls(args.root))
+        batch_id = args.batch_id or f"cli-{code_version()}-{time.time_ns()}"
+        ledger = ReservationLedger(args.root / PHASE12_RELATIVE_ROOT / RESERVATION_LEDGER_NAME)
+        budget = CallBudget(
+            maximum=1_200,
+            used=_existing_calls(args.root),
+            ledger=ledger,
+            batch_id=batch_id,
+        )
         cases = tuple(case for case in manifest.cases if case.split == args.split)
         records = run_live_baselines(
             cases,
@@ -280,6 +298,11 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
     path = write_records(
         args.root, f"evaluation-{args.engine}-{args.method}-{args.split}.jsonl", records
     )
+    if args.engine == "live":
+        ledger = ReservationLedger(args.root / PHASE12_RELATIVE_ROOT / RESERVATION_LEDGER_NAME)
+        ledger.mark_recorded(
+            tuple(_reservation_key_for_record(record) for record in records if record.calls > 0)
+        )
     return {
         "path": str(path),
         "records": len(records),
@@ -328,7 +351,9 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
                 "candidate references unaudited historical failures: " + ", ".join(unknown_sources)
             )
         candidates_by_id[candidate.candidate_id] = candidate
-    record_files = sorted(output.glob("*.jsonl"))
+    record_files = sorted(
+        path for path in output.glob("*.jsonl") if path.name != RESERVATION_LEDGER_NAME
+    )
     record_count = 0
     all_records: list[ExperimentRecord] = []
     for path in record_files:
@@ -400,6 +425,8 @@ def _cmd_report(args: argparse.Namespace) -> dict[str, object]:
     output = args.root / PHASE12_RELATIVE_ROOT
     records: list[ExperimentRecord] = []
     for path in sorted(output.glob("*.jsonl")):
+        if path.name == RESERVATION_LEDGER_NAME:
+            continue
         records.extend(read_records(args.root, str(path.relative_to(args.root))))
     verify_records(records, manifest)
     training_artifacts = [
@@ -439,6 +466,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="baseline",
     )
     evaluate.add_argument("--repeats", type=int, default=1)
+    evaluate.add_argument("--batch-id", default=None)
     select = sub.add_parser("select-lab")
     select.add_argument("--candidate-id", required=True)
     select.add_argument("--previous-id", default="native-agent/A")
