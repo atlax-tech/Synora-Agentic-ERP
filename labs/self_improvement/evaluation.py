@@ -28,6 +28,9 @@ _BATCH_BLOCKING_FAILURES = frozenset(
         "NETWORK_ERROR",
         "PROTOCOL_ERROR",
         "PROVIDER_UNAVAILABLE",
+        "TRANSPORT_ERROR",
+        "TIMEOUT",
+        "MODEL_CALL_TIMEOUT",
     }
 )
 

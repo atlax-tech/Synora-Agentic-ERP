@@ -99,7 +99,7 @@ def test_three_blocking_failures_stop_the_batch() -> None:
     case = next(
         case for case in build_synthetic_manifest("eval-test").cases if case.kind == "MISSING_INPUT"
     )
-    provider = FailingProvider("CONNECTION_ERROR")
+    provider = FailingProvider("TRANSPORT_ERROR")
     budget = CallBudget(maximum=10)
     for _ in range(3):
         run_live_baseline(case, provider, budget, code_version="eval-test", model="fake")
