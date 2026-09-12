@@ -1,7 +1,7 @@
 {
   "action_version": "phase12-actions-v1",
   "artifact_id": "phase12-train-dpo-seed-17",
-  "code_version": "2e10b56",
+  "code_version": "41bcf93",
   "config": {
     "beta": 0.1,
     "epochs": 100,
@@ -10,16 +10,16 @@
   "dataset_digest": "5abe51454c4408e2235209323c6dd8d9d0ffec5b9235f6ac1cb3d933beeb19eb",
   "dataset_id": "phase12-synthetic-v1",
   "feature_version": "phase12-features-v1",
-  "initial_weight_sha256": "99f3e59b0078ccce47bf716d3d0e95992f9a86076a56ea84ed1086577f6557f7",
+  "initial_weight_sha256": "11f402273ce1e86c1a2c879f8328c4b7b1302c988d2ea59fbcde3eb0d533d1a2",
   "method": "dpo",
   "metrics": {
     "dev_preference_pairs": 20.0,
-    "final_dpo_loss": 0.43033909797668457,
+    "final_dpo_loss": 0.40642958879470825,
     "preference_pairs": 60.0
   },
-  "reference_weight_sha256": "99f3e59b0078ccce47bf716d3d0e95992f9a86076a56ea84ed1086577f6557f7",
+  "reference_weight_sha256": "11f402273ce1e86c1a2c879f8328c4b7b1302c988d2ea59fbcde3eb0d533d1a2",
   "schema_version": "1",
   "seed": 17,
   "weight_path": "output/phase12/weights-dpo-17.json",
-  "weight_sha256": "ea6478c08fd3d59f955e2aa4141a8063af7f15ed5c7ebfb6ee7923ba97344024"
+  "weight_sha256": "8b48cdd8e77560f5e03f83585abcf4f54427fa1b5c8a5388d433b3e7c88f7c78"
 }
