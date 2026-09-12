@@ -1,0 +1,7 @@
+{
+  "action": "ROLLBACK",
+  "content_sha256": "e9df312a1d13378d46dd4a5f99a5f610b5c035bd98e3ec764645d50c22537691",
+  "schema_version": "1",
+  "selection_id": "phase12-selection-f1ca8e16e3790b2c",
+  "version_id": "skill-registry/v1"
+}
