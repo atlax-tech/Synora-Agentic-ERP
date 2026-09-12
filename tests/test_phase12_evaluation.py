@@ -165,6 +165,40 @@ def test_recorded_reservations_are_not_counted_twice_after_restart(tmp_path: Pat
     assert restarted.used == 0
 
 
+def test_new_batch_can_reserve_the_same_case_after_a_prior_batch(tmp_path: Path) -> None:
+    path = tmp_path / "reservations.jsonl"
+    provider = FakeProvider('{"action":"FINISH"}')
+    first = CallBudget(
+        maximum=3,
+        ledger=ReservationLedger(path),
+        batch_id="batch-a",
+    )
+    asyncio.run(
+        _call_provider(
+            provider,
+            '{"task":"x"}',
+            first,
+            reservation_key="batch-a:repeat:1:case:case-a",
+        )
+    )
+    ReservationLedger(path).mark_recorded(("batch-a:repeat:1:case:case-a",))
+    second = CallBudget(
+        maximum=3,
+        ledger=ReservationLedger(path),
+        batch_id="batch-b",
+    )
+    call = asyncio.run(
+        _call_provider(
+            provider,
+            '{"task":"x"}',
+            second,
+            reservation_key="batch-b:repeat:1:case:case-a",
+        )
+    )
+    assert call.attempted
+    assert provider.calls == 2
+
+
 def test_provider_call_wall_clock_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     import labs.self_improvement.evaluation as evaluation
 

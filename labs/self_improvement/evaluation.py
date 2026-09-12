@@ -103,8 +103,13 @@ class ReservationLedger:
                 raise ValueError("reservation ledger contains an event after RECORDED")
             if previous is not None and previous[0] != batch_id:
                 raise ValueError("reservation key is bound to multiple batches")
-            if previous is not None and previous[1] != "RESERVED" and state == "RESERVED":
-                raise ValueError("reservation cannot return to RESERVED")
+            if previous is not None:
+                if previous[1] != "RESERVED" and state != "RECORDED":
+                    raise ValueError("reservation has more than one terminal event")
+                if previous[1] == "RESERVED" and state == "RECORDED":
+                    raise ValueError("reservation must have a terminal event first")
+                if state == "RESERVED":
+                    raise ValueError("reservation cannot return to RESERVED")
             states[key] = (batch_id, state)
         return states
 
@@ -119,6 +124,9 @@ class ReservationLedger:
     @property
     def keys(self) -> tuple[str, ...]:
         return tuple(self._states)
+
+    def states(self) -> tuple[tuple[str, str], ...]:
+        return tuple(self._states.items())
 
     def _append(self, batch_id: str, reservation_key: str, state: str) -> None:
         payload = {
@@ -169,6 +177,14 @@ class ReservationLedger:
                 raise ValueError("reservation must be finalized before recording")
             self._append(previous[0], reservation_key, "RECORDED")
             self._states[reservation_key] = (previous[0], "RECORDED")
+
+    def mark_recorded_matching(self, suffixes: Iterable[str]) -> None:
+        wanted = tuple(suffixes)
+        self.mark_recorded(
+            key
+            for key, (_, state) in self._states.items()
+            if state != "RECORDED" and any(key.endswith(suffix) for suffix in wanted)
+        )
 
 
 @dataclass
@@ -399,7 +415,7 @@ def run_live_baseline(
         ensure_ascii=True,
         separators=(",", ":"),
     )
-    reservation_key = f"repeat:{repeat}:case:{case.case_id}"
+    reservation_key = f"{budget.batch_id}:repeat:{repeat}:case:{case.case_id}"
     call = asyncio.run(_call_provider(provider, prompt, budget, reservation_key=reservation_key))
     return _live_record(case, call, code_version, model, repeat, dataset_id, dataset_digest)
 
@@ -492,7 +508,7 @@ def run_live_baselines(
                     ensure_ascii=True,
                     separators=(",", ":"),
                 )
-                reservation_key = f"repeat:{repeat}:case:{case.case_id}"
+                reservation_key = f"{budget.batch_id}:repeat:{repeat}:case:{case.case_id}"
                 call = await _call_provider(
                     provider, prompt, budget, reservation_key=reservation_key
                 )

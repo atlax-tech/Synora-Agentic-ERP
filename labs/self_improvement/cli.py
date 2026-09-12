@@ -337,7 +337,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
     )
     if args.engine == "live":
         ledger = ReservationLedger(args.root / PHASE12_RELATIVE_ROOT / RESERVATION_LEDGER_NAME)
-        ledger.mark_recorded(
+        ledger.mark_recorded_matching(
             tuple(_reservation_key_for_record(record) for record in records if record.calls > 0)
         )
     return {
@@ -408,6 +408,13 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
             if record_candidate is None or record_candidate.kind != expected_kind:
                 raise ValueError("candidate experiment references the wrong artifact")
     verify_records(all_records, manifest)
+    ledger_path = output / RESERVATION_LEDGER_NAME
+    if ledger_path.exists():
+        ledger = ReservationLedger(ledger_path)
+        if any(state != "RECORDED" for _, state in ledger.states()):
+            raise ValueError("live reservation ledger contains an unrecorded call")
+        if _existing_calls(args.root) > 1_200:
+            raise ValueError("cumulative model call budget exceeded")
     selection_dir = output / "selections"
     selection_paths = sorted(selection_dir.glob("*.json")) if selection_dir.exists() else []
     candidate_ids = {path.stem for path in candidate_paths}
