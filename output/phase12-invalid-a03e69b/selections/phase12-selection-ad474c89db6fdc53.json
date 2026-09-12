@@ -1,0 +1,12 @@
+{
+  "action": "SELECT",
+  "created_at": "2026-09-12T05:20:03.629749Z",
+  "evidence_ids": [
+    "phase12-exp-replay-prompt-candidate-1-phase12-complete-read-06-v1"
+  ],
+  "previous_id": "native-agent/A",
+  "reason": "dev verifier and safety equal baseline; hold as lab candidate pending frozen test",
+  "schema_version": "1",
+  "selected_id": "phase12-prompt-609c62e2b621bb14",
+  "selection_id": "phase12-selection-ad474c89db6fdc53"
+}

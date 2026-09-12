@@ -1,0 +1,14 @@
+{
+  "boundary_sha256": "4609b54a1c651f11d166c2244a8ffdeaaba9e6e763956d5a985bf16772582a35",
+  "candidate_id": "phase12-prompt-609c62e2b621bb14",
+  "content": "Verify the highest-impact unresolved read-only fact before finishing.",
+  "content_sha256": "609c62e2b621bb142c58a47a1c390d5de4afd905240eca4624117b42be43ce43",
+  "created_at": "2026-09-12T05:25:02.704326Z",
+  "kind": "PROMPT",
+  "parent_id": "native-agent/A",
+  "schema_version": "1",
+  "source_case_ids": [
+    "phase12-synthetic"
+  ],
+  "status": "PENDING"
+}

@@ -1,0 +1,27 @@
+{
+  "action_version": "phase12-actions-v1",
+  "artifact_id": "phase12-train-reinforce-seed-43",
+  "code_version": "13872f1",
+  "config": {
+    "episodes": 300,
+    "gamma": 0.95,
+    "learning_rate": 0.001
+  },
+  "dataset_digest": "5abe51454c4408e2235209323c6dd8d9d0ffec5b9235f6ac1cb3d933beeb19eb",
+  "dataset_id": "phase12-synthetic-v1",
+  "feature_version": "phase12-features-v1",
+  "initial_weight_sha256": "2d99457114b35ba68b8b1551d773ddfd547a253f233e14ce8250f98e1e976635",
+  "method": "reinforce",
+  "metrics": {
+    "average_steps": 1.5766666666666667,
+    "episodes": 300.0,
+    "invalid_actions": 0.0,
+    "mean_return": 0.4498,
+    "success_rate": 0.7433333333333333
+  },
+  "reference_weight_sha256": null,
+  "schema_version": "1",
+  "seed": 43,
+  "weight_path": "output/phase12/weights-reinforce-43.json",
+  "weight_sha256": "7083def8ab19a49506fec8dcfe4d09bdb034125715861bc3e03aec64382ef199"
+}

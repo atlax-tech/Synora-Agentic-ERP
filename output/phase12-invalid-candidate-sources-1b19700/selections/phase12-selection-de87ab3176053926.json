@@ -1,0 +1,12 @@
+{
+  "action": "ROLLBACK",
+  "created_at": "2026-09-12T05:25:21.191127Z",
+  "evidence_ids": [
+    "phase12-exp-replay-baseline-1-phase12-complete-read-06-v1"
+  ],
+  "previous_id": "phase12-prompt-609c62e2b621bb14",
+  "reason": "no dev gain; restore native baseline before held-out freeze",
+  "schema_version": "1",
+  "selected_id": "native-agent/A",
+  "selection_id": "phase12-selection-de87ab3176053926"
+}
