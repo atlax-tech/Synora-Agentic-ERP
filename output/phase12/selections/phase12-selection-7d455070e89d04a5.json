@@ -1,0 +1,16 @@
+{
+  "action": "ROLLBACK",
+  "created_at": "2026-09-12T06:21:15.252806Z",
+  "evidence_ids": [
+    "phase12-exp-replay-prompt-candidate-1-phase12-complete-read-06-v1"
+  ],
+  "previous_id": "phase12-prompt-609c62e2b621bb14",
+  "reason": "restore native baseline",
+  "schema_version": "1",
+  "selected_id": "native-agent/A",
+  "selection_id": "phase12-selection-7d455070e89d04a5",
+  "version_digests": {
+    "native-agent/A": "1a676172e121c37910512c73b4a77cf3955cad7bca2c659f342d5b2c6e9dbda4",
+    "phase12-prompt-609c62e2b621bb14": "609c62e2b621bb142c58a47a1c390d5de4afd905240eca4624117b42be43ce43"
+  }
+}
