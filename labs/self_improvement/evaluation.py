@@ -360,6 +360,7 @@ def evaluate_replay_cases(
     dataset_id: str = "phase12-synthetic-v1",
     dataset_digest: str | None = None,
     repeat: int = 1,
+    candidate_id: str | None = None,
 ) -> tuple[ExperimentRecord, ...]:
     if repeat < 1 or repeat > 20:
         raise ValueError("repeat must be between one and twenty")
@@ -378,6 +379,7 @@ def evaluate_replay_cases(
                 dataset_digest=bound_digest,
                 split=case.split,
                 method=method,
+                candidate_id=candidate_id,
                 model=model,
                 repeat=repeat,
                 status="SUCCEEDED" if result.verifier_passed else "REJECTED",

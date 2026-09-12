@@ -122,6 +122,9 @@ def test_cli_rejects_tampered_training_metadata(tmp_path: Path) -> None:
 
 def test_cli_candidate_method_and_repeats_are_bounded(tmp_path: Path) -> None:
     assert main(["--root", str(tmp_path), "prepare-data"]) == 0
+    _write_historical_failure(tmp_path)
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
+    assert main(["--root", str(tmp_path), "make-candidates"]) == 0
     assert (
         main(
             [

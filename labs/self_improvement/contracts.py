@@ -161,6 +161,9 @@ class ExperimentRecord(StrictModel):
     dataset_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     split: SplitName
     method: str = Field(min_length=1, max_length=80)
+    candidate_id: str | None = Field(
+        default=None, pattern=r"^phase12-(prompt|skill)-[a-z0-9-]{3,80}$"
+    )
     model: str = Field(min_length=1, max_length=160)
     repeat: int = Field(ge=1, le=20)
     status: Literal["SUCCEEDED", "FAILED", "UNKNOWN", "REJECTED"]

@@ -30,6 +30,7 @@ from .candidates import (
     write_selection,
 )
 from .contracts import (
+    CandidateVersion,
     DatasetCase,
     DatasetManifest,
     ExperimentRecord,
@@ -128,7 +129,12 @@ def _replay_record(
 
 
 def _replay_records(
-    manifest: DatasetManifest, split: str, method: str, version: str, repeats: int = 1
+    manifest: DatasetManifest,
+    split: str,
+    method: str,
+    version: str,
+    repeats: int = 1,
+    candidate_id: str | None = None,
 ) -> tuple[ExperimentRecord, ...]:
     if repeats < 1 or repeats > 3:
         raise ValueError("replay repeats must be between one and three")
@@ -145,6 +151,7 @@ def _replay_records(
                     dataset_id=manifest.dataset_id,
                     dataset_digest=manifest.dataset_digest,
                     repeat=repeat,
+                    candidate_id=candidate_id,
                 )[0]
                 records.append(result)
                 continue
@@ -170,6 +177,23 @@ def _replay_records(
                 )
             )
     return tuple(records)
+
+
+def _candidate_for_method(root: Path, method: str) -> CandidateVersion:
+    expected_kind = "PROMPT" if method == "prompt-candidate" else "SKILL"
+    candidate_dir = root / PHASE12_RELATIVE_ROOT / "candidates"
+    paths = sorted(candidate_dir.glob("*.json")) if candidate_dir.exists() else []
+    matching = tuple(
+        read_candidate(root / PHASE12_RELATIVE_ROOT, path.stem)
+        for path in paths
+        if path.stem.startswith("phase12-prompt-") or path.stem.startswith("phase12-skill-")
+    )
+    matching = tuple(candidate for candidate in matching if candidate.kind == expected_kind)
+    if len(matching) == 1:
+        return matching[0]
+    if not matching:
+        raise FileNotFoundError(f"no {expected_kind} candidate artifact is available")
+    raise RuntimeError(f"{method} requires one frozen candidate artifact; found {len(matching)}")
 
 
 def _existing_calls(root: Path) -> int:
@@ -210,8 +234,16 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
     if args.repeats < 1 or args.repeats > 3:
         raise ValueError("evaluation repeats must be between one and three")
     if args.engine == "replay":
+        candidate_id = None
+        if args.method in {"prompt-candidate", "skill-candidate"}:
+            candidate_id = _candidate_for_method(args.root, args.method).candidate_id
         records = _replay_records(
-            manifest, args.split, args.method, code_version(), repeats=args.repeats
+            manifest,
+            args.split,
+            args.method,
+            code_version(),
+            repeats=args.repeats,
+            candidate_id=candidate_id,
         )
     else:
         if args.method != "baseline":
@@ -270,17 +302,9 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
     verify_manifest(manifest)
     reviewed_ids = {record.case_id for record in _read_verified_audit(args.root)}
     output = args.root / PHASE12_RELATIVE_ROOT
-    record_files = sorted(output.glob("*.jsonl"))
-    record_count = 0
-    all_records: list[ExperimentRecord] = []
-    for path in record_files:
-        records = read_records(args.root, str(path.relative_to(args.root)))
-        verify_records(records, manifest)
-        all_records.extend(records)
-        record_count += len(records)
-    verify_records(all_records, manifest)
     candidate_dir = output / "candidates"
     candidate_paths = sorted(candidate_dir.glob("*.json")) if candidate_dir.exists() else []
+    candidates_by_id: dict[str, CandidateVersion] = {}
     for path in candidate_paths:
         if path.is_symlink():
             raise ValueError("candidate artifact cannot be a symlink")
@@ -292,6 +316,25 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
             raise ValueError(
                 "candidate references unaudited historical failures: " + ", ".join(unknown_sources)
             )
+        candidates_by_id[candidate.candidate_id] = candidate
+    record_files = sorted(output.glob("*.jsonl"))
+    record_count = 0
+    all_records: list[ExperimentRecord] = []
+    for path in record_files:
+        records = read_records(args.root, str(path.relative_to(args.root)))
+        verify_records(records, manifest)
+        all_records.extend(records)
+        record_count += len(records)
+        for record in records:
+            if record.method not in {"prompt-candidate", "skill-candidate"}:
+                continue
+            if record.candidate_id is None:
+                raise ValueError("candidate experiment is missing candidate_id")
+            record_candidate = candidates_by_id.get(record.candidate_id)
+            expected_kind = "PROMPT" if record.method == "prompt-candidate" else "SKILL"
+            if record_candidate is None or record_candidate.kind != expected_kind:
+                raise ValueError("candidate experiment references the wrong artifact")
+    verify_records(all_records, manifest)
     selection_dir = output / "selections"
     selection_paths = sorted(selection_dir.glob("*.json")) if selection_dir.exists() else []
     candidate_ids = {path.stem for path in candidate_paths}
