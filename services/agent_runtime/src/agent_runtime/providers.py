@@ -204,6 +204,7 @@ class Provider(Protocol):
         model: str | None = None,
         max_tokens: int | None = None,
         response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
     ) -> ProviderResponse: ...
 
 
@@ -285,8 +286,9 @@ class DeterministicProvider:
         model: str | None = None,
         max_tokens: int | None = None,
         response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
     ) -> ProviderResponse:
-        del tools, model, max_tokens, response_format
+        del tools, model, max_tokens, response_format, reasoning_effort
         if not messages:
             raise ProviderError("provider requires at least one message")
         if self._scripted:
@@ -407,12 +409,18 @@ class OpenAICompatibleProvider:
         model: str | None = None,
         max_tokens: int | None = None,
         response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
     ) -> ProviderResponse:
         if not messages:
             raise ProviderError(
                 "provider requires at least one message", failure_code="INVALID_REQUEST"
             )
+        if reasoning_effort is not None and reasoning_effort not in _REASONING_EFFORTS:
+            raise ValueError("provider reasoning_effort must be none, low, medium, high, or xhigh")
         requested_model = model or self._model
+        requested_reasoning_effort = (
+            self._reasoning_effort if reasoning_effort is None else reasoning_effort
+        )
         if self._wire_api == "responses":
             payload: dict[str, object] = {
                 "model": requested_model,
@@ -450,13 +458,13 @@ class OpenAICompatibleProvider:
                 payload["response_format"] = format_value
         if self._temperature is not None:
             payload["temperature"] = self._temperature
-        if self._reasoning_effort is not None:
+        if requested_reasoning_effort is not None:
             # xAI Responses uses an object; OpenAI-compatible chat endpoints
             # use the flat field. Neither value is treated as answer content.
             if self._wire_api == "responses":
-                payload["reasoning"] = {"effort": self._reasoning_effort}
+                payload["reasoning"] = {"effort": requested_reasoning_effort}
             else:
-                payload["reasoning_effort"] = self._reasoning_effort
+                payload["reasoning_effort"] = requested_reasoning_effort
         if tools:
             if self._wire_api == "responses":
                 payload["tools"] = [
@@ -649,14 +657,24 @@ class FailoverProvider:
         model: str | None,
         max_tokens: int | None,
         response_format: ProviderResponseFormat | None,
+        reasoning_effort: str | None,
     ) -> ProviderResponse:
         provider = self._providers[index]
+        if reasoning_effort is None:
+            return await provider.complete(
+                messages,
+                tools=tools,
+                model=model if index == 0 else None,
+                max_tokens=self._effective_max_tokens(index, max_tokens),
+                response_format=response_format,
+            )
         return await provider.complete(
             messages,
             tools=tools,
             model=model if index == 0 else None,
             max_tokens=self._effective_max_tokens(index, max_tokens),
             response_format=response_format,
+            reasoning_effort=reasoning_effort,
         )
 
     @staticmethod
@@ -680,6 +698,7 @@ class FailoverProvider:
         model: str | None = None,
         max_tokens: int | None = None,
         response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
     ) -> AsyncIterator[ProviderResponse]:
         """Yield one successful response per configured provider at most once.
 
@@ -700,6 +719,7 @@ class FailoverProvider:
                     model if index == 0 else None,
                     max_tokens,
                     response_format,
+                    reasoning_effort,
                 )
             except ProviderError as error:
                 if error.failure_code not in _FAILOVER_FAILURE_CODES:
@@ -720,6 +740,7 @@ class FailoverProvider:
         model: str | None = None,
         max_tokens: int | None = None,
         response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
     ) -> ProviderResponse:
         async for response in self.iter_candidates(
             messages,
@@ -727,6 +748,7 @@ class FailoverProvider:
             model,
             max_tokens,
             response_format,
+            reasoning_effort,
         ):
             return response
         raise ProviderError("no usable provider response", failure_code="NO_PROVIDER")

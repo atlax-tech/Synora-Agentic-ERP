@@ -197,6 +197,7 @@ class ExperimentRecord(StrictModel):
     failure_code: str | None = Field(default=None, max_length=120)
     prompt_tokens: int | None = Field(default=None, ge=0)
     completion_tokens: int | None = Field(default=None, ge=0)
+    response_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     elapsed_ms: float = Field(ge=0.0, le=3_600_000.0)
     calls: int = Field(ge=0, le=8)
 

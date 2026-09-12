@@ -61,10 +61,11 @@ class SequenceProvider:
     def __init__(self, *texts: str) -> None:
         self.texts = list(texts)
         self.prompts: list[str] = []
+        self.kwargs: list[dict[str, object]] = []
 
     async def complete(self, messages: list[ProviderMessage], **kwargs: object) -> ProviderResponse:
-        del kwargs
         self.prompts.append(messages[0].content)
+        self.kwargs.append(dict(kwargs))
         text = self.texts.pop(0) if self.texts else '{"action":"FINISH"}'
         return ProviderResponse(text=text, prompt_tokens=4, completion_tokens=2)
 
@@ -98,6 +99,7 @@ def test_live_baseline_reserves_budget_and_verifies_action() -> None:
     record = run_live_baseline(case, provider, budget, code_version="eval-test", model="fake")
     assert record.verifier_passed
     assert record.prompt_tokens == 4
+    assert record.response_sha256 is not None
     assert budget.used == 1
     assert provider.calls == 1
 
@@ -323,6 +325,25 @@ def test_live_prompt_includes_candidate_without_scoring_labels() -> None:
     assert case.kind not in prompt
     assert "expected_action" not in prompt
     assert "expected_status" not in prompt
+
+
+def test_live_request_uses_bounded_reasoning_envelope_and_visible_output_cap() -> None:
+    case = next(case for case in build_synthetic_manifest("eval-test").cases if case.split == "dev")
+    provider = SequenceProvider('{"action":"ASK_INPUT"}')
+    budget = CallBudget(maximum=1, batch_id="envelope-batch")
+    run_live_methods(
+        (case,),
+        provider,
+        budget,
+        method="baseline",
+        code_version="eval-test",
+        model="fake",
+        dataset_id="phase12-synthetic-v2",
+        dataset_digest=build_synthetic_manifest("eval-test").dataset_digest,
+    )
+    assert provider.kwargs[0]["max_tokens"] == 1024
+    assert provider.kwargs[0]["response_format"] == "json_object"
+    assert provider.kwargs[0]["reasoning_effort"] == "none"
 
 
 def test_live_reflection_uses_one_observable_revision() -> None:

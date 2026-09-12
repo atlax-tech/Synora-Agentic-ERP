@@ -354,6 +354,33 @@ class TestOpenAICompatibleProvider:
 
         asyncio.run(run())
 
+    def test_request_can_override_reasoning_effort_for_bounded_lab_call(self) -> None:
+        async def run() -> None:
+            captured: dict[str, object] = {}
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                captured["json"] = json.loads(request.content)
+                return httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"role": "assistant", "content": "{}"}}]},
+                    request=request,
+                )
+
+            async with OpenAICompatibleProvider(
+                base_url="https://open.bigmodel.cn/api/paas/v4",
+                model="glm-5.3-flash",
+                reasoning_effort="low",
+                transport=httpx.MockTransport(handler),
+            ) as provider:
+                await provider.complete(
+                    _messages(), response_format="json_object", reasoning_effort="none"
+                )
+            body = captured["json"]
+            assert isinstance(body, dict)
+            assert body["reasoning_effort"] == "none"
+
+        asyncio.run(run())
+
     def test_responses_wire_payload_and_output_are_normalized(self) -> None:
         async def run() -> None:
             captured: dict[str, object] = {}
