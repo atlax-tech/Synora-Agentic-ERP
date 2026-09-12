@@ -131,7 +131,7 @@ class ReservationLedger:
         return tuple(self._states)
 
     def states(self) -> tuple[tuple[str, str], ...]:
-        return tuple(self._states.items())
+        return tuple((key, state) for key, (_, state) in self._states.items())
 
     def _append(self, batch_id: str, reservation_key: str, state: str) -> None:
         payload = {

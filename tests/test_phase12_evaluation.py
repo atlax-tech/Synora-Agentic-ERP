@@ -165,6 +165,13 @@ def test_recorded_reservations_are_not_counted_twice_after_restart(tmp_path: Pat
     assert restarted.used == 0
 
 
+def test_reservation_states_expose_key_and_state(tmp_path: Path) -> None:
+    ledger = ReservationLedger(tmp_path / "reservations.jsonl")
+    budget = CallBudget(maximum=1, ledger=ledger, batch_id="batch-a")
+    assert budget.reserve("repeat:1:case:case-a") == 1
+    assert ledger.states() == (("repeat:1:case:case-a", "RESERVED"),)
+
+
 def test_new_batch_can_reserve_the_same_case_after_a_prior_batch(tmp_path: Path) -> None:
     path = tmp_path / "reservations.jsonl"
     provider = FakeProvider('{"action":"FINISH"}')
