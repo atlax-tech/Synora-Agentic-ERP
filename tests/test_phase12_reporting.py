@@ -83,7 +83,9 @@ def test_reporting_bootstrap_uses_candidate_minus_baseline() -> None:
     assert len(comparisons) == 1
     assert comparisons[0]["method_a"] == "prompt-candidate"
     assert comparisons[0]["method_b"] == "baseline"
-    assert comparisons[0]["delta"] < 0.0
+    delta = comparisons[0]["delta"]
+    assert isinstance(delta, float)
+    assert delta < 0.0
     assert comparisons[0]["conclusion"] == "REGRESSED"
 
 

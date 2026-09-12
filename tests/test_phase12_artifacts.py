@@ -56,26 +56,26 @@ def test_code_binding_distinguishes_report_local_and_remote_changes(
     def fake_run(*_args: object, **_kwargs: object) -> SimpleNamespace:
         return SimpleNamespace(stdout="labs/self_improvement/reporting.py\n")
 
-    monkeypatch.setattr(artifact_module.subprocess, "run", fake_run)
+    monkeypatch.setattr("labs.self_improvement.artifacts.subprocess.run", fake_run)
     assert code_version_is_compatible("frozen")
 
     def remote_run(*_args: object, **_kwargs: object) -> SimpleNamespace:
         return SimpleNamespace(stdout="labs/self_improvement/evaluation.py\n")
 
-    monkeypatch.setattr(artifact_module.subprocess, "run", remote_run)
+    monkeypatch.setattr("labs.self_improvement.artifacts.subprocess.run", remote_run)
     assert not code_version_is_compatible("frozen")
 
     def local_run(*_args: object, **_kwargs: object) -> SimpleNamespace:
         return SimpleNamespace(stdout="labs/self_improvement/baselines.py\n")
 
-    monkeypatch.setattr(artifact_module.subprocess, "run", local_run)
+    monkeypatch.setattr("labs.self_improvement.artifacts.subprocess.run", local_run)
     assert code_version_is_compatible("frozen")
     assert not code_version_is_compatible("frozen", scope="local")
 
     def unknown_run(*_args: object, **_kwargs: object) -> SimpleNamespace:
         return SimpleNamespace(stdout="labs/self_improvement/new_phase12_module.py\n")
 
-    monkeypatch.setattr(artifact_module.subprocess, "run", unknown_run)
+    monkeypatch.setattr("labs.self_improvement.artifacts.subprocess.run", unknown_run)
     assert not code_version_is_compatible("frozen")
 
 
