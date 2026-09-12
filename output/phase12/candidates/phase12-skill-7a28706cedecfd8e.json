@@ -1,0 +1,17 @@
+{
+  "boundary_sha256": "4609b54a1c651f11d166c2244a8ffdeaaba9e6e763956d5a985bf16772582a35",
+  "candidate_id": "phase12-skill-7a28706cedecfd8e",
+  "content": "When evidence is incomplete, request the missing fact and preserve unknowns.",
+  "content_sha256": "7a28706cedecfd8edf133e3ad7c153e74fadfd0573d66b0dc41b6efef2f694b4",
+  "created_at": "2026-09-12T09:38:38.039956Z",
+  "kind": "SKILL",
+  "parent_id": "skill-registry/v1",
+  "schema_version": "1",
+  "source_case_ids": [
+    "phase12-historical-c4edf986f236fdc3",
+    "phase12-historical-a7b9c22b2a7a7aa2",
+    "phase12-historical-720a0af10ace7853",
+    "phase12-historical-89f6a83d3f6db1c0"
+  ],
+  "status": "PENDING"
+}

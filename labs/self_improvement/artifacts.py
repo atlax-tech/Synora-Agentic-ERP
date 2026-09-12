@@ -50,6 +50,42 @@ def write_json_once(root: Path, relative: str, payload: object) -> Path:
     return path
 
 
+def _render_manifest(payload: dict[str, object]) -> str:
+    """Keep the large case list reviewable without a giant single-line document."""
+    lines = ["{"]
+    keys = tuple(key for key in sorted(payload) if key not in {"cases", "case_digests"})
+    for index, key in enumerate(keys):
+        encoded = json.dumps(payload[key], ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        has_following = index < len(keys) - 1 or "case_digests" in payload or "cases" in payload
+        suffix = "," if has_following else ""
+        lines.append(f"  {json.dumps(key)}: {encoded}{suffix}")
+    if "case_digests" in payload:
+        lines.append('  "case_digests": {')
+        digests = payload["case_digests"]
+        if not isinstance(digests, dict):
+            raise ValueError("manifest case_digests must be an object")
+        digest_items = tuple(sorted(digests.items()))
+        for index, (case_id, digest) in enumerate(digest_items):
+            suffix = "," if index < len(digest_items) - 1 else ""
+            lines.append(f"    {json.dumps(case_id)}: {json.dumps(digest)}{suffix}")
+        lines.append("  },")
+    if "cases" in payload:
+        lines.append('  "cases": [')
+        cases = payload["cases"]
+        if not isinstance(cases, list):
+            raise ValueError("manifest cases must be an array")
+        for index, case in enumerate(cases):
+            suffix = "," if index < len(cases) - 1 else ""
+            lines.append(
+                "    "
+                + json.dumps(case, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+                + suffix
+            )
+        lines.append("  ]")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
 def write_text_once(root: Path, relative: str, content: str) -> Path:
     path = _target(root, relative)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -67,11 +103,12 @@ def read_json(root: Path, relative: str) -> object:
 
 
 def write_manifest(root: Path, manifest: DatasetManifest) -> Path:
-    return write_json_once(
-        root,
-        f"{PHASE12_RELATIVE_ROOT}/dataset-{manifest.dataset_id}.json",
-        manifest.model_dump(mode="json"),
-    )
+    path = _target(root, f"{PHASE12_RELATIVE_ROOT}/dataset-{manifest.dataset_id}.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() or path.is_symlink():
+        raise FileExistsError(path)
+    path.write_text(_render_manifest(manifest.model_dump(mode="json")), encoding="utf-8")
+    return path
 
 
 def read_manifest(root: Path, relative: str) -> DatasetManifest:
