@@ -56,6 +56,7 @@ from .evaluation import (
 )
 from .replay import ReplayResult, candidate_policy, deterministic_policy
 from .reporting import build_summary, write_reports
+from .stage import verify_stage
 from .training import load_weights, train_dpo, train_reinforce, train_sft, weights_digest
 from .weight_evaluation import evaluate_weight_artifact
 
@@ -787,6 +788,15 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
+def _cmd_verify_stage(args: argparse.Namespace) -> dict[str, object]:
+    result = verify_stage(
+        args.root,
+        require_review=not args.allow_pending_review,
+        require_harness=not args.allow_pending_harness,
+    )
+    return result.as_dict()
+
+
 def _cmd_report(args: argparse.Namespace) -> dict[str, object]:
     manifest = _manifest(args.root)
     verify_manifest(manifest)
@@ -863,6 +873,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub.add_parser("report")
     sub.add_parser("verify-artifacts")
+    stage = sub.add_parser("verify-stage")
+    stage.add_argument(
+        "--allow-pending-review",
+        action="store_true",
+        help="inspect the evidence graph before the independent review",
+    )
+    stage.add_argument(
+        "--allow-pending-harness",
+        action="store_true",
+        help="inspect the evidence graph before Harness synchronization",
+    )
     return parser
 
 
@@ -958,12 +979,16 @@ def main(argv: list[str] | None = None) -> int:
             result = _cmd_freeze_experiment(args)
         elif args.command == "report":
             result = _cmd_report(args)
+        elif args.command == "verify-stage":
+            result = _cmd_verify_stage(args)
         else:
             result = _cmd_verify(args)
     except (FileExistsError, FileNotFoundError, ValueError, RuntimeError, OSError) as error:
         print(f"phase12: {error}", file=sys.stderr)
         return 2
     _json_print(result)
+    if args.command == "verify-stage" and result.get("status") != "PASS":
+        return 2
     return 0
 
 
