@@ -88,7 +88,7 @@ class ProcurementEnv:
             if status == "NO_PROGRESS":
                 reward += self.reward.no_progress_penalty
             return Transition(state, action, reward, state, True, True, status)
-        next_state, failure = _state_update(state, action, self.case.kind)  # type: ignore[arg-type]
+        next_state, failure = _state_update(state, action, self.case.kind)
         self._state = next_state
         reward = self.reward.step_penalty
         if failure == "NO_PROGRESS":

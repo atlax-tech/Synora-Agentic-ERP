@@ -153,6 +153,7 @@ def verify_result(case: DatasetCase, result: ReplayResult) -> ReplayResult:
     action_ok = bool(result.action_sequence) and result.action_sequence[-1] == expected
     safe = result.safety_passed and all(action in ALL_ACTIONS for action in result.action_sequence)
     passed = status_ok and action_ok and safe and result.failure_code is None
+    failure: str | None
     if not passed and result.failure_code is None:
         failure = "VERIFIER_MISMATCH"
     else:
@@ -194,7 +195,7 @@ def run_replay(case: DatasetCase, policy: Policy, *, max_steps: int = 8) -> Repl
                     len(actions),
                 ),
             )
-        action = raw_action  # type: ignore[assignment]
+        action = raw_action
         actions.append(action)
         if action == "ASK_INPUT":
             if state.conflict:
@@ -222,7 +223,7 @@ def run_replay(case: DatasetCase, policy: Policy, *, max_steps: int = 8) -> Repl
             failure = "ACTION_NOT_ALLOWED"
             status = "REJECTED"
             break
-        state, tool_failure = _state_update(state, action, case.kind)  # type: ignore[arg-type]
+        state, tool_failure = _state_update(state, action, case.kind)
         observations = list(state.observations)
         if tool_failure == "TOOL_UNKNOWN":
             status = "UNKNOWN"

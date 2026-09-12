@@ -7,12 +7,12 @@ import json
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from agent_runtime.providers import ProviderError, ProviderMessage
 
 from .contracts import DatasetCase, ExperimentRecord, digest_json
-from .replay import Policy, ReplayResult, deterministic_policy, run_replay
+from .replay import Policy, ReplayResult, ReplayState, deterministic_policy, run_replay
 
 MAX_INPUT_CHARS = 4_000
 MAX_OUTPUT_TOKENS = 512
@@ -187,7 +187,9 @@ def run_live_baseline(
             calls=1,
         )
     result = run_replay(case, lambda _state: call.action or "FINISH")
-    status = "SUCCEEDED" if result.verifier_passed else "REJECTED"
+    status: Literal["SUCCEEDED", "REJECTED"] = (
+        "SUCCEEDED" if result.verifier_passed else "REJECTED"
+    )
     return ExperimentRecord(
         experiment_id=f"phase12-exp-live-{case.case_id}-{repeat}",
         code_version=code_version,
@@ -276,7 +278,10 @@ def rerank_candidates(
     """Apply hard safety/verifier gates before an evidence-only stable sort."""
     outcomes: list[CandidateOutcome] = []
     for index, action in enumerate(actions):
-        result = run_replay(case, lambda _state, value=action: value)
+        def fixed_policy(_state: ReplayState, value: str = action) -> str:
+            return value
+
+        result = run_replay(case, fixed_policy)
         if result.safety_passed and result.verifier_passed:
             outcomes.append(CandidateOutcome(index, action, result))
     outcomes.sort(key=lambda item: (-item.result.score, item.result.steps, item.index))

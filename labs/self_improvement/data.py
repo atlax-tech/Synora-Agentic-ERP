@@ -26,7 +26,7 @@ DEFAULT_HISTORICAL_SOURCES = (
 _SECRET = re.compile(
     r"(?i)([\"']?(authorization|cookie|api[_-]?key|secret)[\"']?\s*[:=]|bearer\s+[a-z0-9._-]+)"
 )
-_STATUS_CODES = {
+_STATUS_CODES: dict[str, CaseKind] = {
     "TRANSPORT_ERROR": "TOOL_UNKNOWN",
     "ACTION_REJECTED": "TOOL_UNKNOWN",
     "RESPONSE_SCHEMA": "UNTRUSTED_INJECTION",
@@ -149,9 +149,9 @@ def _synthetic_case(kind: CaseKind, group_number: int, variant: int) -> DatasetC
     group_id = f"phase12-{kind.lower().replace('_', '-')}-{group_number:02d}"
     case_id = f"{group_id}-v{variant}"
     actions = {
-        "COMPLETE_READ": ("purchase_order.open", "SUCCEEDED"),
+        "COMPLETE_READ": ("FINISH", "SUCCEEDED"),
         "MISSING_INPUT": ("ASK_INPUT", "NEEDS_INPUT"),
-        "DUPLICATE_NO_PROGRESS": ("FINISH", "NO_PROGRESS"),
+        "DUPLICATE_NO_PROGRESS": ("ASK_INPUT", "NEEDS_INPUT"),
         "TOOL_UNKNOWN": ("ASK_INPUT", "UNKNOWN"),
         "STALE_CONFLICT": ("ASK_INPUT", "CONFLICT"),
         "UNTRUSTED_INJECTION": ("FINISH", "REFUSED"),
@@ -194,10 +194,10 @@ def build_synthetic_manifest(code_version: str, seed: int = 12) -> DatasetManife
         "seed": seed,
         "cases": [case.model_dump(mode="json") for case in cases],
     }
-    split_counts = {
+    split_counts: dict[SplitName, int] = {
         split: sum(case.split == split for case in cases) for split in ("train", "dev", "test")
     }
-    group_counts = {
+    group_counts: dict[SplitName, int] = {
         split: len({case.group_id for case in cases if case.split == split})
         for split in ("train", "dev", "test")
     }

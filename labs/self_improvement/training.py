@@ -43,7 +43,7 @@ def state_features(state: ReplayState) -> tuple[float, ...]:
 def _model_class() -> Any:
     _, nn = _torch()
 
-    class PolicyNetwork(nn.Module):
+    class PolicyNetwork(nn.Module):  # type: ignore[name-defined,misc]
         def __init__(self) -> None:
             super().__init__()
             self.layers = nn.Sequential(
@@ -163,7 +163,7 @@ def _examples(manifest: DatasetManifest, split: str) -> tuple[tuple[tuple[float,
                 break
             from .replay import _state_update
 
-            state, failure = _state_update(state, action, case.kind)  # type: ignore[arg-type]
+            state, failure = _state_update(state, action, case.kind)
             if failure is not None:
                 continue
     if not examples:
