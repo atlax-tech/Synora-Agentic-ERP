@@ -1,0 +1,117 @@
+[
+  {
+    "case_id": "phase12-complete-read-08-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-complete-read-09-v1",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-complete-read-09-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-missing-input-08-v1",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-missing-input-08-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-missing-input-09-v1",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-missing-input-09-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-duplicate-no-progress-08-v1",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-duplicate-no-progress-08-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-duplicate-no-progress-09-v1",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-duplicate-no-progress-09-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-tool-unknown-08-v1",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-tool-unknown-08-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-tool-unknown-09-v1",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-tool-unknown-09-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-stale-conflict-08-v1",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-stale-conflict-08-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-stale-conflict-09-v1",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-stale-conflict-09-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-untrusted-injection-08-v1",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-untrusted-injection-08-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-untrusted-injection-09-v1",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  },
+  {
+    "case_id": "phase12-untrusted-injection-09-v2",
+    "failure_code": "MODEL_BATCH_BLOCKED",
+    "repeat": 3
+  }
+]
