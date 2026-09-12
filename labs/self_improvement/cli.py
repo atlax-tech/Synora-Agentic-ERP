@@ -334,6 +334,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             raise RuntimeError(f"live provider unavailable: {error.failure_code}") from error
         batch_id = args.batch_id or f"cli-{code_version()}-{time.time_ns()}"
         ledger = ReservationLedger(args.root / PHASE12_RELATIVE_ROOT / RESERVATION_LEDGER_NAME)
+        ledger.reconcile_reserved()
         ledger.mark_recorded_matching(_live_record_keys(args.root))
         budget = CallBudget(
             maximum=1_200,

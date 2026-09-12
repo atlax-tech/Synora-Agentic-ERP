@@ -49,6 +49,12 @@ class SlowProvider:
         return ProviderResponse(text='{"action":"FINISH"}')
 
 
+class CancelledProvider:
+    async def complete(self, messages: list[ProviderMessage], **kwargs: object) -> ProviderResponse:
+        del messages, kwargs
+        raise asyncio.CancelledError
+
+
 def test_replay_evaluation_aggregates_verifier_and_safety() -> None:
     manifest = build_synthetic_manifest("eval-test")
     records = evaluate_replay_cases(manifest.cases[:6], code_version="eval-test")
@@ -170,6 +176,36 @@ def test_reservation_states_expose_key_and_state(tmp_path: Path) -> None:
     budget = CallBudget(maximum=1, ledger=ledger, batch_id="batch-a")
     assert budget.reserve("repeat:1:case:case-a") == 1
     assert ledger.states() == (("repeat:1:case:case-a", "RESERVED"),)
+
+
+def test_stale_reserved_is_reconciled_as_unknown_and_keeps_budget(tmp_path: Path) -> None:
+    path = tmp_path / "reservations.jsonl"
+    ledger = ReservationLedger(path)
+    budget = CallBudget(maximum=2, ledger=ledger, batch_id="batch-a")
+    budget.reserve("batch-a:repeat:1:case:case-a")
+
+    restarted = ReservationLedger(path)
+    assert restarted.reconcile_reserved() == ("batch-a:repeat:1:case:case-a",)
+    assert restarted.states() == (("batch-a:repeat:1:case:case-a", "UNKNOWN"),)
+    assert CallBudget(maximum=2, ledger=ReservationLedger(path), batch_id="batch-b").used == 1
+
+
+def test_cancelled_provider_call_is_recorded_unknown(tmp_path: Path) -> None:
+    path = tmp_path / "reservations.jsonl"
+    ledger = ReservationLedger(path)
+    budget = CallBudget(maximum=1, ledger=ledger, batch_id="batch-a")
+    call = asyncio.run(
+        _call_provider(
+            CancelledProvider(),
+            '{"task":"x"}',
+            budget,
+            reservation_key="batch-a:repeat:1:case:case-a",
+        )
+    )
+    assert call.status == "UNKNOWN"
+    assert call.failure_code == "MODEL_CALL_CANCELLED"
+    assert call.attempted
+    assert ledger.states() == (("batch-a:repeat:1:case:case-a", "UNKNOWN"),)
 
 
 def test_new_batch_can_reserve_the_same_case_after_a_prior_batch(tmp_path: Path) -> None:

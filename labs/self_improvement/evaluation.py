@@ -183,6 +183,13 @@ class ReservationLedger:
             self._append(previous[0], reservation_key, "RECORDED")
             self._states[reservation_key] = (previous[0], "RECORDED")
 
+    def reconcile_reserved(self) -> tuple[str, ...]:
+        """Finalize stale reservations as UNKNOWN without releasing their budget."""
+        stale = tuple(key for key, (_, state) in self._states.items() if state == "RESERVED")
+        for key in stale:
+            self.finish(key, "UNKNOWN")
+        return stale
+
     def mark_recorded_matching(self, keys: Iterable[str]) -> None:
         """Mark only the exact reservation keys represented by materialized records.
 
@@ -333,6 +340,19 @@ async def _call_provider(
             error.failure_code,
             error.prompt_tokens or None,
             error.completion_tokens or None,
+            (time.perf_counter() - start) * 1000,
+            True,
+        )
+        budget.finish(key, "UNKNOWN")
+        budget.note(call.failure_code)
+        return call
+    except asyncio.CancelledError:
+        call = LiveCall(
+            None,
+            "UNKNOWN",
+            "MODEL_CALL_CANCELLED",
+            None,
+            None,
             (time.perf_counter() - start) * 1000,
             True,
         )
