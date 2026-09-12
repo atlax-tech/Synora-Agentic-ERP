@@ -622,7 +622,7 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
             raise ValueError("active lab version content digest mismatch")
     weight_count = 0
     training_artifacts: list[TrainingArtifact] = []
-    for path in output.glob("weights-*.json"):
+    for path in sorted(output.glob("weights-*.json")):
         if path.name.endswith(".metadata.json"):
             continue
         if path.is_symlink():

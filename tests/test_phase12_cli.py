@@ -8,14 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from labs.self_improvement.artifacts import read_records
+from labs.self_improvement.artifacts import read_records, write_records
 from labs.self_improvement.cli import (
     _canonical_report_suffix,
     _manifest,
     _validate_frozen_replay_coverage,
     main,
 )
-from labs.self_improvement.contracts import DatasetManifest, ExperimentRecord
+from labs.self_improvement.contracts import DatasetManifest, ExperimentRecord, TrainingArtifact
+from labs.self_improvement.reporting import write_reports
 
 
 def _complete_replay_matrix(manifest: DatasetManifest) -> list[ExperimentRecord]:
@@ -260,6 +261,7 @@ def test_cli_report_rejects_trimmed_frozen_evidence(tmp_path: Path) -> None:
 
 def test_frozen_coverage_ignores_live_baseline_records(tmp_path: Path) -> None:
     assert main(["--root", str(tmp_path), "prepare-data"]) == 0
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
     manifest = _manifest(tmp_path)
     records = _complete_replay_matrix(manifest)
     records.append(
@@ -282,6 +284,66 @@ def test_frozen_coverage_ignores_live_baseline_records(tmp_path: Path) -> None:
         )
     )
     _validate_frozen_replay_coverage(manifest, records)
+
+
+def test_cli_verify_uses_stable_training_artifact_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_historical_failure(tmp_path)
+    assert main(["--root", str(tmp_path), "prepare-data"]) == 0
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
+    assert main(["--root", str(tmp_path), "make-candidates"]) == 0
+    manifest = _manifest(tmp_path)
+    records = _complete_replay_matrix(manifest)
+    candidates = {
+        "prompt-candidate": json.loads(
+            next(
+                (tmp_path / "output" / "phase12" / "candidates").glob("phase12-prompt-*.json")
+            ).read_text(encoding="utf-8")
+        ),
+        "skill-candidate": json.loads(
+            next(
+                (tmp_path / "output" / "phase12" / "candidates").glob("phase12-skill-*.json")
+            ).read_text(encoding="utf-8")
+        ),
+    }
+    records = [
+        ExperimentRecord(
+            **{
+                **record.model_dump(),
+                "candidate_id": candidates[record.method]["candidate_id"]
+                if record.method in candidates
+                else None,
+                "candidate_content_sha256": candidates[record.method]["content_sha256"]
+                if record.method in candidates
+                else None,
+                "candidate_boundary_sha256": candidates[record.method]["boundary_sha256"]
+                if record.method in candidates
+                else None,
+            }
+        )
+        for record in records
+    ]
+    write_records(tmp_path, "evaluation-replay-all.jsonl", records)
+    assert main(["--root", str(tmp_path), "train", "--method", "sft", "--seed", "17"]) == 0
+    assert main(["--root", str(tmp_path), "train", "--method", "dpo", "--seed", "17"]) == 0
+    output = tmp_path / "output" / "phase12"
+    artifacts = tuple(
+        TrainingArtifact.model_validate_json(path.read_text(encoding="utf-8"))
+        for path in sorted(output.glob("weights-*.metadata.json"))
+    )
+    write_reports(tmp_path, manifest, records, artifacts, code_version="coverage-test")
+
+    original_glob = Path.glob
+
+    def reverse_weight_glob(path: Path, pattern: str) -> object:
+        result = original_glob(path, pattern)
+        if path == output and pattern == "weights-*.json":
+            return iter(reversed(tuple(result)))
+        return result
+
+    monkeypatch.setattr(Path, "glob", reverse_weight_glob)
+    assert main(["--root", str(tmp_path), "verify-artifacts"]) == 0
 
 
 def test_canonical_reports_must_have_one_shared_suffix(tmp_path: Path) -> None:
