@@ -50,6 +50,15 @@ def write_json_once(root: Path, relative: str, payload: object) -> Path:
     return path
 
 
+def write_text_once(root: Path, relative: str, content: str) -> Path:
+    path = _target(root, relative)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() or path.is_symlink():
+        raise FileExistsError(path)
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
 def read_json(root: Path, relative: str) -> object:
     path = _target(root, relative)
     if not path.is_file() or path.is_symlink():

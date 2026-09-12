@@ -38,6 +38,7 @@ from .evaluation import (
     run_live_baseline,
 )
 from .replay import ReplayResult, deterministic_policy
+from .reporting import write_reports
 from .training import load_weights, train_dpo, train_reinforce, train_sft, weights_digest
 
 
@@ -241,10 +242,13 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
     output = args.root / PHASE12_RELATIVE_ROOT
     record_files = sorted(output.glob("*.jsonl"))
     record_count = 0
+    all_records: list[ExperimentRecord] = []
     for path in record_files:
         records = read_records(args.root, str(path.relative_to(args.root)))
         verify_records(records, manifest)
+        all_records.extend(records)
         record_count += len(records)
+    verify_records(all_records, manifest)
     candidate_dir = output / "candidates"
     candidate_paths = sorted(candidate_dir.glob("*.json")) if candidate_dir.exists() else []
     for path in candidate_paths:
@@ -298,6 +302,35 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
+def _cmd_report(args: argparse.Namespace) -> dict[str, object]:
+    manifest = _manifest(args.root)
+    verify_manifest(manifest)
+    output = args.root / PHASE12_RELATIVE_ROOT
+    records: list[ExperimentRecord] = []
+    for path in sorted(output.glob("*.jsonl")):
+        records.extend(read_records(args.root, str(path.relative_to(args.root))))
+    verify_records(records, manifest)
+    training_artifacts = [
+        TrainingArtifact.model_validate_json(path.read_text(encoding="utf-8"))
+        for path in sorted(output.glob("weights-*.metadata.json"))
+        if path.is_file() and not path.is_symlink()
+    ]
+    for artifact in training_artifacts:
+        if (
+            artifact.dataset_id != manifest.dataset_id
+            or artifact.dataset_digest != manifest.dataset_digest
+        ):
+            raise ValueError("training artifact is bound to a different dataset")
+    report_paths = write_reports(
+        args.root,
+        manifest,
+        records,
+        training_artifacts,
+        code_version=code_version(),
+    )
+    return {key: value for key, value in report_paths.items()}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m labs.self_improvement.cli")
     parser.add_argument("--root", default=".", type=_root)
@@ -327,6 +360,7 @@ def build_parser() -> argparse.ArgumentParser:
     train = sub.add_parser("train")
     train.add_argument("--method", choices=("sft", "dpo", "reinforce"), required=True)
     train.add_argument("--seed", type=int, choices=(17, 29, 43), default=17)
+    sub.add_parser("report")
     sub.add_parser("verify-artifacts")
     return parser
 
@@ -377,6 +411,8 @@ def main(argv: list[str] | None = None) -> int:
             result = {"path": str(path), "selection": selection.model_dump(mode="json")}
         elif args.command == "train":
             result = _cmd_train(args)
+        elif args.command == "report":
+            result = _cmd_report(args)
         else:
             result = _cmd_verify(args)
     except (FileExistsError, FileNotFoundError, ValueError, RuntimeError, OSError) as error:
