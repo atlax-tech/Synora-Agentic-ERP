@@ -476,6 +476,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "select-lab":
             candidate = read_candidate(args.root / PHASE12_RELATIVE_ROOT, args.candidate_id)
             _validate_lab_version(args.root, args.previous_id)
+            if candidate.parent_id != args.previous_id:
+                raise ValueError("candidate parent does not match the selected previous version")
             _validate_evidence(args.root, tuple(args.evidence))
             selection = build_selection(
                 args.previous_id,

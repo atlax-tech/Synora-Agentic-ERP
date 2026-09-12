@@ -159,6 +159,34 @@ def test_cli_candidate_method_and_repeats_are_bounded(tmp_path: Path) -> None:
     )
 
 
+def test_cli_selection_rejects_parent_version_mismatch(tmp_path: Path) -> None:
+    _write_historical_failure(tmp_path)
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
+    assert main(["--root", str(tmp_path), "make-candidates"]) == 0
+    candidate_path = next(
+        (tmp_path / "output" / "phase12" / "candidates").glob("phase12-prompt-*.json")
+    )
+    candidate_id = json.loads(candidate_path.read_text(encoding="utf-8"))["candidate_id"]
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "select-lab",
+                "--candidate-id",
+                candidate_id,
+                "--previous-id",
+                "skill-registry/v1",
+                "--evidence",
+                "phase12-exp-unknown",
+                "--reason",
+                "mismatch",
+            ]
+        )
+        == 2
+    )
+
+
 def test_cli_module_runs_from_clean_python_process(tmp_path: Path) -> None:
     environment = dict(os.environ)
     environment.pop("PYTHONPATH", None)
