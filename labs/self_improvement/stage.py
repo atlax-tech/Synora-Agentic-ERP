@@ -9,6 +9,7 @@ from typing import Literal
 
 from .artifacts import (
     PHASE12_RELATIVE_ROOT,
+    code_version_is_compatible,
     read_json,
     read_manifest,
     read_records,
@@ -345,6 +346,8 @@ def verify_stage(
             raise ValueError("experiment plan is bound to another dataset")
         if not set(plan.candidate_ids).issubset(candidates):
             raise ValueError("experiment plan references a missing candidate")
+        if not code_version_is_compatible(plan.code_version):
+            raise ValueError("experiment plan is bound to changed implementation code")
         audit.check("experiment_plan", True)
     except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError) as error:
         audit.check("experiment_plan", False)

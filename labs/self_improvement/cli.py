@@ -12,6 +12,7 @@ from .artifacts import (
     PHASE12_RELATIVE_ROOT,
     append_record,
     code_version,
+    code_version_is_compatible,
     read_json,
     read_manifest,
     read_records,
@@ -513,8 +514,8 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
         plan = ExperimentPlan.model_validate_json(plan_path.read_text(encoding="utf-8"))
         if plan.dataset_digest != manifest.dataset_digest or plan.dataset_id != manifest.dataset_id:
             raise ValueError("experiment plan is bound to a different dataset")
-        if plan.code_version != code_version():
-            raise ValueError("experiment plan is bound to a different code version")
+        if not code_version_is_compatible(plan.code_version):
+            raise ValueError("experiment plan is bound to changed implementation code")
         allowed = plan.dev_methods if args.split == "dev" else plan.test_methods
         if args.method not in allowed:
             raise ValueError("method is not preregistered for the requested split")
@@ -589,7 +590,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             provider,
             budget,
             method=args.method,
-            code_version=code_version(),
+            code_version=plan.code_version if plan is not None else code_version(),
             model=getattr(provider, "_model", getattr(provider, "model", "assist")),
             repeats=args.repeats,
             dataset_id=manifest.dataset_id,
@@ -657,6 +658,14 @@ def _cmd_train(args: argparse.Namespace) -> dict[str, object]:
     manifest = _manifest(args.root)
     verify_manifest(manifest)
     path = args.root / PHASE12_RELATIVE_ROOT / f"weights-{args.method}-{args.seed}.json"
+    plan_path = args.root / PHASE12_RELATIVE_ROOT / "phase12-experiment-manifest.json"
+    plan = (
+        ExperimentPlan.model_validate_json(plan_path.read_text(encoding="utf-8"))
+        if plan_path.is_file() and not plan_path.is_symlink()
+        else None
+    )
+    if plan is not None and not code_version_is_compatible(plan.code_version):
+        raise ValueError("experiment plan is bound to changed implementation code")
     if args.method == "sft":
         result = train_sft(manifest, seed=args.seed, weight_path=path)
     elif args.method == "dpo":
@@ -665,7 +674,12 @@ def _cmd_train(args: argparse.Namespace) -> dict[str, object]:
     else:
         source = args.root / PHASE12_RELATIVE_ROOT / f"weights-sft-{args.seed}.json"
         result = train_reinforce(manifest, load_weights(source), seed=args.seed, weight_path=path)
-    metadata = result.artifact.model_dump(mode="json")
+    artifact = (
+        result.artifact.model_copy(update={"code_version": plan.code_version})
+        if plan is not None
+        else result.artifact
+    )
+    metadata = artifact.model_dump(mode="json")
     metadata_path = write_json_once(
         args.root,
         f"{PHASE12_RELATIVE_ROOT}/{path.with_suffix('.metadata.json').name}",
@@ -677,6 +691,14 @@ def _cmd_train(args: argparse.Namespace) -> dict[str, object]:
 def _cmd_evaluate_weights(args: argparse.Namespace) -> dict[str, object]:
     manifest = _manifest(args.root)
     verify_manifest(manifest)
+    plan_path = args.root / PHASE12_RELATIVE_ROOT / "phase12-experiment-manifest.json"
+    plan = (
+        ExperimentPlan.model_validate_json(plan_path.read_text(encoding="utf-8"))
+        if plan_path.is_file() and not plan_path.is_symlink()
+        else None
+    )
+    if plan is not None and not code_version_is_compatible(plan.code_version):
+        raise ValueError("experiment plan is bound to changed implementation code")
     output = args.root / PHASE12_RELATIVE_ROOT
     weight_path = output / f"weights-{args.method}-{args.seed}.json"
     metadata_path = weight_path.with_suffix(".metadata.json")
@@ -694,7 +716,7 @@ def _cmd_evaluate_weights(args: argparse.Namespace) -> dict[str, object]:
         method=args.method,
         seed=args.seed,
         split=args.split,
-        code_version=code_version(),
+        code_version=plan.code_version if plan is not None else code_version(),
         artifact_id=metadata.artifact_id,
     )
     path = write_records(args.root, record_name, records)

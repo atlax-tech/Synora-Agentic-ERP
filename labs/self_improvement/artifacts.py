@@ -31,6 +31,28 @@ def code_version() -> str:
     return value if value else "working-tree"
 
 
+def code_version_is_compatible(frozen: str) -> bool:
+    """Allow evidence-only commits while rejecting implementation drift."""
+    current = code_version()
+    if frozen == current:
+        return True
+    if frozen == "working-tree" or current == "working-tree":
+        return False
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", frozen],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except OSError, subprocess.SubprocessError:
+        return False
+    changed = tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+    source_prefixes = ("labs/self_improvement/", "services/agent_runtime/src/agent_runtime/")
+    return not any(path.startswith(source_prefixes) for path in changed)
+
+
 def _target(root: Path, relative: str) -> Path:
     path = safe_output_path(root, relative)
     try:
