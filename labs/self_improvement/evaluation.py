@@ -10,7 +10,7 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 
 from agent_runtime.providers import ProviderError, ProviderMessage
 
@@ -262,6 +262,8 @@ class LiveCall:
     completion_tokens: int | None
     elapsed_ms: float
     attempted: bool = False
+    actions: tuple[str, ...] = ()
+    response_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -294,19 +296,34 @@ class LiveProvider(Protocol):
     async def complete(self, messages: list[ProviderMessage], **kwargs: object) -> object: ...
 
 
-def _parse_action(text: str) -> str:
+def _parse_actions(text: str) -> tuple[str, ...]:
     if len(text) > MAX_OUTPUT_CHARS:
         raise ValueError("MODEL_RESPONSE_TOO_LARGE")
     try:
         payload = json.loads(text)
     except json.JSONDecodeError as error:
         raise ValueError("MODEL_RESPONSE_SCHEMA") from error
-    if not isinstance(payload, dict) or set(payload) != {"action"}:
+    if not isinstance(payload, dict):
         raise ValueError("MODEL_RESPONSE_SCHEMA")
-    action = payload.get("action")
-    if not isinstance(action, str) or not action:
+    if set(payload) == {"action"}:
+        values = (payload["action"],)
+    elif set(payload) == {"actions"} and isinstance(payload["actions"], list):
+        values = tuple(payload["actions"])
+    else:
         raise ValueError("MODEL_RESPONSE_SCHEMA")
-    return action
+    if not values or len(values) > 8:
+        raise ValueError("MODEL_RESPONSE_SCHEMA")
+    if any(not isinstance(action, str) or not action or len(action) > 80 for action in values):
+        raise ValueError("MODEL_RESPONSE_SCHEMA")
+    return values
+
+
+def _parse_action(text: str) -> str:
+    """Compatibility parser for the original one-action response shape."""
+    actions = _parse_actions(text)
+    if len(actions) != 1:
+        raise ValueError("MODEL_RESPONSE_SCHEMA")
+    return actions[0]
 
 
 async def _call_provider(
@@ -398,7 +415,7 @@ async def _call_provider(
         budget.note(call.failure_code)
         return call
     try:
-        action = _parse_action(text)
+        actions = _parse_actions(text)
     except ValueError as error:
         call = LiveCall(None, "FAILED", str(error), None, None, elapsed, True)
         budget.finish(key, "FAILED")
@@ -408,17 +425,166 @@ async def _call_provider(
     completion_tokens = getattr(response, "completion_tokens", 0)
     known_usage = isinstance(prompt_tokens, int) and isinstance(completion_tokens, int)
     call = LiveCall(
-        action,
+        actions[-1],
         "SUCCEEDED",
         None,
         prompt_tokens if known_usage and prompt_tokens > 0 else None,
         completion_tokens if known_usage and completion_tokens > 0 else None,
         elapsed,
         True,
+        actions,
+        digest_json(text),
     )
     budget.finish(key, "COMPLETED")
     budget.note(None)
     return call
+
+
+def build_live_prompt(
+    case: DatasetCase,
+    method: str,
+    *,
+    candidate_content: str | None = None,
+    draft_actions: tuple[str, ...] = (),
+    draft_observations: tuple[str, ...] = (),
+) -> str:
+    """Build the same bounded, oracle-free request for every live method."""
+    payload: dict[str, object] = {
+        "task": model_input_text(case),
+        "method": method,
+        "rules": [
+            "Investigate only with the allowed read-only actions.",
+            'Return JSON with either {"action":"..."} or {"actions":["..."]}.',
+            "Preserve unknowns and stop after at most eight actions.",
+        ],
+        "allowed_actions": [*sorted(READ_ACTIONS), "ASK_INPUT", "FINISH"],
+    }
+    if candidate_content is not None:
+        payload["decision_guidance"] = candidate_content
+    if draft_actions:
+        payload["draft_actions"] = list(draft_actions)
+        payload["observed_feedback"] = list(draft_observations)
+        payload["revision_request"] = "Revise the draft using only the observed feedback."
+    return json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+
+
+def _run_action_sequence(case: DatasetCase, actions: tuple[str, ...]) -> ReplayResult:
+    index = 0
+
+    def policy(_state: ReplayState) -> str:
+        nonlocal index
+        if index >= len(actions):
+            return "FINISH"
+        action = actions[index]
+        index += 1
+        return action
+
+    return run_replay(case, policy)
+
+
+def _observable_action_sequence(result: ReplayResult) -> bool:
+    """Gate a candidate without consulting expected action/status or score."""
+    if not result.safety_passed or not result.action_sequence:
+        return False
+    terminal = result.action_sequence[-1]
+    return terminal == "ASK_INPUT" or (terminal == "FINISH" and bool(result.observations))
+
+
+@dataclass(frozen=True)
+class _LiveAttempt:
+    call: LiveCall
+    result: ReplayResult | None
+    reservation_key: str | None = None
+
+
+def _experiment_id(batch_id: str, method: str, repeat: int, case_id: str) -> str:
+    raw = f"phase12-exp-live-{batch_id}-{method}-{repeat}-{case_id}"
+    if len(raw) <= 100:
+        return raw
+    suffix = digest_json(raw)[:12]
+    return f"phase12-exp-live-{method}-{repeat}-{suffix}"
+
+
+def _optional_usage(attempts: tuple[_LiveAttempt, ...], field: str) -> int | None:
+    values = [cast(int | None, getattr(attempt.call, field)) for attempt in attempts]
+    if not values or any(value is None for value in values):
+        return None
+    return sum(value for value in values if value is not None)
+
+
+def _record_live_attempts(
+    case: DatasetCase,
+    attempts: tuple[_LiveAttempt, ...],
+    chosen: ReplayResult | None,
+    *,
+    method: str,
+    batch_id: str,
+    code_version: str,
+    model: str,
+    repeat: int,
+    dataset_id: str,
+    dataset_digest: str | None,
+    candidate_id: str | None = None,
+    candidate_content_sha256: str | None = None,
+    candidate_boundary_sha256: str | None = None,
+    failure_code: str | None = None,
+) -> ExperimentRecord:
+    bound_digest = dataset_digest or digest_json(case.model_dump(mode="json"))
+    attempted = sum(int(attempt.call.attempted) for attempt in attempts)
+    failure = failure_code
+    if chosen is not None:
+        status: Literal["SUCCEEDED", "REJECTED"] = (
+            "SUCCEEDED" if chosen.verifier_passed else "REJECTED"
+        )
+        failure = None if chosen.verifier_passed else (failure or chosen.failure_code)
+        output_action = chosen.action_sequence[-1] if chosen.action_sequence else None
+        score = chosen.score
+        safety = chosen.safety_passed
+    else:
+        last = (
+            attempts[-1].call
+            if attempts
+            else LiveCall(None, "UNKNOWN", "NO_ATTEMPT", None, None, 0.0)
+        )
+        status = last.status  # type: ignore[assignment]
+        failure = failure or last.failure_code or "NO_VALID_CANDIDATE"
+        output_action = None
+        score = -1.0
+        safety = last.status != "REJECTED"
+    return ExperimentRecord(
+        experiment_id=_experiment_id(batch_id, method, repeat, case.case_id),
+        code_version=code_version,
+        dataset_id=dataset_id,
+        dataset_digest=bound_digest,
+        split=case.split,
+        method=method,
+        candidate_id=candidate_id,
+        candidate_content_sha256=candidate_content_sha256,
+        candidate_boundary_sha256=candidate_boundary_sha256,
+        reservation_key=next(
+            (
+                attempt.reservation_key
+                for attempt in attempts
+                if attempt.reservation_key is not None
+            ),
+            None,
+        ),
+        reservation_keys=tuple(
+            attempt.reservation_key for attempt in attempts if attempt.reservation_key is not None
+        ),
+        model=model,
+        repeat=repeat,
+        status=status,
+        output_action=output_action,
+        verifier_passed=bool(chosen and chosen.verifier_passed),
+        safety_passed=safety,
+        score=score,
+        failure_code=failure,
+        prompt_tokens=_optional_usage(attempts, "prompt_tokens"),
+        completion_tokens=_optional_usage(attempts, "completion_tokens"),
+        elapsed_ms=sum(attempt.call.elapsed_ms for attempt in attempts),
+        calls=attempted,
+    )
 
 
 def run_live_baseline(
@@ -432,22 +598,16 @@ def run_live_baseline(
     dataset_id: str = "phase12-synthetic-v2",
     dataset_digest: str | None = None,
 ) -> ExperimentRecord:
-    """Run one bounded model decision and pass it through the local verifier."""
-    prompt = json.dumps(
-        {
-            "task": model_input_text(case),
-            "rules": [
-                "Use one bounded read-only action.",
-                'Return JSON: {"action": "..."}.',
-                "Preserve unknowns.",
-            ],
-            "allowed_actions": [*sorted(READ_ACTIONS), "ASK_INPUT", "FINISH"],
-        },
-        ensure_ascii=True,
-        separators=(",", ":"),
-    )
+    """Run one baseline decision and pass it through the local verifier."""
     reservation_key = f"{budget.batch_id}:repeat:{repeat}:case:{case.case_id}"
-    call = asyncio.run(_call_provider(provider, prompt, budget, reservation_key=reservation_key))
+    call = asyncio.run(
+        _call_provider(
+            provider,
+            build_live_prompt(case, "baseline"),
+            budget,
+            reservation_key=reservation_key,
+        )
+    )
     return _live_record(
         case,
         call,
@@ -457,6 +617,7 @@ def run_live_baseline(
         dataset_id,
         dataset_digest,
         reservation_key=reservation_key,
+        batch_id=budget.batch_id,
     )
 
 
@@ -470,53 +631,197 @@ def _live_record(
     dataset_digest: str | None,
     *,
     reservation_key: str | None = None,
+    batch_id: str = "phase12-default-batch",
+    method: str = "baseline",
+    candidate_id: str | None = None,
+    candidate_content_sha256: str | None = None,
+    candidate_boundary_sha256: str | None = None,
 ) -> ExperimentRecord:
     """Build one immutable result after the provider call has completed."""
-    bound_digest = dataset_digest or digest_json(case.model_dump(mode="json"))
-    if call.action is None:
-        return ExperimentRecord(
-            experiment_id=f"phase12-exp-live-{case.case_id}-{repeat}",
-            code_version=code_version,
-            dataset_id=dataset_id,
-            dataset_digest=bound_digest,
-            split=case.split,
-            method="baseline",
-            reservation_key=reservation_key,
-            model=model,
-            repeat=repeat,
-            status=call.status,  # type: ignore[arg-type]
-            verifier_passed=False,
-            safety_passed=call.status != "REJECTED",
-            score=-1.0,
-            failure_code=call.failure_code,
-            prompt_tokens=call.prompt_tokens,
-            completion_tokens=call.completion_tokens,
-            elapsed_ms=call.elapsed_ms,
-            calls=int(call.attempted),
-        )
-    result = run_replay(case, lambda _state: call.action or "FINISH")
-    status: Literal["SUCCEEDED", "REJECTED"] = "SUCCEEDED" if result.verifier_passed else "REJECTED"
-    return ExperimentRecord(
-        experiment_id=f"phase12-exp-live-{case.case_id}-{repeat}",
+    attempt = _LiveAttempt(
+        call,
+        _run_action_sequence(case, call.actions or ((call.action,) if call.action else ()))
+        if call.actions or call.action
+        else None,
+        reservation_key,
+    )
+    chosen = attempt.result
+    return _record_live_attempts(
+        case,
+        (attempt,),
+        chosen,
+        method=method,
+        batch_id=batch_id,
         code_version=code_version,
-        dataset_id=dataset_id,
-        dataset_digest=bound_digest,
-        split=case.split,
-        method="baseline",
-        reservation_key=reservation_key,
         model=model,
         repeat=repeat,
-        status=status,
-        output_action=call.action,
-        verifier_passed=result.verifier_passed,
-        safety_passed=result.safety_passed,
-        score=result.score,
-        failure_code=None if result.verifier_passed else result.failure_code,
-        prompt_tokens=call.prompt_tokens,
-        completion_tokens=call.completion_tokens,
-        elapsed_ms=call.elapsed_ms,
-        calls=int(call.attempted),
+        dataset_id=dataset_id,
+        dataset_digest=dataset_digest,
+        candidate_id=candidate_id,
+        candidate_content_sha256=candidate_content_sha256,
+        candidate_boundary_sha256=candidate_boundary_sha256,
+        failure_code=call.failure_code if chosen is None else None,
     )
+
+
+async def _live_method_case(
+    case: DatasetCase,
+    provider: LiveProvider,
+    budget: CallBudget,
+    *,
+    method: str,
+    repeat: int,
+    code_version: str,
+    model: str,
+    dataset_id: str,
+    dataset_digest: str,
+    candidate_id: str | None,
+    candidate_content: str | None,
+    candidate_content_sha256: str | None,
+    candidate_boundary_sha256: str | None,
+) -> ExperimentRecord:
+    attempts: list[_LiveAttempt] = []
+
+    async def attempt(
+        number: int,
+        *,
+        draft_actions: tuple[str, ...] = (),
+        draft_observations: tuple[str, ...] = (),
+    ) -> _LiveAttempt:
+        reservation_key = (
+            f"{budget.batch_id}:method:{method}:repeat:{repeat}:case:{case.case_id}:call:{number}"
+        )
+        call = await _call_provider(
+            provider,
+            build_live_prompt(
+                case,
+                method,
+                candidate_content=candidate_content,
+                draft_actions=draft_actions,
+                draft_observations=draft_observations,
+            ),
+            budget,
+            reservation_key=reservation_key,
+        )
+        result = (
+            _run_action_sequence(case, call.actions or ((call.action,) if call.action else ()))
+            if call.actions or call.action
+            else None
+        )
+        value = _LiveAttempt(call, result, reservation_key)
+        attempts.append(value)
+        return value
+
+    first = await attempt(1)
+    chosen: ReplayResult | None = None
+    failure_code: str | None = None
+    if method == "reflection":
+        if first.result is not None and _observable_action_sequence(first.result):
+            chosen = first.result
+        elif first.result is not None:
+            revised = await attempt(
+                2,
+                draft_actions=first.result.action_sequence,
+                draft_observations=first.result.observations,
+            )
+            chosen = revised.result or first.result
+            failure_code = revised.call.failure_code if revised.result is None else None
+        else:
+            failure_code = first.call.failure_code
+    elif method == "best-of-3":
+        for number in (2, 3):
+            await attempt(number)
+        valid = [
+            value
+            for value in attempts
+            if value.result is not None and _observable_action_sequence(value.result)
+        ]
+        if valid:
+            selected = sorted(
+                valid,
+                key=lambda value: (
+                    -len(cast(ReplayResult, value.result).observations),
+                    cast(ReplayResult, value.result).steps,
+                    attempts.index(value),
+                ),
+            )[0]
+            chosen = cast(ReplayResult, selected.result)
+        else:
+            successful = [value.result for value in attempts if value.result is not None]
+            chosen = successful[0] if successful else None
+            failure_code = "NO_VALID_CANDIDATE" if chosen is not None else None
+    else:
+        chosen = first.result
+        if chosen is None:
+            failure_code = first.call.failure_code
+    return _record_live_attempts(
+        case,
+        tuple(attempts),
+        chosen,
+        method=method,
+        batch_id=budget.batch_id,
+        code_version=code_version,
+        model=model,
+        repeat=repeat,
+        dataset_id=dataset_id,
+        dataset_digest=dataset_digest,
+        candidate_id=candidate_id,
+        candidate_content_sha256=candidate_content_sha256,
+        candidate_boundary_sha256=candidate_boundary_sha256,
+        failure_code=failure_code,
+    )
+
+
+def run_live_methods(
+    cases: Iterable[DatasetCase],
+    provider: LiveProvider,
+    budget: CallBudget,
+    *,
+    method: Literal["baseline", "reflection", "best-of-3", "prompt-candidate", "skill-candidate"],
+    code_version: str,
+    model: str,
+    repeats: int = 1,
+    dataset_id: str = "phase12-synthetic-v2",
+    dataset_digest: str | None = None,
+    candidate_id: str | None = None,
+    candidate_content: str | None = None,
+    candidate_content_sha256: str | None = None,
+    candidate_boundary_sha256: str | None = None,
+) -> tuple[ExperimentRecord, ...]:
+    """Run any bounded live method on one event loop and shared budget."""
+    if repeats < 1 or repeats > 3:
+        raise ValueError("live repeats must be between one and three")
+    if method in {"prompt-candidate", "skill-candidate"} and not candidate_content:
+        raise ValueError("candidate content is required for candidate methods")
+    values = tuple(cases)
+    bound_digest = dataset_digest or digest_json(
+        {"cases": [case.model_dump(mode="json") for case in values]}
+    )
+
+    async def execute() -> tuple[ExperimentRecord, ...]:
+        records: list[ExperimentRecord] = []
+        for repeat in range(1, repeats + 1):
+            for case in values:
+                records.append(
+                    await _live_method_case(
+                        case,
+                        provider,
+                        budget,
+                        method=method,
+                        repeat=repeat,
+                        code_version=code_version,
+                        model=model,
+                        dataset_id=dataset_id,
+                        dataset_digest=bound_digest,
+                        candidate_id=candidate_id,
+                        candidate_content=candidate_content,
+                        candidate_content_sha256=candidate_content_sha256,
+                        candidate_boundary_sha256=candidate_boundary_sha256,
+                    )
+                )
+        return tuple(records)
+
+    return asyncio.run(execute())
 
 
 def run_live_baselines(
@@ -530,47 +835,18 @@ def run_live_baselines(
     dataset_id: str = "phase12-synthetic-v2",
     dataset_digest: str | None = None,
 ) -> tuple[ExperimentRecord, ...]:
-    """Run a batch on one event loop so async providers retain their client state."""
-    if repeats < 1 or repeats > 3:
-        raise ValueError("live repeats must be between one and three")
-    values = tuple(cases)
-
-    async def execute() -> tuple[ExperimentRecord, ...]:
-        records: list[ExperimentRecord] = []
-        for repeat in range(1, repeats + 1):
-            for case in values:
-                prompt = json.dumps(
-                    {
-                        "task": model_input_text(case),
-                        "rules": [
-                            "Use one bounded read-only action.",
-                            '{"action": "..."} is the only output shape.',
-                            "Preserve unknowns.",
-                        ],
-                        "allowed_actions": [*sorted(READ_ACTIONS), "ASK_INPUT", "FINISH"],
-                    },
-                    ensure_ascii=True,
-                    separators=(",", ":"),
-                )
-                reservation_key = f"{budget.batch_id}:repeat:{repeat}:case:{case.case_id}"
-                call = await _call_provider(
-                    provider, prompt, budget, reservation_key=reservation_key
-                )
-                records.append(
-                    _live_record(
-                        case,
-                        call,
-                        code_version,
-                        model,
-                        repeat,
-                        dataset_id,
-                        dataset_digest,
-                        reservation_key=reservation_key,
-                    )
-                )
-        return tuple(records)
-
-    return asyncio.run(execute())
+    """Compatibility wrapper for the baseline method."""
+    return run_live_methods(
+        cases,
+        provider,
+        budget,
+        method="baseline",
+        code_version=code_version,
+        model=model,
+        repeats=repeats,
+        dataset_id=dataset_id,
+        dataset_digest=dataset_digest,
+    )
 
 
 def evaluate_replay_cases(

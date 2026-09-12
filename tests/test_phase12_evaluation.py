@@ -13,10 +13,12 @@ from labs.self_improvement.evaluation import (
     ReservationLedger,
     _call_provider,
     aggregate,
+    build_live_prompt,
     evaluate_replay_cases,
     rerank_candidates,
     run_live_baseline,
     run_live_baselines,
+    run_live_methods,
 )
 
 
@@ -53,6 +55,18 @@ class CancelledProvider:
     async def complete(self, messages: list[ProviderMessage], **kwargs: object) -> ProviderResponse:
         del messages, kwargs
         raise asyncio.CancelledError
+
+
+class SequenceProvider:
+    def __init__(self, *texts: str) -> None:
+        self.texts = list(texts)
+        self.prompts: list[str] = []
+
+    async def complete(self, messages: list[ProviderMessage], **kwargs: object) -> ProviderResponse:
+        del kwargs
+        self.prompts.append(messages[0].content)
+        text = self.texts.pop(0) if self.texts else '{"action":"FINISH"}'
+        return ProviderResponse(text=text, prompt_tokens=4, completion_tokens=2)
 
 
 def test_replay_evaluation_aggregates_verifier_and_safety() -> None:
@@ -300,6 +314,65 @@ def test_live_batch_reuses_one_event_loop_for_provider_client() -> None:
     assert len(records) == 4
     assert provider.calls == 4
     assert all(record.calls == 1 for record in records)
+
+
+def test_live_prompt_includes_candidate_without_scoring_labels() -> None:
+    case = next(case for case in build_synthetic_manifest("eval-test").cases if case.split == "dev")
+    prompt = build_live_prompt(case, "prompt-candidate", candidate_content="preserve unknowns")
+    assert "preserve unknowns" in prompt
+    assert case.kind not in prompt
+    assert "expected_action" not in prompt
+    assert "expected_status" not in prompt
+
+
+def test_live_reflection_uses_one_observable_revision() -> None:
+    case = next(
+        case for case in build_synthetic_manifest("eval-test").cases if case.kind == "COMPLETE_READ"
+    )
+    provider = SequenceProvider(
+        '{"action":"FINISH"}', '{"actions":["purchase_order.open","FINISH"]}'
+    )
+    budget = CallBudget(maximum=2, batch_id="reflection-batch")
+    record = run_live_methods(
+        (case,),
+        provider,
+        budget,
+        method="reflection",
+        code_version="eval-test",
+        model="fake",
+        dataset_id="phase12-synthetic-v2",
+        dataset_digest=build_synthetic_manifest("eval-test").dataset_digest,
+    )[0]
+    assert record.verifier_passed
+    assert record.calls == 2
+    assert len(record.reservation_keys) == 2
+    assert len(provider.prompts) == 2
+
+
+def test_live_best_of_three_reranks_only_observable_candidates() -> None:
+    case = next(
+        case for case in build_synthetic_manifest("eval-test").cases if case.kind == "COMPLETE_READ"
+    )
+    provider = SequenceProvider(
+        '{"action":"FINISH"}',
+        '{"actions":["purchase_order.open","FINISH"]}',
+        '{"action":"ASK_INPUT"}',
+    )
+    budget = CallBudget(maximum=3, batch_id="best-batch")
+    record = run_live_methods(
+        (case,),
+        provider,
+        budget,
+        method="best-of-3",
+        code_version="eval-test",
+        model="fake",
+        dataset_id="phase12-synthetic-v2",
+        dataset_digest=build_synthetic_manifest("eval-test").dataset_digest,
+    )[0]
+    assert record.verifier_passed
+    assert record.calls == 3
+    assert len(record.reservation_keys) == 3
+    assert len(provider.prompts) == 3
 
 
 def test_reranker_uses_observable_gates_before_oracle_scoring() -> None:

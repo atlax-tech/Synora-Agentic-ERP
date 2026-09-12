@@ -184,6 +184,9 @@ class ExperimentRecord(StrictModel):
     reservation_key: str | None = Field(
         default=None, min_length=1, max_length=240, pattern=r"^[^\r\n]+$"
     )
+    reservation_keys: Annotated[tuple[str, ...], BeforeValidator(_tuple_from_json)] = Field(
+        default_factory=tuple, max_length=8
+    )
     model: str = Field(min_length=1, max_length=160)
     repeat: int = Field(ge=1, le=20)
     status: Literal["SUCCEEDED", "FAILED", "UNKNOWN", "REJECTED"]
@@ -212,6 +215,14 @@ class ExperimentRecord(StrictModel):
                 raise ValueError("candidate digests require candidate_id")
         elif self.candidate_content_sha256 is None or self.candidate_boundary_sha256 is None:
             raise ValueError("candidate experiments require content and boundary digests")
+        if len(set(self.reservation_keys)) != len(self.reservation_keys):
+            raise ValueError("reservation keys must be unique")
+        if (
+            self.reservation_key is not None
+            and self.reservation_keys
+            and self.reservation_key not in self.reservation_keys
+        ):
+            raise ValueError("primary reservation key must be included in reservation keys")
         return self
 
 
