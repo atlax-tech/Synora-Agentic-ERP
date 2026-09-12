@@ -1,11 +1,11 @@
 {
   "action": "ROLLBACK",
-  "created_at": "2026-09-12T06:21:15.252806Z",
+  "created_at": "2026-09-12T07:27:45.399626Z",
   "evidence_ids": [
     "phase12-exp-replay-prompt-candidate-1-phase12-complete-read-06-v1"
   ],
   "previous_id": "phase12-prompt-609c62e2b621bb14",
-  "reason": "restore native baseline",
+  "reason": "preserve explicit no-gain rollback to native profile",
   "schema_version": "1",
   "selected_id": "native-agent/A",
   "selection_id": "phase12-selection-7d455070e89d04a5",
