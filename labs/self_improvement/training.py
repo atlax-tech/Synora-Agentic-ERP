@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -216,6 +217,36 @@ def build_preference_pairs(
     return tuple(pairs)
 
 
+def dpo_loss(
+    policy_model: Any,
+    reference_model: Any,
+    features: Any,
+    chosen: Any,
+    rejected: Any,
+    *,
+    beta: float = 0.1,
+    reference_log: Any | None = None,
+) -> Any:
+    """Return the standard DPO pairwise loss for a frozen reference policy."""
+    if not math.isfinite(beta) or beta <= 0.0:
+        raise ValueError("DPO beta must be finite and positive")
+    torch, _ = _torch()
+    policy_log = torch.log_softmax(policy_model(features), dim=-1)
+    if reference_log is None:
+        with torch.no_grad():
+            reference_log = torch.log_softmax(reference_model(features), dim=-1)
+    policy_diff = policy_log.gather(1, chosen[:, None]).squeeze(1) - policy_log.gather(
+        1, rejected[:, None]
+    ).squeeze(1)
+    reference_diff = reference_log.gather(1, chosen[:, None]).squeeze(1) - reference_log.gather(
+        1, rejected[:, None]
+    ).squeeze(1)
+    loss = (-torch.nn.functional.logsigmoid(beta * (policy_diff - reference_diff))).mean()
+    if not bool(torch.isfinite(loss)):
+        raise ValueError("DPO produced a non-finite loss")
+    return loss
+
+
 def _artifact(
     method: str,
     seed: int,
@@ -360,31 +391,30 @@ def train_dpo(
         train_ref_log = torch.log_softmax(reference(train_features), dim=-1)
         dev_ref_log = torch.log_softmax(reference(dev_features), dim=-1)
 
-    def objective(
-        values: Any,
-        chosen: Any,
-        rejected: Any,
-        reference_log: Any,
-    ) -> Any:
-        policy_log = torch.log_softmax(model(values), dim=-1)
-        pi_diff = policy_log.gather(1, chosen[:, None]).squeeze(1) - policy_log.gather(
-            1, rejected[:, None]
-        ).squeeze(1)
-        ref_diff = reference_log.gather(1, chosen[:, None]).squeeze(1) - reference_log.gather(
-            1, rejected[:, None]
-        ).squeeze(1)
-        return (-torch.nn.functional.logsigmoid(0.1 * (pi_diff - ref_diff))).mean()
-
     for _ in range(max_epochs):
         optimizer.zero_grad()
-        loss = objective(train_features, train_chosen, train_rejected, train_ref_log)
+        loss = dpo_loss(
+            model,
+            reference,
+            train_features,
+            train_chosen,
+            train_rejected,
+            beta=0.1,
+            reference_log=train_ref_log,
+        )
         loss.backward()
         optimizer.step()
         with torch.no_grad():
-            dev_loss = objective(dev_features, dev_chosen, dev_rejected, dev_ref_log)
+            dev_loss = dpo_loss(
+                model,
+                reference,
+                dev_features,
+                dev_chosen,
+                dev_rejected,
+                beta=0.1,
+                reference_log=dev_ref_log,
+            )
         value = float(dev_loss.detach().item())
-        if not torch.isfinite(torch.tensor(value)):
-            raise ValueError("DPO produced a non-finite loss")
         history.append(value)
         if value < best_loss:
             best_loss = value

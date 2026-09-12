@@ -10,6 +10,7 @@ from labs.self_improvement.training import (
     ACTION_INDEX,
     FEATURE_COUNT,
     build_preference_pairs,
+    dpo_loss,
     load_weights,
     save_weights,
     state_features,
@@ -48,6 +49,21 @@ def test_dpo_keeps_action_space_and_reference_start() -> None:
     assert set(ACTION_INDEX) >= {"ASK_INPUT", "FINISH", "purchase_order.open"}
     assert dpo.artifact.weight_sha256 != dpo.artifact.initial_weight_sha256
     assert dpo.artifact.reference_weight_sha256 == weights_digest(sft.model)
+
+
+def test_dpo_equal_policy_and_reference_has_log_two_loss() -> None:
+    manifest = build_synthetic_manifest("training-test")
+    sft = train_sft(manifest, seed=17, max_epochs=2, patience=1)
+    pairs = build_preference_pairs(manifest, "dev")
+    import math
+
+    import torch
+
+    features = torch.tensor([pairs[0][0]], dtype=torch.float32)
+    chosen = torch.tensor([pairs[0][1]], dtype=torch.long)
+    rejected = torch.tensor([pairs[0][2]], dtype=torch.long)
+    loss = dpo_loss(sft.model, sft.model, features, chosen, rejected)
+    assert abs(float(loss.item()) - math.log(2.0)) < 1e-6
 
 
 def test_preference_pairs_are_same_state_and_safety_gated() -> None:
