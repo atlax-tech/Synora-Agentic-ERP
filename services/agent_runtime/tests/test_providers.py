@@ -1093,6 +1093,9 @@ class TestZhipuResponseCompat:
                 with pytest.raises(ProviderError, match="no final content") as caught:
                     await provider.complete(_messages(), max_tokens=1024)
             assert caught.value.failure_code == "RESPONSE_CONTENT_MISSING"
+            assert caught.value.prompt_tokens == 2
+            assert caught.value.completion_tokens == 1
+            assert caught.value.response_sha256 is not None
 
         asyncio.run(run())
 

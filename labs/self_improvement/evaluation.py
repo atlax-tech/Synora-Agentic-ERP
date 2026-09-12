@@ -37,7 +37,7 @@ MAX_OUTPUT_CHARS = MAX_OUTPUT_TOKENS * 4
 # GLM-5.3-Flash may spend the provider completion budget on hidden reasoning.
 # Keep the externally accepted action payload capped at MAX_OUTPUT_TOKENS while
 # reserving a bounded envelope for that provider-side reasoning.
-PROVIDER_REQUEST_TOKENS = 1_024
+PROVIDER_REQUEST_TOKENS = 2_048
 MAX_CALL_SECONDS = 60.0
 MAX_MODEL_CALLS = 1_200
 RESERVATION_LEDGER_NAME = "live-reservations.jsonl"
@@ -395,6 +395,7 @@ async def _call_provider(
             error.completion_tokens or None,
             (time.perf_counter() - start) * 1000,
             True,
+            response_sha256=error.response_sha256,
         )
         budget.finish(key, status)
         budget.note(call.failure_code)

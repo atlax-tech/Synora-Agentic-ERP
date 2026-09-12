@@ -341,7 +341,7 @@ def test_live_request_uses_bounded_reasoning_envelope_and_visible_output_cap() -
         dataset_id="phase12-synthetic-v2",
         dataset_digest=build_synthetic_manifest("eval-test").dataset_digest,
     )
-    assert provider.kwargs[0]["max_tokens"] == 1024
+    assert provider.kwargs[0]["max_tokens"] == 2048
     assert provider.kwargs[0]["response_format"] == "json_object"
     assert provider.kwargs[0]["reasoning_effort"] == "none"
 

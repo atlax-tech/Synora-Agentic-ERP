@@ -11,6 +11,7 @@ API key 脱敏约定 (用户要求):
 - 构造对象后立即使用, 不在模块级保存明文。
 """
 
+import hashlib
 import math
 import os
 import ssl
@@ -183,6 +184,7 @@ class ProviderError(Exception):
         reasoning_tokens: int = 0,
         budget_code: Literal["TOKEN_BUDGET"] | None = None,
         failure_code: str = "PROVIDER_ERROR",
+        response_sha256: str | None = None,
     ) -> None:
         super().__init__(message)
         # 即使结果因预算门禁被拒绝, 已观测的 usage 仍需进入证据, 便于审计。
@@ -194,6 +196,7 @@ class ProviderError(Exception):
         # the kernel does not turn an auditable budget stop into MODEL_ERROR.
         self.budget_code = budget_code
         self.failure_code = failure_code
+        self.response_sha256 = response_sha256
 
 
 class Provider(Protocol):
@@ -500,8 +503,11 @@ class OpenAICompatibleProvider:
             ) from error
         if len(body) > MAX_PROVIDER_RESPONSE_BYTES:
             raise ProviderError(
-                "provider response exceeded size limit", failure_code="RESPONSE_TOO_LARGE"
+                "provider response exceeded size limit",
+                failure_code="RESPONSE_TOO_LARGE",
+                response_sha256=hashlib.sha256(body).hexdigest(),
             )
+        response_sha256 = hashlib.sha256(body).hexdigest()
         if not response.is_success:
             if response.status_code == 429:
                 failure_code = "RATE_LIMITED"
@@ -512,7 +518,9 @@ class OpenAICompatibleProvider:
             else:
                 failure_code = "HTTP_ERROR"
             raise ProviderError(
-                f"provider returned HTTP {response.status_code}", failure_code=failure_code
+                f"provider returned HTTP {response.status_code}",
+                failure_code=failure_code,
+                response_sha256=response_sha256,
             )
 
         response_text = ""
@@ -525,11 +533,15 @@ class OpenAICompatibleProvider:
                 completion_responses = _ResponsesEnvelope.model_validate_json(body)
             except (ValueError, TypeError, RecursionError) as error:
                 raise ProviderError(
-                    "provider returned an invalid response", failure_code="RESPONSE_SCHEMA"
+                    "provider returned an invalid response",
+                    failure_code="RESPONSE_SCHEMA",
+                    response_sha256=response_sha256,
                 ) from error
             if not completion_responses.output:
                 raise ProviderError(
-                    "provider returned no output", failure_code="RESPONSE_NO_CHOICES"
+                    "provider returned no output",
+                    failure_code="RESPONSE_NO_CHOICES",
+                    response_sha256=response_sha256,
                 )
             response_text, tool_calls, reasoning_content_present = _responses_output_values(
                 completion_responses
@@ -546,11 +558,15 @@ class OpenAICompatibleProvider:
                 completion = _CompletionEnvelope.model_validate_json(body)
             except (ValueError, TypeError, RecursionError) as error:
                 raise ProviderError(
-                    "provider returned an invalid response", failure_code="RESPONSE_SCHEMA"
+                    "provider returned an invalid response",
+                    failure_code="RESPONSE_SCHEMA",
+                    response_sha256=response_sha256,
                 ) from error
             if not completion.choices:
                 raise ProviderError(
-                    "provider returned no choices", failure_code="RESPONSE_NO_CHOICES"
+                    "provider returned no choices",
+                    failure_code="RESPONSE_NO_CHOICES",
+                    response_sha256=response_sha256,
                 )
             message = completion.choices[0].message
             tool_calls = tuple(
@@ -577,6 +593,7 @@ class OpenAICompatibleProvider:
                 "provider omitted usage for budgeted response",
                 budget_code="TOKEN_BUDGET",
                 failure_code="USAGE_MISSING",
+                response_sha256=response_sha256,
             )
         if usage_present:
             if (
@@ -589,6 +606,10 @@ class OpenAICompatibleProvider:
                     "provider returned invalid token usage",
                     budget_code="TOKEN_BUDGET",
                     failure_code="USAGE_INVALID",
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    reasoning_tokens=reasoning_tokens,
+                    response_sha256=response_sha256,
                 )
             # Some providers report reasoning_tokens as a subset of completion_tokens
             # (e.g. GLM), while others report it separately. total - prompt is the
@@ -599,6 +620,10 @@ class OpenAICompatibleProvider:
                     "provider returned invalid token usage",
                     budget_code="TOKEN_BUDGET",
                     failure_code="USAGE_INVALID",
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    reasoning_tokens=reasoning_tokens,
+                    response_sha256=response_sha256,
                 )
             if max_tokens is not None and billed_output_tokens > max_tokens:
                 # 成本护栏覆盖服务商报告的完整输出 token; 不假设 reasoning token
@@ -610,10 +635,16 @@ class OpenAICompatibleProvider:
                     reasoning_tokens=reasoning_tokens,
                     budget_code="TOKEN_BUDGET",
                     failure_code="BUDGET_EXCEEDED",
+                    response_sha256=response_sha256,
                 )
         if not response_text and not tool_calls:
             raise ProviderError(
-                "provider returned no final content", failure_code="RESPONSE_CONTENT_MISSING"
+                "provider returned no final content",
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                reasoning_tokens=reasoning_tokens,
+                failure_code="RESPONSE_CONTENT_MISSING",
+                response_sha256=response_sha256,
             )
         return ProviderResponse(
             text=response_text,
