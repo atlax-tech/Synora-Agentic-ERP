@@ -235,7 +235,7 @@ class LabSelection(StrictModel):
     selected_id: str = Field(min_length=1, max_length=120)
     action: SelectionAction
     evidence_ids: Annotated[tuple[str, ...], BeforeValidator(_tuple_from_json)] = Field(
-        min_length=1, max_length=20
+        min_length=1, max_length=240
     )
     version_digests: dict[str, str] = Field(default_factory=dict)
     reason: str = Field(min_length=1, max_length=500)

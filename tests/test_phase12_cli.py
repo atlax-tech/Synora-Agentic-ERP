@@ -49,15 +49,43 @@ def test_cli_candidate_selection_and_rollback(tmp_path: Path) -> None:
                 "prompt-candidate",
                 "--split",
                 "dev",
+                "--repeats",
+                "3",
             ]
         )
         == 0
     )
-    evidence_id = json.loads(
-        (tmp_path / "output" / "phase12" / "evaluation-replay-prompt-candidate-dev.jsonl")
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "evaluate",
+                "--method",
+                "baseline",
+                "--split",
+                "dev",
+                "--repeats",
+                "3",
+            ]
+        )
+        == 0
+    )
+    candidate_evidence = [
+        json.loads(line)["experiment_id"]
+        for line in (
+            tmp_path / "output" / "phase12" / "evaluation-replay-prompt-candidate-dev.jsonl"
+        )
         .read_text(encoding="utf-8")
-        .splitlines()[0]
-    )["experiment_id"]
+        .splitlines()
+    ]
+    baseline_evidence = [
+        json.loads(line)["experiment_id"]
+        for line in (tmp_path / "output" / "phase12" / "evaluation-replay-baseline-dev.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    evidence_ids = [*candidate_evidence, *baseline_evidence]
     assert (
         main(
             [
@@ -67,7 +95,7 @@ def test_cli_candidate_selection_and_rollback(tmp_path: Path) -> None:
                 "--candidate-id",
                 candidate_id,
                 "--evidence",
-                evidence_id,
+                *evidence_ids,
                 "--reason",
                 "dev",
             ]
@@ -85,7 +113,7 @@ def test_cli_candidate_selection_and_rollback(tmp_path: Path) -> None:
                 "--selection-id",
                 selection_id,
                 "--evidence",
-                evidence_id,
+                *evidence_ids,
                 "--reason",
                 "regression",
             ]
