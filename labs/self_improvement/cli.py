@@ -415,6 +415,58 @@ def _validate_evidence(
     versions = {record.code_version for record in records}
     if len(versions) != 1:
         raise ValueError("selection evidence must use one experiment code version")
+    if records and all(record.experiment_id.startswith("phase12-exp-live-") for record in records):
+        plan_path = root / PHASE12_RELATIVE_ROOT / "phase12-experiment-manifest.json"
+        if not plan_path.is_file() or plan_path.is_symlink():
+            raise ValueError("live selection evidence requires a frozen experiment plan")
+        plan = ExperimentPlan.model_validate_json(plan_path.read_text(encoding="utf-8"))
+        if expected_method not in plan.dev_methods or split != "dev":
+            raise ValueError("live selection evidence must use a preregistered dev method")
+        expected = {
+            (expected_method, repeat, case.case_id)
+            for repeat in range(1, 4)
+            for case in manifest.cases
+            if case.split == split
+        }
+        by_case = {case.case_id for case in manifest.cases if case.split == split}
+        actual: set[tuple[str, int, str]] = set()
+        candidate = (
+            read_candidate(root / PHASE12_RELATIVE_ROOT, candidate_id) if candidate_id else None
+        )
+        for record in records:
+            if (
+                record.experiment_plan_id != plan.plan_id
+                or record.code_version != plan.code_version
+            ):
+                raise ValueError("live selection evidence is bound to a different plan")
+            if record.model != plan.model or record.dataset_digest != manifest.dataset_digest:
+                raise ValueError("live selection evidence uses a different model or dataset")
+            case_id = record.case_id or next(
+                (value for value in by_case if record.experiment_id.endswith("-" + value)), None
+            )
+            key = (record.method, record.repeat, case_id or "")
+            if key in actual:
+                raise ValueError("live selection evidence has duplicate trials")
+            actual.add(key)
+            if record.method != expected_method or case_id is None or key not in expected:
+                raise ValueError("live selection evidence coverage mismatch")
+            if record.status not in {"SUCCEEDED", "FAILED", "UNKNOWN", "REJECTED"}:
+                raise ValueError("live selection evidence contains an incomplete trial")
+            if record.calls < 1 or len(record.reservation_keys) != record.calls:
+                raise ValueError("live selection evidence reservation mismatch")
+            if candidate_id is None:
+                if record.candidate_id is not None:
+                    raise ValueError("baseline live evidence unexpectedly has a candidate")
+            elif (
+                candidate is None
+                or record.candidate_id != candidate.candidate_id
+                or record.candidate_content_sha256 != candidate.content_sha256
+                or record.candidate_boundary_sha256 != candidate.boundary_sha256
+            ):
+                raise ValueError("live selection evidence candidate digest binding mismatch")
+        if actual != expected:
+            raise ValueError("live selection evidence coverage mismatch")
+        return
     expected_ids = {
         f"phase12-exp-replay-{expected_method.lower()}-{repeat}-{case.case_id}"
         for repeat in range(1, 4)
@@ -567,6 +619,10 @@ def _cmd_freeze_experiment(args: argparse.Namespace) -> dict[str, object]:
     output = args.root / PHASE12_RELATIVE_ROOT
     candidate_paths = sorted((output / "candidates").glob("*.json"))
     candidates = tuple(read_candidate(output, path.stem) for path in candidate_paths)
+    prompt_candidates = tuple(candidate for candidate in candidates if candidate.kind == "PROMPT")
+    skill_candidates = tuple(candidate for candidate in candidates if candidate.kind == "SKILL")
+    if len(prompt_candidates) != 1 or len(skill_candidates) != 1:
+        raise ValueError("freeze requires exactly one Prompt and one Skill candidate")
     candidate_ids = tuple(candidate.candidate_id for candidate in candidates)
     plan = ExperimentPlan(
         plan_id=args.plan_id,
