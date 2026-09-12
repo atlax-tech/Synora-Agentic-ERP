@@ -349,3 +349,92 @@ def train_dpo(
         tuple(history),
     )
     return _write_result(result, weight_path)
+
+
+def train_reinforce(
+    manifest: DatasetManifest,
+    *,
+    seed: int = 17,
+    episodes: int = 300,
+    weight_path: Path | None = None,
+) -> TrainResult:
+    """Run a bounded REINFORCE loop in the local procurement environment."""
+    if episodes < 1 or episodes > 300:
+        raise ValueError("REINFORCE episode bound must be between one and 300")
+    torch, _ = _torch()
+    from .rl import ProcurementEnv, safe_reward_config
+
+    torch.manual_seed(seed)
+    model = _new_model(seed)
+    initial = copy.deepcopy(model)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    cases = tuple(case for case in manifest.cases if case.split == "train")
+    if not cases:
+        raise ValueError("no train cases are available")
+    baseline = 0.0
+    returns: list[float] = []
+    successes = 0
+    invalid_actions = 0
+    for episode in range(episodes):
+        case = cases[episode % len(cases)]
+        environment = ProcurementEnv(case, reward=safe_reward_config())
+        log_probs: list[Any] = []
+        rewards: list[float] = []
+        final_status = "TRUNCATED"
+        safe = True
+        for _ in range(8):
+            state = environment.state
+            values = torch.tensor([state_features(state)], dtype=torch.float32)
+            distribution = torch.distributions.Categorical(logits=model(values))
+            selected = distribution.sample()
+            action = ALL_ACTIONS[int(selected.item())]
+            transition = environment.step(action)
+            log_probs.append(distribution.log_prob(selected))
+            rewards.append(float(transition.reward))
+            final_status = transition.status
+            safe = safe and transition.safety_passed
+            invalid_actions += int(not transition.safety_passed)
+            if transition.done:
+                break
+        discounted: list[float] = []
+        total = 0.0
+        for reward in reversed(rewards):
+            total = reward + 0.95 * total
+            discounted.append(total)
+        discounted.reverse()
+        episode_return = sum(rewards)
+        returns.append(episode_return)
+        baseline = 0.9 * baseline + 0.1 * episode_return
+        if log_probs:
+            advantages = torch.tensor(
+                [value - baseline for value in discounted], dtype=torch.float32
+            )
+            loss = -(torch.stack(log_probs) * advantages).sum()
+            if not bool(torch.isfinite(loss)):
+                raise ValueError("REINFORCE produced a non-finite loss")
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        successes += int(safe and final_status == case.expected_status)
+    metrics = {
+        "episodes": float(episodes),
+        "mean_return": sum(returns) / len(returns),
+        "success_rate": successes / episodes,
+        "invalid_actions": float(invalid_actions),
+    }
+    path_name = f"output/phase12/weights-reinforce-{seed}.json"
+    result = TrainResult(
+        model,
+        _artifact(
+            "reinforce",
+            seed,
+            manifest,
+            initial,
+            model,
+            metrics,
+            {"learning_rate": 0.001, "gamma": 0.95, "episodes": episodes},
+            path_name,
+        ),
+        tuple(returns),
+    )
+    return _write_result(result, weight_path)
