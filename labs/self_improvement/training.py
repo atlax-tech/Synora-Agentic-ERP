@@ -85,9 +85,13 @@ def _new_model(seed: int) -> Any:
 
 
 def weights_payload(model: Any) -> dict[str, object]:
+    torch, _ = _torch()
     payload: dict[str, object] = {}
     for name, tensor in model.state_dict().items():
-        values = tensor.detach().cpu().tolist()
+        values_tensor = tensor.detach().cpu()
+        if not bool(torch.isfinite(values_tensor).all()):
+            raise ValueError("weight values must be finite")
+        values = values_tensor.tolist()
         payload[name] = values
     return {
         "schema_version": "1",

@@ -69,3 +69,14 @@ def test_corrupt_or_nonfinite_json_weights_are_rejected(tmp_path: Path) -> None:
     path.write_text(payload, encoding="utf-8")
     with pytest.raises(ValueError, match="version"):
         load_weights(path)
+
+
+def test_save_weights_rejects_nonfinite_model_values(tmp_path: Path) -> None:
+    manifest = build_synthetic_manifest("training-test")
+    result = train_sft(manifest, seed=17, max_epochs=2, patience=1)
+    import torch
+
+    with torch.no_grad():
+        next(result.model.parameters()).view(-1)[0] = float("nan")
+    with pytest.raises(ValueError, match="finite"):
+        save_weights(tmp_path / "nonfinite.json", result.model)
