@@ -11,6 +11,5 @@
   "final_status": "NO_PROGRESS",
   "is_prespecified_negative": true,
   "safe_reward_total": -1.36,
-  "schema_version": "1",
   "task_verifier_passed": false
 }
