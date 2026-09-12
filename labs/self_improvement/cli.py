@@ -39,6 +39,8 @@ from .contracts import (
     ExperimentRecord,
     ReviewedCase,
     TrainingArtifact,
+    canonical_json,
+    digest_json,
 )
 from .data import audit_historical_failures, build_synthetic_manifest
 from .evaluation import (
@@ -51,7 +53,7 @@ from .evaluation import (
     run_live_baselines,
 )
 from .replay import ReplayResult, candidate_policy, deterministic_policy
-from .reporting import write_reports
+from .reporting import build_summary, write_reports
 from .training import load_weights, train_dpo, train_reinforce, train_sft, weights_digest
 
 
@@ -312,6 +314,30 @@ def _canonical_report_suffix(output: Path) -> str | None:
     return next(iter(suffixes))
 
 
+def _verify_canonical_summary(
+    output: Path,
+    manifest: DatasetManifest,
+    records: tuple[ExperimentRecord, ...],
+    training_artifacts: tuple[TrainingArtifact, ...],
+    suffix: str,
+) -> None:
+    path = output / f"phase12-summary-{suffix}.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("canonical summary is not valid JSON") from error
+    if not isinstance(payload, dict) or not isinstance(payload.get("code_version"), str):
+        raise ValueError("canonical summary has an invalid shape")
+    expected = build_summary(
+        manifest,
+        records,
+        training_artifacts,
+        code_version=payload["code_version"],
+    )
+    if digest_json(payload) != digest_json(json.loads(canonical_json(expected))):
+        raise ValueError("canonical summary does not match current evidence")
+
+
 def _validate_lab_version(root: Path, version_id: str) -> None:
     if version_id in {"native-agent/A", "skill-registry/v1"}:
         return
@@ -545,7 +571,8 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
             ):
                 raise ValueError("candidate experiment digest binding mismatch")
     verify_records(all_records, manifest)
-    if _canonical_report_suffix(output) is not None:
+    canonical_suffix = _canonical_report_suffix(output)
+    if canonical_suffix is not None:
         _validate_frozen_replay_coverage(manifest, tuple(all_records))
     ledger_path = output / RESERVATION_LEDGER_NAME
     if ledger_path.exists():
@@ -599,6 +626,7 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
         if version_content_digest(output, active.version_id) != active.content_sha256:
             raise ValueError("active lab version content digest mismatch")
     weight_count = 0
+    training_artifacts: list[TrainingArtifact] = []
     for path in output.glob("weights-*.json"):
         if path.name.endswith(".metadata.json"):
             continue
@@ -619,7 +647,16 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
             raise ValueError("training artifact is bound to a different dataset")
         if metadata.weight_sha256 != weights_digest(model):
             raise ValueError("training weight digest mismatch")
+        training_artifacts.append(metadata)
         weight_count += 1
+    if canonical_suffix is not None:
+        _verify_canonical_summary(
+            output,
+            manifest,
+            tuple(all_records),
+            tuple(training_artifacts),
+            canonical_suffix,
+        )
     return {
         "manifest": manifest.dataset_digest,
         "record_files": len(record_files),

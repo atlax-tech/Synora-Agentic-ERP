@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 
 from labs.self_improvement.artifacts import read_records
-from labs.self_improvement.cli import _manifest, _validate_frozen_replay_coverage, main
+from labs.self_improvement.cli import (
+    _canonical_report_suffix,
+    _manifest,
+    _validate_frozen_replay_coverage,
+    main,
+)
 
 
 def _write_historical_failure(root: Path) -> None:
@@ -233,6 +238,16 @@ def test_cli_report_rejects_trimmed_frozen_evidence(tmp_path: Path) -> None:
     records = read_records(tmp_path, "output/phase12/evaluation-replay-baseline-dev.jsonl")
     with pytest.raises(ValueError, match="coverage mismatch"):
         _validate_frozen_replay_coverage(manifest, records)
+
+
+def test_canonical_reports_must_have_one_shared_suffix(tmp_path: Path) -> None:
+    output = tmp_path / "output" / "phase12"
+    output.mkdir(parents=True)
+    (output / "phase12-stage-report-draft-a.md").write_text("stage", encoding="utf-8")
+    (output / "phase12-adoption-card-a.md").write_text("adoption", encoding="utf-8")
+    (output / "phase12-summary-b.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="share one code suffix"):
+        _canonical_report_suffix(output)
 
 
 def test_cli_selection_rejects_parent_version_mismatch(tmp_path: Path) -> None:
