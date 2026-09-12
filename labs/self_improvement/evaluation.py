@@ -60,6 +60,11 @@ class ReservationLedger:
     path: Path
 
     def __post_init__(self) -> None:
+        parent = self.path.parent
+        while parent != parent.parent:
+            if parent.is_symlink():
+                raise ValueError("reservation ledger path cannot traverse a symlink")
+            parent = parent.parent
         if self.path.exists() and self.path.is_symlink():
             raise ValueError("reservation ledger cannot be a symlink")
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -183,7 +188,8 @@ class ReservationLedger:
         keys = tuple(
             key
             for key, (_, state) in self._states.items()
-            if state != "RECORDED" and any(key.endswith(suffix) for suffix in wanted)
+            if state in {"COMPLETED", "FAILED", "UNKNOWN"}
+            and any(key.endswith(suffix) for suffix in wanted)
         )
         self.mark_recorded(keys)
 

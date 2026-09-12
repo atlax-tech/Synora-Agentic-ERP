@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from labs.self_improvement.candidates import (
+    apply_selection,
     build_selection,
     lab_boundary_digest,
     make_prompt_candidate,
@@ -13,6 +14,7 @@ from labs.self_improvement.candidates import (
     write_candidate,
     write_selection,
 )
+from labs.self_improvement.contracts import digest_bytes
 
 
 def test_prompt_candidate_preserves_fixed_boundary_and_round_trips(tmp_path: Path) -> None:
@@ -57,3 +59,28 @@ def test_selection_requires_evidence_and_is_immutable(tmp_path: Path) -> None:
     write_selection(tmp_path, selection)
     with pytest.raises(FileExistsError):
         write_selection(tmp_path, selection)
+
+
+def test_apply_selection_removes_receipt_when_activation_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    candidate = make_prompt_candidate(("source",), "Verify evidence before finishing.")
+    write_candidate(tmp_path, candidate)
+    selection = build_selection(
+        "native-agent/A",
+        candidate.candidate_id,
+        ("phase12-exp-1",),
+        "dev",
+        version_digests={
+            "native-agent/A": digest_bytes(b"native"),
+            candidate.candidate_id: candidate.content_sha256,
+        },
+    )
+
+    def fail_activation(_root: Path, _selection: object) -> Path:
+        raise OSError("simulated activation failure")
+
+    monkeypatch.setattr("labs.self_improvement.candidates.activate_selection", fail_activation)
+    with pytest.raises(OSError, match="activation"):
+        apply_selection(tmp_path, selection)
+    assert not (tmp_path / "selections" / f"{selection.selection_id}.json").exists()

@@ -137,11 +137,19 @@ def write_selection(root: Path, selection: LabSelection) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() or path.is_symlink():
         raise FileExistsError(path)
-    path.write_text(
+    encoded = (
         json.dumps(selection.model_dump(mode="json"), ensure_ascii=True, sort_keys=True, indent=2)
-        + "\n",
-        encoding="utf-8",
-    )
+        + "\n"
+    ).encode("utf-8")
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.write(descriptor, encoded)
+        os.fsync(descriptor)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    finally:
+        os.close(descriptor)
     return path
 
 

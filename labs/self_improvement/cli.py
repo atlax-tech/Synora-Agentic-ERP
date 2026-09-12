@@ -225,6 +225,20 @@ def _reservation_key_for_record(record: ExperimentRecord) -> str:
     return f"repeat:{record.repeat}:case:{case_id}"
 
 
+def _live_record_suffixes(root: Path) -> tuple[str, ...]:
+    output = root / PHASE12_RELATIVE_ROOT
+    if not output.exists():
+        return ()
+    suffixes: list[str] = []
+    for path in output.glob("*.jsonl"):
+        if path.name == RESERVATION_LEDGER_NAME:
+            continue
+        for record in read_records(root, str(path.relative_to(root))):
+            if record.experiment_id.startswith("phase12-exp-live-") and record.calls > 0:
+                suffixes.append(_reservation_key_for_record(record))
+    return tuple(suffixes)
+
+
 def _validate_lab_version(root: Path, version_id: str) -> None:
     if version_id in {"native-agent/A", "skill-registry/v1"}:
         return
@@ -314,6 +328,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             raise RuntimeError(f"live provider unavailable: {error.failure_code}") from error
         batch_id = args.batch_id or f"cli-{code_version()}-{time.time_ns()}"
         ledger = ReservationLedger(args.root / PHASE12_RELATIVE_ROOT / RESERVATION_LEDGER_NAME)
+        ledger.mark_recorded_matching(_live_record_suffixes(args.root))
         budget = CallBudget(
             maximum=1_200,
             used=_existing_calls(args.root),
