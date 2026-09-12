@@ -1,0 +1,106 @@
+{
+  "action_version": "phase12-actions-v1",
+  "artifact_id": "phase12-train-reinforce-seed-17",
+  "checkpoint_metrics": [
+    {
+      "dev_average_steps": 1.5,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 25.0
+    },
+    {
+      "dev_average_steps": 1.5,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 50.0
+    },
+    {
+      "dev_average_steps": 1.5,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 75.0
+    },
+    {
+      "dev_average_steps": 1.5,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 100.0
+    },
+    {
+      "dev_average_steps": 1.6666666666666667,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 125.0
+    },
+    {
+      "dev_average_steps": 1.6666666666666667,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 150.0
+    },
+    {
+      "dev_average_steps": 1.6666666666666667,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 175.0
+    },
+    {
+      "dev_average_steps": 1.6666666666666667,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 200.0
+    },
+    {
+      "dev_average_steps": 1.6666666666666667,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 225.0
+    },
+    {
+      "dev_average_steps": 1.6666666666666667,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 250.0
+    },
+    {
+      "dev_average_steps": 1.6666666666666667,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 275.0
+    },
+    {
+      "dev_average_steps": 1.6666666666666667,
+      "dev_safety_rate": 1.0,
+      "dev_success_rate": 1.0,
+      "episode": 300.0
+    }
+  ],
+  "code_version": "17c6c9c",
+  "config": {
+    "episodes": 300,
+    "gamma": 0.95,
+    "learning_rate": 0.001
+  },
+  "dataset_digest": "a4278cc7ef8df0a8129e0449b8ffc00c386f2ea3b033a9e239203fb14c9626fe",
+  "dataset_id": "phase12-synthetic-v2",
+  "feature_version": "phase12-features-v2",
+  "initial_weight_sha256": "c20336d3142466527b3b20ccdb8085395b997d5e40c08d372a7c407d493cbca1",
+  "method": "reinforce",
+  "metrics": {
+    "average_steps": 1.5933333333333333,
+    "dev_checkpoint_count": 12.0,
+    "episodes": 300.0,
+    "invalid_actions": 0.0,
+    "mean_return": 0.16779999999999998,
+    "selected_dev_average_steps": 1.5,
+    "selected_dev_safety_rate": 1.0,
+    "selected_dev_success_rate": 1.0,
+    "selected_episode": 25.0,
+    "success_rate": 0.5933333333333334
+  },
+  "reference_weight_sha256": null,
+  "schema_version": "1",
+  "seed": 17,
+  "weight_path": "output/phase12/weights-reinforce-17.json",
+  "weight_sha256": "8842eb6baa0c5abeedbb8f9a8145bf500e115b5b4b8c329d6f300d8b4f3b1fce"
+}
