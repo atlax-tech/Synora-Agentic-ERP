@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from collections.abc import Iterable
 from pathlib import Path
@@ -157,6 +158,32 @@ def write_records(root: Path, name: str, records: Iterable[ExperimentRecord]) ->
         ),
         encoding="utf-8",
     )
+    return path
+
+
+def append_record(root: Path, name: str, record: ExperimentRecord) -> Path:
+    """Append one durable result so an interrupted live batch remains auditable."""
+    if "/" in name or ".." in name or not name.endswith(".jsonl"):
+        raise ValueError("record file name is invalid")
+    path = _target(root, f"{PHASE12_RELATIVE_ROOT}/{name}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise ValueError("record file must be a regular file")
+    if path.exists():
+        existing_ids = {
+            item.experiment_id for item in read_records(root, str(path.relative_to(root)))
+        }
+        if record.experiment_id in existing_ids:
+            raise FileExistsError(f"experiment record already exists: {record.experiment_id}")
+    encoded = (
+        json.dumps(record.model_dump(mode="json"), ensure_ascii=True, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    try:
+        os.write(descriptor, encoded)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
     return path
 
 

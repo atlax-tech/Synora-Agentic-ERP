@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
-import time
 from pathlib import Path
 
 from .artifacts import (
     PHASE12_RELATIVE_ROOT,
+    append_record,
     code_version,
     read_json,
     read_manifest,
@@ -50,7 +51,7 @@ from .evaluation import (
     best_of_n_replay,
     evaluate_replay_cases,
     reflection_replay,
-    run_live_baselines,
+    run_live_methods,
 )
 from .replay import ReplayResult, candidate_policy, deterministic_policy
 from .reporting import build_summary, write_reports
@@ -236,6 +237,14 @@ def _reservation_key_for_record(record: ExperimentRecord) -> str | None:
     return record.reservation_key
 
 
+def _reservation_keys_for_record(record: ExperimentRecord) -> tuple[str, ...]:
+    if not record.experiment_id.startswith("phase12-exp-live-"):
+        return ()
+    if record.reservation_keys:
+        return record.reservation_keys
+    return (record.reservation_key,) if record.reservation_key is not None else ()
+
+
 def _live_record_keys(root: Path) -> tuple[str, ...]:
     output = root / PHASE12_RELATIVE_ROOT
     if not output.exists():
@@ -245,10 +254,15 @@ def _live_record_keys(root: Path) -> tuple[str, ...]:
         if path.name == RESERVATION_LEDGER_NAME:
             continue
         for record in read_records(root, str(path.relative_to(root))):
-            key = _reservation_key_for_record(record)
-            if key is not None and record.calls > 0:
-                keys.append(key)
+            if record.calls > 0:
+                keys.extend(_reservation_keys_for_record(record))
     return tuple(keys)
+
+
+def _validated_batch_id(value: str | None) -> str:
+    if value is None or not re.fullmatch(r"[a-z0-9][a-z0-9-]{2,80}", value):
+        raise ValueError("live evaluation requires a lowercase explicit batch id")
+    return value
 
 
 _FROZEN_REPLAY_COVERAGE: tuple[tuple[str, str], ...] = (
@@ -450,15 +464,23 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             candidate_boundary_sha256=candidate_boundary_sha256,
         )
     else:
-        if args.method != "baseline":
-            raise ValueError("live engine currently supports only the baseline method")
         from agent_runtime.providers import ProviderError, provider_for_role
 
+        batch_id = _validated_batch_id(args.batch_id)
+        candidate_id = None
+        candidate_content = None
+        candidate_content_sha256 = None
+        candidate_boundary_sha256 = None
+        if args.method in {"prompt-candidate", "skill-candidate"}:
+            candidate = _candidate_for_method(args.root, args.method)
+            candidate_id = candidate.candidate_id
+            candidate_content = candidate.content
+            candidate_content_sha256 = candidate.content_sha256
+            candidate_boundary_sha256 = candidate.boundary_sha256
         try:
             provider = provider_for_role("assist")
         except ProviderError as error:
             raise RuntimeError(f"live provider unavailable: {error.failure_code}") from error
-        batch_id = args.batch_id or f"cli-{code_version()}-{time.time_ns()}"
         ledger = ReservationLedger(args.root / PHASE12_RELATIVE_ROOT / RESERVATION_LEDGER_NAME)
         ledger.reconcile_reserved()
         ledger.mark_recorded_matching(_live_record_keys(args.root))
@@ -469,29 +491,35 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             batch_id=batch_id,
         )
         cases = tuple(case for case in manifest.cases if case.split == args.split)
-        records = run_live_baselines(
+        record_name = f"evaluation-live-{args.method}-{args.split}-{batch_id}.jsonl"
+        target = args.root / PHASE12_RELATIVE_ROOT / record_name
+        if target.exists() or target.is_symlink():
+            raise FileExistsError(f"live batch output already exists: {record_name}")
+
+        def persist(record: ExperimentRecord) -> None:
+            append_record(args.root, record_name, record)
+            ledger.mark_recorded_matching(record.reservation_keys)
+
+        records = run_live_methods(
             cases,
             provider,
             budget,
+            method=args.method,
             code_version=code_version(),
             model=getattr(provider, "model", "assist"),
             repeats=args.repeats,
             dataset_id=manifest.dataset_id,
             dataset_digest=manifest.dataset_digest,
+            candidate_id=candidate_id,
+            candidate_content=candidate_content,
+            candidate_content_sha256=candidate_content_sha256,
+            candidate_boundary_sha256=candidate_boundary_sha256,
+            record_sink=persist,
         )
-    path = write_records(
-        args.root, f"evaluation-{args.engine}-{args.method}-{args.split}.jsonl", records
-    )
-    if args.engine == "live":
-        ledger = ReservationLedger(args.root / PHASE12_RELATIVE_ROOT / RESERVATION_LEDGER_NAME)
-        ledger.mark_recorded_matching(
-            tuple(
-                key
-                for record in records
-                if record.calls > 0
-                for key in (_reservation_key_for_record(record),)
-                if key is not None
-            )
+        path = target
+    if args.engine == "replay":
+        path = write_records(
+            args.root, f"evaluation-{args.engine}-{args.method}-{args.split}.jsonl", records
         )
     return {
         "path": str(path),

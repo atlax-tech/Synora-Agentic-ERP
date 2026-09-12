@@ -6,6 +6,7 @@ import pytest
 
 from labs.self_improvement.artifacts import (
     PHASE12_RELATIVE_ROOT,
+    append_record,
     read_manifest,
     read_records,
     verify_manifest,
@@ -65,3 +66,18 @@ def test_tampered_manifest_and_duplicate_records_are_rejected(tmp_path: Path) ->
     )
     with pytest.raises(ValueError, match="unique"):
         verify_records((*records, records[0]), manifest)
+
+
+def test_append_record_is_durable_and_write_once_per_experiment(tmp_path: Path) -> None:
+    manifest = build_synthetic_manifest("artifact-test")
+    write_manifest(tmp_path, manifest)
+    record = evaluate_replay_cases(
+        manifest.cases[:1],
+        deterministic_policy,
+        code_version="artifact-test",
+        dataset_digest=manifest.dataset_digest,
+    )[0]
+    path = append_record(tmp_path, "live-batch.jsonl", record)
+    assert read_records(tmp_path, str(path.relative_to(tmp_path))) == (record,)
+    with pytest.raises(FileExistsError, match="already exists"):
+        append_record(tmp_path, "live-batch.jsonl", record)

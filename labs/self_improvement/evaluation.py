@@ -7,7 +7,7 @@ import json
 import os
 import random
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol, cast
@@ -787,6 +787,7 @@ def run_live_methods(
     candidate_content: str | None = None,
     candidate_content_sha256: str | None = None,
     candidate_boundary_sha256: str | None = None,
+    record_sink: Callable[[ExperimentRecord], None] | None = None,
 ) -> tuple[ExperimentRecord, ...]:
     """Run any bounded live method on one event loop and shared budget."""
     if repeats < 1 or repeats > 3:
@@ -802,23 +803,24 @@ def run_live_methods(
         records: list[ExperimentRecord] = []
         for repeat in range(1, repeats + 1):
             for case in values:
-                records.append(
-                    await _live_method_case(
-                        case,
-                        provider,
-                        budget,
-                        method=method,
-                        repeat=repeat,
-                        code_version=code_version,
-                        model=model,
-                        dataset_id=dataset_id,
-                        dataset_digest=bound_digest,
-                        candidate_id=candidate_id,
-                        candidate_content=candidate_content,
-                        candidate_content_sha256=candidate_content_sha256,
-                        candidate_boundary_sha256=candidate_boundary_sha256,
-                    )
+                record = await _live_method_case(
+                    case,
+                    provider,
+                    budget,
+                    method=method,
+                    repeat=repeat,
+                    code_version=code_version,
+                    model=model,
+                    dataset_id=dataset_id,
+                    dataset_digest=bound_digest,
+                    candidate_id=candidate_id,
+                    candidate_content=candidate_content,
+                    candidate_content_sha256=candidate_content_sha256,
+                    candidate_boundary_sha256=candidate_boundary_sha256,
                 )
+                if record_sink is not None:
+                    record_sink(record)
+                records.append(record)
         return tuple(records)
 
     return asyncio.run(execute())
