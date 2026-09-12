@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from labs.self_improvement.cli import main
@@ -107,3 +110,23 @@ def test_cli_candidate_method_and_repeats_are_bounded(tmp_path: Path) -> None:
         )
         == 2
     )
+
+
+def test_cli_module_runs_from_clean_python_process(tmp_path: Path) -> None:
+    environment = dict(os.environ)
+    environment.pop("PYTHONPATH", None)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "labs.self_improvement.cli",
+            "--root",
+            str(tmp_path),
+            "prepare-data",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    assert result.returncode == 0, result.stderr
