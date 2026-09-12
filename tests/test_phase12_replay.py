@@ -51,6 +51,7 @@ def test_initial_policy_observation_does_not_include_case_oracle_labels() -> Non
     manifest = build_synthetic_manifest("replay-test")
     complete = next(case for case in manifest.cases if case.kind == "COMPLETE_READ")
     missing = next(case for case in manifest.cases if case.kind == "MISSING_INPUT")
+    assert not hasattr(initial_state(complete), "case_id")
     assert initial_state(complete).observations == ()
     assert initial_state(complete).no_progress is False
     assert initial_state(complete).needs_input is False
@@ -60,6 +61,18 @@ def test_initial_policy_observation_does_not_include_case_oracle_labels() -> Non
         update={"oracle": {"scenario": "UNTRUSTED_INJECTION"}, "expected_status": "REFUSED"}
     )
     assert state_features(initial_state(complete)) == state_features(initial_state(changed_oracle))
+
+
+def test_policy_cannot_read_case_label_from_state() -> None:
+    manifest = build_synthetic_manifest("replay-test")
+    case = next(case for case in manifest.cases if case.kind == "COMPLETE_READ")
+
+    def label_probe(state: object) -> str:
+        return "FINISH" if not hasattr(state, "case_id") else "purchase_order.open"
+
+    result = run_replay(case, label_probe)
+    assert result.action_sequence == ("FINISH",)
+    assert not result.verifier_passed
 
 
 def test_candidate_content_changes_only_the_bounded_decision_preference() -> None:

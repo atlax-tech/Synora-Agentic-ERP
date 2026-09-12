@@ -33,7 +33,6 @@ ALL_ACTIONS: tuple[ActionName, ...] = (*tuple(sorted(READ_ACTIONS)), "ASK_INPUT"
 
 @dataclass(frozen=True)
 class ReplayState:
-    case_id: str
     observations: tuple[str, ...]
     failed_tools: tuple[str, ...]
     no_progress: bool
@@ -69,7 +68,6 @@ def initial_state(case: DatasetCase, max_steps: int = 8) -> ReplayState:
     after the read action that encountered it.
     """
     return ReplayState(
-        case.case_id,
         (),
         (),
         False,
@@ -88,7 +86,6 @@ def _state_update(
         if action in state.observations:
             return (
                 ReplayState(
-                    state.case_id,
                     state.observations,
                     state.failed_tools,
                     True,
@@ -102,7 +99,6 @@ def _state_update(
         if kind == "TOOL_UNKNOWN":
             return (
                 ReplayState(
-                    state.case_id,
                     state.observations,
                     (*state.failed_tools, action),
                     state.no_progress,
@@ -116,7 +112,6 @@ def _state_update(
         if kind == "MISSING_INPUT":
             return (
                 ReplayState(
-                    state.case_id,
                     (*state.observations, f"{action}:MISSING_INPUT"),
                     state.failed_tools,
                     state.no_progress,
@@ -130,7 +125,6 @@ def _state_update(
         if kind == "DUPLICATE_NO_PROGRESS":
             return (
                 ReplayState(
-                    state.case_id,
                     (*state.observations, action),
                     state.failed_tools,
                     True,
@@ -144,7 +138,6 @@ def _state_update(
         if kind == "UNTRUSTED_INJECTION":
             return (
                 ReplayState(
-                    state.case_id,
                     (*state.observations, f"{action}:UNTRUSTED_CONTENT"),
                     state.failed_tools,
                     state.no_progress,
@@ -158,7 +151,6 @@ def _state_update(
         if kind == "STALE_CONFLICT":
             return (
                 ReplayState(
-                    state.case_id,
                     (*state.observations, "purchase_order.open:CONFLICT"),
                     state.failed_tools,
                     state.no_progress,
@@ -171,7 +163,6 @@ def _state_update(
             )
         return (
             ReplayState(
-                state.case_id,
                 (*state.observations, action),
                 state.failed_tools,
                 state.no_progress,
@@ -184,7 +175,6 @@ def _state_update(
         )
     return (
         ReplayState(
-            state.case_id,
             (*state.observations, action),
             state.failed_tools,
             state.no_progress,
@@ -348,7 +338,18 @@ def candidate_policy(content: str) -> Policy:
 
 
 def policy_from_actions(actions: Mapping[str, str]) -> Policy:
-    def choose(state: ReplayState) -> str:
-        return actions.get(state.case_id, "FINISH")
+    """Compatibility helper for a single fixed action without exposing case IDs.
+
+    Older tests supplied a case-id-to-action mapping.  Dispatching on that key would
+    leak the environment label, so a multi-entry mapping is rejected and a one-entry
+    mapping is treated as a fixed policy.
+    """
+    values = tuple(actions.values())
+    if len(values) > 1:
+        raise ValueError("case-keyed policies are not supported in ReplayState")
+    action = values[0] if values else "FINISH"
+
+    def choose(_state: ReplayState) -> str:
+        return action
 
     return choose
