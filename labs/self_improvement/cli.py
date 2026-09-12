@@ -361,6 +361,12 @@ def _verify_canonical_summary(
         records,
         training_artifacts,
         code_version=payload["code_version"],
+        status=str(payload.get("status", "BLOCKED / LAB_ONLY")),
+        stage_result=(
+            payload.get("stage_verification")
+            if isinstance(payload.get("stage_verification"), dict)
+            else None
+        ),
     )
     if digest_json(payload) != digest_json(json.loads(canonical_json(expected))):
         raise ValueError("canonical summary does not match current evidence")
@@ -807,7 +813,15 @@ def _cmd_report(args: argparse.Namespace) -> dict[str, object]:
             continue
         records.extend(read_records(args.root, str(path.relative_to(args.root))))
     verify_records(records, manifest)
-    _validate_frozen_replay_coverage(manifest, tuple(records))
+    plan_path = output / "phase12-experiment-manifest.json"
+    stage_result: dict[str, object] | None = None
+    status = "BLOCKED / LAB_ONLY"
+    if plan_path.is_file() and not plan_path.is_symlink():
+        stage = verify_stage(args.root)
+        stage_result = stage.as_dict()
+        status = stage.status
+    else:
+        _validate_frozen_replay_coverage(manifest, tuple(records))
     training_artifacts = [
         TrainingArtifact.model_validate_json(path.read_text(encoding="utf-8"))
         for path in sorted(output.glob("weights-*.metadata.json"))
@@ -825,6 +839,8 @@ def _cmd_report(args: argparse.Namespace) -> dict[str, object]:
         records,
         training_artifacts,
         code_version=code_version(),
+        status=status,
+        stage_result=stage_result,
     )
     return {key: value for key, value in report_paths.items()}
 

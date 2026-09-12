@@ -13,7 +13,7 @@ from .contracts import DatasetManifest, ExperimentRecord, TrainingArtifact
 from .evaluation import BootstrapSummary, grouped_bootstrap
 from .rl import intentionally_bad_reward_config, run_action_sequence, safe_reward_config
 
-_STAGE_STATUS = "BLOCKED / LAB_ONLY"
+_DEFAULT_STAGE_STATUS = "BLOCKED / LAB_ONLY"
 
 
 def _report_method(record: ExperimentRecord) -> str:
@@ -82,7 +82,7 @@ def heldout_bootstrap(records: Iterable[ExperimentRecord]) -> tuple[dict[str, ob
             for record in values
             if record.split == "test" and _report_method(record) == method
         )
-    baseline = by_method.get("baseline")
+    baseline = by_method.get("baseline") or by_method.get("live-baseline")
     if not baseline:
         return ()
     comparisons: list[dict[str, object]] = []
@@ -95,8 +95,8 @@ def heldout_bootstrap(records: Iterable[ExperimentRecord]) -> tuple[dict[str, ob
                 grouped_bootstrap(
                     baseline,
                     candidate,
-                    method_a="baseline",
-                    method_b=method,
+                    method_a=method,
+                    method_b="baseline",
                 )
             )
         )
@@ -203,12 +203,14 @@ def build_summary(
     training_artifacts: Iterable[TrainingArtifact],
     *,
     code_version: str,
+    status: str = _DEFAULT_STAGE_STATUS,
+    stage_result: dict[str, object] | None = None,
 ) -> dict[str, object]:
     values = tuple(records)
     scores = rubric_scores()
     return {
         "schema_version": "1",
-        "status": _STAGE_STATUS,
+        "status": status,
         "code_version": code_version,
         "dataset_id": manifest.dataset_id,
         "dataset_digest": manifest.dataset_digest,
@@ -223,10 +225,12 @@ def build_summary(
         "rubric_total": sum(scores.values()),
         "rubric_average": sum(scores.values()) / len(scores),
         "risks": risk_register(),
+        "stage_verification": stage_result,
         "constraints": {
             "max_model_calls": 1_200,
             "max_input_chars": 4_000,
             "max_output_tokens": 512,
+            "provider_request_envelope_tokens": 2_048,
             "network_runtime": "disabled_for_replay_and_training",
             "business_runtime_changes": False,
         },
@@ -303,11 +307,25 @@ def render_stage_report(summary: dict[str, object]) -> str:
                 )
     scores = summary["rubric"]
     risks = summary["risks"]
+    status = str(summary["status"])
+    if status == _DEFAULT_STAGE_STATUS:
+        review_line = (
+            "第二轮独立对抗审查结果为 `CHANGES_REQUIRED`; 按两轮上限标记为 BLOCKED, "
+            "Harness 文件级同步也未闭合, 不能写阶段 PASS."
+        )
+    else:
+        verification = summary.get("stage_verification")
+        review = verification.get("review_status") if isinstance(verification, dict) else "PENDING"
+        harness = (
+            verification.get("harness_status") if isinstance(verification, dict) else "PENDING"
+        )
+        review_line = (
+            f"独立对抗审查状态为 `{review}`, Harness 状态为 `{harness}`; 状态由严格证据门禁计算。"
+        )
     lines = [
         "# Phase 12 阶段报告",
         "",
-        f"状态: `{summary['status']}`. 第二轮独立对抗审查结果为 `CHANGES_REQUIRED`; "
-        "按两轮上限标记为 BLOCKED, Harness 文件级同步也未闭合, 不能写阶段 PASS.",
+        f"状态: `{status}`. {review_line}",
         "",
         "## 业务问题与数据流",
         "",
@@ -362,17 +380,19 @@ def render_stage_report(summary: dict[str, object]) -> str:
         for risk in risk_entries
         if isinstance(risk, dict)
     )
-    lines.extend(
-        (
-            "",
-            "## 限制与未运行项",
-            "",
-            "当前报告不把 replay 当作真实模型质量, 不把本地训练当作业务语言模型微调; "
-            "真实 assist Provider held-out 已记录一轮 24 条并保留失败和 UNKNOWN; 三次重复重跑因 "
-            "Provider 长连接无响应而中断且未写入半批. 全量 make integration, 最终 Harness 同步授权 "
-            "和独立对抗审查仍必须以实际退出码更新.",
-        )
+    current_limitation = (
+        "真实模型、训练、全量 make 门禁和独立审查均以当前活动证据中的实际结果为准; "
+        "缺失项由严格门禁列出, 不会用旧 replay 或报告排版替代."
     )
+    limitation = (
+        "当前报告不把 replay 当作真实模型质量, 不把本地训练当作业务语言模型微调; "
+        "真实 assist Provider held-out 已记录一轮 24 条并保留失败和 UNKNOWN; 三次重复重跑因 "
+        "Provider 长连接无响应而中断且未写入半批. 全量 make integration, 最终 Harness 同步授权 "
+        "和独立对抗审查仍必须以实际退出码更新."
+        if status == _DEFAULT_STAGE_STATUS
+        else current_limitation
+    )
+    lines.extend(("", "## 限制与未运行项", "", limitation))
     return "\n".join(lines) + "\n"
 
 
@@ -383,12 +403,16 @@ def write_reports(
     training_artifacts: Iterable[TrainingArtifact],
     *,
     code_version: str,
+    status: str = _DEFAULT_STAGE_STATUS,
+    stage_result: dict[str, object] | None = None,
 ) -> dict[str, str]:
     summary = build_summary(
         manifest,
         records,
         training_artifacts,
         code_version=code_version,
+        status=status,
+        stage_result=stage_result,
     )
     suffix = code_version.replace("/", "-")
     report_path = write_text_once(
