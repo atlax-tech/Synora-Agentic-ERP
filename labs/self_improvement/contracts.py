@@ -227,8 +227,18 @@ def safe_output_path(root: Path, relative: str) -> Path:
     """Resolve a relative lab path and reject traversal or symlink escape."""
     if not relative or relative.startswith("/"):
         raise ValueError("output path must be relative")
-    target = (root / relative).resolve()
     base = root.resolve()
+    lexical = root / relative
+    try:
+        lexical.relative_to(root)
+    except ValueError as error:
+        raise ValueError("output path must be relative") from error
+    current = root
+    for part in Path(relative).parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError("output path cannot traverse a symlink")
+    target = lexical.resolve()
     try:
         target.relative_to(base)
     except ValueError as error:

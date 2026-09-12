@@ -43,6 +43,14 @@ def test_artifact_writes_do_not_overwrite_or_escape(tmp_path: Path) -> None:
         read_manifest(tmp_path, "output/other.json")
 
 
+def test_artifact_paths_reject_symlink_components(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    (tmp_path / "output").symlink_to(target, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink"):
+        write_manifest(tmp_path, build_synthetic_manifest("artifact-test"))
+
+
 def test_tampered_manifest_and_duplicate_records_are_rejected(tmp_path: Path) -> None:
     manifest = build_synthetic_manifest("artifact-test")
     tampered = manifest.model_copy(update={"dataset_digest": "0" * 64})

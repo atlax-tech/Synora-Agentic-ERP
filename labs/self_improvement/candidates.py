@@ -116,6 +116,8 @@ def read_candidate(root: Path, candidate_id: str) -> CandidateVersion:
     if not path.is_file() or path.is_symlink():
         raise FileNotFoundError(path)
     candidate = CandidateVersion.model_validate_json(path.read_text(encoding="utf-8"))
+    if candidate.candidate_id != candidate_id:
+        raise ValueError("candidate filename does not match its ID")
     return validate_candidate(candidate)
 
 
@@ -138,7 +140,10 @@ def read_selection(root: Path, selection_id: str) -> LabSelection:
     path = safe_output_path(root, f"selections/{selection_id}.json")
     if not path.is_file() or path.is_symlink():
         raise FileNotFoundError(path)
-    return LabSelection.model_validate_json(path.read_text(encoding="utf-8"))
+    selection = LabSelection.model_validate_json(path.read_text(encoding="utf-8"))
+    if selection.selection_id != selection_id:
+        raise ValueError("selection filename does not match its ID")
+    return selection
 
 
 def build_selection(
