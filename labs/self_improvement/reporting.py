@@ -14,6 +14,13 @@ from .evaluation import BootstrapSummary, grouped_bootstrap
 from .rl import intentionally_bad_reward_config, run_action_sequence, safe_reward_config
 
 
+def _report_method(record: ExperimentRecord) -> str:
+    """Keep live provider evidence separate from deterministic replay trials."""
+    if record.method == "baseline" and record.model != "deterministic-replay":
+        return "live-baseline"
+    return record.method
+
+
 def _p95(values: Iterable[float]) -> float:
     ordered = sorted(values)
     if not ordered:
@@ -26,7 +33,7 @@ def summarize_methods(records: Iterable[ExperimentRecord]) -> dict[str, dict[str
     """Aggregate quality, safety, usage and latency without dropping failures."""
     grouped: dict[str, list[ExperimentRecord]] = defaultdict(list)
     for record in records:
-        grouped[record.method].append(record)
+        grouped[_report_method(record)].append(record)
     summaries: dict[str, dict[str, float]] = {}
     for method, values in sorted(grouped.items()):
         count = len(values)
@@ -65,9 +72,11 @@ def _bootstrap_payload(summary: BootstrapSummary) -> dict[str, object]:
 def heldout_bootstrap(records: Iterable[ExperimentRecord]) -> tuple[dict[str, object], ...]:
     values = tuple(records)
     by_method: dict[str, tuple[ExperimentRecord, ...]] = {}
-    for method in {record.method for record in values if record.split == "test"}:
+    for method in {_report_method(record) for record in values if record.split == "test"}:
         by_method[method] = tuple(
-            record for record in values if record.split == "test" and record.method == method
+            record
+            for record in values
+            if record.split == "test" and _report_method(record) == method
         )
     baseline = by_method.get("baseline")
     if not baseline:
