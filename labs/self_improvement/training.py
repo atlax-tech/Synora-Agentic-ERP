@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .artifacts import code_version as current_code_version
 from .contracts import DatasetManifest, TrainingArtifact, digest_json
 from .replay import ALL_ACTIONS, ReplayState, deterministic_policy
 
@@ -262,7 +263,7 @@ def _artifact(
     return TrainingArtifact(
         artifact_id=f"phase12-train-{method}-seed-{seed}",
         method=method,  # type: ignore[arg-type]
-        code_version=manifest.code_version,
+        code_version=current_code_version(),
         dataset_id=manifest.dataset_id,
         dataset_digest=manifest.dataset_digest,
         seed=seed,
