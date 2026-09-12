@@ -150,6 +150,8 @@ class CandidateVersion(StrictModel):
         expected_prefix = "phase12-prompt-" if self.kind == "PROMPT" else "phase12-skill-"
         if not self.candidate_id.startswith(expected_prefix):
             raise ValueError("candidate id does not match kind")
+        if self.candidate_id.rsplit("-", 1)[-1] != self.content_sha256[:16]:
+            raise ValueError("candidate id digest suffix does not match content")
         return self
 
 
@@ -164,6 +166,8 @@ class ExperimentRecord(StrictModel):
     candidate_id: str | None = Field(
         default=None, pattern=r"^phase12-(prompt|skill)-[a-z0-9-]{3,80}$"
     )
+    candidate_content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    candidate_boundary_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     reservation_key: str | None = Field(
         default=None, min_length=1, max_length=240, pattern=r"^[^\r\n]+$"
     )
@@ -187,6 +191,14 @@ class ExperimentRecord(StrictModel):
             raise ValueError("successful experiment must pass verifier")
         if self.status in {"FAILED", "UNKNOWN", "REJECTED"} and not self.failure_code:
             raise ValueError("non-successful experiment requires failure code")
+        if self.candidate_id is None:
+            if (
+                self.candidate_content_sha256 is not None
+                or self.candidate_boundary_sha256 is not None
+            ):
+                raise ValueError("candidate digests require candidate_id")
+        elif self.candidate_content_sha256 is None or self.candidate_boundary_sha256 is None:
+            raise ValueError("candidate experiments require content and boundary digests")
         return self
 
 

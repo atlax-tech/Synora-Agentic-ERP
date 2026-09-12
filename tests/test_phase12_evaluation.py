@@ -64,6 +64,17 @@ def test_replay_evaluation_aggregates_verifier_and_safety() -> None:
     assert summary["safety_rate"] == 1.0
 
 
+def test_candidate_replay_requires_content_and_boundary_digests() -> None:
+    manifest = build_synthetic_manifest("eval-test")
+    with pytest.raises(ValueError, match="candidate experiments require"):
+        evaluate_replay_cases(
+            manifest.cases[:1],
+            code_version="eval-test",
+            method="prompt-candidate",
+            candidate_id="phase12-prompt-0000000000000000",
+        )
+
+
 def test_live_baseline_reserves_budget_and_verifies_action() -> None:
     case = next(
         case for case in build_synthetic_manifest("eval-test").cases if case.kind == "MISSING_INPUT"

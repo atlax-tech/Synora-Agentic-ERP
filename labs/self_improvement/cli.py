@@ -141,6 +141,8 @@ def _replay_records(
     repeats: int = 1,
     candidate_id: str | None = None,
     candidate_content: str | None = None,
+    candidate_content_sha256: str | None = None,
+    candidate_boundary_sha256: str | None = None,
 ) -> tuple[ExperimentRecord, ...]:
     if repeats < 1 or repeats > 3:
         raise ValueError("replay repeats must be between one and three")
@@ -163,6 +165,8 @@ def _replay_records(
                     dataset_digest=manifest.dataset_digest,
                     repeat=repeat,
                     candidate_id=candidate_id,
+                    candidate_content_sha256=candidate_content_sha256,
+                    candidate_boundary_sha256=candidate_boundary_sha256,
                 )[0]
                 records.append(result)
                 continue
@@ -310,10 +314,14 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
     if args.engine == "replay":
         candidate_id = None
         candidate_content = None
+        candidate_content_sha256 = None
+        candidate_boundary_sha256 = None
         if args.method in {"prompt-candidate", "skill-candidate"}:
             candidate = _candidate_for_method(args.root, args.method)
             candidate_id = candidate.candidate_id
             candidate_content = candidate.content
+            candidate_content_sha256 = candidate.content_sha256
+            candidate_boundary_sha256 = candidate.boundary_sha256
         records = _replay_records(
             manifest,
             args.split,
@@ -322,6 +330,8 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             repeats=args.repeats,
             candidate_id=candidate_id,
             candidate_content=candidate_content,
+            candidate_content_sha256=candidate_content_sha256,
+            candidate_boundary_sha256=candidate_boundary_sha256,
         )
     else:
         if args.method != "baseline":
@@ -434,6 +444,11 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
             expected_kind = "PROMPT" if record.method == "prompt-candidate" else "SKILL"
             if record_candidate is None or record_candidate.kind != expected_kind:
                 raise ValueError("candidate experiment references the wrong artifact")
+            if (
+                record.candidate_content_sha256 != record_candidate.content_sha256
+                or record.candidate_boundary_sha256 != record_candidate.boundary_sha256
+            ):
+                raise ValueError("candidate experiment digest binding mismatch")
     verify_records(all_records, manifest)
     ledger_path = output / RESERVATION_LEDGER_NAME
     if ledger_path.exists():

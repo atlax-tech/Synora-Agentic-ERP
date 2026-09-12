@@ -46,6 +46,16 @@ def test_stale_boundary_and_duplicate_write_are_rejected(tmp_path: Path) -> None
         write_candidate(tmp_path, candidate)
 
 
+def test_candidate_id_must_include_content_digest_suffix() -> None:
+    candidate = make_prompt_candidate(
+        ("source",), "Verify the unresolved read-only fact before finishing."
+    )
+    with pytest.raises(ValueError, match="digest suffix"):
+        payload = candidate.model_dump(mode="python")
+        payload["candidate_id"] = "phase12-prompt-0000000000000000"
+        type(candidate).model_validate(payload)
+
+
 def test_selection_requires_evidence_and_is_immutable(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         build_selection("native-agent/A", "candidate", (), "no evidence")

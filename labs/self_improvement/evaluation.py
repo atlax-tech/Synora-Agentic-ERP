@@ -584,6 +584,8 @@ def evaluate_replay_cases(
     dataset_digest: str | None = None,
     repeat: int = 1,
     candidate_id: str | None = None,
+    candidate_content_sha256: str | None = None,
+    candidate_boundary_sha256: str | None = None,
 ) -> tuple[ExperimentRecord, ...]:
     if repeat < 1 or repeat > 20:
         raise ValueError("repeat must be between one and twenty")
@@ -603,6 +605,8 @@ def evaluate_replay_cases(
                 split=case.split,
                 method=method,
                 candidate_id=candidate_id,
+                candidate_content_sha256=candidate_content_sha256,
+                candidate_boundary_sha256=candidate_boundary_sha256,
                 model=model,
                 repeat=repeat,
                 status="SUCCEEDED" if result.verifier_passed else "REJECTED",
