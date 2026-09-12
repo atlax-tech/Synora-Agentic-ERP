@@ -1,0 +1,28 @@
+{
+  "candidate_ids": [
+    "phase12-prompt-609c62e2b621bb14",
+    "phase12-skill-7a28706cedecfd8e"
+  ],
+  "code_version": "17c6c9c",
+  "dataset_digest": "a4278cc7ef8df0a8129e0449b8ffc00c386f2ea3b033a9e239203fb14c9626fe",
+  "dataset_id": "phase12-synthetic-v2",
+  "dev_methods": [
+    "baseline",
+    "reflection",
+    "best-of-3",
+    "prompt-candidate",
+    "skill-candidate"
+  ],
+  "model": "glm-5.3-flash",
+  "plan_id": "phase12-plan-r5-v3",
+  "repeats": 3,
+  "reward_version": "safe-reward-v1",
+  "schema_version": "1",
+  "selected_method": "baseline",
+  "test_methods": [
+    "baseline",
+    "prompt-candidate",
+    "skill-candidate"
+  ],
+  "verifier_version": "replay-verifier-v2"
+}
