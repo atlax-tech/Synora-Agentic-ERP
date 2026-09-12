@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from labs.self_improvement.data import build_synthetic_manifest
-from labs.self_improvement.replay import deterministic_policy, policy_from_actions, run_replay
+from labs.self_improvement.replay import (
+    deterministic_policy,
+    initial_state,
+    policy_from_actions,
+    run_replay,
+)
+from labs.self_improvement.training import state_features
 
 
 def test_deterministic_policy_passes_one_case_of_each_kind() -> None:
@@ -38,3 +44,18 @@ def test_tool_unknown_and_conflict_are_explicit_terminal_results() -> None:
     assert unknown_result.status == "UNKNOWN"
     assert conflict_result.status == "CONFLICT"
     assert unknown_result.verifier_passed and conflict_result.verifier_passed
+
+
+def test_initial_policy_observation_does_not_include_case_oracle_labels() -> None:
+    manifest = build_synthetic_manifest("replay-test")
+    complete = next(case for case in manifest.cases if case.kind == "COMPLETE_READ")
+    missing = next(case for case in manifest.cases if case.kind == "MISSING_INPUT")
+    assert initial_state(complete).observations == ()
+    assert initial_state(complete).no_progress is False
+    assert initial_state(complete).needs_input is False
+    assert initial_state(complete).untrusted_content is False
+    assert state_features(initial_state(complete)) == state_features(initial_state(missing))
+    changed_oracle = complete.model_copy(
+        update={"oracle": {"scenario": "UNTRUSTED_INJECTION"}, "expected_status": "REFUSED"}
+    )
+    assert state_features(initial_state(complete)) == state_features(initial_state(changed_oracle))

@@ -60,14 +60,22 @@ Policy = Callable[[ReplayState], str]
 
 
 def initial_state(case: DatasetCase, max_steps: int = 8) -> ReplayState:
+    """Create the state visible before the first tool call.
+
+    The synthetic case kind and scoring fields belong to the environment/oracle. They
+    must never be copied into the policy observation before the environment has
+    produced a corresponding observation. Every scenario therefore starts with the
+    same empty, observable state; ``_state_update`` reveals a failure or conflict only
+    after the read action that encountered it.
+    """
     return ReplayState(
         case.case_id,
         (),
         (),
-        case.kind == "DUPLICATE_NO_PROGRESS",
         False,
-        case.kind == "MISSING_INPUT",
-        case.kind == "UNTRUSTED_INJECTION",
+        False,
+        False,
+        False,
         max_steps,
     )
 
@@ -104,6 +112,48 @@ def _state_update(
                     state.remaining_steps - 1,
                 ),
                 "TOOL_UNKNOWN",
+            )
+        if kind == "MISSING_INPUT":
+            return (
+                ReplayState(
+                    state.case_id,
+                    (*state.observations, f"{action}:MISSING_INPUT"),
+                    state.failed_tools,
+                    state.no_progress,
+                    state.conflict,
+                    True,
+                    state.untrusted_content,
+                    state.remaining_steps - 1,
+                ),
+                None,
+            )
+        if kind == "DUPLICATE_NO_PROGRESS":
+            return (
+                ReplayState(
+                    state.case_id,
+                    (*state.observations, action),
+                    state.failed_tools,
+                    True,
+                    state.conflict,
+                    state.needs_input,
+                    state.untrusted_content,
+                    state.remaining_steps - 1,
+                ),
+                "NO_PROGRESS",
+            )
+        if kind == "UNTRUSTED_INJECTION":
+            return (
+                ReplayState(
+                    state.case_id,
+                    (*state.observations, f"{action}:UNTRUSTED_CONTENT"),
+                    state.failed_tools,
+                    state.no_progress,
+                    state.conflict,
+                    state.needs_input,
+                    True,
+                    state.remaining_steps - 1,
+                ),
+                None,
             )
         if kind == "STALE_CONFLICT":
             return (
