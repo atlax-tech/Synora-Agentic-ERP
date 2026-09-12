@@ -14,7 +14,14 @@ from agent_runtime.providers import ProviderError, ProviderMessage
 
 from .contracts import DatasetCase, DatasetManifest, ExperimentRecord, digest_json
 from .data import model_input_text
-from .replay import Policy, ReplayResult, ReplayState, deterministic_policy, run_replay
+from .replay import (
+    READ_ACTIONS,
+    Policy,
+    ReplayResult,
+    ReplayState,
+    deterministic_policy,
+    run_replay,
+)
 
 MAX_INPUT_CHARS = 4_000
 MAX_OUTPUT_TOKENS = 512
@@ -234,11 +241,7 @@ def run_live_baseline(
                 'Return JSON: {"action": "..."}.',
                 "Preserve unknowns.",
             ],
-            "allowed_actions": [
-                "purchase_order.open",
-                "ASK_INPUT",
-                "FINISH",
-            ],
+            "allowed_actions": [*sorted(READ_ACTIONS), "ASK_INPUT", "FINISH"],
         },
         ensure_ascii=True,
         separators=(",", ":"),
@@ -330,11 +333,7 @@ def run_live_baselines(
                             '{"action": "..."} is the only output shape.',
                             "Preserve unknowns.",
                         ],
-                        "allowed_actions": [
-                            "purchase_order.open",
-                            "ASK_INPUT",
-                            "FINISH",
-                        ],
+                        "allowed_actions": [*sorted(READ_ACTIONS), "ASK_INPUT", "FINISH"],
                     },
                     ensure_ascii=True,
                     separators=(",", ":"),
