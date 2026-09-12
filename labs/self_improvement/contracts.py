@@ -222,8 +222,21 @@ class LabSelection(StrictModel):
     evidence_ids: Annotated[tuple[str, ...], BeforeValidator(_tuple_from_json)] = Field(
         min_length=1, max_length=20
     )
+    version_digests: dict[str, str] = Field(default_factory=dict)
     reason: str = Field(min_length=1, max_length=500)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="after")
+    def validate_version_digests(self) -> LabSelection:
+        allowed = {self.previous_id, self.selected_id}
+        if not set(self.version_digests).issubset(allowed):
+            raise ValueError("selection contains a digest for an unrelated version")
+        if any(
+            len(value) != 64 or any(character not in "0123456789abcdef" for character in value)
+            for value in self.version_digests.values()
+        ):
+            raise ValueError("selection version digest is invalid")
+        return self
 
 
 def safe_output_path(root: Path, relative: str) -> Path:

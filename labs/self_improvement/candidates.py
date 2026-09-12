@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from agent_runtime.agent.prompting import PROMPT_REGISTRY
+from agent_runtime.skills.registry import SkillRegistry
 
 from .contracts import CandidateVersion, LabSelection, digest_bytes, digest_json, safe_output_path
 from .replay import READ_ACTIONS
@@ -146,6 +147,21 @@ def read_selection(root: Path, selection_id: str) -> LabSelection:
     return selection
 
 
+def version_content_digest(root: Path, version_id: str) -> str:
+    """Return the current content digest for a lab version identifier."""
+    if version_id == "native-agent/A":
+        return str(PROMPT_REGISTRY.resolve("native-agent", variant="A").profile_hash)
+    if version_id == "skill-registry/v1":
+        registry = SkillRegistry()
+        manifests = tuple(
+            manifest.model_dump(mode="json") for manifest in registry.list_manifests()
+        )
+        return digest_json({"registry_version": registry.version, "manifests": manifests})
+    if version_id.startswith("phase12-"):
+        return read_candidate(root, version_id).content_sha256
+    raise ValueError("unknown lab version")
+
+
 def build_selection(
     previous_id: str,
     selected_id: str,
@@ -153,13 +169,24 @@ def build_selection(
     reason: str,
     *,
     action: str = "SELECT",
+    version_digests: Mapping[str, str] | None = None,
 ) -> LabSelection:
     evidence = tuple(evidence_ids)
     if not evidence:
         raise ValueError("selection requires evaluation evidence")
+    digests = dict(version_digests or {})
+    if not set(digests).issubset({previous_id, selected_id}):
+        raise ValueError("selection digest references an unrelated version")
     selection_id = (
         "phase12-selection-"
-        + digest_json({"previous": previous_id, "selected": selected_id, "evidence": evidence})[:16]
+        + digest_json(
+            {
+                "previous": previous_id,
+                "selected": selected_id,
+                "evidence": evidence,
+                "version_digests": digests,
+            }
+        )[:16]
     )
     return LabSelection(
         selection_id=selection_id,
@@ -167,6 +194,7 @@ def build_selection(
         selected_id=selected_id,
         action=action,  # type: ignore[arg-type]
         evidence_ids=evidence,
+        version_digests=digests,
         reason=reason,
     )
 
@@ -181,11 +209,20 @@ def rollback_selection(
     current = read_selection(root, selection_id)
     if current.action == "ROLLBACK":
         raise ValueError("cannot roll back a rollback receipt")
+    for version_id, expected_digest in current.version_digests.items():
+        if version_content_digest(root, version_id) != expected_digest:
+            raise ValueError(f"version content changed: {version_id}")
+    rollback_digests = {
+        version_id: current.version_digests[version_id]
+        for version_id in (current.selected_id, current.previous_id)
+        if version_id in current.version_digests
+    }
     rollback = build_selection(
         current.selected_id,
         current.previous_id,
         evidence_ids,
         reason,
         action="ROLLBACK",
+        version_digests=rollback_digests,
     )
     return rollback, write_selection(root, rollback)

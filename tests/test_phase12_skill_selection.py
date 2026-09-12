@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ from labs.self_improvement.candidates import (
     make_skill_candidate,
     read_selection,
     rollback_selection,
+    version_content_digest,
     write_candidate,
     write_selection,
 )
@@ -55,3 +57,27 @@ def test_rollback_receipt_cannot_be_rolled_back_again(tmp_path: Path) -> None:
     rollback, _ = rollback_selection(tmp_path, selected.selection_id, ("exp-2",), "regression")
     with pytest.raises(ValueError, match="rollback receipt"):
         rollback_selection(tmp_path, rollback.selection_id, ("exp-3",), "again")
+
+
+def test_content_digest_mismatch_blocks_rollback(tmp_path: Path) -> None:
+    candidate = make_skill_candidate(
+        ("source",), "Preserve unknowns and request missing read-only evidence."
+    )
+    write_candidate(tmp_path, candidate)
+    selected = build_selection(
+        "skill-registry/v1",
+        candidate.candidate_id,
+        ("exp-1",),
+        "dev result",
+        version_digests={
+            "skill-registry/v1": version_content_digest(tmp_path, "skill-registry/v1"),
+            candidate.candidate_id: candidate.content_sha256,
+        },
+    )
+    write_selection(tmp_path, selected)
+    payload = candidate.model_dump(mode="json")
+    payload["content"] = "Changed after selection."
+    candidate_path = tmp_path / "candidates" / f"{candidate.candidate_id}.json"
+    candidate_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="digest"):
+        rollback_selection(tmp_path, selected.selection_id, ("exp-2",), "tampered")

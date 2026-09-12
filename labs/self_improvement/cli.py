@@ -26,6 +26,7 @@ from .candidates import (
     read_candidate,
     read_selection,
     rollback_selection,
+    version_content_digest,
     write_candidate,
     write_selection,
 )
@@ -347,6 +348,9 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
         for version_id in (selection.previous_id, selection.selected_id):
             if version_id.startswith("phase12-") and version_id not in candidate_ids:
                 raise FileNotFoundError(f"selection references missing candidate: {version_id}")
+        for version_id, expected_digest in selection.version_digests.items():
+            if version_content_digest(output, version_id) != expected_digest:
+                raise ValueError(f"selection version digest mismatch: {version_id}")
     weight_count = 0
     for path in output.glob("weights-*.json"):
         if path.name.endswith(".metadata.json"):
@@ -474,7 +478,16 @@ def main(argv: list[str] | None = None) -> int:
             _validate_lab_version(args.root, args.previous_id)
             _validate_evidence(args.root, tuple(args.evidence))
             selection = build_selection(
-                args.previous_id, candidate.candidate_id, args.evidence, args.reason
+                args.previous_id,
+                candidate.candidate_id,
+                args.evidence,
+                args.reason,
+                version_digests={
+                    args.previous_id: version_content_digest(
+                        args.root / PHASE12_RELATIVE_ROOT, args.previous_id
+                    ),
+                    candidate.candidate_id: candidate.content_sha256,
+                },
             )
             result = {
                 "path": str(write_selection(args.root / PHASE12_RELATIVE_ROOT, selection)),
