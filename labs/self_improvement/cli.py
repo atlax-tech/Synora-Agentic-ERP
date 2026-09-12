@@ -56,6 +56,7 @@ from .evaluation import (
 from .replay import ReplayResult, candidate_policy, deterministic_policy
 from .reporting import build_summary, write_reports
 from .training import load_weights, train_dpo, train_reinforce, train_sft, weights_digest
+from .weight_evaluation import evaluate_weight_artifact
 
 
 def _root(value: str) -> Path:
@@ -549,6 +550,40 @@ def _cmd_train(args: argparse.Namespace) -> dict[str, object]:
     return {"weight_path": str(path), "metadata_path": str(metadata_path), "artifact": metadata}
 
 
+def _cmd_evaluate_weights(args: argparse.Namespace) -> dict[str, object]:
+    manifest = _manifest(args.root)
+    verify_manifest(manifest)
+    output = args.root / PHASE12_RELATIVE_ROOT
+    weight_path = output / f"weights-{args.method}-{args.seed}.json"
+    metadata_path = weight_path.with_suffix(".metadata.json")
+    if not weight_path.is_file() or weight_path.is_symlink():
+        raise FileNotFoundError(f"training weights are missing: {weight_path.name}")
+    if not metadata_path.is_file() or metadata_path.is_symlink():
+        raise FileNotFoundError(f"training metadata is missing: {metadata_path.name}")
+    metadata = TrainingArtifact.model_validate_json(metadata_path.read_text(encoding="utf-8"))
+    if metadata.method != args.method or metadata.seed != args.seed:
+        raise ValueError("weight metadata does not match the requested method and seed")
+    record_name = f"evaluation-weights-{args.method}-{args.seed}-{args.split}.jsonl"
+    records = evaluate_weight_artifact(
+        manifest,
+        weight_path,
+        method=args.method,
+        seed=args.seed,
+        split=args.split,
+        code_version=code_version(),
+        artifact_id=metadata.artifact_id,
+    )
+    path = write_records(args.root, record_name, records)
+    return {
+        "path": str(path),
+        "records": len(records),
+        "method": args.method,
+        "seed": args.seed,
+        "split": args.split,
+        "weight_sha256": metadata.weight_sha256,
+    }
+
+
 def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
     manifest = _manifest(args.root)
     verify_manifest(manifest)
@@ -752,6 +787,10 @@ def build_parser() -> argparse.ArgumentParser:
     train = sub.add_parser("train")
     train.add_argument("--method", choices=("sft", "dpo", "reinforce"), required=True)
     train.add_argument("--seed", type=int, choices=(17, 29, 43), default=17)
+    weight_eval = sub.add_parser("evaluate-weights")
+    weight_eval.add_argument("--method", choices=("sft", "dpo", "reinforce"), required=True)
+    weight_eval.add_argument("--seed", type=int, choices=(17, 29, 43), default=17)
+    weight_eval.add_argument("--split", choices=("train", "dev", "test"), default="dev")
     sub.add_parser("report")
     sub.add_parser("verify-artifacts")
     return parser
@@ -843,6 +882,8 @@ def main(argv: list[str] | None = None) -> int:
             result = {"path": str(path), "selection": selection.model_dump(mode="json")}
         elif args.command == "train":
             result = _cmd_train(args)
+        elif args.command == "evaluate-weights":
+            result = _cmd_evaluate_weights(args)
         elif args.command == "report":
             result = _cmd_report(args)
         else:

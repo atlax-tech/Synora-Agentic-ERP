@@ -181,6 +181,10 @@ class ExperimentRecord(StrictModel):
     )
     candidate_content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     candidate_boundary_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    training_artifact_id: str | None = Field(
+        default=None, pattern=r"^phase12-train-(sft|dpo|reinforce)-[a-z0-9-]{3,100}$"
+    )
+    weight_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     reservation_key: str | None = Field(
         default=None, min_length=1, max_length=240, pattern=r"^[^\r\n]+$"
     )
@@ -216,6 +220,10 @@ class ExperimentRecord(StrictModel):
                 raise ValueError("candidate digests require candidate_id")
         elif self.candidate_content_sha256 is None or self.candidate_boundary_sha256 is None:
             raise ValueError("candidate experiments require content and boundary digests")
+        if (self.training_artifact_id is None) != (self.weight_sha256 is None):
+            raise ValueError("training experiment must bind artifact and weight digest together")
+        if self.training_artifact_id is not None and self.candidate_id is not None:
+            raise ValueError("training and candidate bindings cannot be combined")
         if len(set(self.reservation_keys)) != len(self.reservation_keys):
             raise ValueError("reservation keys must be unique")
         if (

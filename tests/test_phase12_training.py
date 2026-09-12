@@ -19,6 +19,7 @@ from labs.self_improvement.training import (
     train_sft,
     weights_digest,
 )
+from labs.self_improvement.weight_evaluation import evaluate_weight_artifact
 
 
 def test_sft_updates_finite_weights_and_round_trips_in_new_load(tmp_path: Path) -> None:
@@ -118,3 +119,22 @@ def test_training_time_limit_is_bounded() -> None:
         train_sft(manifest, seed=17, time_limit_seconds=0.0)
     with pytest.raises(ValueError, match="120 seconds"):
         train_sft(manifest, seed=17, time_limit_seconds=120.1)
+
+
+def test_weight_task_evaluation_binds_artifact_and_digest(tmp_path: Path) -> None:
+    manifest = build_synthetic_manifest("training-test")
+    weight_path = tmp_path / "weights-sft-17.json"
+    trained = train_sft(manifest, seed=17, max_epochs=2, patience=1, weight_path=weight_path)
+    records = evaluate_weight_artifact(
+        manifest,
+        weight_path,
+        method="sft",
+        seed=17,
+        split="dev",
+        code_version="training-test",
+        artifact_id=trained.artifact.artifact_id,
+    )
+    assert len(records) == 24
+    assert {record.training_artifact_id for record in records} == {trained.artifact.artifact_id}
+    assert {record.weight_sha256 for record in records} == {trained.artifact.weight_sha256}
+    assert all(record.calls == 0 for record in records)

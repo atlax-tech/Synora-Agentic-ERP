@@ -232,6 +232,30 @@ def test_cli_candidate_method_and_repeats_are_bounded(tmp_path: Path) -> None:
     )
 
 
+def test_cli_evaluate_weights_writes_independent_task_records(tmp_path: Path) -> None:
+    assert main(["--root", str(tmp_path), "prepare-data"]) == 0
+    assert main(["--root", str(tmp_path), "train", "--method", "sft", "--seed", "17"]) == 0
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "evaluate-weights",
+                "--method",
+                "sft",
+                "--seed",
+                "17",
+                "--split",
+                "dev",
+            ]
+        )
+        == 0
+    )
+    records = read_records(tmp_path, "output/phase12/evaluation-weights-sft-17-dev.jsonl")
+    assert len(records) == 24
+    assert all(record.training_artifact_id is not None for record in records)
+
+
 def test_cli_report_rejects_trimmed_frozen_evidence(tmp_path: Path) -> None:
     assert main(["--root", str(tmp_path), "prepare-data"]) == 0
     assert main(["--root", str(tmp_path), "audit-data"]) == 0

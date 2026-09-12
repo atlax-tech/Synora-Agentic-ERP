@@ -214,5 +214,9 @@ def verify_records(records: Iterable[ExperimentRecord], manifest: DatasetManifes
             or record.dataset_digest != manifest.dataset_digest
         ):
             raise ValueError("experiment is bound to a different dataset")
-        if record.split == "test" and record.method.startswith("candidate-"):
+        if (
+            record.split == "test"
+            and record.method in {"prompt-candidate", "skill-candidate"}
+            and record.candidate_id is None
+        ):
             raise ValueError("unregistered candidate cannot access held-out test")
