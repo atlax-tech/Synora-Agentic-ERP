@@ -208,6 +208,7 @@ def build_summary(
         "code_version": code_version,
         "dataset_id": manifest.dataset_id,
         "dataset_digest": manifest.dataset_digest,
+        "evidence_code_versions": sorted({record.code_version for record in values}),
         "split_counts": manifest.split_counts,
         "group_counts": manifest.group_counts,
         "methods": summarize_methods(values),
@@ -306,6 +307,7 @@ def render_stage_report(summary: dict[str, object]) -> str:
         "",
         f"数据集 `{summary['dataset_id']}` / digest `{summary['dataset_digest']}`, "
         f"split `{summary['split_counts']}`, groups `{summary['group_counts']}`.",
+        f"证据记录代码版本 `{summary['evidence_code_versions']}`; 修复重跑可能保留多个版本。",
         "",
         "## 方法结果",
         "",

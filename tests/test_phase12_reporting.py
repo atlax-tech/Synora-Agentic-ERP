@@ -87,6 +87,7 @@ def test_report_artifacts_are_immutable_and_explicitly_lab_only(tmp_path: Path) 
     card_text = Path(paths["adoption_card"]).read_text(encoding="utf-8")
     assert "DRAFT / LAB_ONLY" in report_text
     assert "真实 assist Provider held-out 已记录一轮 24 条" in report_text
+    assert "证据记录代码版本" in report_text
     assert "LAB_ONLY" in card_text
     with pytest.raises(FileExistsError):
         write_reports(tmp_path, manifest, records, (), code_version="report-test")
