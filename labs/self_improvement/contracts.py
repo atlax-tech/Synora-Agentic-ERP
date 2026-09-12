@@ -24,6 +24,13 @@ SourceKind = Literal["HISTORICAL_FAILURE", "SYNTHETIC", "SYNTHETIC_DERIVED"]
 SplitName = Literal["train", "dev", "test"]
 CandidateKind = Literal["PROMPT", "SKILL"]
 SelectionAction = Literal["SELECT", "ROLLBACK"]
+ExperimentMethod = Literal[
+    "baseline",
+    "reflection",
+    "best-of-3",
+    "prompt-candidate",
+    "skill-candidate",
+]
 
 
 class StrictModel(BaseModel):
@@ -175,6 +182,8 @@ class ExperimentRecord(StrictModel):
     dataset_id: str = Field(min_length=1, max_length=100)
     dataset_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     split: SplitName
+    group_id: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{2,79}$")
+    experiment_plan_id: str | None = Field(default=None, pattern=r"^phase12-plan-[a-z0-9-]{3,100}$")
     method: str = Field(min_length=1, max_length=80)
     candidate_id: str | None = Field(
         default=None, pattern=r"^phase12-(prompt|skill)-[a-z0-9-]{3,80}$"
@@ -264,6 +273,53 @@ class TrainingArtifact(StrictModel):
                 finite(value)
         if not self.weight_path.startswith("output/phase12/"):
             raise ValueError("training weights must remain in the Phase 12 output root")
+        return self
+
+
+class ExperimentPlan(StrictModel):
+    """Immutable pre-registration for one real-model comparison cycle."""
+
+    schema_version: Literal["1"] = "1"
+    plan_id: str = Field(pattern=r"^phase12-plan-[a-z0-9-]{3,100}$")
+    code_version: str = Field(min_length=1, max_length=80)
+    dataset_id: str = Field(min_length=1, max_length=100)
+    dataset_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    model: str = Field(min_length=1, max_length=160)
+    dev_methods: Annotated[tuple[ExperimentMethod, ...], BeforeValidator(_tuple_from_json)] = Field(
+        min_length=5, max_length=5
+    )
+    test_methods: Annotated[tuple[ExperimentMethod, ...], BeforeValidator(_tuple_from_json)] = (
+        Field(min_length=3, max_length=5)
+    )
+    selected_method: ExperimentMethod
+    candidate_ids: Annotated[tuple[str, ...], BeforeValidator(_tuple_from_json)] = Field(
+        max_length=2
+    )
+    repeats: Literal[3] = 3
+    verifier_version: str = Field(min_length=1, max_length=40)
+    reward_version: str = Field(min_length=1, max_length=40)
+
+    @model_validator(mode="after")
+    def validate_methods(self) -> ExperimentPlan:
+        expected_dev = {
+            "baseline",
+            "reflection",
+            "best-of-3",
+            "prompt-candidate",
+            "skill-candidate",
+        }
+        if set(self.dev_methods) != expected_dev or len(set(self.dev_methods)) != 5:
+            raise ValueError("experiment plan must preregister all five dev methods")
+        if len(set(self.test_methods)) != len(self.test_methods):
+            raise ValueError("experiment plan test methods must be unique")
+        if "baseline" not in self.test_methods:
+            raise ValueError("experiment plan test methods require baseline")
+        if self.selected_method not in self.dev_methods:
+            raise ValueError("selected method must be a preregistered dev method")
+        if self.selected_method not in self.test_methods:
+            raise ValueError("selected method must be included in test methods")
+        if len(set(self.candidate_ids)) != len(self.candidate_ids):
+            raise ValueError("experiment plan candidate ids must be unique")
         return self
 
 

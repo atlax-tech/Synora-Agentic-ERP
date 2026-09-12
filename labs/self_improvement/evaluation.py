@@ -561,6 +561,7 @@ def _record_live_attempts(
     repeat: int,
     dataset_id: str,
     dataset_digest: str | None,
+    experiment_plan_id: str | None = None,
     candidate_id: str | None = None,
     candidate_content_sha256: str | None = None,
     candidate_boundary_sha256: str | None = None,
@@ -600,6 +601,8 @@ def _record_live_attempts(
         dataset_id=dataset_id,
         dataset_digest=bound_digest,
         split=case.split,
+        group_id=case.group_id,
+        experiment_plan_id=experiment_plan_id,
         method=method,
         candidate_id=candidate_id,
         candidate_content_sha256=candidate_content_sha256,
@@ -719,6 +722,7 @@ async def _live_method_case(
     model: str,
     dataset_id: str,
     dataset_digest: str,
+    experiment_plan_id: str | None,
     candidate_id: str | None,
     candidate_content: str | None,
     candidate_content_sha256: str | None,
@@ -809,6 +813,7 @@ async def _live_method_case(
         repeat=repeat,
         dataset_id=dataset_id,
         dataset_digest=dataset_digest,
+        experiment_plan_id=experiment_plan_id,
         candidate_id=candidate_id,
         candidate_content_sha256=candidate_content_sha256,
         candidate_boundary_sha256=candidate_boundary_sha256,
@@ -827,6 +832,7 @@ def run_live_methods(
     repeats: int = 1,
     dataset_id: str = "phase12-synthetic-v2",
     dataset_digest: str | None = None,
+    experiment_plan_id: str | None = None,
     candidate_id: str | None = None,
     candidate_content: str | None = None,
     candidate_content_sha256: str | None = None,
@@ -857,6 +863,7 @@ def run_live_methods(
                     model=model,
                     dataset_id=dataset_id,
                     dataset_digest=bound_digest,
+                    experiment_plan_id=experiment_plan_id,
                     candidate_id=candidate_id,
                     candidate_content=candidate_content,
                     candidate_content_sha256=candidate_content_sha256,
@@ -880,6 +887,7 @@ def run_live_baselines(
     repeats: int = 1,
     dataset_id: str = "phase12-synthetic-v2",
     dataset_digest: str | None = None,
+    experiment_plan_id: str | None = None,
 ) -> tuple[ExperimentRecord, ...]:
     """Compatibility wrapper for the baseline method."""
     return run_live_methods(
@@ -892,6 +900,7 @@ def run_live_baselines(
         repeats=repeats,
         dataset_id=dataset_id,
         dataset_digest=dataset_digest,
+        experiment_plan_id=experiment_plan_id,
     )
 
 
@@ -925,6 +934,7 @@ def evaluate_replay_cases(
                 dataset_id=dataset_id,
                 dataset_digest=bound_digest,
                 split=case.split,
+                group_id=case.group_id,
                 method=method,
                 candidate_id=candidate_id,
                 candidate_content_sha256=candidate_content_sha256,
@@ -1049,6 +1059,7 @@ def held_out_replay(
                         dataset_id=manifest.dataset_id,
                         dataset_digest=manifest.dataset_digest,
                         split="test",
+                        group_id=case.group_id,
                         method=method,
                         model="deterministic-replay",
                         repeat=repeat,
@@ -1083,6 +1094,8 @@ def grouped_bootstrap(
     b_by_group: dict[str, list[bool]] = {}
 
     def record_group(record: ExperimentRecord) -> str:
+        if record.group_id is not None:
+            return record.group_id
         parts = record.experiment_id.split("-")
         marker = max(index for index, part in enumerate(parts) if part == "phase12")
         return "-".join(parts[marker:-1])

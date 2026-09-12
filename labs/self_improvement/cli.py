@@ -37,6 +37,7 @@ from .contracts import (
     CandidateVersion,
     DatasetCase,
     DatasetManifest,
+    ExperimentPlan,
     ExperimentRecord,
     ReviewedCase,
     TrainingArtifact,
@@ -123,6 +124,7 @@ def _replay_record(
         dataset_id=dataset.dataset_id,
         dataset_digest=dataset.dataset_digest,
         split=case.split,
+        group_id=case.group_id,
         method=method,
         model="deterministic-replay",
         repeat=repeat,
@@ -147,10 +149,15 @@ def _replay_records(
     candidate_content: str | None = None,
     candidate_content_sha256: str | None = None,
     candidate_boundary_sha256: str | None = None,
+    case_id: str | None = None,
 ) -> tuple[ExperimentRecord, ...]:
     if repeats < 1 or repeats > 3:
         raise ValueError("replay repeats must be between one and three")
     cases = tuple(case for case in manifest.cases if case.split == split)
+    if case_id is not None:
+        cases = tuple(case for case in cases if case.case_id == case_id)
+        if not cases:
+            raise ValueError("case id is missing from the requested split")
     records = []
     for repeat in range(1, repeats + 1):
         for case in cases:
@@ -440,6 +447,17 @@ def _validate_evidence(
 def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
     manifest = _manifest(args.root)
     verify_manifest(manifest)
+    plan: ExperimentPlan | None = None
+    plan_path = args.root / PHASE12_RELATIVE_ROOT / "phase12-experiment-manifest.json"
+    if plan_path.exists():
+        plan = ExperimentPlan.model_validate_json(plan_path.read_text(encoding="utf-8"))
+        if plan.dataset_digest != manifest.dataset_digest or plan.dataset_id != manifest.dataset_id:
+            raise ValueError("experiment plan is bound to a different dataset")
+        if plan.code_version != code_version():
+            raise ValueError("experiment plan is bound to a different code version")
+        allowed = plan.dev_methods if args.split == "dev" else plan.test_methods
+        if args.method not in allowed:
+            raise ValueError("method is not preregistered for the requested split")
     if args.repeats < 1 or args.repeats > 3:
         raise ValueError("evaluation repeats must be between one and three")
     if args.engine == "replay":
@@ -463,6 +481,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             candidate_content=candidate_content,
             candidate_content_sha256=candidate_content_sha256,
             candidate_boundary_sha256=candidate_boundary_sha256,
+            case_id=args.case_id,
         )
     else:
         from agent_runtime.providers import ProviderError, provider_for_role
@@ -492,6 +511,10 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             batch_id=batch_id,
         )
         cases = tuple(case for case in manifest.cases if case.split == args.split)
+        if args.case_id is not None:
+            cases = tuple(case for case in cases if case.case_id == args.case_id)
+            if not cases:
+                raise ValueError("case id is missing from the requested split")
         record_name = f"evaluation-live-{args.method}-{args.split}-{batch_id}.jsonl"
         target = args.root / PHASE12_RELATIVE_ROOT / record_name
         if target.exists() or target.is_symlink():
@@ -507,10 +530,11 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             budget,
             method=args.method,
             code_version=code_version(),
-            model=getattr(provider, "model", "assist"),
+            model=getattr(provider, "_model", getattr(provider, "model", "assist")),
             repeats=args.repeats,
             dataset_id=manifest.dataset_id,
             dataset_digest=manifest.dataset_digest,
+            experiment_plan_id=plan.plan_id if plan is not None else None,
             candidate_id=candidate_id,
             candidate_content=candidate_content,
             candidate_content_sha256=candidate_content_sha256,
@@ -527,6 +551,42 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
         "records": len(records),
         "calls": sum(record.calls for record in records),
     }
+
+
+def _cmd_freeze_experiment(args: argparse.Namespace) -> dict[str, object]:
+    manifest = _manifest(args.root)
+    verify_manifest(manifest)
+    output = args.root / PHASE12_RELATIVE_ROOT
+    candidate_paths = sorted((output / "candidates").glob("*.json"))
+    candidates = tuple(read_candidate(output, path.stem) for path in candidate_paths)
+    candidate_ids = tuple(candidate.candidate_id for candidate in candidates)
+    plan = ExperimentPlan(
+        plan_id=args.plan_id,
+        code_version=code_version(),
+        dataset_id=manifest.dataset_id,
+        dataset_digest=manifest.dataset_digest,
+        model=args.model,
+        dev_methods=(
+            "baseline",
+            "reflection",
+            "best-of-3",
+            "prompt-candidate",
+            "skill-candidate",
+        ),
+        test_methods=tuple(
+            dict.fromkeys(("baseline", "prompt-candidate", "skill-candidate", args.selected_method))
+        ),
+        selected_method=args.selected_method,
+        candidate_ids=candidate_ids,
+        verifier_version="replay-verifier-v2",
+        reward_version="safe-reward-v1",
+    )
+    path = write_json_once(
+        args.root,
+        f"{PHASE12_RELATIVE_ROOT}/phase12-experiment-manifest.json",
+        plan.model_dump(mode="json"),
+    )
+    return {"path": str(path), "plan": plan.model_dump(mode="json")}
 
 
 def _cmd_train(args: argparse.Namespace) -> dict[str, object]:
@@ -775,6 +835,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate.add_argument("--repeats", type=int, default=1)
     evaluate.add_argument("--batch-id", default=None)
+    evaluate.add_argument("--case-id", default=None)
     select = sub.add_parser("select-lab")
     select.add_argument("--candidate-id", required=True)
     select.add_argument("--previous-id", default="native-agent/A")
@@ -791,6 +852,14 @@ def build_parser() -> argparse.ArgumentParser:
     weight_eval.add_argument("--method", choices=("sft", "dpo", "reinforce"), required=True)
     weight_eval.add_argument("--seed", type=int, choices=(17, 29, 43), default=17)
     weight_eval.add_argument("--split", choices=("train", "dev", "test"), default="dev")
+    freeze = sub.add_parser("freeze-experiment")
+    freeze.add_argument("--plan-id", default="phase12-plan-r5-v1")
+    freeze.add_argument("--model", default="glm-5.3-flash", help="frozen assist model identifier")
+    freeze.add_argument(
+        "--selected-method",
+        choices=("baseline", "reflection", "best-of-3", "prompt-candidate", "skill-candidate"),
+        default="baseline",
+    )
     sub.add_parser("report")
     sub.add_parser("verify-artifacts")
     return parser
@@ -884,6 +953,8 @@ def main(argv: list[str] | None = None) -> int:
             result = _cmd_train(args)
         elif args.command == "evaluate-weights":
             result = _cmd_evaluate_weights(args)
+        elif args.command == "freeze-experiment":
+            result = _cmd_freeze_experiment(args)
         elif args.command == "report":
             result = _cmd_report(args)
         else:

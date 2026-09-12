@@ -256,6 +256,25 @@ def test_cli_evaluate_weights_writes_independent_task_records(tmp_path: Path) ->
     assert all(record.training_artifact_id is not None for record in records)
 
 
+def test_cli_freeze_experiment_preregisters_dev_and_test_methods(tmp_path: Path) -> None:
+    _write_historical_failure(tmp_path)
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
+    assert main(["--root", str(tmp_path), "prepare-data"]) == 0
+    assert main(["--root", str(tmp_path), "make-candidates"]) == 0
+    assert main(["--root", str(tmp_path), "freeze-experiment"]) == 0
+    payload = json.loads(
+        (tmp_path / "output/phase12/phase12-experiment-manifest.json").read_text()
+    )
+    assert set(payload["dev_methods"]) == {
+        "baseline",
+        "reflection",
+        "best-of-3",
+        "prompt-candidate",
+        "skill-candidate",
+    }
+    assert payload["selected_method"] in payload["test_methods"]
+
+
 def test_cli_report_rejects_trimmed_frozen_evidence(tmp_path: Path) -> None:
     assert main(["--root", str(tmp_path), "prepare-data"]) == 0
     assert main(["--root", str(tmp_path), "audit-data"]) == 0
