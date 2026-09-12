@@ -88,6 +88,18 @@ def test_corrupt_or_nonfinite_json_weights_are_rejected(tmp_path: Path) -> None:
         load_weights(path)
 
 
+def test_malformed_weight_values_are_rejected_as_contract_errors(tmp_path: Path) -> None:
+    manifest = build_synthetic_manifest("training-test")
+    result = train_sft(manifest, seed=17, max_epochs=2, patience=1)
+    path = tmp_path / "weights.json"
+    save_weights(path, result.model)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["state_dict"]["layers.0.weight"] = "not-a-tensor"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="weight values"):
+        load_weights(path)
+
+
 def test_save_weights_rejects_nonfinite_model_values(tmp_path: Path) -> None:
     manifest = build_synthetic_manifest("training-test")
     result = train_sft(manifest, seed=17, max_epochs=2, patience=1)

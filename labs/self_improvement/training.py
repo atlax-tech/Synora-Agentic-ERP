@@ -146,7 +146,10 @@ def load_weights(path: Path) -> Any:
         values = state_dict.get(name)
         if values is None:
             raise ValueError("weight key is missing")
-        tensor = torch.tensor(values, dtype=reference.dtype)
+        try:
+            tensor = torch.tensor(values, dtype=reference.dtype)
+        except (TypeError, ValueError, RuntimeError) as error:
+            raise ValueError("weight values are invalid") from error
         if tuple(tensor.shape) != tuple(reference.shape) or not bool(torch.isfinite(tensor).all()):
             raise ValueError("weight shape or finite-value check failed")
         tensors[name] = tensor
