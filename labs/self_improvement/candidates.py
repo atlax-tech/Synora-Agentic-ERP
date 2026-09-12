@@ -220,6 +220,17 @@ def activate_selection(root: Path, selection: LabSelection) -> Path:
     return path
 
 
+def apply_selection(root: Path, selection: LabSelection) -> tuple[Path, Path]:
+    """Write one receipt and pointer, cleaning up on a normal activation failure."""
+    receipt = write_selection(root, selection)
+    try:
+        active = activate_selection(root, selection)
+    except Exception:
+        receipt.unlink(missing_ok=True)
+        raise
+    return receipt, active
+
+
 def load_active_policy(root: Path) -> Policy:
     """Load the explicitly selected lab version for replay only."""
     active = read_active_version(root)
@@ -312,6 +323,5 @@ def rollback_selection(
         action="ROLLBACK",
         version_digests=rollback_digests,
     )
-    path = write_selection(root, rollback)
-    activate_selection(root, rollback)
+    path, _ = apply_selection(root, rollback)
     return rollback, path

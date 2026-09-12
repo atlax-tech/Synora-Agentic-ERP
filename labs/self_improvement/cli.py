@@ -21,7 +21,7 @@ from .artifacts import (
     write_records,
 )
 from .candidates import (
-    activate_selection,
+    apply_selection,
     build_selection,
     make_prompt_candidate,
     make_skill_candidate,
@@ -31,7 +31,6 @@ from .candidates import (
     rollback_selection,
     version_content_digest,
     write_candidate,
-    write_selection,
 )
 from .contracts import (
     CandidateVersion,
@@ -609,13 +608,14 @@ def main(argv: list[str] | None = None) -> int:
                     candidate.candidate_id: candidate.content_sha256,
                 },
             )
+            selection_path, active_path = apply_selection(
+                args.root / PHASE12_RELATIVE_ROOT, selection
+            )
             result = {
-                "path": str(write_selection(args.root / PHASE12_RELATIVE_ROOT, selection)),
+                "path": str(selection_path),
                 "selection": selection.model_dump(mode="json"),
             }
-            result["active_path"] = str(
-                activate_selection(args.root / PHASE12_RELATIVE_ROOT, selection)
-            )
+            result["active_path"] = str(active_path)
         elif args.command == "rollback-lab":
             current = read_selection(args.root / PHASE12_RELATIVE_ROOT, args.selection_id)
             evidence_version = current.selected_id
