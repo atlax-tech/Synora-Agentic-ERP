@@ -8,14 +8,24 @@ from pathlib import Path
 
 import pytest
 
-from labs.self_improvement.artifacts import read_records, write_records
+from labs.self_improvement.artifacts import (
+    code_version,
+    read_records,
+    write_json_once,
+    write_records,
+)
 from labs.self_improvement.cli import (
     _canonical_report_suffix,
     _manifest,
     _validate_frozen_replay_coverage,
     main,
 )
-from labs.self_improvement.contracts import DatasetManifest, ExperimentRecord, TrainingArtifact
+from labs.self_improvement.contracts import (
+    DatasetManifest,
+    ExperimentPlan,
+    ExperimentRecord,
+    TrainingArtifact,
+)
 from labs.self_improvement.reporting import write_reports
 
 
@@ -256,12 +266,51 @@ def test_cli_evaluate_weights_writes_independent_task_records(tmp_path: Path) ->
     assert all(record.training_artifact_id is not None for record in records)
 
 
+def test_cli_evaluate_baselines_writes_initial_random_and_rule_records(tmp_path: Path) -> None:
+    assert main(["--root", str(tmp_path), "prepare-data"]) == 0
+    assert main(["--root", str(tmp_path), "train", "--method", "sft", "--seed", "17"]) == 0
+    for kind in ("initial", "random", "rule"):
+        assert (
+            main(
+                [
+                    "--root",
+                    str(tmp_path),
+                    "evaluate-baseline",
+                    "--kind",
+                    kind,
+                    "--split",
+                    "dev",
+                ]
+            )
+            == 0
+        )
+    initial = read_records(tmp_path, "output/phase12/evaluation-baseline-initial-17-dev.jsonl")
+    random = read_records(tmp_path, "output/phase12/evaluation-baseline-random-17-dev.jsonl")
+    rule = read_records(tmp_path, "output/phase12/evaluation-baseline-rule-dev.jsonl")
+    assert len(initial) == len(random) == len(rule) == 24
+    assert {record.method for record in initial} == {"initial-policy"}
+    assert {record.method for record in random} == {"random-policy"}
+    assert {record.method for record in rule} == {"rule-policy"}
+    assert all(record.calls == 0 for record in (*initial, *random, *rule))
+
+
 def test_cli_freeze_experiment_preregisters_dev_and_test_methods(tmp_path: Path) -> None:
     _write_historical_failure(tmp_path)
     assert main(["--root", str(tmp_path), "audit-data"]) == 0
     assert main(["--root", str(tmp_path), "prepare-data"]) == 0
     assert main(["--root", str(tmp_path), "make-candidates"]) == 0
-    assert main(["--root", str(tmp_path), "freeze-experiment"]) == 0
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "freeze-experiment",
+                "--selected-method",
+                "reflection",
+            ]
+        )
+        == 0
+    )
     payload = json.loads((tmp_path / "output/phase12/phase12-experiment-manifest.json").read_text())
     assert set(payload["dev_methods"]) == {
         "baseline",
@@ -270,7 +319,83 @@ def test_cli_freeze_experiment_preregisters_dev_and_test_methods(tmp_path: Path)
         "prompt-candidate",
         "skill-candidate",
     }
-    assert payload["selected_method"] in payload["test_methods"]
+    assert payload["selected_method"] == "reflection"
+    assert set(payload["test_methods"]) == {
+        "baseline",
+        "prompt-candidate",
+        "skill-candidate",
+        "reflection",
+    }
+
+
+def test_cli_records_posthoc_method_selection_without_rewriting_plan(tmp_path: Path) -> None:
+    assert main(["--root", str(tmp_path), "prepare-data"]) == 0
+    manifest = _manifest(tmp_path)
+    plan = ExperimentPlan(
+        plan_id="phase12-plan-selection-test",
+        code_version=code_version(),
+        dataset_id=manifest.dataset_id,
+        dataset_digest=manifest.dataset_digest,
+        model="selection-test-model",
+        dev_methods=(
+            "baseline",
+            "reflection",
+            "best-of-3",
+            "prompt-candidate",
+            "skill-candidate",
+        ),
+        test_methods=("baseline", "prompt-candidate", "skill-candidate"),
+        selected_method="baseline",
+        candidate_ids=(),
+        verifier_version="test-verifier",
+        reward_version="test-reward",
+    )
+    write_json_once(
+        tmp_path,
+        "output/phase12/phase12-experiment-manifest.json",
+        plan.model_dump(mode="json"),
+    )
+    records: list[ExperimentRecord] = []
+    for method, calls, unsafe in (("reflection", 1, False), ("best-of-3", 3, True)):
+        for repeat in range(1, 4):
+            for case in manifest.cases:
+                if case.split != "dev":
+                    continue
+                keys = tuple(
+                    f"selection-{method}-{repeat}-{case.case_id}-{index}" for index in range(calls)
+                )
+                records.append(
+                    ExperimentRecord(
+                        experiment_id=f"phase12-exp-live-selection-{method}-{repeat}-{case.case_id}",
+                        code_version=plan.code_version,
+                        dataset_id=manifest.dataset_id,
+                        dataset_digest=manifest.dataset_digest,
+                        split="dev",
+                        case_id=case.case_id,
+                        group_id=case.group_id,
+                        experiment_plan_id=plan.plan_id,
+                        method=method,
+                        model=plan.model,
+                        repeat=repeat,
+                        status="SUCCEEDED",
+                        output_action="FINISH",
+                        verifier_passed=True,
+                        safety_passed=not unsafe,
+                        score=1.0,
+                        elapsed_ms=float(calls),
+                        calls=calls,
+                        reservation_key=keys[0],
+                        reservation_keys=keys,
+                    )
+                )
+    write_records(tmp_path, "selection-evidence.jsonl", records)
+    assert main(["--root", str(tmp_path), "select-test-method"]) == 0
+    receipt = json.loads(
+        (tmp_path / "output/phase12/phase12-method-selection.json").read_text(encoding="utf-8")
+    )
+    assert receipt["pre_registered"] is False
+    assert receipt["selected_method"] == "reflection"
+    assert plan.selected_method == "baseline"
 
 
 def test_cli_report_rejects_trimmed_frozen_evidence(tmp_path: Path) -> None:

@@ -22,6 +22,11 @@ from .artifacts import (
     write_manifest,
     write_records,
 )
+from .baselines import (
+    evaluate_initial_baseline,
+    evaluate_random_baseline,
+    evaluate_rule_baseline,
+)
 from .candidates import (
     apply_selection,
     build_selection,
@@ -56,8 +61,13 @@ from .evaluation import (
     run_live_methods,
 )
 from .replay import ReplayResult, candidate_policy, deterministic_policy
-from .reporting import build_summary, write_reports
-from .stage import verify_stage
+from .reporting import build_summary, heldout_bootstrap, write_reports
+from .stage import (
+    METHOD_SELECTION_FILENAME,
+    build_method_selection,
+    effective_test_methods,
+    verify_stage,
+)
 from .training import load_weights, train_dpo, train_reinforce, train_sft, weights_digest
 from .weight_evaluation import evaluate_weight_artifact
 
@@ -233,7 +243,11 @@ def _existing_calls(root: Path) -> int:
     for path in output.glob("*.jsonl"):
         if path.name == RESERVATION_LEDGER_NAME:
             continue
-        total += sum(record.calls for record in read_records(root, str(path.relative_to(root))))
+        total += sum(
+            record.calls
+            for record in read_records(root, str(path.relative_to(root)))
+            if record.experiment_id.startswith("phase12-exp-live-")
+        )
     return total
 
 
@@ -289,10 +303,18 @@ _FROZEN_REPLAY_COVERAGE: tuple[tuple[str, str], ...] = (
 
 
 def _validate_frozen_replay_coverage(
-    manifest: DatasetManifest, records: tuple[ExperimentRecord, ...]
+    manifest: DatasetManifest,
+    records: tuple[ExperimentRecord, ...],
+    *,
+    test_methods: tuple[str, ...] | None = None,
 ) -> None:
     """Require the pre-registered case/repeat matrix for the canonical evidence."""
-    for method, split in _FROZEN_REPLAY_COVERAGE:
+    coverage = _FROZEN_REPLAY_COVERAGE
+    if test_methods is not None:
+        coverage = tuple(item for item in _FROZEN_REPLAY_COVERAGE if item[1] == "dev") + tuple(
+            (method, "test") for method in test_methods
+        )
+    for method, split in coverage:
         case_ids = tuple(case.case_id for case in manifest.cases if case.split == split)
         expected = {
             f"phase12-exp-replay-{method.lower()}-{repeat}-{case_id}"
@@ -368,6 +390,7 @@ def _verify_canonical_summary(
             if isinstance(payload.get("stage_verification"), dict)
             else None
         ),
+        root=output.parent.parent,
     )
     if digest_json(payload) != digest_json(json.loads(canonical_json(expected))):
         raise ValueError("canonical summary does not match current evidence")
@@ -516,7 +539,11 @@ def _cmd_evaluate(args: argparse.Namespace) -> dict[str, object]:
             raise ValueError("experiment plan is bound to a different dataset")
         if not code_version_is_compatible(plan.code_version):
             raise ValueError("experiment plan is bound to changed implementation code")
-        allowed = plan.dev_methods if args.split == "dev" else plan.test_methods
+        allowed = (
+            plan.dev_methods
+            if args.split == "dev"
+            else effective_test_methods(plan, args.root / PHASE12_RELATIVE_ROOT)
+        )
         if args.method not in allowed:
             raise ValueError("method is not preregistered for the requested split")
     if args.repeats < 1 or args.repeats > 3:
@@ -654,6 +681,70 @@ def _cmd_freeze_experiment(args: argparse.Namespace) -> dict[str, object]:
     return {"path": str(path), "plan": plan.model_dump(mode="json")}
 
 
+def _active_records(root: Path) -> tuple[ExperimentRecord, ...]:
+    output = root / PHASE12_RELATIVE_ROOT
+    values: list[ExperimentRecord] = []
+    for path in sorted(output.glob("*.jsonl")):
+        if path.name != RESERVATION_LEDGER_NAME:
+            values.extend(read_records(root, str(path.relative_to(root))))
+    return tuple(values)
+
+
+def _cmd_select_test_method(args: argparse.Namespace) -> dict[str, object]:
+    manifest = _manifest(args.root)
+    verify_manifest(manifest)
+    output = args.root / PHASE12_RELATIVE_ROOT
+    plan_path = output / "phase12-experiment-manifest.json"
+    if not plan_path.is_file() or plan_path.is_symlink():
+        raise FileNotFoundError("experiment plan is missing")
+    plan = ExperimentPlan.model_validate_json(plan_path.read_text(encoding="utf-8"))
+    if plan.dataset_id != manifest.dataset_id or plan.dataset_digest != manifest.dataset_digest:
+        raise ValueError("experiment plan is bound to a different dataset")
+    if not code_version_is_compatible(plan.code_version):
+        raise ValueError("experiment plan is bound to changed experiment implementation")
+    records = _active_records(args.root)
+    verify_records(records, manifest)
+    payload = build_method_selection(manifest, plan, records)
+    path = write_json_once(
+        args.root,
+        f"{PHASE12_RELATIVE_ROOT}/{METHOD_SELECTION_FILENAME}",
+        payload,
+    )
+    return {"path": str(path), "selection": payload}
+
+
+def _cmd_bootstrap(args: argparse.Namespace) -> dict[str, object]:
+    manifest = _manifest(args.root)
+    verify_manifest(manifest)
+    output = args.root / PHASE12_RELATIVE_ROOT
+    plan_path = output / "phase12-experiment-manifest.json"
+    if not plan_path.is_file() or plan_path.is_symlink():
+        raise FileNotFoundError("experiment plan is missing")
+    plan = ExperimentPlan.model_validate_json(plan_path.read_text(encoding="utf-8"))
+    if plan.dataset_id != manifest.dataset_id or plan.dataset_digest != manifest.dataset_digest:
+        raise ValueError("experiment plan is bound to a different dataset")
+    records = _active_records(args.root)
+    verify_records(records, manifest)
+    methods = effective_test_methods(plan, output)
+    comparisons = heldout_bootstrap(records, methods=methods)
+    expected = set(methods) - {"baseline"}
+    if {item["method_a"] for item in comparisons} != expected:
+        raise ValueError("held-out bootstrap requires every effective test method")
+    payload = {
+        "schema_version": "1",
+        "plan_id": plan.plan_id,
+        "dataset_digest": manifest.dataset_digest,
+        "code_version": plan.code_version,
+        "comparisons": list(comparisons),
+    }
+    path = write_json_once(
+        args.root,
+        f"{PHASE12_RELATIVE_ROOT}/phase12-bootstrap-{plan.plan_id.removeprefix('phase12-plan-')}.json",
+        payload,
+    )
+    return {"path": str(path), "comparisons": list(comparisons)}
+
+
 def _cmd_train(args: argparse.Namespace) -> dict[str, object]:
     manifest = _manifest(args.root)
     verify_manifest(manifest)
@@ -664,7 +755,7 @@ def _cmd_train(args: argparse.Namespace) -> dict[str, object]:
         if plan_path.is_file() and not plan_path.is_symlink()
         else None
     )
-    if plan is not None and not code_version_is_compatible(plan.code_version):
+    if plan is not None and not code_version_is_compatible(plan.code_version, scope="local"):
         raise ValueError("experiment plan is bound to changed implementation code")
     if args.method == "sft":
         result = train_sft(manifest, seed=args.seed, weight_path=path)
@@ -697,7 +788,7 @@ def _cmd_evaluate_weights(args: argparse.Namespace) -> dict[str, object]:
         if plan_path.is_file() and not plan_path.is_symlink()
         else None
     )
-    if plan is not None and not code_version_is_compatible(plan.code_version):
+    if plan is not None and not code_version_is_compatible(plan.code_version, scope="local"):
         raise ValueError("experiment plan is bound to changed implementation code")
     output = args.root / PHASE12_RELATIVE_ROOT
     weight_path = output / f"weights-{args.method}-{args.seed}.json"
@@ -728,6 +819,52 @@ def _cmd_evaluate_weights(args: argparse.Namespace) -> dict[str, object]:
         "split": args.split,
         "weight_sha256": metadata.weight_sha256,
     }
+
+
+def _cmd_evaluate_baseline(args: argparse.Namespace) -> dict[str, object]:
+    manifest = _manifest(args.root)
+    verify_manifest(manifest)
+    output = args.root / PHASE12_RELATIVE_ROOT
+    plan_path = output / "phase12-experiment-manifest.json"
+    plan = (
+        ExperimentPlan.model_validate_json(plan_path.read_text(encoding="utf-8"))
+        if plan_path.is_file() and not plan_path.is_symlink()
+        else None
+    )
+    if plan is not None and not code_version_is_compatible(plan.code_version):
+        raise ValueError("experiment plan is bound to changed implementation code")
+    frozen_version = plan.code_version if plan is not None else code_version()
+    if args.kind == "initial":
+        metadata_path = output / f"weights-sft-{args.seed}.metadata.json"
+        if not metadata_path.is_file() or metadata_path.is_symlink():
+            raise FileNotFoundError(f"training metadata is missing: {metadata_path.name}")
+        metadata = TrainingArtifact.model_validate_json(metadata_path.read_text(encoding="utf-8"))
+        records = evaluate_initial_baseline(
+            manifest,
+            seed=args.seed,
+            split=args.split,
+            code_version=frozen_version,
+            training_artifact_id=metadata.artifact_id,
+            expected_weight_sha256=metadata.initial_weight_sha256,
+        )
+        name = f"evaluation-baseline-initial-{args.seed}-{args.split}.jsonl"
+    elif args.kind == "random":
+        records = evaluate_random_baseline(
+            manifest,
+            seed=args.seed,
+            split=args.split,
+            code_version=frozen_version,
+        )
+        name = f"evaluation-baseline-random-{args.seed}-{args.split}.jsonl"
+    else:
+        records = evaluate_rule_baseline(
+            manifest,
+            split=args.split,
+            code_version=frozen_version,
+        )
+        name = f"evaluation-baseline-rule-{args.split}.jsonl"
+    path = write_records(args.root, name, records)
+    return {"path": str(path), "kind": args.kind, "seed": args.seed, "split": args.split}
 
 
 def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
@@ -777,7 +914,12 @@ def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
     verify_records(all_records, manifest)
     canonical_suffix = _canonical_report_suffix(output)
     if canonical_suffix is not None:
-        _validate_frozen_replay_coverage(manifest, tuple(all_records))
+        test_methods: tuple[str, ...] | None = None
+        plan_path = output / "phase12-experiment-manifest.json"
+        if plan_path.is_file() and not plan_path.is_symlink():
+            plan = ExperimentPlan.model_validate_json(plan_path.read_text(encoding="utf-8"))
+            test_methods = effective_test_methods(plan, output)
+        _validate_frozen_replay_coverage(manifest, tuple(all_records), test_methods=test_methods)
     ledger_path = output / RESERVATION_LEDGER_NAME
     if ledger_path.exists():
         ledger = ReservationLedger(ledger_path)
@@ -957,14 +1099,20 @@ def build_parser() -> argparse.ArgumentParser:
     weight_eval.add_argument("--method", choices=("sft", "dpo", "reinforce"), required=True)
     weight_eval.add_argument("--seed", type=int, choices=(17, 29, 43), default=17)
     weight_eval.add_argument("--split", choices=("train", "dev", "test"), default="dev")
+    baseline_eval = sub.add_parser("evaluate-baseline")
+    baseline_eval.add_argument("--kind", choices=("initial", "random", "rule"), required=True)
+    baseline_eval.add_argument("--seed", type=int, choices=(17, 29, 43), default=17)
+    baseline_eval.add_argument("--split", choices=("dev", "test"), required=True)
     freeze = sub.add_parser("freeze-experiment")
     freeze.add_argument("--plan-id", default="phase12-plan-r5-v1")
     freeze.add_argument("--model", default="glm-5.3-flash", help="frozen assist model identifier")
     freeze.add_argument(
         "--selected-method",
-        choices=("baseline", "reflection", "best-of-3", "prompt-candidate", "skill-candidate"),
-        default="baseline",
+        choices=("reflection", "best-of-3"),
+        required=True,
     )
+    sub.add_parser("select-test-method")
+    sub.add_parser("bootstrap")
     sub.add_parser("report")
     sub.add_parser("verify-artifacts")
     stage = sub.add_parser("verify-stage")
@@ -1069,8 +1217,14 @@ def main(argv: list[str] | None = None) -> int:
             result = _cmd_train(args)
         elif args.command == "evaluate-weights":
             result = _cmd_evaluate_weights(args)
+        elif args.command == "evaluate-baseline":
+            result = _cmd_evaluate_baseline(args)
         elif args.command == "freeze-experiment":
             result = _cmd_freeze_experiment(args)
+        elif args.command == "select-test-method":
+            result = _cmd_select_test_method(args)
+        elif args.command == "bootstrap":
+            result = _cmd_bootstrap(args)
         elif args.command == "report":
             result = _cmd_report(args)
         elif args.command == "verify-stage":

@@ -7,12 +7,46 @@ import os
 import subprocess
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Literal
 
 from .contracts import DatasetManifest, ExperimentRecord, safe_output_path
 from .data import validate_grouped_splits
 
 PHASE12_RELATIVE_ROOT = "output/phase12"
 MAX_CALLS = 1_200
+
+# The experiment binding is intentionally narrower than the package boundary.
+# Report rendering and the read-only exit gate may be corrected from immutable
+# raw records without spending provider calls again.  Unknown Phase 12 source
+# files fail closed; only the explicitly identified request/data/verifier
+# modules and provider protocol can invalidate a frozen remote experiment.
+_EXPERIMENT_BINDING_PATHS = frozenset(
+    {
+        "labs/self_improvement/candidates.py",
+        "labs/self_improvement/contracts.py",
+        "labs/self_improvement/data.py",
+        "labs/self_improvement/evaluation.py",
+        "labs/self_improvement/replay.py",
+        "services/agent_runtime/src/agent_runtime/providers.py",
+    }
+)
+_LOCAL_EVIDENCE_PATHS = frozenset(
+    {
+        "labs/self_improvement/baselines.py",
+        "labs/self_improvement/rl.py",
+        "labs/self_improvement/training.py",
+        "labs/self_improvement/weight_evaluation.py",
+    }
+)
+_PHASE12_CONTROL_PATHS = frozenset(
+    {
+        "labs/self_improvement/artifacts.py",
+        "labs/self_improvement/cli.py",
+        "labs/self_improvement/reporting.py",
+        "labs/self_improvement/stage.py",
+        "labs/self_improvement/stage_completion.py",
+    }
+)
 
 
 def code_version() -> str:
@@ -31,8 +65,16 @@ def code_version() -> str:
     return value if value else "working-tree"
 
 
-def code_version_is_compatible(frozen: str) -> bool:
-    """Allow evidence-only commits while rejecting implementation drift."""
+def code_version_is_compatible(
+    frozen: str, *, scope: Literal["remote", "local"] = "remote"
+) -> bool:
+    """Allow evidence/control fixes while rejecting bound experiment drift.
+
+    This is a semantic classification, not a blanket source whitelist: a new
+    Phase 12 source path is treated as binding until it is explicitly
+    classified, while reporting and gate-only fixes remain recalculable from
+    immutable records.
+    """
     current = code_version()
     if frozen == current:
         return True
@@ -49,8 +91,20 @@ def code_version_is_compatible(frozen: str) -> bool:
     except OSError, subprocess.SubprocessError:
         return False
     changed = tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
-    source_prefixes = ("labs/self_improvement/", "services/agent_runtime/src/agent_runtime/")
-    return not any(path.startswith(source_prefixes) for path in changed)
+    for path in changed:
+        if path in _EXPERIMENT_BINDING_PATHS:
+            return False
+        if scope == "local" and path in _LOCAL_EVIDENCE_PATHS:
+            return False
+        if path in _LOCAL_EVIDENCE_PATHS:
+            continue
+        if path in _PHASE12_CONTROL_PATHS:
+            continue
+        if path.startswith("labs/self_improvement/"):
+            return False
+        if path == "services/agent_runtime/src/agent_runtime/providers.py":
+            return False
+    return True
 
 
 def _target(root: Path, relative: str) -> Path:
@@ -228,7 +282,10 @@ def verify_records(records: Iterable[ExperimentRecord], manifest: DatasetManifes
     values = tuple(records)
     if len({record.experiment_id for record in values}) != len(values):
         raise ValueError("experiment ids must be unique")
-    if sum(record.calls for record in values) > MAX_CALLS:
+    provider_calls = sum(
+        record.calls for record in values if record.experiment_id.startswith("phase12-exp-live-")
+    )
+    if provider_calls > MAX_CALLS:
         raise ValueError("cumulative model call budget exceeded")
     for record in values:
         if (

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from .artifacts import (
     PHASE12_RELATIVE_ROOT,
@@ -29,6 +29,10 @@ from .evaluation import ReservationLedger
 
 StageStatus = Literal["INCOMPLETE", "BLOCKED", "PASS"]
 LIVE_METHODS = ("baseline", "reflection", "best-of-3", "prompt-candidate", "skill-candidate")
+DEV_SELECTION_METHODS = ("reflection", "best-of-3")
+REQUIRED_TEST_METHODS = ("baseline", "prompt-candidate", "skill-candidate")
+METHOD_SELECTION_FILENAME = "phase12-method-selection.json"
+METHOD_SELECTION_RULE = "safety-qualified > verifier_rate(desc) > calls(asc) > latency(asc)"
 TERMINAL_STATUSES = frozenset({"SUCCEEDED", "FAILED", "UNKNOWN", "REJECTED"})
 
 
@@ -82,6 +86,187 @@ def _output(root: Path) -> Path:
     if not output.is_dir() or output.is_symlink():
         raise FileNotFoundError("Phase 12 output root is missing")
     return output
+
+
+def _method_selection_payload(output: Path) -> dict[str, object]:
+    path = output / METHOD_SELECTION_FILENAME
+    if not path.is_file() or path.is_symlink():
+        raise FileNotFoundError("post-hoc method selection receipt is missing")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    fields = {
+        "schema_version",
+        "selection_type",
+        "pre_registered",
+        "plan_id",
+        "code_version",
+        "dataset_id",
+        "dataset_digest",
+        "model",
+        "selection_rule",
+        "selected_method",
+        "evidence_ids",
+        "metrics",
+        "selection_basis",
+    }
+    if not isinstance(payload, dict) or set(payload) != fields:
+        raise ValueError("method selection receipt shape is invalid")
+    if (
+        payload["schema_version"] != "1"
+        or payload["selection_type"] != "POST_HOC_TEST_METHOD_SUPPLEMENT"
+        or payload["pre_registered"] is not False
+        or payload["selection_rule"] != METHOD_SELECTION_RULE
+        or payload["selected_method"] not in DEV_SELECTION_METHODS
+    ):
+        raise ValueError("method selection receipt contract is invalid")
+    evidence = payload["evidence_ids"]
+    metrics = payload["metrics"]
+    basis = payload["selection_basis"]
+    if (
+        not isinstance(evidence, dict)
+        or set(evidence) != set(DEV_SELECTION_METHODS)
+        or not isinstance(metrics, dict)
+        or set(metrics) != set(DEV_SELECTION_METHODS)
+        or not isinstance(basis, dict)
+        or set(basis) != set(DEV_SELECTION_METHODS)
+    ):
+        raise ValueError("method selection receipt evidence is invalid")
+    return payload
+
+
+def effective_test_methods(plan: ExperimentPlan, output: Path) -> tuple[str, ...]:
+    """Return the frozen test methods plus a validated legacy supplement pointer."""
+    methods = tuple(plan.test_methods)
+    if plan.selected_method in DEV_SELECTION_METHODS:
+        return methods
+    try:
+        payload = _method_selection_payload(output)
+    except FileNotFoundError, OSError, ValueError, json.JSONDecodeError:
+        return methods
+    selected = payload["selected_method"]
+    if not isinstance(selected, str):
+        return methods
+    return tuple(dict.fromkeys((*methods, selected)))
+
+
+def _selection_dev_records(
+    manifest: DatasetManifest,
+    plan: ExperimentPlan,
+    records: tuple[ExperimentRecord, ...],
+) -> dict[str, tuple[ExperimentRecord, ...]]:
+    cases = {case.case_id for case in manifest.cases if case.split == "dev"}
+    expected = {
+        (method, repeat, case_id)
+        for method in DEV_SELECTION_METHODS
+        for repeat in range(1, 4)
+        for case_id in cases
+    }
+    selected: dict[str, tuple[ExperimentRecord, ...]] = {}
+    actual: set[tuple[str, int, str]] = set()
+    for method in DEV_SELECTION_METHODS:
+        values = tuple(
+            record
+            for record in records
+            if (
+                record.experiment_id.startswith("phase12-exp-live-")
+                and record.experiment_plan_id == plan.plan_id
+                and record.split == "dev"
+                and record.method == method
+            )
+        )
+        for record in values:
+            case_id = record.case_id
+            key = (method, record.repeat, case_id or "")
+            if case_id is None or key in actual or key not in expected:
+                raise ValueError(
+                    f"dev selection evidence coverage mismatch: {record.experiment_id}"
+                )
+            actual.add(key)
+            if (
+                record.code_version != plan.code_version
+                or record.model != plan.model
+                or record.dataset_digest != manifest.dataset_digest
+                or record.status not in TERMINAL_STATUSES
+                or record.calls < 1
+                or len(record.reservation_keys) != record.calls
+            ):
+                raise ValueError(f"dev selection evidence binding mismatch: {record.experiment_id}")
+        selected[method] = tuple(sorted(values, key=lambda record: record.experiment_id))
+    if actual != expected:
+        raise ValueError(
+            "dev selection evidence must cover Reflection and Best-of-3 at 24 cases x 3 repeats"
+        )
+    return selected
+
+
+def _selection_metrics(values: tuple[ExperimentRecord, ...]) -> dict[str, object]:
+    if not values:
+        raise ValueError("dev selection evidence is empty")
+    count = len(values)
+    return {
+        "record_count": count,
+        "case_count": len({record.case_id for record in values}),
+        "repeats": len({record.repeat for record in values}),
+        "safety_passed": sum(record.safety_passed for record in values),
+        "verifier_passed": sum(record.verifier_passed for record in values),
+        "safety_rate": sum(record.safety_passed for record in values) / count,
+        "verifier_rate": sum(record.verifier_passed for record in values) / count,
+        "calls": sum(record.calls for record in values),
+        "mean_elapsed_ms": sum(record.elapsed_ms for record in values) / count,
+    }
+
+
+def build_method_selection(
+    manifest: DatasetManifest,
+    plan: ExperimentPlan,
+    records: tuple[ExperimentRecord, ...],
+) -> dict[str, object]:
+    """Build a deterministic, explicitly post-hoc supplement from frozen dev results."""
+    evidence = _selection_dev_records(manifest, plan, records)
+    metrics = {method: _selection_metrics(values) for method, values in evidence.items()}
+    eligible = tuple(
+        method
+        for method in DEV_SELECTION_METHODS
+        if metrics[method]["safety_passed"] == metrics[method]["record_count"]
+    )
+    if not eligible:
+        raise ValueError("no Reflection or Best-of-3 method satisfies the safety gate")
+    selected = min(
+        eligible,
+        key=lambda method: (
+            -cast(float, metrics[method]["verifier_rate"]),
+            cast(int, metrics[method]["calls"]),
+            cast(float, metrics[method]["mean_elapsed_ms"]),
+            method,
+        ),
+    )
+    basis = {
+        method: (
+            f"safety {metrics[method]['safety_passed']}/{metrics[method]['record_count']}; "
+            f"verifier {metrics[method]['verifier_passed']}/{metrics[method]['record_count']}; "
+            f"calls {metrics[method]['calls']}; "
+            f"mean latency {metrics[method]['mean_elapsed_ms']:.3f} ms; "
+            f"safety_qualified={method in eligible}"
+        )
+        for method in DEV_SELECTION_METHODS
+    }
+    return {
+        "schema_version": "1",
+        "selection_type": "POST_HOC_TEST_METHOD_SUPPLEMENT",
+        "pre_registered": False,
+        "plan_id": plan.plan_id,
+        "code_version": plan.code_version,
+        "dataset_id": manifest.dataset_id,
+        "dataset_digest": manifest.dataset_digest,
+        "model": plan.model,
+        "selection_rule": METHOD_SELECTION_RULE,
+        "selected_method": selected,
+        "evidence_ids": {
+            method: [record.experiment_id for record in evidence[method]]
+            for method in DEV_SELECTION_METHODS
+        },
+        "metrics": metrics,
+        "selection_basis": basis,
+    }
 
 
 def _audit_payload(root: Path) -> tuple[dict[str, object], ...]:
@@ -212,6 +397,53 @@ def _expected(
     }
 
 
+def _check_method_selection(
+    output: Path,
+    manifest: DatasetManifest,
+    plan: ExperimentPlan,
+    records: tuple[ExperimentRecord, ...],
+    audit: StageAudit,
+) -> tuple[str, ...]:
+    """Require an auditable supplement when the legacy plan selected baseline."""
+    missing_required = set(REQUIRED_TEST_METHODS) - set(plan.test_methods)
+    if missing_required:
+        audit.check("approved_test_methods", False)
+        audit.fail(
+            "experiment plan omits approved test methods: " + ", ".join(sorted(missing_required))
+        )
+        return tuple(plan.test_methods)
+    if plan.selected_method in DEV_SELECTION_METHODS:
+        if plan.selected_method not in plan.test_methods:
+            audit.check("approved_test_methods", False)
+            audit.fail("selected dev method is absent from the frozen test methods")
+            return tuple(plan.test_methods)
+        audit.count("effective_test_methods", len(plan.test_methods))
+        audit.check("approved_test_methods", True)
+        audit.check("method_selection_evidence", True)
+        return tuple(plan.test_methods)
+    try:
+        payload = _method_selection_payload(output)
+        expected = build_method_selection(manifest, plan, records)
+        if payload != expected:
+            raise ValueError("post-hoc method selection does not match immutable dev evidence")
+        selected = payload["selected_method"]
+        if not isinstance(selected, str):  # guarded by _method_selection_payload
+            raise ValueError("selected method is not a string")
+        methods = tuple(dict.fromkeys((*plan.test_methods, selected)))
+        if selected not in DEV_SELECTION_METHODS:
+            raise ValueError("post-hoc selected method is not Reflection or Best-of-3")
+        audit.count("effective_test_methods", len(methods))
+        audit.count("posthoc_selection", 1)
+        audit.check("approved_test_methods", True)
+        audit.check("method_selection_evidence", True)
+        return methods
+    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError) as error:
+        audit.check("approved_test_methods", False)
+        audit.check("method_selection_evidence", False)
+        audit.fail(f"required dev method selection supplement is invalid: {error}")
+        return tuple(plan.test_methods)
+
+
 def _check_live_matrix(
     manifest: DatasetManifest,
     plan: ExperimentPlan,
@@ -219,8 +451,9 @@ def _check_live_matrix(
     candidates: dict[str, CandidateVersion],
     split: Literal["dev", "test"],
     audit: StageAudit,
+    methods: tuple[str, ...] | None = None,
 ) -> set[str]:
-    methods = tuple(plan.dev_methods if split == "dev" else plan.test_methods)
+    methods = tuple(methods or (plan.dev_methods if split == "dev" else plan.test_methods))
     expected = _expected(manifest, methods, split)
     cases = {case.case_id: case for case in manifest.cases if case.split == split}
     live = tuple(
@@ -359,12 +592,24 @@ def verify_stage(
             verify_records(records, manifest)
         except ValueError as error:
             audit.fail(f"experiment records fail the base contract: {error}", blocked=True)
+        test_methods = _check_method_selection(output, manifest, plan, records, audit)
         expected_keys |= _check_live_matrix(manifest, plan, records, candidates, "dev", audit)
-        expected_keys |= _check_live_matrix(manifest, plan, records, candidates, "test", audit)
+        expected_keys |= _check_live_matrix(
+            manifest, plan, records, candidates, "test", audit, methods=test_methods
+        )
         _check_ledger(output, expected_keys, audit)
         from .stage_completion import check_completion
 
-        check_completion(root, output, manifest, plan, candidates, records, audit)
+        check_completion(
+            root,
+            output,
+            manifest,
+            plan,
+            candidates,
+            records,
+            audit,
+            test_methods=test_methods,
+        )
     else:
         audit.fail("strict matrix checks cannot run without a valid dataset and experiment plan")
     review_status = "PENDING" if not require_review else "MISSING"

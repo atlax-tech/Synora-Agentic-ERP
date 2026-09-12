@@ -20,16 +20,6 @@
       "method_b": "baseline",
       "samples": 2000,
       "upper_95": 0.06944444444444443
-    },
-    {
-      "conclusion": "INCONCLUSIVE",
-      "delta": 0.02777777777777778,
-      "groups": 12,
-      "lower_95": -0.125,
-      "method_a": "reflection",
-      "method_b": "baseline",
-      "samples": 2000,
-      "upper_95": 0.1527777777777778
     }
   ],
   "dataset_digest": "a4278cc7ef8df0a8129e0449b8ffc00c386f2ea3b033a9e239203fb14c9626fe",

@@ -27,7 +27,18 @@ def test_stage_gate_reports_missing_preregistration(tmp_path: Path) -> None:
 
 def test_stage_cli_returns_nonzero_for_incomplete_evidence(tmp_path: Path) -> None:
     _seed_lab(tmp_path)
-    assert main(["--root", str(tmp_path), "freeze-experiment"]) == 0
+    assert (
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "freeze-experiment",
+                "--selected-method",
+                "reflection",
+            ]
+        )
+        == 0
+    )
     assert main(["--root", str(tmp_path), "verify-stage"]) == 2
 
 

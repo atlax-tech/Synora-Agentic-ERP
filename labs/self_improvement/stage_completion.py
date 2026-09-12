@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from .contracts import (
     ExperimentRecord,
     TrainingArtifact,
 )
+from .evaluation import grouped_bootstrap
 from .stage import StageAudit
 
 TRAINING_METHODS = ("sft", "dpo", "reinforce")
@@ -129,6 +131,98 @@ def _check_training(
         audit.fail(f"training or weight evaluation invalid: {error}", blocked=True)
 
 
+def _check_baseline_evaluations(
+    root: Path,
+    output: Path,
+    manifest: DatasetManifest,
+    plan: ExperimentPlan,
+    audit: StageAudit,
+) -> None:
+    """Require initialization, seeded-random, and rule task evaluations."""
+    try:
+        specs: list[tuple[str, int | None, str]] = (
+            [("initial", seed, split) for seed in SEEDS for split in ("dev", "test")]
+            + [("random", seed, split) for seed in SEEDS for split in ("dev", "test")]
+            + [("rule", None, split) for split in ("dev", "test")]
+        )
+        expected_artifacts: dict[int, TrainingArtifact] = {}
+        for seed in SEEDS:
+            metadata_path = output / f"weights-sft-{seed}.metadata.json"
+            metadata = TrainingArtifact.model_validate(_json(metadata_path))
+            if (
+                metadata.method != "sft"
+                or metadata.seed != seed
+                or metadata.artifact_id != f"phase12-train-sft-seed-{seed}"
+                or metadata.code_version != plan.code_version
+                or metadata.dataset_digest != manifest.dataset_digest
+            ):
+                raise ValueError(f"initial baseline metadata binding mismatch: {seed}")
+            expected_artifacts[seed] = metadata
+        counts = {"initial": 0, "random": 0, "rule": 0}
+        for kind, baseline_seed, split in specs:
+            suffix = f"-{baseline_seed}" if baseline_seed is not None else ""
+            path = output / f"evaluation-baseline-{kind}{suffix}-{split}.jsonl"
+            values = read_records(root, str(path.relative_to(root)))
+            expected_ids = {case.case_id for case in manifest.cases if case.split == split}
+            if {record.case_id for record in values} != expected_ids or len(values) != len(
+                expected_ids
+            ):
+                raise ValueError(
+                    f"baseline evaluation coverage mismatch: {kind}/{baseline_seed}/{split}"
+                )
+            initial_metadata = (
+                expected_artifacts.get(baseline_seed)
+                if kind == "initial" and baseline_seed is not None
+                else None
+            )
+            expected_models = {
+                "initial": (
+                    f"phase12-initial-baseline-seed-{baseline_seed}-"
+                    f"{initial_metadata.initial_weight_sha256[:16]}"
+                    if initial_metadata is not None
+                    else None
+                ),
+                "random": f"phase12-random-baseline-seed-{baseline_seed}",
+                "rule": "phase12-rule-baseline",
+            }
+            for record in values:
+                if (
+                    record.method != f"{kind}-policy"
+                    or record.model != expected_models[kind]
+                    or record.split != split
+                    or record.dataset_id != manifest.dataset_id
+                    or record.code_version != plan.code_version
+                    or record.dataset_digest != manifest.dataset_digest
+                    or record.calls != 0
+                    or record.repeat != 1
+                    or record.candidate_id is not None
+                    or record.status not in {"SUCCEEDED", "REJECTED"}
+                ):
+                    raise ValueError(
+                        f"baseline evaluation binding mismatch: {kind}/{baseline_seed}/{split}"
+                    )
+                if kind == "initial":
+                    if (
+                        initial_metadata is None
+                        or record.training_artifact_id != initial_metadata.artifact_id
+                        or record.weight_sha256 != initial_metadata.initial_weight_sha256
+                    ):
+                        raise ValueError(
+                            f"initial baseline weight binding mismatch: {baseline_seed}"
+                        )
+                elif record.training_artifact_id is not None or record.weight_sha256 is not None:
+                    raise ValueError(f"non-weight baseline unexpectedly binds a weight: {kind}")
+            counts[kind] += len(values)
+        audit.count("initial_task_evaluations", counts["initial"])
+        audit.count("random_task_evaluations", counts["random"])
+        audit.count("rule_task_evaluations", counts["rule"])
+        audit.count("baseline_task_evaluations", sum(counts.values()))
+        audit.check("baseline_task_evaluations", True)
+    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError) as error:
+        audit.check("baseline_task_evaluations", False)
+        audit.fail(f"baseline task evaluations invalid: {error}", blocked=True)
+
+
 def _check_selections(
     output: Path, records: tuple[ExperimentRecord, ...], audit: StageAudit
 ) -> None:
@@ -207,7 +301,12 @@ def _check_rollback(
 
 
 def _check_bootstrap(
-    output: Path, manifest: DatasetManifest, plan: ExperimentPlan, audit: StageAudit
+    output: Path,
+    manifest: DatasetManifest,
+    plan: ExperimentPlan,
+    records: tuple[ExperimentRecord, ...],
+    test_methods: tuple[str, ...],
+    audit: StageAudit,
 ) -> None:
     try:
         payload = _json(
@@ -226,7 +325,7 @@ def _check_bootstrap(
             or payload["code_version"] != plan.code_version
         ):
             raise ValueError("bootstrap evidence binding mismatch")
-        expected = set(plan.test_methods) - {"baseline"}
+        expected = set(test_methods) - {"baseline"}
         comparisons = payload["comparisons"]
         fields = {
             "method_a",
@@ -244,18 +343,52 @@ def _check_bootstrap(
         for comparison in comparisons:
             if not isinstance(comparison, dict) or set(comparison) != fields:
                 raise ValueError("bootstrap comparison shape is invalid")
+            method_a = comparison["method_a"]
             if (
                 comparison["method_b"] != "baseline"
-                or comparison["method_a"] not in expected
-                or comparison["method_a"] in seen
+                or not isinstance(method_a, str)
+                or method_a not in expected
+                or method_a in seen
                 or comparison["groups"] != 12
                 or comparison["samples"] != 2_000
                 or comparison["conclusion"] not in {"IMPROVED", "INCONCLUSIVE", "REGRESSED"}
             ):
                 raise ValueError("bootstrap comparison contract is invalid")
-            seen.add(str(comparison["method_a"]))
+            seen.add(method_a)
         if seen != expected:
             raise ValueError("bootstrap comparisons do not cover frozen methods")
+        live = tuple(
+            record
+            for record in records
+            if (
+                record.experiment_id.startswith("phase12-exp-live-")
+                and record.experiment_plan_id == plan.plan_id
+                and record.split == "test"
+            )
+        )
+        baseline = tuple(record for record in live if record.method == "baseline")
+        expected_by_method = {comparison["method_a"]: comparison for comparison in comparisons}
+        for method in sorted(expected):
+            candidate = tuple(record for record in live if record.method == method)
+            calculated = grouped_bootstrap(
+                candidate,
+                baseline,
+                method_a=method,
+                method_b="baseline",
+            )
+            actual = expected_by_method[method]
+            for field in ("method_a", "method_b", "groups", "conclusion"):
+                if actual[field] != getattr(calculated, field):
+                    raise ValueError(f"bootstrap calculation mismatch for {method}: {field}")
+            if actual["samples"] != 2_000:
+                raise ValueError(f"bootstrap calculation mismatch for {method}: samples")
+            for field in ("delta", "lower_95", "upper_95"):
+                value = actual[field]
+                expected_value = getattr(calculated, field)
+                if not isinstance(value, (int, float)) or not math.isclose(
+                    float(value), expected_value, rel_tol=1e-12, abs_tol=1e-12
+                ):
+                    raise ValueError(f"bootstrap calculation mismatch for {method}: {field}")
         audit.count("bootstrap_comparisons", len(comparisons))
         audit.check("heldout_bootstrap", True)
     except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError) as error:
@@ -293,13 +426,16 @@ def check_completion(
     candidates: dict[str, CandidateVersion],
     records: tuple[ExperimentRecord, ...],
     audit: StageAudit,
+    *,
+    test_methods: tuple[str, ...],
 ) -> None:
     del candidates
     _check_budget(output, records, audit)
     _check_training(root, output, manifest, plan, audit)
+    _check_baseline_evaluations(root, output, manifest, plan, audit)
     _check_selections(output, records, audit)
     _check_rollback(output, manifest, plan, audit)
-    _check_bootstrap(output, manifest, plan, audit)
+    _check_bootstrap(output, manifest, plan, records, test_methods, audit)
     _check_reward(output, manifest, audit)
 
 

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import math
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from pathlib import Path
+from typing import cast
 
 from .artifacts import write_json_once, write_text_once
 from .contracts import DatasetManifest, ExperimentRecord, TrainingArtifact
@@ -17,10 +18,18 @@ _DEFAULT_STAGE_STATUS = "BLOCKED / LAB_ONLY"
 
 
 def _report_method(record: ExperimentRecord) -> str:
-    """Keep live provider evidence separate from deterministic replay trials."""
-    if record.method == "baseline" and record.model != "deterministic-replay":
-        return "live-baseline"
-    return record.method
+    """Keep replay, live split, and local-weight evidence in separate rows."""
+    if record.model == "deterministic-replay":
+        mode = "replay"
+    elif record.training_artifact_id is not None or record.method in {
+        "initial-policy",
+        "random-policy",
+        "rule-policy",
+    }:
+        mode = "local"
+    else:
+        mode = "live"
+    return f"{mode}-{record.split}-{record.method}"
 
 
 def _p95(values: Iterable[float]) -> float:
@@ -39,7 +48,9 @@ def summarize_methods(records: Iterable[ExperimentRecord]) -> dict[str, dict[str
     summaries: dict[str, dict[str, float]] = {}
     for method, values in sorted(grouped.items()):
         count = len(values)
-        provider_values = [record for record in values if record.model != "deterministic-replay"]
+        provider_values = [
+            record for record in values if _report_method(record).startswith("live-")
+        ]
         known_usage = sum(
             record.prompt_tokens is not None and record.completion_tokens is not None
             for record in provider_values
@@ -73,34 +84,114 @@ def _bootstrap_payload(summary: BootstrapSummary) -> dict[str, object]:
     }
 
 
-def heldout_bootstrap(records: Iterable[ExperimentRecord]) -> tuple[dict[str, object], ...]:
+def heldout_bootstrap(
+    records: Iterable[ExperimentRecord],
+    *,
+    methods: Iterable[str] | None = None,
+) -> tuple[dict[str, object], ...]:
+    """Compare candidates with a baseline from the same execution mode only."""
     values = tuple(records)
-    by_method: dict[str, tuple[ExperimentRecord, ...]] = {}
-    for method in {_report_method(record) for record in values if record.split == "test"}:
-        by_method[method] = tuple(
-            record
-            for record in values
-            if record.split == "test" and _report_method(record) == method
+    candidate_methods = tuple(
+        dict.fromkeys(
+            method
+            for method in (
+                methods or ("prompt-candidate", "skill-candidate", "reflection", "best-of-3")
+            )
+            if method != "baseline"
         )
-    baseline = by_method.get("baseline") or by_method.get("live-baseline")
+    )
+
+    def mode(record: ExperimentRecord) -> str:
+        if record.model == "deterministic-replay":
+            return "replay"
+        return "live"
+
+    by_mode_method: dict[tuple[str, str], tuple[ExperimentRecord, ...]] = {}
+    for execution_mode in ("live", "replay"):
+        for method in ("baseline", *candidate_methods):
+            by_mode_method[(execution_mode, method)] = tuple(
+                record
+                for record in values
+                if record.split == "test"
+                and mode(record) == execution_mode
+                and record.method == method
+            )
+    execution_mode = "live" if by_mode_method[("live", "baseline")] else "replay"
+    baseline = by_mode_method[(execution_mode, "baseline")]
     if not baseline:
         return ()
     comparisons: list[dict[str, object]] = []
-    for method in ("prompt-candidate", "skill-candidate", "reflection", "best-of-3"):
-        candidate = by_method.get(method)
+    for method in candidate_methods:
+        candidate = by_mode_method[(execution_mode, method)]
         if not candidate:
+            continue
+        baseline_keys = {(record.group_id, record.repeat, record.case_id) for record in baseline}
+        candidate_keys = {(record.group_id, record.repeat, record.case_id) for record in candidate}
+        if baseline_keys != candidate_keys:
             continue
         comparisons.append(
             _bootstrap_payload(
                 grouped_bootstrap(
-                    baseline,
                     candidate,
+                    baseline,
                     method_a=method,
                     method_b="baseline",
                 )
             )
         )
     return tuple(comparisons)
+
+
+def adoption_decisions(
+    methods: dict[str, dict[str, float]],
+    bootstraps: Iterable[dict[str, object]],
+) -> tuple[dict[str, object], ...]:
+    """Derive safety, statistical, and adoption decisions independently."""
+    decisions: list[dict[str, object]] = []
+    for comparison in bootstraps:
+        method = comparison.get("method_a")
+        if not isinstance(method, str) or comparison.get("method_b") != "baseline":
+            continue
+        candidate = methods.get(f"live-test-{method}") or methods.get(f"replay-test-{method}")
+        baseline = methods.get("live-test-baseline") or methods.get("replay-test-baseline")
+        if candidate is None or baseline is None:
+            decisions.append(
+                {
+                    "method": method,
+                    "safety_gate": "UNKNOWN",
+                    "statistical_conclusion": comparison.get("conclusion"),
+                    "adoption": "INSUFFICIENT_EVIDENCE",
+                    "limitation": "matching test-mode metrics are missing",
+                }
+            )
+            continue
+        candidate_safety = candidate["safety_rate"]
+        safety_gate = "PASS" if candidate_safety == 1.0 else "FAIL"
+        conclusion = comparison.get("conclusion")
+        if safety_gate == "FAIL":
+            decision = "REJECT_FOR_SAFETY"
+            limitation = "candidate safety rate is below the 100% safety gate"
+        elif conclusion == "IMPROVED":
+            decision = "ADOPT_LAB_ONLY"
+            limitation = "statistical evidence does not authorize business runtime adoption"
+        elif conclusion == "REGRESSED":
+            decision = "REJECT_FOR_STATISTICAL_REGRESSION"
+            limitation = "held-out verifier interval is wholly below zero"
+        else:
+            decision = "KEEP_BASELINE_INCONCLUSIVE"
+            limitation = "held-out interval crosses zero"
+        decisions.append(
+            {
+                "method": method,
+                "candidate_safety_rate": candidate_safety,
+                "baseline_safety_rate": baseline["safety_rate"],
+                "safety_gate": safety_gate,
+                "statistical_conclusion": conclusion,
+                "adoption": decision,
+                "limitation": limitation,
+            }
+        )
+    return tuple(decisions)
 
 
 def reward_hacking_evidence(manifest: DatasetManifest) -> dict[str, object]:
@@ -123,19 +214,135 @@ def reward_hacking_evidence(manifest: DatasetManifest) -> dict[str, object]:
     }
 
 
-def rubric_scores() -> dict[str, int]:
-    """Provisional scores; final scores require the independent exit review."""
-    return {
-        "D1_business_correctness": 3,
-        "D2_identity_scope": 4,
-        "D3_state_idempotency_recovery": 3,
-        "D4_agent_trust_cost": 3,
-        "D5_security_data_protection": 4,
-        "D6_ui_accessibility_bilingual": 3,
-        "D7_testing_reproduction": 3,
-        "D8_governance_traceability": 3,
-        "D9_simplicity_operability": 3,
+def rubric_assessment(
+    manifest: DatasetManifest,
+    methods: dict[str, dict[str, float]],
+    training_artifacts: tuple[TrainingArtifact, ...],
+    stage_result: dict[str, object] | None,
+) -> dict[str, dict[str, object]]:
+    """Score each dimension from observed evidence and retain its limitation."""
+    checks = stage_result.get("checks", {}) if isinstance(stage_result, dict) else {}
+    if not isinstance(checks, dict):
+        checks = {}
+
+    def check(name: str) -> bool:
+        return checks.get(name) is True
+
+    live_test_rows = sum(
+        values.get("count", 0.0)
+        for name, values in methods.items()
+        if name.startswith("live-test-")
+    )
+    lab_only_scope = bool(
+        methods
+        and all(name.startswith(("replay-", "live-", "local-")) for name in methods)
+        and check("experiment_plan")
+    )
+    ui_evidence_present = any(
+        name.startswith(("replay-ui-", "live-ui-", "local-ui-")) for name in methods
+    )
+    total_calls = sum(
+        values.get("calls", 0.0) for name, values in methods.items() if name.startswith("live-")
+    )
+    unknown_usage = sum(values.get("unknown_usage_records", 0.0) for values in methods.values())
+    rows: dict[str, dict[str, object]] = {
+        "D1_business_correctness": {
+            "score": 4
+            if manifest.case_count == 120 and live_test_rows and check("live_test_matrix")
+            else 2,
+            "evidence": (
+                f"{manifest.case_count} frozen cases; {live_test_rows:.0f} live test rows "
+                "in the report denominator"
+            ),
+            "limitation": (
+                "live test rows are incomplete"
+                if not live_test_rows
+                else "verifier success is an experiment result, not a production claim"
+            ),
+        },
+        "D2_identity_scope": {
+            "score": 4 if lab_only_scope else 2,
+            "evidence": (
+                "Phase 12 artifacts remain LAB_ONLY and the report declares no business "
+                "runtime change"
+            ),
+            "limitation": "no new production identity or permission flow is evaluated in this lab",
+        },
+        "D3_state_idempotency_recovery": {
+            "score": (
+                4 if check("rollback_behavior_restored") and check("reservation_ledger") else 2
+            ),
+            "evidence": "rollback and reservation checks are reported from the stage gate",
+            "limitation": "score is capped until the strict stage gate is complete",
+        },
+        "D4_agent_trust_cost": {
+            "score": (
+                4
+                if total_calls <= 1_200 and unknown_usage == 0
+                else 3
+                if total_calls <= 1_200
+                else 1
+            ),
+            "evidence": (
+                f"reported calls={total_calls:.0f}, max=1200; unknown usage records="
+                f"{unknown_usage:.0f}"
+            ),
+            "limitation": (
+                "provider usage may be unknown and cost cannot be inferred for those records"
+            ),
+        },
+        "D5_security_data_protection": {
+            "score": 4 if check("observable_inputs") and check("candidate_boundaries") else 2,
+            "evidence": "observable-input and candidate-boundary checks are independently surfaced",
+            "limitation": "an experiment safety result does not grant ERP write permission",
+        },
+        "D6_ui_accessibility_bilingual": {
+            "score": 4 if ui_evidence_present else 2,
+            "evidence": "no UI surface is changed by the Phase 12 lab artifacts",
+            "limitation": (
+                "UI/accessibility/bilingual behavior is outside this phase's evidence scope"
+            ),
+        },
+        "D7_testing_reproduction": {
+            "score": (
+                4
+                if check("live_dev_matrix")
+                and check("live_test_matrix")
+                and check("baseline_task_evaluations")
+                and check("weight_task_evaluations")
+                else 2
+            ),
+            "evidence": (
+                f"stage matrix checks plus {len(training_artifacts)} training artifacts "
+                "are included"
+            ),
+            "limitation": "missing or partial matrices remain a stage blocker, not a test pass",
+        },
+        "D8_governance_traceability": {
+            "score": (
+                4
+                if check("historical_audit_matches_allowlist") and check("approved_test_methods")
+                else 2
+            ),
+            "evidence": (
+                "historical audit and approved test-method checks are linked to the stage result"
+            ),
+            "limitation": "independent review and Harness status are separate exit conditions",
+        },
+        "D9_simplicity_operability": {
+            "score": (
+                4
+                if methods
+                and all(name.startswith(("replay-", "live-", "local-")) for name in methods)
+                else 2
+            ),
+            "evidence": "report rows carry execution mode and split instead of mixing denominators",
+            "limitation": (
+                "the report does not compress away failed, unknown, or non-applicable records"
+            ),
+        },
     }
+    return rows
 
 
 def risk_register() -> tuple[dict[str, object], ...]:
@@ -197,6 +404,133 @@ def risk_register() -> tuple[dict[str, object], ...]:
     )
 
 
+def _call_segment(records: Iterable[ExperimentRecord]) -> dict[str, object]:
+    values = tuple(records)
+    return {
+        "records": len(values),
+        "calls": sum(record.calls for record in values),
+        "status_records": dict(Counter(record.status for record in values)),
+        "status_calls": {
+            status: sum(record.calls for record in values if record.status == status)
+            for status in sorted({record.status for record in values})
+        },
+        "unknown_usage_records": sum(
+            record.prompt_tokens is None or record.completion_tokens is None for record in values
+        ),
+        "reservation_keys": len(
+            {key for record in values for key in record.reservation_keys if key is not None}
+        ),
+    }
+
+
+def _archived_call_segment(paths: Iterable[Path]) -> dict[str, object]:
+    rows: list[dict[str, object]] = []
+    reservation_keys: set[str] = set()
+    for path in paths:
+        if not path.is_file() or path.is_symlink():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            payload = json.loads(line)
+            if not isinstance(payload, dict):
+                raise ValueError(f"archived call record is not an object: {path}")
+            rows.append(payload)
+            keys = payload.get("reservation_keys", ())
+            key_values = keys if isinstance(keys, list) else ()
+            for key in key_values:
+                if isinstance(key, str):
+                    reservation_keys.add(key)
+
+    def calls(row: dict[str, object]) -> int:
+        value = row.get("calls", 0)
+        return int(value) if isinstance(value, (int, float)) else 0
+
+    return {
+        "records": len(rows),
+        "calls": sum(calls(row) for row in rows),
+        "status_records": dict(Counter(str(row.get("status")) for row in rows)),
+        "status_calls": {
+            status: sum(calls(row) for row in rows if str(row.get("status")) == status)
+            for status in sorted({str(row.get("status")) for row in rows})
+        },
+        "reservation_keys": len(reservation_keys),
+    }
+
+
+def call_accounting(root: Path | None, records: Iterable[ExperimentRecord]) -> dict[str, object]:
+    """Separate active, supplemental, historical, and unrecoverable call evidence."""
+    values = tuple(records)
+    live = tuple(record for record in values if _report_method(record).startswith("live-"))
+
+    def batch_id(record: ExperimentRecord) -> str:
+        key = record.reservation_key or (
+            record.reservation_keys[0] if record.reservation_keys else ""
+        )
+        return key.split(":", 1)[0]
+
+    posthoc = tuple(record for record in live if batch_id(record) == "r5-test-reflection-posthoc")
+    matrix = tuple(record for record in live if batch_id(record) != "r5-test-reflection-posthoc")
+    recovery = tuple(
+        record for record in matrix if batch_id(record).startswith("r5-test-skill-recovery-")
+    )
+    accounting: dict[str, object] = {
+        "active_matrix": _call_segment(matrix),
+        "active_posthoc_test_supplement": _call_segment(posthoc),
+        "active_recovery_supplement_within_matrix": _call_segment(recovery),
+        "active_total": _call_segment(live),
+        "max_model_calls": 1_200,
+        "historical_pre_r2_legacy": {
+            "status": "NOT_SCANNED" if root is None else "SCANNED",
+            "classification": "legacy_live_without_reservation",
+        },
+        "historical_invalid_skill_archive": {
+            "status": "NOT_SCANNED" if root is None else "SCANNED",
+            "classification": "duplicate_or_blocked_recovery_evidence",
+            "counted_as_additional_unique_calls": 0,
+        },
+        "unreconciled_historical": {
+            "lower_bound_calls": 0,
+            "upper_bound_calls": None,
+            "basis": (
+                "No request-level reservation or response artifact exists for the remaining "
+                "interrupted/diagnostic history; the repository cannot provide a finite upper "
+                "bound, so it is not silently added to the active budget."
+            ),
+        },
+    }
+    if root is None:
+        accounting["confirmed_unique_lower_bound_calls"] = sum(record.calls for record in live)
+        return accounting
+
+    pre_r2 = root / "output/phase12-invalid-pre-r2-895dfcf/evaluation-live-baseline-test.jsonl"
+    skill_archive = root / "output/phase12-invalid-live-r5-test-skill-blocked"
+    legacy = _archived_call_segment((pre_r2,))
+    invalid_skill = _archived_call_segment(sorted(skill_archive.glob("**/*.jsonl")))
+    accounting["historical_pre_r2_legacy"] = {
+        **legacy,
+        "classification": "legacy_live_without_reservation",
+        "counted_as_additional_unique_calls": legacy["calls"],
+    }
+    accounting["historical_invalid_skill_archive"] = {
+        **invalid_skill,
+        "classification": "duplicate_or_blocked_recovery_evidence",
+        "counted_as_additional_unique_calls": 0,
+        "basis": (
+            "The 95 raw rows include the active Skill partial/recovery evidence and blocked "
+            "copies; they are preserved for audit but not added to the unique call total."
+        ),
+    }
+    active_total = accounting["active_total"]
+    historical_total = accounting["historical_pre_r2_legacy"]
+    if not isinstance(active_total, dict) or not isinstance(historical_total, dict):
+        raise ValueError("call accounting segments have an invalid shape")
+    active_calls = active_total.get("calls", 0)
+    historical_calls = historical_total.get("calls", 0)
+    accounting["confirmed_unique_lower_bound_calls"] = (
+        int(active_calls) if isinstance(active_calls, (int, float)) else 0
+    ) + (int(historical_calls) if isinstance(historical_calls, (int, float)) else 0)
+    return accounting
+
+
 def build_summary(
     manifest: DatasetManifest,
     records: Iterable[ExperimentRecord],
@@ -205,9 +539,13 @@ def build_summary(
     code_version: str,
     status: str = _DEFAULT_STAGE_STATUS,
     stage_result: dict[str, object] | None = None,
+    root: Path | None = None,
 ) -> dict[str, object]:
     values = tuple(records)
-    scores = rubric_scores()
+    training_values = tuple(training_artifacts)
+    methods = summarize_methods(values)
+    bootstraps = heldout_bootstrap(values)
+    rubric = rubric_assessment(manifest, methods, training_values, stage_result)
     return {
         "schema_version": "1",
         "status": status,
@@ -217,13 +555,15 @@ def build_summary(
         "evidence_code_versions": sorted({record.code_version for record in values}),
         "split_counts": manifest.split_counts,
         "group_counts": manifest.group_counts,
-        "methods": summarize_methods(values),
-        "heldout_bootstrap": heldout_bootstrap(values),
-        "training_artifacts": [artifact.model_dump(mode="json") for artifact in training_artifacts],
+        "methods": methods,
+        "call_accounting": call_accounting(root, values),
+        "heldout_bootstrap": bootstraps,
+        "adoption_decisions": adoption_decisions(methods, bootstraps),
+        "training_artifacts": [artifact.model_dump(mode="json") for artifact in training_values],
         "reward_hacking": reward_hacking_evidence(manifest),
-        "rubric": scores,
-        "rubric_total": sum(scores.values()),
-        "rubric_average": sum(scores.values()) / len(scores),
+        "rubric": rubric,
+        "rubric_total": sum(cast(int, item["score"]) for item in rubric.values()),
+        "rubric_average": sum(cast(int, item["score"]) for item in rubric.values()) / len(rubric),
         "risks": risk_register(),
         "stage_verification": stage_result,
         "constraints": {
@@ -240,6 +580,7 @@ def build_summary(
 def render_adoption_card(summary: dict[str, object]) -> str:
     methods = summary["methods"]
     bootstraps = summary["heldout_bootstrap"]
+    decisions = summary.get("adoption_decisions", ())
     lines = [
         "# Phase 12 Adoption Card",
         "",
@@ -260,14 +601,17 @@ def render_adoption_card(summary: dict[str, object]) -> str:
         f"- 数据集: `{summary['dataset_id']}`, digest `{summary['dataset_digest']}`.",
         f"- 方法汇总: `{json.dumps(methods, ensure_ascii=True, sort_keys=True)}`.",
         f"- held-out bootstrap: `{json.dumps(bootstraps, ensure_ascii=True, sort_keys=True)}`.",
+        f"- 安全门禁与采用决定: `{json.dumps(decisions, ensure_ascii=True, sort_keys=True)}`.",
         "- RAG 只引用 Phase 8 的独立 FTS5/vector 对照, 不与本阶段数据混排.",
+        "- 调用账分类: "
+        f"`{json.dumps(summary['call_accounting'], ensure_ascii=True, sort_keys=True)}`.",
         "",
         "## Decision",
         "",
-        "每条 held-out 比较的结论描述 method_a 相对 method_b 的差异; "
-        "Prompt 候选区间跨 0 时保留基线, "
-        "Skill 候选由基线相对其的正差值证明候选退化, 因而拒绝候选. "
-        "SFT, DPO, REINFORCE 仅保留为本地策略实验, 不能加载到业务主线.",
+        "统计结论只描述 method_a 相对 method_b 的候选减基线差异; "
+        "安全门禁单独要求候选 test 结果无不安全记录, 采用决定再结合区间和限制计算. "
+        "INCONCLUSIVE 是证据不足而不是退化结论; SFT, DPO, REINFORCE 仅保留为本地策略实验, "
+        "不能加载到业务主线.",
         "",
         "## Known Negative",
         "",
@@ -344,6 +688,9 @@ def render_stage_report(summary: dict[str, object]) -> str:
         "",
         "失败, UNKNOWN, 未知 usage 和部分生成均保留在分母; 重复运行不是新增独立样本. "
         "Live 请求预留账本单独记录批次和终态.",
+        "调用账把活动正式矩阵、post-hoc test 补测、矩阵内 recovery、pre-R2 历史调用、"
+        "失效 Skill 原始副本和不可恢复历史分别列出: "
+        f"`{json.dumps(summary['call_accounting'], ensure_ascii=True, sort_keys=True)}`.",
         "",
         "## Held-out 规则",
         "",
@@ -364,16 +711,25 @@ def render_stage_report(summary: dict[str, object]) -> str:
         "",
         "Prompt, Skill, SFT, DPO, RL 默认均为 `LAB_ONLY`; 没有净收益或证据不足时保留基线. "
         "选择前校验父版本和评测证据, 回滚写新 receipt 并验证父版本内容, 不覆盖旧 artifact.",
+        "统计结论、安全门禁与采用决定分开记录: "
+        f"`{json.dumps(summary.get('adoption_decisions', ()), ensure_ascii=True, sort_keys=True)}`.",  # noqa: E501
         "",
-        "## Rubric (暂定)",
+        "## Rubric (逐项证据评估)",
         "",
         f"`{json.dumps(scores, ensure_ascii=True, sort_keys=True)}`, "
         f"合计 `{summary['rubric_total']}/36`, 平均 `{summary['rubric_average']:.2f}`. "
-        "最终分数需在全量证据和独立审查后确认.",
+        "分数由当前可见证据计算; 限制项不会被隐藏, 也不等于阶段已通过.",
         "",
         "## 风险登记",
         "",
     ]
+    if isinstance(scores, dict):
+        lines.extend(
+            f"- `{dimension}`: `{item.get('score')}/4`; evidence: {item.get('evidence')}; "
+            f"limitation: {item.get('limitation')}."
+            for dimension, item in scores.items()
+            if isinstance(item, dict)
+        )
     risk_entries = risks if isinstance(risks, (list, tuple)) else ()
     lines.extend(
         f"- `{risk['risk']}`: L={risk['likelihood']} x I={risk['impact']}, {risk['status']}."
@@ -413,6 +769,7 @@ def write_reports(
         code_version=code_version,
         status=status,
         stage_result=stage_result,
+        root=root,
     )
     suffix = code_version.replace("/", "-")
     report_path = write_text_once(

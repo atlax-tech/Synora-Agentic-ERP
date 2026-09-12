@@ -30,6 +30,25 @@ def test_grouped_bootstrap_reports_inconclusive_when_delta_is_zero() -> None:
     assert summary.conclusion == "INCONCLUSIVE"
 
 
+def test_grouped_bootstrap_direction_is_candidate_minus_baseline() -> None:
+    manifest = build_synthetic_manifest("heldout-test")
+    baseline = held_out_replay(
+        manifest, {"baseline": deterministic_policy}, code_version="heldout-test"
+    )
+    candidate = held_out_replay(
+        manifest, {"candidate": policy_from_actions({})}, code_version="heldout-test"
+    )
+    candidate_delta = grouped_bootstrap(
+        candidate, baseline, method_a="candidate", method_b="baseline"
+    )
+    baseline_delta = grouped_bootstrap(
+        baseline, candidate, method_a="baseline", method_b="candidate"
+    )
+    assert candidate_delta.delta < 0.0
+    assert baseline_delta.delta > 0.0
+    assert candidate_delta.delta == -baseline_delta.delta
+
+
 def test_grouped_bootstrap_rejects_empty_or_tiny_samples() -> None:
     with pytest.raises(ValueError, match="at least 100"):
         grouped_bootstrap((), (), method_a="a", method_b="b", samples=10)

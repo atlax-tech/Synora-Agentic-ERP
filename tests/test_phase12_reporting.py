@@ -26,11 +26,11 @@ def test_reporting_keeps_usage_and_failures_in_method_denominator() -> None:
         code_version="report-test",
     )
     summary = summarize_methods(records)
-    assert summary["baseline"]["count"] == 24.0
-    assert summary["baseline"]["calls"] == 0.0
-    assert summary["baseline"]["unknown_usage_records"] == 0.0
-    assert summary["baseline"]["usage_not_applicable_records"] == 24.0
-    assert summary["baseline"]["failed_records"] == 0.0
+    assert summary["replay-test-baseline"]["count"] == 24.0
+    assert summary["replay-test-baseline"]["calls"] == 0.0
+    assert summary["replay-test-baseline"]["unknown_usage_records"] == 0.0
+    assert summary["replay-test-baseline"]["usage_not_applicable_records"] == 24.0
+    assert summary["replay-test-baseline"]["failed_records"] == 0.0
     assert heldout_bootstrap(records) == ()
 
 
@@ -59,8 +59,8 @@ def test_reporting_separates_live_provider_from_replay_baseline() -> None:
         code_version="report-test",
     )
     summary = summarize_methods((*replay, live))
-    assert summary["baseline"]["count"] == 24.0
-    assert summary["live-baseline"]["count"] == 1.0
+    assert summary["replay-test-baseline"]["count"] == 24.0
+    assert summary["live-test-baseline"]["count"] == 1.0
     assert heldout_bootstrap((*replay, live)) == ()
 
 
@@ -70,6 +70,21 @@ def test_reporting_exposes_prespecified_reward_hacking_negative() -> None:
     assert evidence["is_prespecified_negative"] is True
     assert evidence["bad_reward_higher"] is True
     assert evidence["task_verifier_passed"] is False
+
+
+def test_reporting_bootstrap_uses_candidate_minus_baseline() -> None:
+    manifest = build_synthetic_manifest("report-test")
+    records = held_out_replay(
+        manifest,
+        {"baseline": deterministic_policy, "prompt-candidate": lambda _state: "FINISH"},
+        code_version="report-test",
+    )
+    comparisons = heldout_bootstrap(records)
+    assert len(comparisons) == 1
+    assert comparisons[0]["method_a"] == "prompt-candidate"
+    assert comparisons[0]["method_b"] == "baseline"
+    assert comparisons[0]["delta"] < 0.0
+    assert comparisons[0]["conclusion"] == "REGRESSED"
 
 
 def test_report_artifacts_are_immutable_and_explicitly_lab_only(tmp_path: Path) -> None:

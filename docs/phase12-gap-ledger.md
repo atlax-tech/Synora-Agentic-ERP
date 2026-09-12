@@ -4,32 +4,46 @@
 
 ## 发现依据
 
-- 起始 HEAD：`ffb5b81`。
-- 当前实现 HEAD：`895dfcf`。
-- 现有仓库门禁曾通过，但只证明当前代码和已生成 artifact 可运行。
-- 现有活动数据集 digest：`5abe51454c4408e2235209323c6dd8d9d0ffec5b9235f6ac1cb3d933beeb19eb`。
-- 现有活动数据集包含 60 组、120 案例，分组数量为 train/dev/test＝36/12/12，案例数量为 72/24/24。
-- 现有 live baseline 文件为 24 条记录；其中 24 次调用、21 条失败或未知、16 条 usage 已知、8 条 usage 未知。无法由旧记录恢复的调用只按保守上界计入，不反推不存在的请求。
-- 现有 deterministic replay、训练和报告 artifact 保留为历史证据；因输入设计和方法实现存在缺口，不直接作为新收口周期的最终证据。
+- 起始收口基线：`ffb5b81`；本次定向核查基线 HEAD：`fd3beea`。旧基线只用于追溯，不代表当前状态；最终实现提交后须以新 HEAD 重新绑定报告。
+- 当前活动计划绑定 `code_version=17c6c9c`、数据 digest `a4278cc7ef8df0a8129e0449b8ffc00c386f2ea3b033a9e239203fb14c9626fe`，包含 60 组、120 案例，train/dev/test＝36/12/12 组、72/24/24 案例。
+- 当前活动目录已有 2,064 条记录，其中 live 调用 816 次、replay 648 条、本地初始化/随机/规则基线 336 条、训练权重任务评测 432 条；这些数字不能代替历史累计成本。
+- 旧 `pre-R2` 归档含 24 次无 reservation 的 live 调用；R5 Skill 阻断归档含活动结果的重复副本，不能再次计入独立调用。无法恢复的历史/诊断请求继续按保守上界保留，不反推不存在的请求。
+- 现有 deterministic replay、训练和报告 artifact 仍保留为证据；本清单先区分文件完整性、实验完整性和阶段出口，不把既有门禁 PASS 当作计划完成。
+
+## 六项定向核查（2026-09-12）
+
+以下状态是对用户指定发现的逐项核实，不是新的缺口清单。修复完成后在同一行追加证据；不改写旧 manifest、旧报告或旧实验结果。
+
+| 编号 | 核查结果 | 依据与当前处理 |
+|---|---|---|
+| F1 计划必需 test 方法 | **已修复且有证据（原流程偏差已披露）** | 原 manifest 未倒签：仍保留 `selected_method=baseline` 的历史事实；`phase12-method-selection.json` 明确 `pre_registered=false`，基于 Reflection/Best-of-3 各 72 条 dev 证据选择 Reflection，严格 gate 的 effective test methods 为 `baseline`、Prompt、Skill、Reflection，test 为 288/288。 |
+| F2 bootstrap 差值方向 | **已修复且有证据** | `reporting.heldout_bootstrap` 先传候选、后传基线；`phase12-bootstrap-r5-v3.json` 三个比较均标为 `method_a=candidate`、`method_b=baseline`，并由不可变 live test 原始记录重算，正负方向测试覆盖非零正/负样例。 |
+| F3 Adoption Card 旧结论 | **已修复且有证据** | 当前 Adoption Card 与 summary 分开呈现 safety gate、statistical conclusion 和 adoption；Prompt/Skill 的安全失败与 `INCONCLUSIVE` 统计分别表达，Reflection 为安全通过但区间跨 0 的 `KEEP_BASELINE_INCONCLUSIVE`，不再写死 Skill 退化。 |
+| F4 版本绑定分类 | **已修复且有证据** | `code_version_is_compatible` 现在对实验绑定、local evidence、控制/报告分别分类，未知 Phase 12 源文件 fail closed；报告修复允许从不可变记录重算，`evaluation.py` 变化仍拒绝，artifacts targeted test 已覆盖这些边界。 |
+| F5 CLI/缺口账本陈旧 | **已修复且有证据** | `docs/phase12-cli-runbook.md` 已覆盖五种 live 方法、post-hoc 选择回执、显式 batch、replay/live/local 分流和 14 组本地基线命令；本清单已绑定当前 HEAD `fd3beea`、数据 digest 和 816 次活动 live 账，旧 24 次单列。 |
+| F6 本地基线、Rubric、历史成本 | **已修复且有证据** | 活动目录含初始化/随机/规则 dev/test 共 336 条零 Provider task eval，且初始化绑定三份 SFT 初始权重；summary 的九维 Rubric 各列 evidence/limitation；call accounting 分开列出 816 活动 live、86 post-hoc、23 recovery、24 次 pre-R2、失效 Skill 95 条/72 calls 副本及无法恢复历史的保守边界。 |
+
+六项核查均已完成方向性修复或证据补齐；F1 的历史流程偏差保留并显式标注为 post-hoc，不能伪称预注册。当前剩余不是这六项根因，而是最终全量门禁、独立对抗审查和 Review PASS 后的 Harness 收口。
 
 ## 缺口表
 
-| 编号 | 阻断 | 证据 | 关闭条件 |
+| 编号 | 状态 | 证据 | 关闭条件或限制 |
 |---|---|---|---|
-| G1 | 合成案例主要由编号和场景字段区分，去掉标签后任务输入近似相同 | `labs/self_improvement/data.py` 的 `_synthetic_case` 与 `model_input_text` | 新数据含可观察采购事实，规范化近重复检测通过，oracle 不进入输入 |
-| G2 | deterministic replay 的 Reflection、Best-of-3 和候选策略不是 Provider 结果 | `labs/self_improvement/cli.py`、`replay.py` | 五种方法共用 live Provider 入口，调用记录、候选文本和 verifier 结果齐全 |
-| G3 | live CLI 只允许 baseline | `labs/self_improvement/cli.py` 的 `_cmd_evaluate` | live 支持五种方法，方法预算和失败分母可核对 |
-| G4 | 旧 test 已被查看并参与修复，不能继续作为新 held-out | `output/phase12-invalid-*` 与旧报告 | 新数据版本使用未用过的 test 组并重新冻结 |
-| G5 | RL 只保存训练期间统计，缺少固定 dev checkpoint 选择和独立任务评测 | `labs/self_improvement/training.py` | 每 25 episode dev 评测，固定选择规则，权重独立 held-out 结果齐全 |
-| G6 | artifact PASS 目前是文件完整性，不是阶段出口判定 | `labs/self_improvement/cli.py` 的 `_cmd_verify` | 增加完整 trial、批次、模型、候选、训练和审查状态检查 |
-| G7 | 真实响应错误尚未按共享解析/提示根因闭环 | `output/phase12/evaluation-live-baseline-test.jsonl` | 最小 live 诊断可复现，失败分类稳定，修复后新批次不重放旧请求 |
-| G8 | 第二轮独立审查为 `CHANGES_REQUIRED` | 阶段日志第 118 轮及审查记录 | 新周期最终审查 `PASS`；否则保留具体未关闭项 |
-| G9 | Harness 写同步尚未授权 | `.agents/skills/harness-update/SKILL.md` | 仅在 Review PASS 后生成 proposal，再取得独立文件级授权 |
+| G1 | **已关闭** | `dataset-phase12-synthetic-v2.json`、`model_input_text`、`observable_inputs=true`；120 个模型可见投影唯一 | 当前仅证明固定合成输入隔离；不外推生产数据质量 |
+| G2 | **已关闭（replay 仍仅作复现）** | 五种方法均有 live Provider 入口；当前 live dev/test 分别为 360/288 条，replay 单独计数 | deterministic replay 不作为真实模型质量证据 |
+| G3 | **已关闭** | `labs/self_improvement/cli.py` 的 `_cmd_evaluate` 支持五种 live 方法，reservation 与失败分母可核对 | 新批次仍须显式 `--batch-id` |
+| G4 | **已关闭并保留时序偏差** | 当前数据 digest 为 `a4278c…` 的 synthetic-v2；旧 pre-R2 与旧报告在 `output/phase12-invalid-*` 归档，F1 另记录 test 方法 post-hoc 补测 | 该补测不是原 manifest 的预注册证据 |
+| G5 | **已关闭** | 9 份训练权重 metadata、固定 dev 选择字段及 432 条独立权重 task eval 均通过严格检查 | 本地小模型结果不代表业务模型收益 |
+| G6 | **已关闭** | `verify-stage --allow-pending-review --allow-pending-harness` 的 19 项证据检查通过；`verify-artifacts` 另作文件完整性检查 | Review/Harness 仍是阶段出口条件 |
+| G7 | **已关闭为可追溯实验限制** | 当前 live 记录保留失败/UNKNOWN、统一 verifier 与 reservation 终态；历史不可恢复诊断请求单独列为 `unreconciled_historical` | 无 request-level 历史证据，不能声称恢复完整历史调用上界 |
+| G8 | **待最终独立审查** | 新收口周期尚未写入 `phase12-review-final.json` | Review 必须同时读取批准计划与实现证据并返回 `PASS` |
+| G9 | **待单独授权** | 当前未写 Harness sync artifact，避免无授权改写 `.harness` | Review PASS 后先生成文件级 proposal，再取得独立授权 |
 
 ## 预算账规则
 
 - 原计划 1,200 次是估算基线；replay、训练 episode 和 Provider 调用分开统计。
-- 已确认写入活动 live record 的调用：24 次。旧批次中无法确认是否发出的中断请求不从证据中删除，按记录状态或保守上界保留。
+- 当前活动 live 调用为 816 次：原正式矩阵 730 次，矩阵内 Skill recovery 23 次，post-hoc Reflection test 补充 86 次；reservation 816/816 且终态均为 `RECORDED`。其中活动记录状态 calls 为 `SUCCEEDED=333`、`REJECTED=299`、`FAILED=150`、`UNKNOWN=34`；未知 usage 记录 132 条。replay、本地基线和训练 episode 不计入 Provider 调用。
+- 可确认的历史下界为 840 次：活动 live 816 次加旧 `pre-R2` 归档 24 次；失效 Skill 归档的 95 条 raw rows/72 calls 字段是活动结果副本或阻断恢复证据，追加独立调用计数为 0。旧批次中无法确认是否发出的中断/诊断请求不从证据中删除，但没有 request-level 证据，保留 `unreconciled_historical` 的下界 0、上界不可得，不把活动目录计数称为阶段全部成本。
 - 新批次必须有唯一 `batch_id`，请求前原子 reservation，结果或 UNKNOWN 终态随后写入；重启不得重置累计账。
 - 本轮采用弹性预算：先按完整矩阵计算必需调用数，按批次增加；每批报告实际调用、失败、未知 usage、累计值和剩余预测。
 - 结构错误优先本地复现和修复共享解析/提示，不自动重试；传输、认证和协议故障沿用连续三次停止规则。
