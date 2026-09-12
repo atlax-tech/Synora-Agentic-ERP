@@ -72,11 +72,21 @@ def _write_audit(root: Path) -> dict[str, object]:
     return {"path": str(path), "records": len(records)}
 
 
-def _candidate_sources(root: Path) -> tuple[str, ...]:
+def _read_verified_audit(root: Path) -> tuple[ReviewedCase, ...]:
     payload = read_json(root, f"{PHASE12_RELATIVE_ROOT}/audited-failures.json")
     if not isinstance(payload, dict) or not isinstance(payload.get("records"), list):
         raise ValueError("audited failure artifact has an invalid shape")
     reviewed = tuple(ReviewedCase.model_validate(item) for item in payload["records"])
+    current = audit_historical_failures(root)
+    if tuple(record.model_dump(mode="json") for record in reviewed) != tuple(
+        record.model_dump(mode="json") for record in current
+    ):
+        raise ValueError("audited failure artifact does not match its allowlisted sources")
+    return reviewed
+
+
+def _candidate_sources(root: Path) -> tuple[str, ...]:
+    reviewed = _read_verified_audit(root)
     sources = tuple(
         record.case_id
         for record in reviewed
@@ -257,6 +267,7 @@ def _cmd_train(args: argparse.Namespace) -> dict[str, object]:
 def _cmd_verify(args: argparse.Namespace) -> dict[str, object]:
     manifest = _manifest(args.root)
     verify_manifest(manifest)
+    _read_verified_audit(args.root)
     output = args.root / PHASE12_RELATIVE_ROOT
     record_files = sorted(output.glob("*.jsonl"))
     record_count = 0

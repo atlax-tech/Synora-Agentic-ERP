@@ -83,6 +83,16 @@ def test_cli_candidate_generation_requires_reviewed_failures(tmp_path: Path) -> 
     assert payload["source_case_ids"][0].startswith("phase12-historical-")
 
 
+def test_cli_verify_rejects_tampered_audit_artifact(tmp_path: Path) -> None:
+    _write_historical_failure(tmp_path)
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
+    audit = tmp_path / "output" / "phase12" / "audited-failures.json"
+    payload = json.loads(audit.read_text(encoding="utf-8"))
+    payload["records"][0]["review_reason"] = "tampered"
+    audit.write_text(json.dumps(payload), encoding="utf-8")
+    assert main(["--root", str(tmp_path), "verify-artifacts"]) == 2
+
+
 def test_cli_default_evaluate_does_not_require_provider(tmp_path: Path) -> None:
     assert main(["--root", str(tmp_path), "prepare-data"]) == 0
     assert main(["--root", str(tmp_path), "evaluate", "--engine", "replay", "--split", "test"]) == 0
@@ -90,6 +100,7 @@ def test_cli_default_evaluate_does_not_require_provider(tmp_path: Path) -> None:
 
 def test_cli_rejects_tampered_training_metadata(tmp_path: Path) -> None:
     assert main(["--root", str(tmp_path), "prepare-data"]) == 0
+    assert main(["--root", str(tmp_path), "audit-data"]) == 0
     assert main(["--root", str(tmp_path), "train", "--method", "sft", "--seed", "17"]) == 0
     metadata = tmp_path / "output" / "phase12" / "weights-sft-17.metadata.json"
     payload = json.loads(metadata.read_text(encoding="utf-8"))
