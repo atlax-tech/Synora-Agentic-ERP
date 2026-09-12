@@ -40,6 +40,8 @@ def _validate_candidate_content(content: str) -> None:
     lowered = content.casefold()
     if not content.strip() or len(content) > 4_000:
         raise ValueError("candidate content is empty or too large")
+    if ".." in content or content.lstrip().startswith("/"):
+        raise ValueError("candidate contains a path traversal")
     if any(marker in lowered for marker in _FORBIDDEN_CANDIDATE_MARKERS):
         raise ValueError("candidate attempts to change a protected boundary")
     if "[decision" in lowered or "[skill" in lowered:
@@ -130,6 +132,15 @@ def write_selection(root: Path, selection: LabSelection) -> Path:
     return path
 
 
+def read_selection(root: Path, selection_id: str) -> LabSelection:
+    if "/" in selection_id or ".." in selection_id:
+        raise ValueError("selection id is not a file path")
+    path = safe_output_path(root, f"selections/{selection_id}.json")
+    if not path.is_file() or path.is_symlink():
+        raise FileNotFoundError(path)
+    return LabSelection.model_validate_json(path.read_text(encoding="utf-8"))
+
+
 def build_selection(
     previous_id: str,
     selected_id: str,
@@ -153,3 +164,23 @@ def build_selection(
         evidence_ids=evidence,
         reason=reason,
     )
+
+
+def rollback_selection(
+    root: Path,
+    selection_id: str,
+    evidence_ids: Iterable[str],
+    reason: str,
+) -> tuple[LabSelection, Path]:
+    """Create a new receipt that restores the exact parent of a selection."""
+    current = read_selection(root, selection_id)
+    if current.action == "ROLLBACK":
+        raise ValueError("cannot roll back a rollback receipt")
+    rollback = build_selection(
+        current.selected_id,
+        current.previous_id,
+        evidence_ids,
+        reason,
+        action="ROLLBACK",
+    )
+    return rollback, write_selection(root, rollback)
