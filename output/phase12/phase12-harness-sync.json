@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "plan_id": "phase12-plan-r5-v3",
+  "status": "APPROVED",
+  "scope": "User-authorized conditional closure only; not strict stage PASS",
+  "authorization_date": "2026-09-14",
+  "proposal_id": "phase12-conditional-close-20260914",
+  "authorization_basis": "Explicit user instruction to directly synchronize Harness and close Phase 12 as CONDITIONAL_PASS; overrides prior separate approval and review prerequisites for this closure.",
+  "files": [
+    "docs/PLAN.md",
+    "docs/SPEC.md",
+    "docs/ROADMAP.md",
+    "docs/phase12-gap-ledger.md",
+    "docs/development-log/20260912-Phase-12-开发日志.md",
+    "output/phase12/phase12-closure-20260914.json",
+    ".harness/source-index.json",
+    ".harness/unresolved.json",
+    ".harness/manifest.json"
+  ],
+  "preserved_drift": [
+    "services/agent_runtime/src/agent_runtime/evaluation/phase7.py",
+    "services/agent_runtime/src/agent_runtime/evaluation/phase9_ab.py",
+    "services/agent_runtime/src/agent_runtime/evaluation/phase9_baseline.py"
+  ],
+  "preserved_other_dirty_files": ["tests/test_phase12_data.py", "tests/test_phase12_evaluation.py"],
+  "review_status": "WAIVED_BY_USER; not PASS",
+  "no_change_claimed": false
+}

@@ -100,6 +100,8 @@ Exit: experiments are runnable and explain when API tools, browser tools, or vis
 
 ## Phase 12 — Self-improvement, Post-training, and Agentic RL
 
+Status (2026-09-14): `CONDITIONAL_PASS`, execution closed by explicit user decision. Further independent review is waived; strict PASS is not claimed. Remaining limitations and immutable evidence are indexed in [phase12-gap-ledger.md](phase12-gap-ledger.md). The original objectives below are retained as scope history, not a claim that every original exit condition passed.
+
 - Turn reviewed failure trajectories into versioned Prompt/Skill candidates with offline evaluation and rollback.
 - Run small offline experiments for reranking, SFT/DPO concepts, reward design, and Agentic RL prerequisites.
 - Prevent online self-modification of production prompts, policies, permissions, or tools.
@@ -108,9 +110,24 @@ Exit: improvement claims come from held-out evaluations; changes remain reviewab
 
 ## Phase 13 — AI Infra, Hardening, and Capstone
 
+Status (2026-09-14): `NOT_STARTED / DEFERRED_PENDING_USER_DECISION`. No implementation is authorized by the Phase 12 closure. The scope below is the original work to assess, not a verified list of missing code: existing evidence should be reused before any new implementation.
+
 - Evaluate model routing, caching, concurrency, rate limiting, graceful degradation, local inference, and deployment choices from measured needs.
 - Run failure injection, recovery drills, adversarial release review, manual-versus-Agent workflow benchmarks, and full-system evaluation.
 - Produce a reproducible capstone and interview dossier linking business goals, architecture, traces, failures, trade-offs, and recovery.
+
+Approved scope checklist (PLAN §22 and 项目方向纠偏 §Phase 13):
+
+- Async/streaming/session isolation, connection pools, concurrency, rate limits and backpressure; define targets from measurements, not invented service promises.
+- Provider/model routing, fallback, circuit breakers, caching and token/cost budgets.
+- Compare local inference with BYOK; evaluate vLLM/SGLang/Ollama only where useful, not as three mandatory deployments.
+- Traces, metrics, logs and dashboards covering token usage, cost and latency.
+- Shadow/canary/A-B experiments, soak/load tests, fault injection, recovery and security exercises.
+- Reproducible Docker/process supervision/health checks; Kubernetes design or bounded local experiments, never unsupported production-cluster claims.
+- Human-versus-Agent workflow benchmarks (navigation, inputs, approvals and completion time), system evaluation and requirement-to-code-to-test traceability.
+- Reuse and assemble evidence for ReAct, loop failures, checkpoint recovery, stale-approval rejection, idempotency/reconciliation, memory-poisoning rejection, multi-agent conflicts, model/Prompt A-B and a rejected advanced technique.
+- Original exit scope: Rubric, risk assessment, adversarial release review and real browser acceptance, followed by reproducible capstone/README/project narrative. Assignment and interview exercises remain suspended under the current user instruction; README remains user-owned.
+- Cross-phase release dependency: third-party attribution/NOTICE and distribution boundaries remain unresolved; stopping Phase 13 does not itself settle them or authorize public-release claims.
 
 Exit: every public claim is reproducible; the complete system and its rejected alternatives can be explained and demonstrated from task intake through failure recovery.
 

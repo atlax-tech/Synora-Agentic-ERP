@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "plan_id": "phase12-plan-r5-v3",
+  "date": "2026-09-14",
+  "status": "CONDITIONAL_PASS",
+  "execution_status": "CLOSED_BY_USER_DECISION",
+  "decision_basis": "User explicitly waived further independent review, requested direct Harness synchronization and conditional closure; Phase 13 scope is for assessment only.",
+  "evidence_head": "d123734",
+  "implementation_commit": "4026fe4",
+  "strict_acceptance_passed": false,
+  "independent_review": "WAIVED_BY_USER; original REVIEW_INCOMPLETE preserved",
+  "business_adoption": "LAB_ONLY; no candidate promoted",
+  "current_entry": "docs/phase12-gap-ledger.md",
+  "historical_report": "output/phase12/phase12-stage-report-draft-4026fe4.md",
+  "historical_review": "output/phase12/phase12-review-final.json",
+  "residual_limitations": [
+    "Dirty-source and broad CLI version-compatibility gaps",
+    "Stale CLI selection/rollback examples and incomplete clean-root reproduction verification",
+    "Rubric substantiation incomplete; automatic scores are not final acceptance",
+    "Post-hoc method selection is not preregistered held-out evidence",
+    "Historical diagnostic costs have no recoverable finite upper bound",
+    "Full validation evidence has not received completed independent verification"
+  ],
+  "phase13_status": "NOT_STARTED / DEFERRED_PENDING_USER_DECISION",
+  "new_provider_calls": 0,
+  "new_training_runs": 0
+}

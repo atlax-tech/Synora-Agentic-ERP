@@ -2,7 +2,7 @@
 
 状态：`CONFIRMED` 执行计划。版本：`PLAN-MAP-v1`。
 
-当前阶段状态（2026-09-12）：Phase 11 为 `COMPLETED / PASS / READY FOR THE NEXT PHASE`。该状态覆盖固定 loopback 合成采购实验、真实 `dev.localhost` 采购只读 API/Web/GUI 对照、全量回归、最终独立 Review 和 Harness drift=0；不代表生产部署、业务写入授权或客户采用。Phase 12–13 尚未开始。
+当前阶段状态（2026-09-14）：Phase 12 为 `CONDITIONAL_PASS`，按用户明确决定关闭执行，不再独立审查、补实验或继续修复收口问题；Phase 13 为 `NOT_STARTED / DEFERRED_PENDING_USER_DECISION`，不自动启动。Phase 11 的既有 PASS 不变。此为有条件的项目管理收口，不是 Phase 12 严格门禁 PASS，也不代表生产部署、业务写入授权或客户采用。当前收口入口为 [唯一缺口与预算账](phase12-gap-ledger.md)，机器可读决定为 `output/phase12/phase12-closure-20260914.json`。
 
 ## 1. 目的、权威与边界
 
@@ -413,9 +413,13 @@ Phase 11 已完成。实验页和执行器保持 `LAB_ONLY`，覆盖 DOM、ARIA�
 
 将经审核失败轨迹转为可版本回滚的 Prompt/Skill 候选，并用 held-out eval 筛选；完成 rerank、SFT/DPO、reward design 和 Agentic RL 前置条件的小型离线实验。禁止线上自动改写业务 Prompt、policy、permission 或 tools。
 
+2026-09-14 用户收口决定优先于本文件的一般阶段出口规则：状态 `CONDITIONAL_PASS`，停止进一步实现和独立审查；保留原 Review `REVIEW_INCOMPLETE` 和严格检查未通过事实，不将豁免伪造为审查通过。不生成 Assignment、学习笔记或面试问答。实验收益结论、post-hoc 选择时序、版本绑定/CLI/Rubric 残留和历史成本限制见唯一缺口账。候选仍为 LAB_ONLY，不晋级业务主线；本次文档收口不变更业务安全门禁。
+
 ## 22. Phase 13 — AI Infra、系统强化与毕业作品
 
 依据实测需要评估模型路由、缓存、并发、限流、降级、本地推理和部署；运行故障注入、恢复演练、对抗发布审查、人工对 Agent Benchmark 和全系统评测；形成可复跑毕业作品与面试 dossier。
+
+当前未启动，等待用户判断投入价值；原范围保留在 ROADMAP，不因 Phase 12 有条件关闭而宣称这些能力已实现，也不自动恢复 Phase 12 工作。
 
 ## 23. 阶段出口报告
 

@@ -525,6 +525,12 @@ CI must not depend on a paid or nondeterministic model. Assertions check ERP fin
 - Web/GUI, self-improvement, post-training, Agentic RL, and AI Infra remain bounded experiments unless adoption evidence supports the business path;
 - the final capstone links requirements, traces, failures, trade-offs, recovery, benchmarks, and interview evidence without unsupported production claims.
 
+### Phase 12 conditional closure — 2026-09-14
+
+User-authorized status: `CONDITIONAL_PASS`; execution is closed and further independent review is waived for this phase only. This is not a strict verification PASS. The original review remains `REVIEW_INCOMPLETE`; immutable experimental reports and manifests retain their original statuses. The current decision and residual limitations are indexed in [phase12-gap-ledger.md](phase12-gap-ledger.md).
+
+Prompt/Skill/Reflection comparisons remain statistically INCONCLUSIVE; safety and adoption decisions remain separate. No candidate is promoted into the ERP business path. Version-binding gaps, stale CLI examples, incomplete Rubric substantiation, post-hoc selection timing and incomplete historical cost bounds remain accepted limitations, not verified fixes. No business implementation or safety control changes accompany this closure. Phase 13 is deferred pending the user's decision, not completed or started.
+
 ## 18. Unresolved Decisions
 
 Implementation must not fill these by guesswork:

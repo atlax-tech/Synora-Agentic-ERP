@@ -1,6 +1,15 @@
 # Phase 12 缺口与预算账
 
-状态：`IN_PROGRESS / LAB_ONLY`。本清单是新收口周期的唯一缺口索引；旧报告和旧实验结果不因本清单而变成有效证据。
+状态（2026-09-14）：`CONDITIONAL_PASS / EXECUTION_CLOSED / LAB_ONLY`。用户明确终止后续独立审查和收口修复，授权直接同步 Harness。本清单是唯一当前收口入口；这是风险接受决定，不是严格门禁 PASS。旧报告、原 manifest 和 `phase12-review-final.json` 保留原貌，不能把其中历史 BLOCKED/REVIEW_INCOMPLETE 改写成通过。决定见 `output/phase12/phase12-closure-20260914.json`。
+
+## 有条件关闭的保留项
+
+- F4 部分修复但未完全关闭：`code_version_is_compatible` 在 frozen=HEAD 时直接返回 True，不检查未提交源代码；控制路径分类包含整个 CLI，仍可能漏掉影响实验的改动。
+- F5 部分修复但未完全关闭：CLI 手册的 LAB 选择/回滚示例仍引用旧候选和单条 dev 证据，新目录完整复跑未经最终独立核验。
+- F6 部分补齐但未完全关闭：本地评测已存在；Rubric 的 UI 维度仍依赖方法名前缀，不能将自动总分当作完整九维验收；历史诊断成本上界不可恢复，副本去重依据未完成独立核验。
+- F1 补充 test 明确为 post-hoc，不能外推原计划预注册 held-out 结论。收益区间仍跨零，不推广候选，也不承诺模型优化收益。
+- 既有全量验证执行记录不等于已完成独立审查和可独立核验的完整原始输出绑定。本次不再重跑或补审查。
+- 上述限制接受用于当前求职展示/实验留档范围，不等于“对任何业务使用完全无影响”。本次不改 ERP 业务代码；未来若重新运行实验、采用候选或对外宣称严格可复现，需要重新评估相应限制。Phase 13 未启动，待用户决定。
 
 ## 发现依据
 
@@ -23,7 +32,7 @@
 | F5 CLI/缺口账本陈旧 | **已修复且有证据** | `docs/phase12-cli-runbook.md` 已覆盖五种 live 方法、post-hoc 选择回执、显式 batch、replay/live/local 分流和 14 组本地基线命令；本清单已绑定当前 HEAD `fd3beea`、数据 digest 和 816 次活动 live 账，旧 24 次单列。 |
 | F6 本地基线、Rubric、历史成本 | **已修复且有证据** | 活动目录含初始化/随机/规则 dev/test 共 336 条零 Provider task eval，且初始化绑定三份 SFT 初始权重；summary 的九维 Rubric 各列 evidence/limitation；call accounting 分开列出 816 活动 live、86 post-hoc、23 recovery、24 次 pre-R2、失效 Skill 95 条/72 calls 副本及无法恢复历史的保守边界。 |
 
-六项核查均已完成方向性修复或证据补齐；F1 的历史流程偏差保留并显式标注为 post-hoc，不能伪称预注册。最终全量门禁已完成；当前剩余是独立对抗审查未完成，以及 Review PASS 后的 Harness 收口。
+上表保留上一轮核查记录；其中 F4/F5/F6 的“已修复”表述范围过宽，以本页顶部保留项为当前结论。已有测试通过不代表所有批准条件均已满足；当前按用户决定有条件关闭，不再等待这些项目修复。
 
 ## 缺口表
 
@@ -36,8 +45,8 @@
 | G5 | **已关闭** | 9 份训练权重 metadata、固定 dev 选择字段及 432 条独立权重 task eval 均通过严格检查 | 本地小模型结果不代表业务模型收益 |
 | G6 | **已关闭** | `verify-stage --allow-pending-review --allow-pending-harness` 的 19 项证据检查通过；`verify-artifacts` 另作文件完整性检查 | Review/Harness 仍是阶段出口条件 |
 | G7 | **已关闭为可追溯实验限制** | 当前 live 记录保留失败/UNKNOWN、统一 verifier 与 reservation 终态；历史不可恢复诊断请求单独列为 `unreconciled_historical` | 无 request-level 历史证据，不能声称恢复完整历史调用上界 |
-| G8 | **阻断：REVIEW_INCOMPLETE** | `output/phase12/phase12-review-final.json` 记录两次授权尝试：一次超时关闭、一次明确返回 `REVIEW_INCOMPLETE`；没有 PASS 结论 | 本轮不再启动第三次；后续新授权的独立审查必须同时读取批准计划与实现证据并返回 `PASS` |
-| G9 | **阻断：待单独授权** | 当前未写 Harness sync artifact，避免无授权改写 `.harness` | 仅在 Review PASS 后生成文件级 proposal，再取得独立授权 |
+| G8 | **用户豁免，不再阻断行政收口** | 原始 Review 为 `REVIEW_INCOMPLETE`，中断由执行 Agent 发起，并非用户叫停或已证实的环境故障；两次尝试不能称为两轮完成审查 | 2026-09-14 用户明确要求不再独立审查；不伪造 PASS |
+| G9 | **本次授权同步** | 用户明确要求直接同步 Harness；文件范围为 PLAN/SPEC/ROADMAP、本清单、收口回执、当前日志与 Harness 状态索引 | 保留原有用户工作区变化，不以 drift=0 掩盖无关未提交内容；同步结果见 `phase12-harness-sync.json` |
 
 ## 预算账规则
 
@@ -54,7 +63,7 @@
 - 第一轮和第二轮审查前的旧报告已归档，不能与新数据拼接。
 - 新收口周期允许最多两轮独立只读审查；本轮两次尝试均未形成 PASS，开发阶段未启动审查。
 - Assignment、学习笔记、面试问答和 c2c 按用户要求不启用。
-- PLAN、SPEC、ROADMAP、README 和 `.harness/` 暂不写阶段完成事实；最终只有 Review PASS 后才进入文档与 Harness 收口。
+- 以上审查轮次为历史执行记录；2026-09-14 用户覆盖原 Review PASS 前置条件，PLAN/SPEC/ROADMAP 与 Harness 同步有条件关闭事实。README 不修改；不再启动审查或 Phase 13。
 
 ## 每个缺口的验收记录
 

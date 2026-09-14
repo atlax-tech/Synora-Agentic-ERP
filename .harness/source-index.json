@@ -23,7 +23,7 @@
       "path": "docs/SPEC.md",
       "kind": "design",
       "status": "CONFIRMED",
-      "sha256": "d436017a6dfdca9904f246e9c13ea4797e07a321a4f11c5e79ca376c9f9996d3",
+      "sha256": "1b215a37cc621e16f9c9493ced7c544aa1828916f31393855b394834e17d3a71",
       "locator": "requirement traceability and Phase 10 contract, approval, recovery, and evidence gates"
     },
     {
@@ -31,8 +31,8 @@
       "path": "docs/PLAN.md",
       "kind": "plan",
       "status": "CONFIRMED",
-      "sha256": "5f6ba0842ab2d353aa71cadcae1bca4b4b05326a4c87604fbee66f0de69a7a2d",
-      "locator": "current Phase 11 status, execution order, exit gates, and preserved Phase 12/13 wording"
+      "sha256": "f912561d8c86b6f5d0508b884d2515f33e4d7292e184fb629d54a81bffc51b3f",
+      "locator": "2026-09-14 Phase 12 CONDITIONAL_PASS user closure; Phase 13 deferred; strict review not passed"
     },
     {
       "id": "approved-project-direction-correction",
@@ -216,7 +216,7 @@
       "kind": "code",
       "locator": "Provider 接口：Deterministic(CI)/OpenAI 兼容(BYOK)，SecretStr 脱敏、请求级 max_tokens + usage/reasoning token 校验、fail-closed 解析",
       "status": "CONFIRMED",
-      "sha256": "c7f846d7aea48b4a6d7fadf7a23f9d2b6181a9bd054d3868734e58062f0bb9c5"
+      "sha256": "f83c043a225b8caaa1dc31db35a208e866e4a2dd5a74a3b40adb062a5d887955"
     },
     {
       "id": "p36-retrieval-module",
@@ -328,7 +328,7 @@
       "kind": "testing",
       "locator": "Provider MockTransport 契约：usage 缺失、completion/reasoning token 超预算、重试和 BYOK 配置",
       "status": "CONFIRMED",
-      "sha256": "717e3655ea09faec12e1e58f7cc3335ef38de79bcb08b041000412e85ffbf097"
+      "sha256": "ae2724de01c7368070901ab748ae2035a35e66b23e70bc3fd8676a4a14ee0dce"
     },
     {
       "id": "p35-real-http-script",
@@ -1073,6 +1073,38 @@
       "status": "CONFIRMED",
       "sha256": "c8ab0f29f781eba4e531c89bce968436f62526c934a40ea27b46251cf0f516e4",
       "locator": "R10.6 machine manifest binding final status, evidence digests, review, risks, and protected sync"
+    },
+    {
+      "id": "phase12-gap-ledger",
+      "path": "docs/phase12-gap-ledger.md",
+      "kind": "acceptance",
+      "status": "CONFIRMED",
+      "sha256": "27c73a6a0908075a9284548afca2ad177b708823d090cc8301d35b9383d4e167",
+      "locator": "Conditional closure decision and preserved limitations; not strict acceptance PASS"
+    },
+    {
+      "id": "phase12-conditional-closure",
+      "path": "output/phase12/phase12-closure-20260914.json",
+      "kind": "acceptance",
+      "status": "CONFIRMED",
+      "sha256": "e1f1f9d13468a8b6c20bc9cab7206de41a2b985affed363c903b67ed0098e674",
+      "locator": "Conditional closure decision and preserved limitations; not strict acceptance PASS"
+    },
+    {
+      "id": "phase12-harness-sync",
+      "path": "output/phase12/phase12-harness-sync.json",
+      "kind": "acceptance",
+      "status": "CONFIRMED",
+      "sha256": "b53655e62f2e041e1c2098946058eaf47cc578b7b17edc5704947090497ae224",
+      "locator": "Conditional closure decision and preserved limitations; not strict acceptance PASS"
+    },
+    {
+      "id": "phase12-development-log",
+      "path": "docs/development-log/20260912-Phase-12-开发日志.md",
+      "kind": "development",
+      "status": "CONFIRMED",
+      "sha256": "166327a76d6aabd03c74e4bb32912aa7382ae6afe187d4a347dd67641e5bb805",
+      "locator": "Conditional closure decision and preserved limitations; not strict acceptance PASS"
     }
   ]
 }

@@ -3,6 +3,14 @@
   "schema_version": "1.0.0",
   "items": [
     {
+      "id": "phase12-conditional-closure",
+      "status": "RESOLVED",
+      "question": "Should Phase 12 remain blocked on final review and further closeout fixes?",
+      "impact": "Administrative closure must not be confused with strict experimental acceptance or business adoption.",
+      "sources": ["docs/PLAN.md", "docs/phase12-gap-ledger.md", "output/phase12/phase12-closure-20260914.json"],
+      "resolution": "2026-09-14 explicit user decision: CONDITIONAL_PASS, execution closed, no further independent review. Residual technical and evidence limitations remain accepted for lab/portfolio use, not fixed. Phase 13 awaits a separate decision. Three pre-existing dirty evaluation source fingerprints remain unsynchronized; user edits are preserved."
+    },
+    {
       "id": "erp-version-pair",
       "status": "RESOLVED",
       "question": "Which exact Frappe v16 and ERPNext v16 commits form the verified baseline?",
