@@ -478,8 +478,9 @@ class _FixtureProvider:
         model: str | None = None,
         max_tokens: int | None = None,
         response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
     ) -> ProviderResponse:
-        del messages, tools, model, max_tokens, response_format
+        del messages, tools, model, max_tokens, response_format, reasoning_effort
         self.calls += 1
         if self.fixture.mode == "PROVIDER_ERROR":
             failure = cast(str, self.fixture.failure)

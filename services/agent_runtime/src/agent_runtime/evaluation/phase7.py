@@ -202,8 +202,9 @@ class _RecordedProvider:
         model: str | None = None,
         max_tokens: int | None = None,
         response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
     ) -> ProviderResponse:
-        del model, max_tokens, response_format
+        del model, max_tokens, response_format, reasoning_effort
         self.calls += 1
         self.tool_schema_snapshots.append(tuple(tools or ()))
         return self.responses.pop(0)

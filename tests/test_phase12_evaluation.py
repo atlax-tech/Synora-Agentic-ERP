@@ -5,7 +5,13 @@ import time
 from pathlib import Path
 
 import pytest
-from agent_runtime.providers import ProviderError, ProviderMessage, ProviderResponse
+from agent_runtime.providers import (
+    ProviderError,
+    ProviderMessage,
+    ProviderResponse,
+    ProviderResponseFormat,
+    ProviderToolSpec,
+)
 
 from labs.self_improvement.data import build_synthetic_manifest
 from labs.self_improvement.evaluation import (
@@ -27,8 +33,16 @@ class FakeProvider:
         self.text = text
         self.calls = 0
 
-    async def complete(self, messages: list[ProviderMessage], **kwargs: object) -> ProviderResponse:
-        del messages, kwargs
+    async def complete(
+        self,
+        messages: list[ProviderMessage],
+        tools: list[ProviderToolSpec] | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
+    ) -> ProviderResponse:
+        del messages, tools, model, max_tokens, response_format, reasoning_effort
         self.calls += 1
         return ProviderResponse(text=self.text, prompt_tokens=4, completion_tokens=2)
 
@@ -38,22 +52,46 @@ class FailingProvider:
         self.failure_code = failure_code
         self.calls = 0
 
-    async def complete(self, messages: list[ProviderMessage], **kwargs: object) -> ProviderResponse:
-        del messages, kwargs
+    async def complete(
+        self,
+        messages: list[ProviderMessage],
+        tools: list[ProviderToolSpec] | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
+    ) -> ProviderResponse:
+        del messages, tools, model, max_tokens, response_format, reasoning_effort
         self.calls += 1
         raise ProviderError("blocked", failure_code=self.failure_code)
 
 
 class SlowProvider:
-    async def complete(self, messages: list[ProviderMessage], **kwargs: object) -> ProviderResponse:
-        del messages, kwargs
+    async def complete(
+        self,
+        messages: list[ProviderMessage],
+        tools: list[ProviderToolSpec] | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
+    ) -> ProviderResponse:
+        del messages, tools, model, max_tokens, response_format, reasoning_effort
         await asyncio.sleep(0.01)
         return ProviderResponse(text='{"action":"FINISH"}')
 
 
 class CancelledProvider:
-    async def complete(self, messages: list[ProviderMessage], **kwargs: object) -> ProviderResponse:
-        del messages, kwargs
+    async def complete(
+        self,
+        messages: list[ProviderMessage],
+        tools: list[ProviderToolSpec] | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
+    ) -> ProviderResponse:
+        del messages, tools, model, max_tokens, response_format, reasoning_effort
         raise asyncio.CancelledError
 
 
@@ -63,9 +101,25 @@ class SequenceProvider:
         self.prompts: list[str] = []
         self.kwargs: list[dict[str, object]] = []
 
-    async def complete(self, messages: list[ProviderMessage], **kwargs: object) -> ProviderResponse:
+    async def complete(
+        self,
+        messages: list[ProviderMessage],
+        tools: list[ProviderToolSpec] | None = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
+    ) -> ProviderResponse:
         self.prompts.append(messages[0].content)
-        self.kwargs.append(dict(kwargs))
+        self.kwargs.append(
+            {
+                "tools": tools,
+                "model": model,
+                "max_tokens": max_tokens,
+                "response_format": response_format,
+                "reasoning_effort": reasoning_effort,
+            }
+        )
         text = self.texts.pop(0) if self.texts else '{"action":"FINISH"}'
         return ProviderResponse(text=text, prompt_tokens=4, completion_tokens=2)
 

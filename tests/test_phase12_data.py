@@ -88,16 +88,27 @@ def test_cross_split_group_is_rejected() -> None:
 
 
 def test_cross_split_near_duplicate_is_rejected() -> None:
-    base = dict(
-        kind="COMPLETE_READ",
-        source_kind="SYNTHETIC",
-        input_text="Review the stainless valve gasket request for the north warehouse.",
-        expected_action="FINISH",
-        expected_status="SUCCEEDED",
-    )
     cases = [
-        DatasetCase(case_id="phase12-near-one", group_id="phase12-near-a", split="train", **base),
-        DatasetCase(case_id="phase12-near-two", group_id="phase12-near-b", split="test", **base),
+        DatasetCase(
+            case_id="phase12-near-one",
+            group_id="phase12-near-a",
+            split="train",
+            kind="COMPLETE_READ",
+            source_kind="SYNTHETIC",
+            input_text="Review the stainless valve gasket request for the north warehouse.",
+            expected_action="FINISH",
+            expected_status="SUCCEEDED",
+        ),
+        DatasetCase(
+            case_id="phase12-near-two",
+            group_id="phase12-near-b",
+            split="test",
+            kind="COMPLETE_READ",
+            source_kind="SYNTHETIC",
+            input_text="Review the stainless valve gasket request for the north warehouse.",
+            expected_action="FINISH",
+            expected_status="SUCCEEDED",
+        ),
     ]
     with pytest.raises(ValueError, match="near-duplicate"):
         validate_grouped_splits(cases)

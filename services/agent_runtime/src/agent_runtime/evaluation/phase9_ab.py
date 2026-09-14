@@ -302,8 +302,9 @@ class _RecordedSingleProvider:
         model: str | None = None,
         max_tokens: int | None = None,
         response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
     ) -> ProviderResponse:
-        del messages, tools, model, max_tokens, response_format
+        del messages, tools, model, max_tokens, response_format, reasoning_effort
         fixture = self.case.provider_fixture
         if fixture.mode == "PROVIDER_ERROR":
             raise ProviderError(
@@ -333,8 +334,9 @@ class _RecordedMultiProvider:
         model: str | None = None,
         max_tokens: int | None = None,
         response_format: ProviderResponseFormat | None = None,
+        reasoning_effort: str | None = None,
     ) -> ProviderResponse:
-        del messages, tools, model, max_tokens, response_format
+        del messages, tools, model, max_tokens, response_format, reasoning_effort
         if self.case.failure_code is not None:
             raise ProviderError(
                 "recorded A/B multi provider failure",
